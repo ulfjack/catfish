@@ -50,8 +50,8 @@ final class SessionManager {
   private final UuidGenerator uuidGenerator = new UuidGenerator();
   private final Clock clock;
   private long entryNumber = 0;
-  private final HashMap<String,SessionEntry> sessions = new HashMap<String,SessionEntry>();
-  private final TreeSet<SessionEntry> timeOutMap = new TreeSet<SessionEntry>();
+  private final HashMap<String,SessionEntry> sessions = new HashMap<>();
+  private final TreeSet<SessionEntry> timeOutMap = new TreeSet<>();
 
   SessionManager(Clock clock) {
   	this.clock = clock;
@@ -95,7 +95,7 @@ final class SessionManager {
 
   public synchronized void save(OutputStream dest) throws IOException {
   	ObjectOutputStream out = new ObjectOutputStream(dest);
-  	List<SessionImpl> sessionsToSave = new ArrayList<SessionImpl>();
+  	List<SessionImpl> sessionsToSave = new ArrayList<>();
   	for (SessionEntry entry : sessions.values()) {
   		sessionsToSave.add(entry.session);
   	}

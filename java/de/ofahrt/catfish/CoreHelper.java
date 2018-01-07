@@ -30,7 +30,7 @@ final class CoreHelper {
   public static final Set<String> COMPRESSION_WHITELIST = getCompressionSet();
 
   private static Set<String> getCompressionSet() {
-  	HashSet<String> result = new HashSet<String>();
+  	HashSet<String> result = new HashSet<>();
   	result.add(MIME_APPLICATION_JAVASCRIPT);
   	result.add(MIME_APPLICATION_XHTML_AND_XML);
   	result.add(MIME_APPLICATION_XML);
@@ -85,7 +85,7 @@ final class CoreHelper {
   private static final DateFormat dateFormat2 = getDateFormat2();
   private static final DateFormat dateFormat3 = getDateFormat3();
 
-  private static final ThreadLocal<DateFormat> DATE_FORMATTER = new ThreadLocal<DateFormat>();
+  private static final ThreadLocal<DateFormat> DATE_FORMATTER = new ThreadLocal<>();
 
   public static final String formatDate(long date) {
     DateFormat formatter = DATE_FORMATTER.get();

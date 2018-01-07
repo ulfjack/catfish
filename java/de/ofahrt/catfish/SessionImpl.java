@@ -20,7 +20,7 @@ final class SessionImpl implements HttpSession, Serializable {
   private volatile long timeoutInterval;
   private volatile boolean isNew = true;
   private volatile long lastAccessTime;
-  private final ConcurrentHashMap<String,Serializable> info = new ConcurrentHashMap<String,Serializable>();
+  private final ConcurrentHashMap<String,Serializable> info = new ConcurrentHashMap<>();
 
   public SessionImpl(String id, long creationTime, long timeoutInterval) {
   	this.id = id;

@@ -28,28 +28,22 @@ import java.util.regex.Pattern;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-public class ServletHelper
-{
+public class ServletHelper {
 
 private static final String DEFAULT_CHARSET = "UTF-8";
 
 private static final String queryPartStructure = "([^&=]*)=([^&]*)";
 private static final Pattern queryPartPattern = Pattern.compile(queryPartStructure);
 
-private static final Pattern nameExtractorPattern =
-	Pattern.compile(".* name=\"(.*)\".*");
-private static final Pattern filenameExtractorPattern = 
-	Pattern.compile(".* name=\"(.*)\".* filename=\"(.*)\".*");
+private static final Pattern nameExtractorPattern = Pattern.compile(".* name=\"(.*)\".*");
+private static final Pattern filenameExtractorPattern = Pattern.compile(".* name=\"(.*)\".* filename=\"(.*)\".*");
 
-public static final String formatText(String what, boolean fixed)
-{
+public static final String formatText(String what, boolean fixed) {
   StringBuffer result = new StringBuffer();
   if (fixed) result.append("<pre>");
-  for (int i = 0; i < what.length(); i++)
-  {
+  for (int i = 0; i < what.length(); i++) {
     char c = what.charAt(i);
-    switch (c)
-    {
+    switch (c) {
       case 13 :
         break;
       case 10 :
@@ -137,103 +131,98 @@ public static void setBodyFile(HttpServletResponse response, MimeType type, Stri
   { if (fis != null) fis.close(); }
 }
 
-public static String getFilename(HttpServletRequest request)
-{
-	try
-	{
+public static String getFilename(HttpServletRequest request) {
+	try {
 		String filename = new URI(request.getRequestURI()).getPath();
 		int j = filename.lastIndexOf('/');
-		if (j != -1)
+		if (j != -1) {
 			filename = filename.substring(j + 1);
-		if ("".equals(filename)) filename = "index";
+		}
+		if ("".equals(filename)) {
+		  filename = "index";
+		}
 		return filename;
+	} catch (URISyntaxException e) {
+	  throw new RuntimeException(e);
 	}
-	catch (URISyntaxException e)
-	{ throw new RuntimeException(e); }
 }
 
-public static boolean supportCompression(HttpServletRequest request)
-{
+public static boolean supportCompression(HttpServletRequest request) {
   String temp = request.getHeader(HttpFieldName.ACCEPT_ENCODING);
-  if (temp != null)
-  {
-    if (temp.toLowerCase(Locale.ENGLISH).indexOf("gzip") >= 0)
+  if (temp != null) {
+    if (temp.toLowerCase(Locale.ENGLISH).indexOf("gzip") >= 0) {
       return true;
-  }
-  else
-  {
+    }
+  } else {
     temp = request.getHeader("~~~~~~~~~~~~~~~");
-    if ("~~~~~ ~~~~~~~".equals(temp)) return true;
+    if ("~~~~~ ~~~~~~~".equals(temp)) {
+      return true;
+    }
     temp = request.getHeader("---------------");
-    if ("----- -------".equals(temp)) return true;
+    if ("----- -------".equals(temp)) {
+      return true;
+    }
   }
   return false;
 }
 
-public static Map<String, String> parseQuery(HttpServletRequest request)
-{
-	Map<String, String> result = new TreeMap<String, String>();
+public static Map<String, String> parseQuery(HttpServletRequest request) {
+	Map<String, String> result = new TreeMap<>();
 	String queryData = request.getQueryString();
-	if (queryData != null)
-	{
+	if (queryData != null) {
 		Matcher mq = queryPartPattern.matcher(queryData);
-		while (mq.find())
-		{
-			try
-			{
+		while (mq.find()) {
+			try {
 				String key = URLDecoder.decode(mq.group(1), DEFAULT_CHARSET);
 				String value = URLDecoder.decode(mq.group(2), DEFAULT_CHARSET);
 				result.put(key, value);
+			} catch (UnsupportedEncodingException e) {
+			  throw new RuntimeException("\"" + queryData + "\"", e);
 			}
-			catch (UnsupportedEncodingException e)
-			{ throw new RuntimeException("\""+queryData+"\"", e); }
 		}
 	}
 	return result;
 }
 
-private static byte[] readByteArray(InputStream in, int length) throws IOException
-{
+private static byte[] readByteArray(InputStream in, int length) throws IOException {
 	int bodyReceived = 0;
 	byte[] ba = new byte[length];
-	while (bodyReceived < ba.length)
-	{
+	while (bodyReceived < ba.length) {
 		int i = in.read(ba, bodyReceived, ba.length-bodyReceived);
-		if (i == -1)
+		if (i == -1) {
 			throw new IOException("Unexpected end of stream!");
+		}
 		bodyReceived += i;
 	}
 	return ba;
 }
 
-private static void parseFormData(FormData result, InputStream in, int expected)
-		throws IOException
-{
+private static void parseFormData(FormData result, InputStream in, int expected) throws IOException {
 	boolean requestFinished = false;
 	int b = 0;
 	String line = "";
-	Map<String, String> tempInfo = new TreeMap<String, String>();
-	while (!requestFinished)
-	{
+	Map<String, String> tempInfo = new TreeMap<>();
+	while (!requestFinished) {
 		b = in.read();
-		if (b < 0)
+		if (b < 0) {
 			b = -1;
-		else
-		{
+		} else {
 			expected--;
-			if ((b < 9) || (b > 255)) b = 0;
-			if ((b > 10) && (b < 32)) b = 0;
+			if ((b < 9) || (b > 255)) {
+			  b = 0;
+			}
+			if ((b > 10) && (b < 32)) {
+			  b = 0;
+			}
 		}
 		
-		switch (b)
-		{
+		switch (b) {
 			case -1 : requestFinished = true; break;
 			case 0 : break;
 			case 10 :
-				if (line.equals(""))
+				if (line.equals("")) {
 					requestFinished = true;
-				else
-				{
+				} else {
 					int i = line.indexOf(':');
 					// FIXME: Use canonicalizer!
 					String s1 = line.substring(0, i).trim().toLowerCase(Locale.ENGLISH);
@@ -251,93 +240,77 @@ private static void parseFormData(FormData result, InputStream in, int expected)
 	byte[] ba = readByteArray(in, expected-2);
 	String contentType = tempInfo.get("content-type");
 	String contentDisposition = tempInfo.get("content-disposition");
-	if (contentType == null)
-	{
+	if (contentType == null) {
 		Matcher m = nameExtractorPattern.matcher(contentDisposition);
-		if (m.matches())
-		{
+		if (m.matches()) {
 			String name = m.group(1);
 			result.data.put(name, new String(ba));
-		}
-		else
+		} else {
 			throw new IllegalArgumentException("Unrecognized form data!");
-	}
-	else
-	{
+		}
+	} else {
 		Matcher m = filenameExtractorPattern.matcher(contentDisposition);
-		if (m.matches())
-		{
+		if (m.matches()) {
 			String name = m.group(1);
 			String tempname = m.group(2);
 			result.files.put(name, new FileData(name, tempname, ba));
-		}
-		else
+		} else {
 			throw new IllegalArgumentException("Unrecognized form data!");
+		}
 	}
 }
 
-static FormData parseFormData(int clen, InputStream in, String ctHeader) throws IOException
-{
+static FormData parseFormData(int clen, InputStream in, String ctHeader) throws IOException {
 	FormData result = new FormData();
 	byte[] ba = readByteArray(in, clen);
 	String contentType = ctHeader;
 	{
 		int i = ctHeader.indexOf(';');
-		if (i >= 0)
-		{
+		if (i >= 0) {
 			contentType = ctHeader.substring(0, i).trim();
 			ctHeader = ctHeader.substring(i+1).trim();
 		}
 	}
 	
-	if (contentType.equalsIgnoreCase("multipart/form-data"))
-	{
+	if (contentType.equalsIgnoreCase("multipart/form-data")) {
 		int k = ctHeader.indexOf("=");
 		String boundary = "--"+ctHeader.substring(k+1).trim();
 		byte[] bounds = boundary.getBytes();
 		int numIndex = 0;
 		int[] indexes = new int[30];
 		
-		for (int i = 0; i < ba.length-bounds.length; i++)
-		{
+		for (int i = 0; i < ba.length-bounds.length; i++) {
 			boolean found = true;
-			for (int j = 0; j < bounds.length; j++)
-			{
-				if (ba[i+j] != bounds[j])
-				{
+			for (int j = 0; j < bounds.length; j++) {
+				if (ba[i+j] != bounds[j]) {
 					found = false;
 					break;
 				}
 			}
 			
-			if (found)
+			if (found) {
 				indexes[numIndex++] = i;
+			}
 		}
 		
-		for (int i = 0; i < numIndex-1; i++)
-		{
+		for (int i = 0; i < numIndex-1; i++) {
 			int start = indexes[i]+bounds.length+2;
 			int length = indexes[i+1]-indexes[i]-bounds.length-2;
 			parseFormData(result, new ByteArrayInputStream(ba, start, length), length);
 		}
 	}
 	
-	if (contentType.equalsIgnoreCase("application/x-www-form-urlencoded"))
-	{
+	if (contentType.equalsIgnoreCase("application/x-www-form-urlencoded")) {
 //				String ce = request.getHeader(HeaderKey.CONTENT_ENCODING.toString());
 		String footerData = new String(ba);
 		
 		Matcher mq = queryPartPattern.matcher(footerData);
-		while (mq.find())
-		{
-			try
-			{
+		while (mq.find()) {
+			try {
 				String first = URLDecoder.decode(mq.group(1), DEFAULT_CHARSET);
 				String last = URLDecoder.decode(mq.group(2), DEFAULT_CHARSET);
 				result.data.put(first, last);
-			}
-			catch (UnsupportedEncodingException e)
-			{
+			} catch (UnsupportedEncodingException e) {
 				IOException e2 = new IOException("Internal Error!");
 				e2.initCause(e);
 				throw e2;
@@ -347,63 +320,53 @@ static FormData parseFormData(int clen, InputStream in, String ctHeader) throws 
 	return result;
 }
 
-public static FormData parseFormData(HttpServletRequest request) throws IOException
-{
+public static FormData parseFormData(HttpServletRequest request) throws IOException {
 	String clen = request.getHeader(HttpFieldName.CONTENT_LENGTH);
 	String ctHeader = request.getHeader(HttpFieldName.CONTENT_TYPE);
-	if ((clen != null) && (ctHeader != null))
+	if ((clen != null) && (ctHeader != null)) {
 		return parseFormData(Integer.parseInt(clen), request.getInputStream(), ctHeader);
+	}
 	return new FormData();
 }
 
-public static String getCompleteUrl(HttpServletRequest request)
-{
+public static String getCompleteUrl(HttpServletRequest request) {
 	StringBuffer result = request.getRequestURL();
 	String query = request.getQueryString();
-	if (query != null)
+	if (query != null) {
 		result.append("?").append(query);
+	}
 	return result.toString();
 }
 
-public static final void printRequest(PrintStream out, HttpServletRequest request)
-{
-  out.println(request.getMethod()+" "+getCompleteUrl(request)+" "+request.getProtocol());
+public static final void printRequest(PrintStream out, HttpServletRequest request) {
+  out.println(request.getMethod() + " " + getCompleteUrl(request) + " " + request.getProtocol());
   Enumeration<?> it = request.getHeaderNames();
-  while (it.hasMoreElements())
-  {
+  while (it.hasMoreElements()) {
   	String key = (String) it.nextElement();
   	out.println(key+": "+request.getHeader(key));
   }
   out.println("Query Parameters:");
   Map<String,String> queries = parseQuery(request);
-  for (Map.Entry<String,String> e : queries.entrySet())
-  {
+  for (Map.Entry<String,String> e : queries.entrySet()) {
   	out.println("  "+e.getKey()+": "+e.getValue());
   }
-  try
-  {
+  try {
   	FormData formData = parseFormData(request);
 	  out.println("Post Parameters:");
-	  for (Map.Entry<String,String> e : formData.data.entrySet())
-	  {
+	  for (Map.Entry<String,String> e : formData.data.entrySet()) {
 	  	out.println("  "+e.getKey()+": "+e.getValue());
 	  }
-  }
-  catch (IllegalArgumentException e)
-  {
+  } catch (IllegalArgumentException e) {
   	out.println("Exception trying to parse post parameters:");
   	e.printStackTrace(out);
-  }
-  catch (IOException e)
-  {
+  } catch (IOException e) {
   	out.println("Exception trying to parse post parameters:");
   	e.printStackTrace(out);
   }
   out.flush();
 }
 
-public static final String getRequestText(HttpServletRequest req)
-{
+public static final String getRequestText(HttpServletRequest req) {
   ByteArrayOutputStream ba = new ByteArrayOutputStream();
   PrintStream out = new PrintStream(ba);
   printRequest(out, req);
@@ -429,10 +392,11 @@ private static final Pattern CONTENT_TYPE_PATTERN = Pattern.compile(
 private static final Pattern PARAMETER_PATTERN = Pattern.compile(
 		"(?:\\s*;\\s*("+TOKEN+")=(?:("+TOKEN+")|\"((?:\\\\[\\p{ASCII}]|[^\"\\\\])*)\"))");
 
-private static final Set<String> COMMON_CONTENT_TYPES = new HashSet<String>(Arrays.asList("text/html"));
+private static final Set<String> COMMON_CONTENT_TYPES = new HashSet<>(Arrays.asList("text/html"));
 
-static boolean isTokenCharacter(char c)
-{ return Pattern.compile(TOKEN_CHARS).matcher(""+c).matches(); }
+static boolean isTokenCharacter(char c) {
+  return Pattern.compile(TOKEN_CHARS).matcher("" + c).matches();
+}
 
 //       media-type     = type "/" subtype *( ";" parameter )
 //       type           = token
@@ -440,9 +404,10 @@ static boolean isTokenCharacter(char c)
 //       parameter               = attribute "=" value
 //       attribute               = token
 //       value                   = token | quoted-string
-public static boolean isValidContentType(String name)
-{
-	if (name == null) throw new NullPointerException();
+public static boolean isValidContentType(String name) {
+	if (name == null) {
+	  throw new NullPointerException();
+	}
 	Matcher m = CONTENT_TYPE_PATTERN.matcher(name);
 	return m.matches();
 }
@@ -460,175 +425,175 @@ public static String getMimeTypeFromContentType(String name) {
 
 
 // 14.1
-public static void parseAccept(String text)
+public static void parseAccept(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseAcceptCharset(String text)
+public static void parseAcceptCharset(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
 // Case insensitive
-public static void parseAcceptEncoding(String text)
+public static void parseAcceptEncoding(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseAcceptLanguage(String text)
+public static void parseAcceptLanguage(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseAcceptRanges(String text)
+public static void parseAcceptRanges(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseAge(String text)
+public static void parseAge(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseAllow(String text)
+public static void parseAllow(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
 // 14.8
-public static void parseAuthorization(String text)
+public static void parseAuthorization(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseCacheControl(String text)
+public static void parseCacheControl(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseConnection(String text)
+public static void parseConnection(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
 // 14.11
-public static void parseContentEncoding(String text)
+public static void parseContentEncoding(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseContentLanguage(String text)
+public static void parseContentLanguage(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseContentLength(String text)
+public static void parseContentLength(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseContentLocation(String text)
+public static void parseContentLocation(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseContentMD5(String text)
+public static void parseContentMD5(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseContentRange(String text)
+public static void parseContentRange(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
 // 14.17
-public static String[] parseContentType(String name)
-{
+public static String[] parseContentType(String name) {
 	Matcher m = CONTENT_TYPE_PATTERN.matcher(name);
-	if (!m.matches()) throw new IllegalArgumentException();
-	ArrayList<String> result = new ArrayList<String>();
+	if (!m.matches()) {
+	  throw new IllegalArgumentException();
+	}
+	ArrayList<String> result = new ArrayList<>();
 	result.add(m.group(1));
 	result.add(m.group(2));
 	String params = m.group(3);
-	if (params != null)
-	{
+	if (params != null) {
 		m = PARAMETER_PATTERN.matcher(m.group(3));
-		while (m.find())
-		{
+		while (m.find()) {
 			result.add(m.group(1));
 			String value = m.group(2);
-			if (value != null)
+			if (value != null) {
 				result.add(value);
-			else
+			} else {
 				result.add(m.group(3).replace("\\\"", "\""));
+			}
 		}
 	}
 	return result.toArray(new String[0]);
 }
 
-public static void parseDate(String text)
+public static void parseDate(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseETag(String text)
+public static void parseETag(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
 // 14.20
-public static void parseExpect(String text)
+public static void parseExpect(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseExpires(String text)
+public static void parseExpires(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseFrom(String text)
+public static void parseFrom(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseHost(String text)
+public static void parseHost(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
 // 14.24
-public static void parseIfMatch(String text)
+public static void parseIfMatch(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseIfModifiedSince(String text)
+public static void parseIfModifiedSince(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseIfNoneMatch(String text)
+public static void parseIfNoneMatch(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseIfRange(String text)
+public static void parseIfRange(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseIfUnmodifiedSince(String text)
+public static void parseIfUnmodifiedSince(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseLastModified(String text)
+public static void parseLastModified(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseLocation(String text)
+public static void parseLocation(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseMaxForwards(String text)
+public static void parseMaxForwards(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
 // 14.32
-public static void parsePragma(String text)
+public static void parsePragma(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseProxyAuthenticate(String text)
+public static void parseProxyAuthenticate(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseProxyAuthorization(String text)
+public static void parseProxyAuthorization(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseRange(String text)
+public static void parseRange(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseReferer(String text)
+public static void parseReferer(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseRetryAfter(String text)
+public static void parseRetryAfter(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseServer(String text)
+public static void parseServer(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
 // 14.39
-public static void parseTE(String text)
+public static void parseTE(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseTrailer(String text)
+public static void parseTrailer(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseTransferEncoding(String text)
+public static void parseTransferEncoding(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseUpgrade(String text)
+public static void parseUpgrade(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseUserAgent(String text)
+public static void parseUserAgent(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseVary(String text)
+public static void parseVary(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseVia(String text)
+public static void parseVia(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
-public static void parseWarning(String text)
+public static void parseWarning(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
 // 14.47
-public static void parseWwwAuthenticate(String text)
+public static void parseWwwAuthenticate(@SuppressWarnings("unused") String text)
 { throw new UnsupportedOperationException(); }
 
 }

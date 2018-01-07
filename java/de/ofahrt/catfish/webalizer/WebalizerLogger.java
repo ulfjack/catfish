@@ -61,7 +61,7 @@ public final class WebalizerLogger implements RequestListener {
 	}
 
   private final String fileName;
-  private final BlockingQueue<String> jobs = new LinkedBlockingQueue<String>();
+  private final BlockingQueue<String> jobs = new LinkedBlockingQueue<>();
   private final WebalizerFormatter formatter = new WebalizerFormatter();
 
   public WebalizerLogger(String filename) {

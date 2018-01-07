@@ -64,7 +64,7 @@ public final class RequestImpl implements HttpServletRequest {
   private final Map<String, String> headers;
   private Map<String, String> parameters;
 
-  private final HashMap<String, Object> attributes = new HashMap<String, Object>();
+  private final HashMap<String, Object> attributes = new HashMap<>();
 
   private byte[] body;
 
@@ -88,7 +88,7 @@ public final class RequestImpl implements HttpServletRequest {
   }
 
   private static Map<String, String> parseQuery(String query, String charset) {
-    Map<String, String> result = new TreeMap<String, String>();
+    Map<String, String> result = new TreeMap<>();
     if (query != null) {
       Matcher mq = QUERY_PATTERN.matcher(query);
       while (mq.find()) {
@@ -261,7 +261,7 @@ public final class RequestImpl implements HttpServletRequest {
 
   @Override
   public Enumeration<Locale> getLocales() {
-    final ArrayList<Locale> result = new ArrayList<Locale>();
+    final ArrayList<Locale> result = new ArrayList<>();
     String value = getHeader(HttpFieldName.ACCEPT_LANGUAGE);
     if (value != null) {
       Matcher m = HTTP_LOCALE_PATTERN.matcher(value);
@@ -607,7 +607,7 @@ public final class RequestImpl implements HttpServletRequest {
 //    private SessionManager sessionManager;
 //    private HttpSession session;
 
-    private Map<String,String> headers = new TreeMap<String,String>();
+    private Map<String,String> headers = new TreeMap<>();
 
     private byte[] body;
 
@@ -623,7 +623,7 @@ public final class RequestImpl implements HttpServletRequest {
       method = "UNKNOWN";
       uri = null;
       unparsedUri = null;
-      headers = new TreeMap<String, String>();
+      headers = new TreeMap<>();
       body = null;
       errorCode = 0;
       error = null;

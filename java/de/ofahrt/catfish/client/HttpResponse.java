@@ -9,7 +9,6 @@ import java.util.Map;
 import de.ofahrt.catfish.utils.HttpFieldName;
 
 public final class HttpResponse {
-
   private final int majorVersion;
   private final int minorVersion;
   private final int statusCode;
@@ -22,7 +21,7 @@ public final class HttpResponse {
     this.minorVersion = 0;
   	this.statusCode = statusCode;
   	this.reasonPhrase = null;
-  	this.headers = new HashMap<String, String>();
+  	this.headers = new HashMap<>();
   	this.content = content;
   }
 
@@ -31,7 +30,7 @@ public final class HttpResponse {
     this.minorVersion = builder.minorVersion;
     this.statusCode = builder.statusCode;
     this.reasonPhrase = builder.reasonPhrase;
-    this.headers = new HashMap<String, String>(builder.headers);
+    this.headers = new HashMap<>(builder.headers);
     this.content = builder.content;
   }
 
@@ -76,7 +75,7 @@ public final class HttpResponse {
     private int minorVersion;
     private int statusCode;
     private String reasonPhrase;
-    private final Map<String, String> headers = new HashMap<String, String>();
+    private final Map<String, String> headers = new HashMap<>();
     private byte[] content = new byte[0];
 
     public HttpResponse build() {

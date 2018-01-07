@@ -12,7 +12,7 @@ final class MimeMultipartContainer implements Iterable<MimeMultipartContainer.Pa
 		private final Map<String, String> fields;
 
 		public Part(Map<String, String> fields) {
-			this.fields = new TreeMap<String, String>(fields);
+			this.fields = new TreeMap<>(fields);
 		}
 
 		public String getField(String name) {

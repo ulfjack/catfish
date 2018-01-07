@@ -1,5 +1,6 @@
 package de.ofahrt.catfish.client;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -13,7 +14,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 
-public final class HttpConnection {
+public final class HttpConnection implements Closeable {
 
   public static class ConnectionClosedException extends IOException {
     private static final long serialVersionUID = 1L;
@@ -31,6 +32,7 @@ public final class HttpConnection {
     return connect(server, port, sslContext, null);
   }
 
+  @SuppressWarnings("resource")
   public static HttpConnection connect(String server, int port, SSLContext sslContext, String sniHostname) throws IOException {
     Socket socket;
     if (sslContext != null) {
@@ -60,9 +62,10 @@ public final class HttpConnection {
   }
 
   public void write(byte[] content) throws IOException {
-    OutputStream out = socket.getOutputStream();
-    out.write(content);
-    out.flush();
+    try (OutputStream out = socket.getOutputStream()) {
+      out.write(content);
+      out.flush();
+    }
   }
 
   public HttpResponse readResponse() throws IOException {
@@ -98,6 +101,7 @@ public final class HttpConnection {
     return parser.getResponse();
   }
 
+  @Override
   public void close() throws IOException {
     socket.close();
   }

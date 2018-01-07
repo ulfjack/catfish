@@ -57,7 +57,7 @@ final class MatchMap<T> {
   private final ArrayList<Entry<T>> list;
 
   private MatchMap(List<Entry<T>> data) {
-    this.list = new ArrayList<Entry<T>>(data);
+    this.list = new ArrayList<>(data);
   }
 
   public int size() {
@@ -78,10 +78,10 @@ final class MatchMap<T> {
   }
 
   public static class Builder<T> {
-    private final ArrayList<Entry<T>> list = new ArrayList<Entry<T>>();
+    private final ArrayList<Entry<T>> list = new ArrayList<>();
 
     public MatchMap<T> build() {
-      return new MatchMap<T>(list);
+      return new MatchMap<>(list);
     }
 
     public Builder<T> put(String pathSpec, T value) {
@@ -90,14 +90,14 @@ final class MatchMap<T> {
       }
       Entry<T> entry;
       if (pathSpec.startsWith("*")) {
-        entry = new SuffixEntry<T>(pathSpec, value);
+        entry = new SuffixEntry<>(pathSpec, value);
       } else {
         if (!pathSpec.startsWith("/"))
           throw new IllegalArgumentException("pathSpec must start with /");
         if (pathSpec.endsWith("*"))
-          entry = new PrefixEntry<T>(pathSpec, value);
+          entry = new PrefixEntry<>(pathSpec, value);
         else
-          entry = new ExactEntry<T>(pathSpec, value);
+          entry = new ExactEntry<>(pathSpec, value);
       }
       list.add(entry);
       return this;

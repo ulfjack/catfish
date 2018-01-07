@@ -1,5 +1,6 @@
 package de.ofahrt.catfish.fastcgi;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -7,8 +8,9 @@ import java.net.Socket;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-final class FastCgiConnection {
+final class FastCgiConnection implements Closeable {
 
+  @SuppressWarnings("resource")
   public static FastCgiConnection connect(String server, int port) throws IOException {
     Socket socket = new Socket();
     socket.connect(new InetSocketAddress(server, port));
@@ -23,6 +25,7 @@ final class FastCgiConnection {
   }
 
   public void write(Record record) throws IOException {
+    @SuppressWarnings("resource")
     OutputStream out = socket.getOutputStream();
     record.writeTo(out);
     out.flush();
@@ -34,6 +37,7 @@ final class FastCgiConnection {
     return record;
   }
 
+  @Override
   public void close() throws IOException {
     socket.close();
   }
@@ -54,7 +58,7 @@ final class FastCgiConnection {
 
     record.setType(FastCgiConstants.FCGI_PARAMS);
     record.setRequestId(1);
-    Map<String, String> map = new LinkedHashMap<String, String>();
+    Map<String, String> map = new LinkedHashMap<>();
     map.put("SCRIPT_NAME", "/hello.php");
     map.put("SCRIPT_FILENAME", "/home/ulfjack/Projects/catfish/hello.php");
     map.put("REQUEST_METHOD", "GET");

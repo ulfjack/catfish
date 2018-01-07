@@ -32,10 +32,10 @@ final class IncrementalMimeMultipartParser {
   private StringBuffer elementBuffer = new StringBuffer();
   private String fieldName;
   private String fieldValue;
-  private Map<String, String> fields = new TreeMap<String, String>();
+  private Map<String, String> fields = new TreeMap<>();
 
   private ByteArrayOutputStream bodyPart;
-  private List<Part> parts = new ArrayList<Part>();
+  private List<Part> parts = new ArrayList<>();
 
   public IncrementalMimeMultipartParser(String contentType) {
   	String[] parsedContentType = ServletHelper.parseContentType(contentType);

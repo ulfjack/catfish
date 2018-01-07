@@ -444,6 +444,7 @@ final class NioEngine {
     @Override
     public void handleEvent() throws IOException {
       if (key.isAcceptable()) {
+        @SuppressWarnings("resource")
         SocketChannel socketChannel = serverChannel.accept();
         openCounter.incrementAndGet();
         ConnectionId connectionId = new ConnectionId(uuidGenerator.generateID(), ssl, System.nanoTime());
@@ -472,8 +473,8 @@ final class NioEngine {
 
   class SelectorQueue implements Runnable {
     private final Selector selector;
-    private final BlockingQueue<Runnable> eventQueue = new LinkedBlockingQueue<Runnable>();
-    private final BlockingQueue<Runnable> shutdownQueue = new LinkedBlockingQueue<Runnable>();
+    private final BlockingQueue<Runnable> eventQueue = new LinkedBlockingQueue<>();
+    private final BlockingQueue<Runnable> shutdownQueue = new LinkedBlockingQueue<>();
     private boolean shutdown = false;
 
     public SelectorQueue(int i) throws IOException {
@@ -484,12 +485,13 @@ final class NioEngine {
 
     private void start(final int port, final boolean ssl) throws IOException, InterruptedException {
       final CountDownLatch latch = new CountDownLatch(1);
-      final AtomicReference<IOException> thrownException = new AtomicReference<IOException>();
+      final AtomicReference<IOException> thrownException = new AtomicReference<>();
       queue(new Runnable() {
         @Override
         public void run() {
           try {
             serverListener.openPort(port, ssl);
+            @SuppressWarnings("resource")
             ServerSocketChannel serverChannel = ServerSocketChannel.open();
             serverChannel.configureBlocking(false);
             serverChannel.socket().setReuseAddress(true);

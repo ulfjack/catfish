@@ -8,7 +8,7 @@ import de.ofahrt.catfish.utils.HttpFieldName;
 
 final class HttpFieldHelper {
 
-  private static final HashSet<String> MULTIPLE_OCCURANCE_BLACKLIST = new HashSet<String>(Arrays.asList(
+  private static final HashSet<String> MULTIPLE_OCCURANCE_BLACKLIST = new HashSet<>(Arrays.asList(
       HttpFieldName.HOST
   ));
 

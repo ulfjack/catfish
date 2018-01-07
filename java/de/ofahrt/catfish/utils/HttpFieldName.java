@@ -61,7 +61,7 @@ public final class HttpFieldName {
   private static Map<String,String> CANONICALIZATION_MAP = getCanonicalizationMap();
 
   private static Map<String,String> getCanonicalizationMap() {
-  	Map<String,String> result = new HashMap<String,String>();
+  	Map<String,String> result = new HashMap<>();
   	for (Field field : HttpFieldName.class.getFields()) {
   		if (Modifier.isPublic(field.getModifiers()) && Modifier.isStatic(field.getModifiers()) &&
   				Modifier.isFinal(field.getModifiers()) && String.class.equals(field.getType())) {

@@ -49,14 +49,14 @@ public final class CatfishHttpServer {
 
   private volatile Domain defaultDomain;
 
-  private final ConcurrentHashMap<String, Domain> domains = new ConcurrentHashMap<String, Domain>();
-  private final ConcurrentHashMap<String, String> aliases = new ConcurrentHashMap<String, String>();
+  private final ConcurrentHashMap<String, Domain> domains = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, String> aliases = new ConcurrentHashMap<>();
 
   private volatile boolean mayCompress = true;
   private volatile boolean mayKeepAlive = false;
   private volatile String defaultCharset = "UTF-8";
 
-  private final ArrayList<RequestListener> listeners = new ArrayList<RequestListener>();
+  private final ArrayList<RequestListener> listeners = new ArrayList<>();
   private final NioEngine engine;
 
   private final SessionManager sessionManager = new SessionManager();
@@ -233,7 +233,7 @@ public final class CatfishHttpServer {
     } else {
       PathTracker tracker = new PathTracker(request.getPath());
 
-      ArrayList<Filter> allFilters = new ArrayList<Filter>();
+      ArrayList<Filter> allFilters = new ArrayList<>();
       allFilters.addAll(current.getFilters());
 
       while (tracker.hasNextPath()) {

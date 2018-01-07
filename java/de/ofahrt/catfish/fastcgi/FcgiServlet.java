@@ -15,13 +15,12 @@ import de.ofahrt.catfish.fastcgi.IncrementalFcgiResponseParser.MalformedResponse
 import de.ofahrt.catfish.utils.HttpFieldName;
 
 public class FcgiServlet extends HttpServlet {
-
   private static final long serialVersionUID = 1L;
 
   public FcgiServlet() {
-    
   }
 
+  @SuppressWarnings("resource")
   @Override
   protected synchronized void doGet(HttpServletRequest req, final HttpServletResponse res)
       throws ServletException, IOException {
@@ -34,7 +33,7 @@ public class FcgiServlet extends HttpServlet {
 
     record.setType(FastCgiConstants.FCGI_PARAMS);
     record.setRequestId(1);
-    Map<String, String> map = new LinkedHashMap<String, String>();
+    Map<String, String> map = new LinkedHashMap<>();
     map.put("SCRIPT_NAME", "/hello.php");
     map.put("SCRIPT_FILENAME", "/home/ulfjack/Projects/catfish/hello.php");
     map.put("REQUEST_METHOD", "GET");

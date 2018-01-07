@@ -19,8 +19,8 @@ public final class Directory {
   public Directory(String name, List<Filter> filters,
       Map<String, Directory> subdirs, MatchMap<Servlet> servletMap) {
     this.name = name;
-    this.filters = Collections.unmodifiableList(new ArrayList<Filter>(filters));
-    this.subdirs = Collections.unmodifiableMap(new HashMap<String, Directory>(subdirs));
+    this.filters = Collections.unmodifiableList(new ArrayList<>(filters));
+    this.subdirs = Collections.unmodifiableMap(new HashMap<>(subdirs));
     this.servletMap = servletMap;
   }
 
@@ -48,10 +48,9 @@ public final class Directory {
 
     final static class BuilderDirectory {
       private final String name;
-      private final ArrayList<Filter> filters = new ArrayList<Filter>();
-      private final HashMap<String, BuilderDirectory> subdirs =
-          new HashMap<String, BuilderDirectory>();
-      private final MatchMap.Builder<Servlet> servletMap = new MatchMap.Builder<Servlet>();
+      private final ArrayList<Filter> filters = new ArrayList<>();
+      private final HashMap<String, BuilderDirectory> subdirs = new HashMap<>();
+      private final MatchMap.Builder<Servlet> servletMap = new MatchMap.Builder<>();
 
       public BuilderDirectory(String name) {
         this.name = name;
@@ -74,7 +73,7 @@ public final class Directory {
       }
 
       public Directory createDirectory() {
-        HashMap<String, Directory> newSubDirs = new HashMap<String, Directory>();
+        HashMap<String, Directory> newSubDirs = new HashMap<>();
         for (Map.Entry<String, BuilderDirectory> e : subdirs.entrySet()) {
           newSubDirs.put(e.getKey(), e.getValue().createDirectory());
         }
@@ -84,7 +83,7 @@ public final class Directory {
 
     private final BuilderDirectory root;
     private BuilderDirectory current;
-    private final Stack<BuilderDirectory> stack = new Stack<BuilderDirectory>();
+    private final Stack<BuilderDirectory> stack = new Stack<>();
 
     public Builder(BuilderDirectory root) {
       this.root = root;
