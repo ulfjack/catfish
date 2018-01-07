@@ -19,19 +19,22 @@ public final class MimeType implements Serializable {
     if (mimetype == null) {
       mimetype = new MimeType(primary, subtype);
       MimeType m = cache.putIfAbsent(key, mimetype);
-      if (m != null)
+      if (m != null) {
         mimetype = m;
+      }
     }
     return mimetype;
   }
 
   public static MimeType parseMimeType(String type) {
     MimeType result = cache.get(type);
-    if (result != null)
+    if (result != null) {
       return result;
+    }
     Matcher m = MIME_PATTERN.matcher(type);
-    if (m.matches())
+    if (m.matches()) {
       return getInstance(m.group(1), m.group(2));
+    }
     throw new IllegalArgumentException("not a valid mime-type: \"" + type + "\"");
   }
 
@@ -69,12 +72,14 @@ public final class MimeType implements Serializable {
 
   private final String primary;
   private final String subtype;
+  private final String cachedToString;
 
   private transient volatile int cachedHashCode = 0;
 
   public MimeType(String primary, String subtype) {
-    this.primary = primary.intern();
-    this.subtype = subtype.intern();
+    this.primary = primary;
+    this.subtype = subtype;
+    this.cachedToString = primary + "/" + subtype;
   }
 
   public MimeType(String primary) {
@@ -95,25 +100,26 @@ public final class MimeType implements Serializable {
 
   @Override
   public int hashCode() {
-    if (cachedHashCode == 0)
+    if (cachedHashCode == 0) {
       cachedHashCode = primary.hashCode() * 313 + subtype.hashCode();
+    }
     return cachedHashCode;
   }
 
   @Override
   public boolean equals(Object o) {
-    if (o == this)
+    if (o == this) {
       return true;
-    if (!(o instanceof MimeType))
+    }
+    if (!(o instanceof MimeType)) {
       return false;
+    }
     MimeType other = (MimeType) o;
-    return (primary == other.primary) && (subtype == other.subtype);
+    return primary.equals(other.primary) && subtype.equals(other.subtype);
   }
 
   @Override
   public String toString() {
-    StringBuilder result = new StringBuilder(primary);
-    result.append('/').append(subtype);
-    return result.toString();
+    return cachedToString;
   }
 }
