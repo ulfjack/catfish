@@ -349,6 +349,8 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
     if (!CoreHelper.shouldCompress(ServletHelper.getMimeTypeFromContentType(type))) {
       disableCompression();
     }
+    // TODO: The charset may not be set yet. Store the content type as a field and only set the
+    // header when finalizing the response.
     if (CoreHelper.isTextMimeType(type) && (charset != null)) {
       type += "; charset=" + charset;
     }
