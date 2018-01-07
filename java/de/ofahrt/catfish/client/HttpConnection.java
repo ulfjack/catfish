@@ -62,10 +62,10 @@ public final class HttpConnection implements Closeable {
   }
 
   public void write(byte[] content) throws IOException {
-    try (OutputStream out = socket.getOutputStream()) {
-      out.write(content);
-      out.flush();
-    }
+    @SuppressWarnings("resource")
+    OutputStream out = socket.getOutputStream();
+    out.write(content);
+    out.flush();
   }
 
   public HttpResponse readResponse() throws IOException {
