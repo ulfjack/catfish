@@ -13,5 +13,6 @@ java_binary(
   name = "catfish-dist",
   runtime_deps = [
     ":catfish",
+    "//java/de/ofahrt/catfish/servlets",
   ],
 )
