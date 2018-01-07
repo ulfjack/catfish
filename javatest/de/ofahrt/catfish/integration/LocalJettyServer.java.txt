@@ -1,0 +1,90 @@
+package de.ofahrt.catfish.integration;
+
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+
+import org.mortbay.jetty.Connector;
+import org.mortbay.jetty.handler.ContextHandlerCollection;
+import org.mortbay.jetty.nio.SelectChannelConnector;
+import org.mortbay.jetty.servlet.Context;
+import org.mortbay.jetty.servlet.ServletHolder;
+
+import de.ofahrt.catfish.TestHelper;
+import de.ofahrt.catfish.TestServlet;
+import de.ofahrt.catfish.client.HttpConnection;
+import de.ofahrt.catfish.client.HttpResponse;
+
+final class LocalJettyServer implements Server {
+
+  private static final String HTTP_SERVER = "localhost";
+  private static final int HTTP_PORT = 8080;
+  private static final int HTTPS_PORT = 8081;
+
+  private final org.mortbay.jetty.Server server;
+
+  public LocalJettyServer() {
+    server = new org.mortbay.jetty.Server();
+    Connector connector = new SelectChannelConnector();
+    connector.setPort(HTTP_PORT);
+    server.setConnectors(new Connector[]{connector});
+  }
+
+  @Override
+  public void setStartSsl(boolean startSsl) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public void start() throws Exception {
+    ContextHandlerCollection contexts = new ContextHandlerCollection();
+    server.setHandler(contexts);
+    Context c = new Context(contexts, "/", Context.SESSIONS);
+    c.addServlet(new ServletHolder(new TestServlet()), "/compression.html");
+    c.addServlet(new ServletHolder(new HttpRequestTestServlet()), "/*");
+    server.start();
+  }
+
+  @Override
+  public void shutdown() throws Exception {
+    server.stop();
+  }
+
+  private byte[] toBytes(String data) throws UnsupportedEncodingException {
+    return data.replace("\n", "\r\n").getBytes("ISO-8859-1");
+  }
+
+  private HttpResponse send(String hostname, int port, boolean ssl, String sniHostname, byte[] content) throws IOException {
+    HttpConnection connection = HttpConnection.connect(hostname, port,
+        ssl ? TestHelper.getSSLContext() : null, sniHostname);
+    connection.write(content);
+    HttpResponse response = connection.readResponse();
+    connection.close();
+    return response;
+  }
+
+  @Override
+  public HttpResponse send(String content) throws IOException {
+    return send(HTTP_SERVER, HTTP_PORT, false, null, toBytes(content));
+  }
+
+  @Override
+  public HttpResponse sendSsl(String content) throws IOException {
+    return send(HTTP_SERVER, HTTPS_PORT, true, null, toBytes(content));
+  }
+
+  @Override
+  public HttpResponse sendSslWithSni(String sniHostname, String content) throws IOException {
+    return send(HTTP_SERVER, HTTPS_PORT, true, sniHostname, toBytes(content));
+  }
+
+  @Override
+  public HttpConnection connect(boolean ssl) throws IOException {
+    return HttpConnection.connect(HTTP_SERVER, ssl ? HTTPS_PORT : HTTP_PORT,
+        ssl ? TestHelper.getSSLContext() : null);
+  }
+
+  @Override
+  public void waitForNoOpenConnections() {
+    // What now?
+  }
+}
