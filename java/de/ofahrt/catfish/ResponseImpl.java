@@ -23,6 +23,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import de.ofahrt.catfish.utils.Enumerations;
 import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpResponseCode;
 import de.ofahrt.catfish.utils.ServletHelper;
 
 public final class ResponseImpl implements HttpServletResponse, ReadableHttpResponse {
@@ -237,7 +238,7 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
     buffer.append("HTTP/");
     buffer.append(majorVersion).append(".").append(minorVersion);
     buffer.append(" ");
-    buffer.append(CoreHelper.getStatusText(status));
+    buffer.append(HttpResponseCode.getStatusText(status));
     buffer.append(CRLF);
 
     Iterator<Map.Entry<String, String>> it = header.entrySet().iterator();
@@ -448,7 +449,7 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
     }
     setStatus(statusCode);
     if (msg == null) {
-      msg = CoreHelper.getStatusText(statusCode);
+      msg = HttpResponseCode.getStatusText(statusCode);
     }
     setContentType(CoreHelper.MIME_TEXT_PLAIN);
     setBodyString(msg);

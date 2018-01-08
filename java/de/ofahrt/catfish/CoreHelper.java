@@ -11,6 +11,8 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.TimeZone;
 
+import de.ofahrt.catfish.utils.HttpResponseCode;
+
 final class CoreHelper {
 
   // Mime type support:
@@ -118,7 +120,7 @@ final class CoreHelper {
 
   // Response text output for debugging:
   public static final void printResponse(PrintStream out, ReadableHttpResponse response) {
-    out.println(response.getProtocol() + " " + getStatusText(response.getStatusCode()));
+    out.println(response.getProtocol() + " " + HttpResponseCode.getStatusText(response.getStatusCode()));
     Enumeration<String> it = response.getHeaderNames();
     while (it.hasMoreElements()) {
     	String key = it.nextElement();
@@ -160,72 +162,6 @@ final class CoreHelper {
   	return 0;
   }
 
-
-  // Http response codes:
-	private static enum ResponseCode {
-		CONTINUE               (100, "Continue"),
-		SWITCHING_PROTOCOLS    (101, "Switching Protocols"),
-
-		OK                     (200, "OK"),
-		CREATED                (201, "Created"),
-		ACCEPTED               (202, "Accepted"),
-		NON_AUTHORITATIVE      (203, "Non-Authoritative Information"),
-		NO_CONTENT             (204, "No Content"),
-		RESET_CONTENT          (205, "Reset Content"),
-		PARTIAL_CONTENT        (206, "Partial Content"),
-
-		MULTIPLE_CHOICES       (300, "Multiple Choices"),
-		MOVED_PERMANENTLY      (301, "Moved Permanently"),
-		FOUND                  (302, "Found"),
-		SEE_OTHER              (303, "See Other"),
-		NOT_MODIFIED           (304, "Not Modified"),
-		USE_PROXY              (305, "Use Proxy"),
-
-		BAD_REQUEST            (400, "Bad Request"),
-		UNAUTHORIZED           (401, "Unauthorized"),
-		PAYMENT_REQUIRED       (402, "Payment Required"),
-		FORBIDDEN              (403, "Forbidden"),
-		NOT_FOUND              (404, "Not Found"),
-		METHOD_NOT_ALLOWED     (405, "Method Not Allowed"),
-		NOT_ACCEPTABLE         (406, "Not Acceptable"),
-		PROXY_AUTH_REQUIRED    (407, "Proxy Authentication Required"),
-		REQUEST_TIMEOUT        (408, "Request Timeout"),
-		CONFLICT               (409, "Conflict"),
-		GONE                   (410, "Gone"),
-		LENGTH_REQUIRED        (411, "Length Required"),
-		PRECONDITION_FAILED    (412, "Precondition Failed"),
-		ENTITY_TOO_LARGE       (413, "Request Entity Too Large"),
-		URI_TOO_LONG           (414, "Request-URI Too Long"),
-		UNSUPPORTED_MEDIA_TYPE (415, "Unsupported Media Type"),
-		RANGE_NOT_SATISFIABLE  (416, "Requested Range Not Satisfiable"),
-		EXPECTATION_FAILED     (417, "Expectation Failed"),
-
-		INTERNAL_SERVER_ERROR  (500, "Internal Server Error"),
-		NOT_IMPLEMENTED        (501, "Not Implemented"),
-		BAD_GATEWAY            (502, "Bad Gateway"),
-		SERVICE_UNAVAILABLE    (503, "Service Unavailable"),
-		GATEWAY_TIMEOUT        (504, "Gateway Timeout"),
-		VERSION_NOT_SUPPORTED  (505, "HTTP Version Not Supported");
-
-		private final int code;
-		private final String text;
-
-		private ResponseCode(int code, String desc) {
-			this.code = code;
-			this.text = Integer.toString(code)+" "+desc;
-		}
-	}
-
-  private static final String[] STATUS_TEXT_MAP = getStatusTextMap();
-
-  private static String[] getStatusTextMap() {
-  	String[] result = new String[506];
-  	for (ResponseCode r : ResponseCode.values()) {
-  		result[r.code] = r.text;
-  	}
-  	return result;
-  }
-
   /**
    * Return a string containing the code and the well-known status text, if
    * defined by RFC 2616. If the status text is unknown, returns informational
@@ -236,32 +172,7 @@ final class CoreHelper {
    *         number
    */
   public static String getStatusText(int code) {
-  	if ((code < 100) || (code >= 1000)) {
-  		throw new IllegalArgumentException("the http status code must be a three-digit number");
-  	}
-  	String result = null;
-  	if ((code >= 0) && (code < STATUS_TEXT_MAP.length)) {
-  		result = STATUS_TEXT_MAP[code];
-  	}
-  	if (result != null) {
-  	  return result;
-  	}
-  	if ((code >= 100) && (code < 200)) {
-  		return code+" Informational";
-  	}
-  	if ((code >= 200) && (code < 300)) {
-  		return code+" Success";
-  	}
-  	if ((code >= 300) && (code < 400)) {
-  		return code+" Redirection";
-  	}
-  	if ((code >= 400) && (code < 500)) {
-  		return code+" Client Error";
-  	}
-  	if ((code >= 500) && (code < 600)) {
-  		return code+" Server Error";
-  	}
-  	return code+" None";
+  	return HttpResponseCode.getStatusText(code);
   }
 
   private CoreHelper() {

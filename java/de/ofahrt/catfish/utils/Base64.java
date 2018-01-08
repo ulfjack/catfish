@@ -3,13 +3,12 @@ package de.ofahrt.catfish.utils;
 import java.util.Arrays;
 
 final class Base64 {
+  private static final char[] valueToChar = new char[64];
+  private static final int[] charToValue = new int[256];
 
-  static final char[] valueToChar = new char[64];
-  static final int[] charToValue = new int[256];
-
-  static final int ERROR  = -3;
-  static final int IGNORE = -2;
-  static final int PAD    = -1;
+  private static final int ERROR  = -3;
+  private static final int IGNORE = -2;
+  private static final int PAD    = -1;
 
   static {
   	String data = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

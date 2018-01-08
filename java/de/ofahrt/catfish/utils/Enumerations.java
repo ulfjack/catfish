@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 public final class Enumerations {
-
   private static final Enumeration<Object> EMPTY = new AsEnumeration<>(Collections.<Object>emptyList());
 
   @SuppressWarnings("unchecked")

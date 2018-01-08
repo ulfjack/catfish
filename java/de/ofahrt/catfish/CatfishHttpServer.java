@@ -19,6 +19,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletResponse;
 
 import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpResponseCode;
 
 /**
  * A <code>CatfishHttpServer</code> manages a HTTP-Server.
@@ -156,7 +157,7 @@ public final class CatfishHttpServer {
   }
 
   ResponseImpl createErrorResponse(int statusCode) {
-    return createErrorResponse(statusCode, CoreHelper.getStatusText(statusCode));
+    return createErrorResponse(statusCode, HttpResponseCode.getStatusText(statusCode));
   }
 
   ResponseImpl createErrorResponse(int statusCode, String message) {

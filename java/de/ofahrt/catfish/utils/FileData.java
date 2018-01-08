@@ -4,7 +4,6 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 
 public final class FileData {
-
   private final String id;
   private final String name;
   private final byte[] data;
