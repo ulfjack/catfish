@@ -81,49 +81,4 @@ public class CoreHelperTest {
   				IncrementalHttpRequestParser.isTokenCharacter(c), ServletHelperTest.isTokenCharacter(c));
   	}
   }
-
-  @Test
-  public void getStatusTextReturnsCorrect100() {
-    assertEquals("100 Continue", CoreHelper.getStatusText(100));
-  }
-
-  @Test
-  public void getStatusTextReturnsCorrect1XX() {
-    assertEquals("199 Informational", CoreHelper.getStatusText(199));
-  }
-
-  @Test
-  public void getStatusTextReturnsCorrect2XX() {
-    assertEquals("299 Success", CoreHelper.getStatusText(299));
-  }
-
-  @Test
-  public void getStatusTextReturnsCorrect3XX() {
-    assertEquals("399 Redirection", CoreHelper.getStatusText(399));
-  }
-
-  @Test
-  public void getStatusTextReturnsCorrect4XX() {
-    assertEquals("499 Client Error", CoreHelper.getStatusText(499));
-  }
-
-  @Test
-  public void getStatusTextReturnsCorrect5XX() {
-    assertEquals("599 Server Error", CoreHelper.getStatusText(599));
-  }
-
-  @Test
-  public void getStatusTextReturnsCorrect999() {
-    assertEquals("999 None", CoreHelper.getStatusText(999));
-  }
-
-  @Test(expected=IllegalArgumentException.class)
-  public void lowCodeThrowsIllegalArgumentException() {
-    CoreHelper.getStatusText(99);
-  }
-
-  @Test(expected=IllegalArgumentException.class)
-  public void highCodeThrowsIllegalArgumentException() {
-    CoreHelper.getStatusText(1000);
-  }
 }

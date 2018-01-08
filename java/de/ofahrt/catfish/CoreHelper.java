@@ -162,19 +162,6 @@ final class CoreHelper {
   	return 0;
   }
 
-  /**
-   * Return a string containing the code and the well-known status text, if
-   * defined by RFC 2616. If the status text is unknown, returns informational
-   * status text as defined by the ranges in RFC 2616. If the status code is
-   * outside those ranges, returns "None".
-   *
-   * @throws IllegalArgumentException if the given code is not a three-digit
-   *         number
-   */
-  public static String getStatusText(int code) {
-  	return HttpResponseCode.getStatusText(code);
-  }
-
   private CoreHelper() {
     // Disallow instantiation.
   }
