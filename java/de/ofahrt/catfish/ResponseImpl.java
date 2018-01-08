@@ -26,14 +26,13 @@ import de.ofahrt.catfish.utils.HttpFieldName;
 import de.ofahrt.catfish.utils.ServletHelper;
 
 public final class ResponseImpl implements HttpServletResponse, ReadableHttpResponse {
-
   private static final Charset DEFAULT_CHARSET = Charset.forName("UTF-8");
   private static final String CRLF = "\r\n";
 
-  private boolean isCommitted = false;
-  private boolean isCompleted = false;
+  private boolean isCommitted;
+  private boolean isCompleted;
 
-  private boolean isHeadRequest = false;
+  private boolean isHeadRequest;
 
   private int majorVersion = 0;
   private int minorVersion = 9;
@@ -42,14 +41,14 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
   private Locale defaultLocale = Locale.US;
   private Locale locale;
 
-  private byte[] bodyData = null;
+  private byte[] bodyData;
   private int contentLength = -1;
 
-  private boolean compressable = false;
+  private boolean compressable;
 
-  private OutputStream internalStream = null;
-  private OutputStream keepStream = null;
-  private Writer keepWriter = null;
+  private OutputStream internalStream;
+  private OutputStream keepStream;
+  private Writer keepWriter;
 
   private HashMap<String, String> header = new HashMap<>();
 
@@ -57,14 +56,16 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
   }
 
   void setHeadRequest() {
-    if (isHeadRequest)
+    if (isHeadRequest) {
       throw new IllegalStateException();
+    }
     isHeadRequest = true;
   }
 
   public void setVersion(int majorVersion, int minorVersion) {
-    if (isCommitted)
+    if (isCommitted) {
       throw new IllegalStateException();
+    }
     this.majorVersion = majorVersion;
     this.minorVersion = minorVersion;
   }
@@ -84,8 +85,9 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
   }
 
   private void setHeaderInternal(String key, String value) {
-    if (isCompleted)
+    if (isCompleted) {
       throw new IllegalStateException();
+    }
     header.put(canonicalize(key), value);
   }
 
@@ -108,8 +110,9 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
   }
 
   void setCompressionAllowed(boolean how) {
-    if (isCommitted)
+    if (isCommitted) {
       throw new IllegalStateException();
+    }
     compressable = how;
   }
 
@@ -122,8 +125,9 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
   }
 
   void setCookie(String cookie) {
-    if (isCommitted)
+    if (isCommitted) {
       throw new IllegalStateException();
+    }
     setHeader(HttpFieldName.SET_COOKIE, cookie);
   }
 
@@ -131,8 +135,9 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
     internalStream = new ByteArrayOutputStream(5000) {
       @Override
       public void close() throws IOException {
-        if (internalStream != this)
+        if (internalStream != this) {
           throw new IOException("Cannot close stream twice!");
+        }
         internalStream = null;
         keepStream = null;
         bodyData = toByteArray();
@@ -154,8 +159,9 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
     keepWriter = new StringWriter(5000) {
       @Override
       public void close() throws IOException {
-        if (keepWriter != this)
+        if (keepWriter != this) {
           throw new IOException("Cannot close stream twice!");
+        }
         keepWriter = null;
         OutputStream out = internalOutputStream(compressable);
         OutputStreamWriter writer = new OutputStreamWriter(out, charset);
@@ -176,26 +182,31 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
   }
 
   void close() {
-    if (isCompleted)
+    if (isCompleted) {
       return;
-    if (!isCommitted)
+    }
+    if (!isCommitted) {
       commit();
+    }
     try {
-      if (keepWriter != null)
+      if (keepWriter != null) {
         keepWriter.close();
-      if (keepStream != null)
+      }
+      if (keepStream != null) {
         keepStream.close();
-    } catch (IOException e) // cannot happen
-    {
+      }
+    } catch (IOException e) {
+      // cannot happen
       throw new RuntimeException(e);
     }
 
-    if (bodyData != null)
+    if (bodyData != null) {
       setHeaderInternal(HttpFieldName.CONTENT_LENGTH, Integer.toString(bodyData.length));
-    else if (contentLength != -1)
+    } else if (contentLength != -1) {
       setHeaderInternal(HttpFieldName.CONTENT_LENGTH, Integer.toString(contentLength));
-    else
+    } else {
       setHeaderInternal(HttpFieldName.CONTENT_LENGTH, "0");
+    }
     // The servlet specification requires writing out the content-language.
     // But locale.toString is clearly not correct.
     // if ((locale != null) && containsHeader(HttpFieldName.CONTENT_TYPE))
@@ -461,22 +472,25 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
 
   @Override
   public void setDateHeader(String name, long date) {
-    if (isCommitted)
+    if (isCommitted) {
       throw new IllegalStateException();
+    }
     setHeaderInternal(name, CoreHelper.formatDate(date));
   }
 
   @Override
   public void setHeader(String name, String value) {
-    if (isCommitted)
+    if (isCommitted) {
       throw new IllegalStateException();
+    }
     setHeaderInternal(name, value);
   }
 
   @Override
   public void setIntHeader(String name, int value) {
-    if (isCommitted)
+    if (isCommitted) {
       throw new IllegalStateException();
+    }
     setHeaderInternal(name, Integer.toString(value));
   }
 
