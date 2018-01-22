@@ -62,8 +62,6 @@ public final class CatfishHttpServer {
 
   private final SessionManager sessionManager = new SessionManager();
 
-  private final HttpServlet notFoundServlet = new DefaultNotFoundServlet();
-
   private final ThreadPoolExecutor executor =
       new ThreadPoolExecutor(4, 4, 1L, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(50));
 
@@ -88,8 +86,20 @@ public final class CatfishHttpServer {
     addHead(name, dir, null);
   }
 
+  public void addHead(String name, ServletLayout layout) {
+    addHead(name, layout, null);
+  }
+
   public void addHead(String name, Directory dir, SSLContext sslContext) {
-    Domain domain = new Domain(dir, sslContext);
+    Domain domain = new DirectoryDomain(dir, sslContext);
+    if (defaultDomain == null) {
+      defaultDomain = domain;
+    }
+    domains.put(name, domain);
+  }
+
+  public void addHead(String name, ServletLayout layout, SSLContext sslContext) {
+    Domain domain = new ServletLayoutDomain(layout, sslContext);
     if (defaultDomain == null) {
       defaultDomain = domain;
     }
@@ -149,7 +159,7 @@ public final class CatfishHttpServer {
 
   SSLContext getSSLContext(String host) {
     Domain domain = findDomain(host);
-    return domain == null ? defaultDomain.sslContext : domain.sslContext;
+    return domain == null ? defaultDomain.getSSLContext() : domain.getSSLContext();
   }
 
   ResponseImpl createErrorResponse(RequestImpl request) {
@@ -227,37 +237,7 @@ public final class CatfishHttpServer {
       }
     }
     Domain domain = findDomain(host);
-    Directory current = domain.root;
-
-    if (current == null) {
-      return new FilterDispatcher(Collections.<Filter>emptyList(), notFoundServlet);
-    } else {
-      PathTracker tracker = new PathTracker(request.getPath());
-
-      ArrayList<Filter> allFilters = new ArrayList<>();
-      allFilters.addAll(current.getFilters());
-
-      while (tracker.hasNextPath()) {
-        String piece = tracker.getNextPath();
-        Directory next = current.getDirectory(piece);
-        if (next == null) {
-          return new FilterDispatcher(allFilters, notFoundServlet);
-        }
-
-        tracker.advance();
-        current = next;
-        allFilters.addAll(current.getFilters());
-      }
-
-      String s = tracker.getFilename();
-      if ("".equals(s)) s = "index";
-      Servlet servlet = current.findServlet(s);
-      if (servlet == null) {
-        return new FilterDispatcher(allFilters, notFoundServlet);
-      } else {
-        return new FilterDispatcher(allFilters, servlet);
-      }
-    }
+    return domain.determineDispatcher(request);
   }
 
   private Domain findDomain(String host) {
@@ -296,13 +276,85 @@ public final class CatfishHttpServer {
     return engine.getOpenConnections();
   }
 
-  private static class Domain {
+  private static interface Domain {
+    SSLContext getSSLContext();
+    FilterDispatcher determineDispatcher(RequestImpl request);
+  }
+
+  private static class DirectoryDomain implements Domain {
+    private final HttpServlet notFoundServlet = new DefaultNotFoundServlet();
     private final Directory root;
     private final SSLContext sslContext;
 
-    public Domain(Directory root, SSLContext sslContext) {
+    DirectoryDomain(Directory root, SSLContext sslContext) {
       this.root = root;
       this.sslContext = sslContext;
+    }
+
+    @Override
+    public SSLContext getSSLContext() {
+      return sslContext;
+    }
+
+    @Override
+    public FilterDispatcher determineDispatcher(RequestImpl request) {
+      Directory current = root;
+
+      if (current == null) {
+        return new FilterDispatcher(Collections.<Filter>emptyList(), notFoundServlet);
+      } else {
+        PathTracker tracker = new PathTracker(request.getPath());
+
+        ArrayList<Filter> allFilters = new ArrayList<>();
+        allFilters.addAll(current.getFilters());
+
+        while (tracker.hasNextPath()) {
+          String piece = tracker.getNextPath();
+          Directory next = current.getDirectory(piece);
+          if (next == null) {
+            return new FilterDispatcher(allFilters, notFoundServlet);
+          }
+
+          tracker.advance();
+          current = next;
+          allFilters.addAll(current.getFilters());
+        }
+
+        String s = tracker.getFilename();
+        if ("".equals(s)) s = "index";
+        Servlet servlet = current.findServlet(s);
+        if (servlet == null) {
+          return new FilterDispatcher(allFilters, notFoundServlet);
+        } else {
+          return new FilterDispatcher(allFilters, servlet);
+        }
+      }
+    }
+  }
+
+  private static class ServletLayoutDomain implements Domain {
+    private final HttpServlet notFoundServlet = new DefaultNotFoundServlet();
+    private final ServletLayout layout;
+    private final SSLContext sslContext;
+
+    ServletLayoutDomain(ServletLayout layout, SSLContext sslContext) {
+      this.layout = layout;
+      this.sslContext = sslContext;
+    }
+
+    @Override
+    public SSLContext getSSLContext() {
+      return sslContext;
+    }
+
+    @Override
+    public FilterDispatcher determineDispatcher(RequestImpl request) {
+      Servlet servlet = layout.find(request.getPath());
+      if (servlet == null) {
+        return new FilterDispatcher(Collections.<Filter>emptyList(), notFoundServlet);
+      } else {
+        return new FilterDispatcher(Collections.<Filter>emptyList(), servlet);
+      }
     }
   }
 }

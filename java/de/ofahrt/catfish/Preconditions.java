@@ -15,6 +15,12 @@ final class Preconditions {
     }
   }
 
+  public static void checkArgument(boolean ok) {
+    if (!ok) {
+      throw new IllegalArgumentException();
+    }
+  }
+
   private Preconditions() {
     // Not instantiable.
   }
