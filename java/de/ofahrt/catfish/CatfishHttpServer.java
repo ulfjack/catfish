@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionHandler;
@@ -13,9 +12,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.SSLContext;
-import javax.servlet.Filter;
-import javax.servlet.Servlet;
-import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletResponse;
 
 import de.ofahrt.catfish.utils.HttpFieldName;
@@ -48,9 +44,9 @@ public final class CatfishHttpServer {
 
   private final ServerListener serverListener;
 
-  private volatile Domain defaultDomain;
+  private volatile InternalVirtualHost defaultDomain;
 
-  private final ConcurrentHashMap<String, Domain> domains = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, InternalVirtualHost> hosts = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, String> aliases = new ConcurrentHashMap<>();
 
   private volatile boolean mayCompress = true;
@@ -86,24 +82,19 @@ public final class CatfishHttpServer {
     addHead(name, dir, null);
   }
 
-  public void addHead(String name, ServletLayout layout) {
-    addHead(name, layout, null);
-  }
-
   public void addHead(String name, Directory dir, SSLContext sslContext) {
-    Domain domain = new DirectoryDomain(dir, sslContext);
+    InternalVirtualHost domain = new DirectoryVirtualHost(dir, sslContext);
     if (defaultDomain == null) {
       defaultDomain = domain;
     }
-    domains.put(name, domain);
+    hosts.put(name, domain);
   }
 
-  public void addHead(String name, ServletLayout layout, SSLContext sslContext) {
-    Domain domain = new ServletLayoutDomain(layout, sslContext);
+  public void addVirtualHost(String name, VirtualHost virtualHost) {
     if (defaultDomain == null) {
-      defaultDomain = domain;
+      defaultDomain = virtualHost;
     }
-    domains.put(name, domain);
+    hosts.put(name, virtualHost);
   }
 
   public void addAlias(String alias, String name) {
@@ -158,7 +149,7 @@ public final class CatfishHttpServer {
   }
 
   SSLContext getSSLContext(String host) {
-    Domain domain = findDomain(host);
+    InternalVirtualHost domain = findVirtualHost(host);
     return domain == null ? defaultDomain.getSSLContext() : domain.getSSLContext();
   }
 
@@ -236,19 +227,19 @@ public final class CatfishHttpServer {
         host = host.substring(0, host.indexOf(':'));
       }
     }
-    Domain domain = findDomain(host);
-    return domain.determineDispatcher(request);
+    InternalVirtualHost virtualHost = findVirtualHost(host);
+    return virtualHost.determineDispatcher(request);
   }
 
-  private Domain findDomain(String host) {
-    if (host == null) {
+  private InternalVirtualHost findVirtualHost(String hostName) {
+    if (hostName == null) {
       return defaultDomain;
     }
-    if (aliases.containsKey(host)) {
-      host = aliases.get(host);
+    if (aliases.containsKey(hostName)) {
+      hostName = aliases.get(hostName);
     }
-    Domain domain = domains.get(host);
-    return domain == null ? defaultDomain : domain;
+    InternalVirtualHost virtualHost = hosts.get(hostName);
+    return virtualHost == null ? defaultDomain : virtualHost;
   }
 
   public void saveSessions(OutputStream target) throws IOException {
@@ -274,87 +265,5 @@ public final class CatfishHttpServer {
 
   public int getOpenConnections() {
     return engine.getOpenConnections();
-  }
-
-  private static interface Domain {
-    SSLContext getSSLContext();
-    FilterDispatcher determineDispatcher(RequestImpl request);
-  }
-
-  private static class DirectoryDomain implements Domain {
-    private final HttpServlet notFoundServlet = new DefaultNotFoundServlet();
-    private final Directory root;
-    private final SSLContext sslContext;
-
-    DirectoryDomain(Directory root, SSLContext sslContext) {
-      this.root = root;
-      this.sslContext = sslContext;
-    }
-
-    @Override
-    public SSLContext getSSLContext() {
-      return sslContext;
-    }
-
-    @Override
-    public FilterDispatcher determineDispatcher(RequestImpl request) {
-      Directory current = root;
-
-      if (current == null) {
-        return new FilterDispatcher(Collections.<Filter>emptyList(), notFoundServlet);
-      } else {
-        PathTracker tracker = new PathTracker(request.getPath());
-
-        ArrayList<Filter> allFilters = new ArrayList<>();
-        allFilters.addAll(current.getFilters());
-
-        while (tracker.hasNextPath()) {
-          String piece = tracker.getNextPath();
-          Directory next = current.getDirectory(piece);
-          if (next == null) {
-            return new FilterDispatcher(allFilters, notFoundServlet);
-          }
-
-          tracker.advance();
-          current = next;
-          allFilters.addAll(current.getFilters());
-        }
-
-        String s = tracker.getFilename();
-        if ("".equals(s)) s = "index";
-        Servlet servlet = current.findServlet(s);
-        if (servlet == null) {
-          return new FilterDispatcher(allFilters, notFoundServlet);
-        } else {
-          return new FilterDispatcher(allFilters, servlet);
-        }
-      }
-    }
-  }
-
-  private static class ServletLayoutDomain implements Domain {
-    private final HttpServlet notFoundServlet = new DefaultNotFoundServlet();
-    private final ServletLayout layout;
-    private final SSLContext sslContext;
-
-    ServletLayoutDomain(ServletLayout layout, SSLContext sslContext) {
-      this.layout = layout;
-      this.sslContext = sslContext;
-    }
-
-    @Override
-    public SSLContext getSSLContext() {
-      return sslContext;
-    }
-
-    @Override
-    public FilterDispatcher determineDispatcher(RequestImpl request) {
-      Servlet servlet = layout.find(request.getPath());
-      if (servlet == null) {
-        return new FilterDispatcher(Collections.<Filter>emptyList(), notFoundServlet);
-      } else {
-        return new FilterDispatcher(Collections.<Filter>emptyList(), servlet);
-      }
-    }
   }
 }

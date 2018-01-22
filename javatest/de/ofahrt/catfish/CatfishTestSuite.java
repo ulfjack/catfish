@@ -20,10 +20,12 @@ import de.ofahrt.catfish.utils.CatfishUtilsTestSuite;
   IncrementalHttpResponseGeneratorTest.class,
   MatchMapTest.class,
   MimeMultipartParserTest.class,
+  PathFragmentIteratorTest.class,
   PathTrackerTest.class,
   RequestImplTest.class,
   SessionManagerTest.class,
   SNIParserTest.class,
+  VirtualHostTest.class,
 
   CatfishUtilsTestSuite.class,
   ServletsTestSuite.class,

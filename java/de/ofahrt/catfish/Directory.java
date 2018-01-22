@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Stack;
 
 public final class Directory {
-
   private final String name;
   private final List<Filter> filters;
   private final Map<String, Directory> subdirs;
@@ -44,54 +43,53 @@ public final class Directory {
     return filters;
   }
 
-  public static final class Builder {
+  final static class DirectoryBuilder {
+    private final String name;
+    private final ArrayList<Filter> filters = new ArrayList<>();
+    private final HashMap<String, DirectoryBuilder> subdirs = new HashMap<>();
+    private final MatchMap.Builder<Servlet> servletMap = new MatchMap.Builder<>();
 
-    final static class BuilderDirectory {
-      private final String name;
-      private final ArrayList<Filter> filters = new ArrayList<>();
-      private final HashMap<String, BuilderDirectory> subdirs = new HashMap<>();
-      private final MatchMap.Builder<Servlet> servletMap = new MatchMap.Builder<>();
-
-      public BuilderDirectory(String name) {
-        this.name = name;
-      }
-
-      public BuilderDirectory getDirectory(String directoryName) {
-        return subdirs.get(directoryName);
-      }
-
-      public void add(BuilderDirectory dir) {
-        subdirs.put(dir.name, dir);
-      }
-
-      public void add(Filter filter) {
-        filters.add(filter);
-      }
-
-      public void add(Servlet servlet, String fileSpec) {
-        servletMap.put(fileSpec, servlet);
-      }
-
-      public Directory createDirectory() {
-        HashMap<String, Directory> newSubDirs = new HashMap<>();
-        for (Map.Entry<String, BuilderDirectory> e : subdirs.entrySet()) {
-          newSubDirs.put(e.getKey(), e.getValue().createDirectory());
-        }
-        return new Directory(name, filters, newSubDirs, servletMap.build());
-      }
+    public DirectoryBuilder(String name) {
+      this.name = name;
     }
 
-    private final BuilderDirectory root;
-    private BuilderDirectory current;
-    private final Stack<BuilderDirectory> stack = new Stack<>();
+    public DirectoryBuilder getDirectory(String directoryName) {
+      return subdirs.get(directoryName);
+    }
 
-    public Builder(BuilderDirectory root) {
+    public void add(DirectoryBuilder dir) {
+      subdirs.put(dir.name, dir);
+    }
+
+    public void add(Filter filter) {
+      filters.add(filter);
+    }
+
+    public void add(Servlet servlet, String fileSpec) {
+      servletMap.put(fileSpec, servlet);
+    }
+
+    public Directory createDirectory() {
+      HashMap<String, Directory> newSubDirs = new HashMap<>();
+      for (Map.Entry<String, DirectoryBuilder> e : subdirs.entrySet()) {
+        newSubDirs.put(e.getKey(), e.getValue().createDirectory());
+      }
+      return new Directory(name, filters, newSubDirs, servletMap.build());
+    }
+  }
+
+  public static final class Builder {
+    private final DirectoryBuilder root;
+    private DirectoryBuilder current;
+    private final Stack<DirectoryBuilder> stack = new Stack<>();
+
+    public Builder(DirectoryBuilder root) {
       this.root = root;
       this.current = root;
     }
 
     public Builder() {
-      this(new BuilderDirectory(""));
+      this(new DirectoryBuilder(""));
     }
 
     public Directory build() {
@@ -112,9 +110,9 @@ public final class Directory {
     }
 
     public Builder enter(String directoryName) {
-      BuilderDirectory temp = current.getDirectory(directoryName);
+      DirectoryBuilder temp = current.getDirectory(directoryName);
       if (temp == null) {
-        temp = new BuilderDirectory(directoryName);
+        temp = new DirectoryBuilder(directoryName);
         current.add(temp);
       }
       stack.push(current);

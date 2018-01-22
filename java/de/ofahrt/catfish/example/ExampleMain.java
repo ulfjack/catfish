@@ -10,7 +10,7 @@ import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.CatfishHttpServer.EventType;
 import de.ofahrt.catfish.CatfishHttpServer.ServerListener;
 import de.ofahrt.catfish.ConnectionId;
-import de.ofahrt.catfish.Directory;
+import de.ofahrt.catfish.VirtualHost;
 import de.ofahrt.catfish.fastcgi.FcgiServlet;
 import de.ofahrt.catfish.servlets.CheckCompression;
 import de.ofahrt.catfish.servlets.CheckPost;
@@ -76,18 +76,17 @@ public class ExampleMain {
       }
     });
 
-    Directory dir = new Directory.Builder()
-       .add(new FcgiServlet(), "/hello.php")
-       .add(new CheckPost(), "/post")
-       .add(new CheckCompression(), "/*")
-       .build();
+    VirtualHost.Builder dir = new VirtualHost.Builder()
+       .exact("/hello.php", new FcgiServlet())
+       .exact("/post", new CheckPost())
+       .directory("/", new CheckCompression());
 
-    server.addHead("localhost", dir);
+    server.addVirtualHost("localhost", dir.build());
     server.setKeepAliveAllowed(true);
     server.listenHttp(8080);
     if (sslContext != null) {
       // TODO: This doesn't work for wildcard certificates.
-      server.addHead(domainName, dir, sslContext);
+      server.addVirtualHost(domainName, dir.withSSLContext(sslContext).build());
       server.listenHttps(8081);
     }
   }

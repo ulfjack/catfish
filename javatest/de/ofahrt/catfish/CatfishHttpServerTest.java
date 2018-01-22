@@ -25,9 +25,10 @@ public class CatfishHttpServerTest {
   private static ResponseImpl createResponse(String text) throws Exception {
   	RequestImpl request = parse(text);
   	CatfishHttpServer server = new CatfishHttpServer(null);
-  	Directory.Builder builder = new Directory.Builder();
-  	builder.add(new TestServlet(), "/index");
-  	server.addHead("localhost", builder.build());
+  	VirtualHost host = new VirtualHost.Builder()
+  	    .exact("/index", new TestServlet())
+  	    .build();
+  	server.addVirtualHost("localhost", host);
   	server.setCompressionAllowed(true);
   	return server.createResponse(request);
   }
