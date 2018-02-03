@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.utils;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
