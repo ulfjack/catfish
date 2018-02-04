@@ -122,7 +122,7 @@ public final class CatfishHttpServer {
   }
 
   public String getServerName() {
-    return "Catfish/10.0";
+    return "Catfish/11.0";
   }
 
   void notifySent(RequestImpl request, ResponseImpl response, int amount) {
@@ -183,7 +183,6 @@ public final class CatfishHttpServer {
     response.setCharacterEncoding(defaultCharset);
     response.setVersion(1, 1);
     response.setHeader(HttpFieldName.SERVER, getServerName());
-    response.setHeader(HttpFieldName.DATE, CoreHelper.formatDate(System.currentTimeMillis()));
 
     if (mayCompress) {
       response.setCompressionAllowed(request.supportGzipCompression());
