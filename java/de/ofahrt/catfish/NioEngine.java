@@ -483,7 +483,7 @@ final class NioEngine {
       t.start();
     }
 
-    private void start(final int port, final boolean ssl) throws IOException, InterruptedException {
+    private void start(final InetAddress address, final int port, final boolean ssl) throws IOException, InterruptedException {
       final CountDownLatch latch = new CountDownLatch(1);
       final AtomicReference<IOException> thrownException = new AtomicReference<>();
       queue(new Runnable() {
@@ -495,7 +495,7 @@ final class NioEngine {
             ServerSocketChannel serverChannel = ServerSocketChannel.open();
             serverChannel.configureBlocking(false);
             serverChannel.socket().setReuseAddress(true);
-            serverChannel.socket().bind(new InetSocketAddress((InetAddress) null, port));
+            serverChannel.socket().bind(new InetSocketAddress(address, port));
             SelectionKey key = serverChannel.register(selector, SelectionKey.OP_ACCEPT);
             ServerSocketHandler handler = new ServerSocketHandler(serverChannel, key, ssl);
             key.attach(handler);
@@ -611,8 +611,16 @@ final class NioEngine {
   }
 
   public void start(int port, boolean ssl) throws IOException, InterruptedException {
+    start(null, port, ssl);
+  }
+
+  public void startLocal(int port, boolean ssl) throws IOException, InterruptedException {
+    start(InetAddress.getLoopbackAddress(), port, ssl);
+  }
+
+  private void start(InetAddress address, int port, boolean ssl) throws IOException, InterruptedException {
     int index = mod(connectionIndex.incrementAndGet(), queues.length);
-    queues[index].start(port, ssl);
+    queues[index].start(address, port, ssl);
   }
 
   public void stop() throws InterruptedException {

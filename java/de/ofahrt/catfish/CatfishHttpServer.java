@@ -255,6 +255,10 @@ public final class CatfishHttpServer {
     serverListener.shutdown();
   }
 
+  public void listenHttpLocal(int port) throws IOException, InterruptedException {
+    engine.startLocal(port, /*ssl=*/false);
+  }
+
   public void listenHttp(int port) throws IOException, InterruptedException {
     engine.start(port, /*ssl=*/false);
   }
