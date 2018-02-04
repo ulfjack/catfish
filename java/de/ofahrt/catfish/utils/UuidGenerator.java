@@ -6,8 +6,6 @@ import java.security.SecureRandom;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class UuidGenerator {
-  private static final String HEX_CODE = "0123456789abcdef";
-
   private final SecureRandom rand;
   private final AtomicLong numbers = new AtomicLong();
 
@@ -20,13 +18,7 @@ public final class UuidGenerator {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       digest.update(data);
       byte[] temp = digest.digest();
-      StringBuffer buffer = new StringBuffer();
-      for (int i = 0; i < temp.length; i++) {
-        byte b = temp[i];
-        buffer.append(HEX_CODE.charAt((b >> 4) & 0x0f));
-        buffer.append(HEX_CODE.charAt(b & 0x0f));
-      }
-      return buffer.toString();
+      return Base64.encode(temp);
     } catch (NoSuchAlgorithmException e) {
       throw new RuntimeException(e);
     }
