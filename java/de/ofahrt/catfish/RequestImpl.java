@@ -446,7 +446,7 @@ public final class RequestImpl implements HttpServletRequest {
     if (value == null) {
       return -1;
     }
-    return CoreHelper.unformatDate(value);
+    return CoreHelper.parseDate(value);
   }
 
   @Override
