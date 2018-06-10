@@ -25,15 +25,13 @@ import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
 
 import de.ofahrt.catfish.CatfishHttpServer.RequestCallback;
+import de.ofahrt.catfish.api.HttpHeaders;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpResponseWriter;
+import de.ofahrt.catfish.utils.HttpFieldName;
 
 final class NioEngine {
-
-  private static final byte[] SERVER_FULL_MESSAGE =
-      "HTTP/1.0 503 Service unavailable\r\n\r\nToo many open connections! Connection refused!".getBytes();
-
   private static final boolean DEBUG = false;
 
   private static enum State {
@@ -52,11 +50,12 @@ final class NioEngine {
 
     protected final IncrementalHttpRequestParser parser;
     protected HttpRequest request;
+    protected HttpResponse response;
     protected byte[] inputBuffer = new byte[1024];
     protected ByteBuffer inputByteBuffer = ByteBuffer.wrap(inputBuffer);
 
-    protected boolean isKeepAlive = false;
-    protected ResponseGenerator generator;
+    protected boolean isKeepAlive;
+    protected AsyncInputStream generator;
     protected byte[] outputBuffer = new byte[1024];
     protected ByteBuffer outputByteBuffer = ByteBuffer.wrap(outputBuffer);
 
@@ -81,7 +80,6 @@ final class NioEngine {
       if (DEBUG) System.out.println("NEXT REQUEST!");
       parser.reset();
       isKeepAlive = false;
-      generator = null;
       state = State.READ_REQUEST;
     }
 
@@ -125,11 +123,13 @@ final class NioEngine {
         try {
           request = parser.getRequest();
           if (DEBUG) printRequest(System.out);
+          key.interestOps(0);
+          submitJob();
         } catch (MalformedRequestException e) {
-          throw new IllegalStateException("Implement me!");
+          HttpResponse responseToWrite = e.getErrorResponse();
+          ResponseGenerator gen = ResponseGenerator.buffered(responseToWrite, false);
+          startOutput(responseToWrite, gen);
         }
-        key.interestOps(0);
-        submitJob();
         return true;
       }
       return false;
@@ -161,52 +161,81 @@ final class NioEngine {
       out.flush();
     }
 
-    protected final void submitJob() {
+    private final void submitJob() {
       server.queueRequest(new RequestCallback() {
         @Override
         public void run() {
           HttpResponseWriter writer = new HttpResponseWriter() {
             @Override
-            public void commitBuffered(HttpResponse response) {
-              serverListener.notifyRequest(connection, response);
-              ResponseGenerator gen = ResponseGenerator.buffered(response, false);
+            public void commitBuffered(HttpResponse responseToWrite) {
+              byte[] body = response.getBody();
+              int announcedContentLength = parseContentLength(responseToWrite);
+              if (announcedContentLength != body.length) {
+                responseToWrite = responseToWrite.withHeaderOverrides(
+                    HttpHeaders.of(HttpFieldName.CONTENT_LENGTH, Integer.toString(body.length)));
+              }
+              HttpResponse actualResponse = responseToWrite;
+              // We want to create the ResponseGenerator on the current thread.
+              ResponseGenerator gen = ResponseGenerator.buffered(actualResponse, false);
               // This runs in a thread pool thread, so we need to wake up the main thread.
-              queue.queue(() -> startOutput(gen));
+              queue.queue(() -> startOutput(actualResponse, gen));
             }
 
             @Override
-            public OutputStream commitStreamed(HttpResponse response) throws IOException {
-              throw new UnsupportedOperationException();
+            public OutputStream commitStreamed(HttpResponse responseToWrite) throws IOException {
+              StreamingResponseGenerator gen = new StreamingResponseGenerator(
+                  responseToWrite, () -> { queue.queue(() -> resumeOutput()); });
+              queue.queue(() -> startOutput(responseToWrite, gen));
+              return gen.getOutputStream();
             }
           };
           server.createResponse(connection, request, writer);
+        }
+
+        private int parseContentLength(HttpResponse responseToWrite) {
+          String value = responseToWrite.getHeaders().get(HttpFieldName.CONTENT_LENGTH);
+          if (value == null) {
+            return -1;
+          }
+          try {
+            return Integer.parseInt(value);
+          } catch (NumberFormatException e) {
+            return -1;
+          }
         }
 
         @Override
         public void reject() {
           // This will always be called in the event thread, so it's safe to access Connection here.
           rejectedCounter.incrementAndGet();
-          isKeepAlive = false;
-          outputByteBuffer.clear();
-          outputByteBuffer.put(SERVER_FULL_MESSAGE);
-          outputByteBuffer.flip();
-          state = State.WRITE_RESPONSE;
-          key.interestOps(SelectionKey.OP_WRITE);
+          HttpResponse responseToWrite = HttpResponse.SERVICE_UNAVAILABLE;
+          ResponseGenerator gen = ResponseGenerator.buffered(responseToWrite, false);
+          startOutput(responseToWrite, gen);
         }
       });
     }
 
-    protected final void startOutput(ResponseGenerator gen) {
+    private final void startOutput(HttpResponse responseToWrite, AsyncInputStream gen) {
+      this.response = responseToWrite;
+      this.generator = gen;
+      isKeepAlive = "keep-alive".equals(response.getHeaders().get(HttpFieldName.CONNECTION));
+      if (DEBUG) CoreHelper.printResponse(System.out, response);
+      resumeOutput();
+    }
+
+    private void resumeOutput() {
       if (!key.isValid()) {
         return;
       }
-      this.generator = gen;
-      isKeepAlive = gen.isKeepAlive();
-      if (DEBUG) CoreHelper.printResponse(System.out, gen.getResponse());
-      outputByteBuffer.clear();
-      int available = gen.generate(outputBuffer, 0, outputBuffer.length);
-      outputByteBuffer.limit(available);
       state = State.WRITE_RESPONSE;
+      outputByteBuffer.clear();
+      int available = generator.readAsync(outputBuffer, 0, outputBuffer.length);
+      if (available <= 0) {
+        serverListener.notifyInternalError(connection, new IllegalStateException());
+        close();
+        return;
+      }
+      outputByteBuffer.limit(available);
       key.interestOps(SelectionKey.OP_WRITE);
     }
 
@@ -262,19 +291,25 @@ final class NioEngine {
       }
       int freeSpace = outputByteBuffer.capacity() - outputByteBuffer.limit();
       if ((freeSpace > 0) && (generator != null)) {
-        int available = generator.generate(outputBuffer, outputByteBuffer.limit(), freeSpace);
-        outputByteBuffer.limit(outputByteBuffer.limit() + available);
+        int bytesGenerated = generator.readAsync(outputBuffer, outputByteBuffer.limit(), freeSpace);
+        if (bytesGenerated > 0) {
+          outputByteBuffer.limit(outputByteBuffer.limit() + bytesGenerated);
+        } else if (bytesGenerated < 0) {
+          generator = null;
+        }
       }
       if (outputByteBuffer.remaining() == 0) {
-        if (generator != null) {
-          server.notifySent(connection, request, generator.getResponse(), 0);
-        }
-        if (isKeepAlive) {
-          reset();
-          key.interestOps(SelectionKey.OP_READ);
-          consumeInput();
+        if (generator == null) {
+          server.notifySent(connection, request, response, 0);
+          if (isKeepAlive) {
+            reset();
+            key.interestOps(SelectionKey.OP_READ);
+            consumeInput();
+          } else {
+            close();
+          }
         } else {
-          close();
+          key.interestOps(0);
         }
       }
     }
@@ -431,21 +466,27 @@ final class NioEngine {
         outputByteBuffer.compact(); // prepare for writing - if empty, equivalent to clear()
         int freeSpace = outputByteBuffer.remaining();
         if ((freeSpace > 0) && (generator != null)) {
-          int bytesGenerated = generator.generate(outputBuffer, outputByteBuffer.position(), freeSpace);
-          outputByteBuffer.position(outputByteBuffer.position() + bytesGenerated);
+          int bytesGenerated = generator.readAsync(outputBuffer, outputByteBuffer.position(), freeSpace);
+          if (bytesGenerated > 0) {
+            outputByteBuffer.position(outputByteBuffer.position() + bytesGenerated);
+          } else if (bytesGenerated < 0) {
+            generator = null;
+          }
         }
         outputByteBuffer.flip(); // prepare for reading
-        if (DEBUG) System.out.println("After generating response: "+outputByteBuffer.remaining());
+        if (DEBUG) System.out.println("After generating response: " + outputByteBuffer.remaining());
         if (outputByteBuffer.remaining() == 0) {
-          if (generator != null) {
-            server.notifySent(connection, request, generator.getResponse(), 0);
-          }
-          if (isKeepAlive) {
-            reset();
-            key.interestOps(SelectionKey.OP_READ);
-            consumeInput();
+          if (generator == null) {
+            server.notifySent(connection, request, response, 0);
+            if (isKeepAlive) {
+              reset();
+              key.interestOps(SelectionKey.OP_READ);
+              consumeInput();
+            } else {
+              close();
+            }
           } else {
-            close();
+            key.interestOps(0);
           }
         }
       }

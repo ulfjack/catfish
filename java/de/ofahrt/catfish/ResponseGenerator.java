@@ -6,27 +6,20 @@ import java.util.Map;
 
 import de.ofahrt.catfish.api.HttpHeaders;
 import de.ofahrt.catfish.api.HttpResponse;
-import de.ofahrt.catfish.utils.HttpFieldName;
 
-final class ResponseGenerator {
+final class ResponseGenerator implements AsyncInputStream {
   private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
   private static final String CRLF = "\r\n";
 
   static ResponseGenerator buffered(HttpResponse response, boolean includeBody) {
     byte[] body = includeBody ? response.getBody() : EMPTY_BYTE_ARRAY;
-    if (body == null) {
-      throw new IllegalArgumentException();
-    }
-    response = response.withHeaderOverrides(
-        HttpHeaders.of(HttpFieldName.CONTENT_LENGTH, Integer.toString(body.length)));
     HttpHeaders headers = response.getHeaders();
     byte[][] data = new byte[][] {
       statusLineToByteArray(response),
       headersToByteArray(headers),
       body
     };
-    boolean keepAlive = "keep-alive".equals(headers.get(HttpFieldName.CONNECTION));
-    return new ResponseGenerator(response, keepAlive, data);
+    return new ResponseGenerator(data);
   }
 
   private static byte[] statusLineToByteArray(HttpResponse response) {
@@ -52,29 +45,18 @@ final class ResponseGenerator {
     return buffer.toString().getBytes(StandardCharsets.UTF_8);
   }
 
-  private final HttpResponse response;
-  private final boolean keepAlive;
   private final byte[][] data;
   private int currentBlock;
   private int currentIndex;
 
-  private ResponseGenerator(HttpResponse response, boolean keepAlive, byte[][] data) {
-    this.response = response;
-    this.keepAlive = keepAlive;
+  private ResponseGenerator(byte[][] data) {
     this.data = data;
   }
 
-  public HttpResponse getResponse() {
-    return response;
-  }
-
-  public boolean isKeepAlive() {
-    return keepAlive;
-  }
-
-  public int generate(byte[] dest, int offset, int length) {
+  @Override
+  public int readAsync(byte[] dest, int offset, int length) {
     if (currentBlock >= data.length) {
-      return 0;
+      return -1;
     }
     int totalBytesCopied = 0;
     while (length > 0) {
@@ -91,6 +73,10 @@ final class ResponseGenerator {
       if (currentBlock >= data.length) {
         break;
       }
+    }
+    if ((totalBytesCopied == 0) && (currentBlock >= data.length)) {
+      // There wasn't actually any data left.
+      return -1;
     }
     return totalBytesCopied;
   }

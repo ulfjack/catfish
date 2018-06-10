@@ -17,7 +17,7 @@ public class ResponseGeneratorTest {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     byte[] buffer = new byte[39];
     int len;
-    while ((len = generator.generate(buffer, 0, buffer.length)) != 0) {
+    while ((len = generator.readAsync(buffer, 0, buffer.length)) != 0) {
       out.write(buffer, 0, len);
     }
     return out.toByteArray();

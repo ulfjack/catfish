@@ -8,9 +8,8 @@ import javax.net.ssl.SSLContext;
 
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.Connection;
-import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.HttpServerListener;
-import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.fastcgi.FcgiServlet;
 import de.ofahrt.catfish.servlets.CheckCompression;
 import de.ofahrt.catfish.servlets.CheckPost;
@@ -58,13 +57,6 @@ public class ExampleMain {
       @Override
       public void notifyInternalError(Connection id, Throwable throwable) {
         throwable.printStackTrace();
-      }
-
-      @Override
-      public void notifyRequest(Connection id, HttpResponse response) {
-        if (response.getStatusCode() >= 400) {
-          System.out.println("REQUEST FAILED: " + response.getStatusCode() + " " + response.getStatusLine());
-        }
       }
     });
 

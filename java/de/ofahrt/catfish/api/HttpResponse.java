@@ -6,13 +6,22 @@ import java.io.OutputStream;
 import de.ofahrt.catfish.utils.HttpResponseCode;
 
 public interface HttpResponse {
+  // 200
+  public static final HttpResponse OK = new SimpleResponse(HttpResponseCode.OK);
   public static final HttpResponse NO_CONTENT = new SimpleResponse(HttpResponseCode.NO_CONTENT);
-  public static final HttpResponse METHOD_NOT_ALLOWED = new SimpleResponse(HttpResponseCode.METHOD_NOT_ALLOWED);
-  public static final HttpResponse NOT_FOUND = new SimpleResponse(HttpResponseCode.NOT_FOUND);
-  public static final HttpResponse NOT_MODIFIED = new SimpleResponse(HttpResponseCode.NOT_MODIFIED);
-  public static final HttpResponse INTERNAL_SERVER_ERROR = new SimpleResponse(HttpResponseCode.INTERNAL_SERVER_ERROR);
+
+  // 300
+  public static final HttpResponse NOT_MODIFIED = new SimpleResponse(HttpResponseCode.NOT_MODIFIED); // 304
+
+  // 400
   public static final HttpResponse BAD_REQUEST = new SimpleResponse(HttpResponseCode.BAD_REQUEST);
+  public static final HttpResponse NOT_FOUND = new SimpleResponse(HttpResponseCode.NOT_FOUND);
+  public static final HttpResponse METHOD_NOT_ALLOWED = new SimpleResponse(HttpResponseCode.METHOD_NOT_ALLOWED);
   public static final HttpResponse EXPECTATION_FAILED = new SimpleResponse(HttpResponseCode.EXPECTATION_FAILED);
+
+  // 500
+  public static final HttpResponse INTERNAL_SERVER_ERROR = new SimpleResponse(HttpResponseCode.INTERNAL_SERVER_ERROR);
+  public static final HttpResponse SERVICE_UNAVAILABLE = new SimpleResponse(HttpResponseCode.SERVICE_UNAVAILABLE);
 
   public static HttpResponse forInternalServerError(Throwable throwable) {
     return throwable == null
@@ -20,16 +29,16 @@ public interface HttpResponse {
         : InternalServerErrorResponse.create(throwable);
   }
 
-  public static HttpResponse foundAt(String destinationUrl) {
-    return RedirectResponse.create(HttpResponseCode.FOUND, destinationUrl);
-  }
-
   public static HttpResponse movedPermanentlyTo(String destinationUrl) {
-    return RedirectResponse.create(HttpResponseCode.MOVED_PERMANENTLY, destinationUrl);
+    return RedirectResponse.create(HttpResponseCode.MOVED_PERMANENTLY, destinationUrl); // 301
   }
 
-  public static HttpResponse temporaryRedirect(String destinationUrl) {
-    return RedirectResponse.create(HttpResponseCode.TEMPORARY_REDIRECT, destinationUrl);
+  public static HttpResponse foundAt(String destinationUrl) {
+    return RedirectResponse.create(HttpResponseCode.FOUND, destinationUrl); // 302
+  }
+
+  public static HttpResponse temporaryRedirectTo(String destinationUrl) {
+    return RedirectResponse.create(HttpResponseCode.TEMPORARY_REDIRECT, destinationUrl); // 307
   }
 
   default HttpVersion getProtocolVersion() {

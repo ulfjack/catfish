@@ -26,6 +26,7 @@ import de.ofahrt.catfish.utils.CatfishUtilsTestSuite;
   RequestImplTest.class,
   SessionManagerTest.class,
   SNIParserTest.class,
+  StreamingResponseGeneratorTest.class,
   VirtualHostTest.class,
 
   CatfishApiTestSuite.class,

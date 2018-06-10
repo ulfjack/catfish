@@ -1,5 +1,6 @@
 package de.ofahrt.catfish;
 
+import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 
 public interface HttpServerListener {
@@ -25,8 +26,9 @@ public interface HttpServerListener {
 
   /**
    * @param connection
+   * @param request
    * @param response
    */
-  default void notifyRequest(Connection connection, HttpResponse response) {
+  default void notifyRequest(Connection connection, HttpRequest request, HttpResponse response) {
   }
 }
