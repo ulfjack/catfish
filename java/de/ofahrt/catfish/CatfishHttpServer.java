@@ -16,6 +16,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import de.ofahrt.catfish.api.HttpHeaders;
 import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.HttpFieldName;
 import de.ofahrt.catfish.utils.HttpMethodName;
@@ -171,7 +172,7 @@ public final class CatfishHttpServer {
       response.setHeadRequest();
     }
     response.setCharacterEncoding(defaultCharset);
-    response.setVersion(1, 1);
+    response.setVersion(HttpVersion.HTTP_1_1);
     if (mayCompress) {
       response.setCompressionAllowed(request.supportGzipCompression());
     }

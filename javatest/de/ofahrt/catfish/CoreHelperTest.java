@@ -14,16 +14,6 @@ public class CoreHelperTest {
   }
 
   @Test
-  public void compareVersion1() {
-    assertEquals(-1, CoreHelper.compareVersion(0, 7, 1, 1));
-  }
-
-  @Test
-  public void compareVersion2() {
-    assertEquals(-1, CoreHelper.compareVersion(1, 9, 1, 11));
-  }
-
-  @Test
   public void isTokenCharShouldAgreeWithIncrementalParser() {
   	for (char c = 0; c < 256; c++) {
   		assertEquals("Odd result for "+(int) c,

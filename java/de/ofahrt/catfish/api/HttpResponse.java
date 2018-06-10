@@ -98,8 +98,8 @@ public interface HttpResponse {
     }
   }
 
-  default String getProtocol() {
-    return "HTTP/1.1";
+  default HttpVersion getProtocol() {
+    return HttpVersion.HTTP_1_1;
   }
 
   int getStatusCode();
@@ -130,7 +130,7 @@ public interface HttpResponse {
   default HttpResponse withHeaderOverrides(HttpHeaders overrides) {
     return new HttpResponse() {
       @Override
-      public String getProtocol() {
+      public HttpVersion getProtocol() {
         return HttpResponse.this.getProtocol();
       }
 

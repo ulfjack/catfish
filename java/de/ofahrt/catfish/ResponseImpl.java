@@ -19,6 +19,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import de.ofahrt.catfish.api.HttpHeaders;
 import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.utils.HttpContentType;
 import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.HttpFieldName;
@@ -30,8 +31,7 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
 
   private boolean isHeadRequest;
 
-  private int majorVersion = 0;
-  private int minorVersion = 9;
+  private HttpVersion version = HttpVersion.HTTP_1_1;
   private String charset = "UTF-8";
   private int status = HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
   private Locale defaultLocale = Locale.US;
@@ -58,17 +58,16 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
     isHeadRequest = true;
   }
 
-  public void setVersion(int majorVersion, int minorVersion) {
+  void setVersion(HttpVersion version) {
     if (isCommitted) {
       throw new IllegalStateException();
     }
-    this.majorVersion = majorVersion;
-    this.minorVersion = minorVersion;
+    this.version = version;
   }
 
   @Override
-  public String getProtocol() {
-    return "HTTP/" + majorVersion + "." + minorVersion;
+  public HttpVersion getProtocol() {
+    return version;
   }
 
   @Override

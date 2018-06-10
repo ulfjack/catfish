@@ -7,6 +7,8 @@ import java.io.UnsupportedEncodingException;
 
 import org.junit.Test;
 
+import de.ofahrt.catfish.api.HttpVersion;
+
 public class ResponseGeneratorTest {
 
   private byte[] readFully(ResponseGenerator generator) {
@@ -26,6 +28,7 @@ public class ResponseGeneratorTest {
   @Test
   public void simple() throws Exception {
     ResponseImpl response = new ResponseImpl();
+    response.setVersion(HttpVersion.HTTP_0_9);
     response.setStatus(200);
     response.close();
     ResponseGenerator generator = ResponseGenerator.of(response);
@@ -35,6 +38,7 @@ public class ResponseGeneratorTest {
   @Test
   public void simpleWithBody() throws Exception {
     ResponseImpl response = new ResponseImpl();
+    response.setVersion(HttpVersion.HTTP_0_9);
     response.setStatus(200);
     response.getWriter().write("xx");
     response.close();

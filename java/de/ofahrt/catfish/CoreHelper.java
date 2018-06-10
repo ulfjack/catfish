@@ -84,15 +84,6 @@ final class CoreHelper {
     return "%"+toHex(0xE0 + l)+"%"+toHex(0x80 + k)+"%"+toHex(0x80+j);
   }
 
-  // Http version comparisons:
-  public static int compareVersion(int major0, int minor0, int major1, int minor1) {
-  	if (major0 > major1) return 1;
-  	if (major0 < major1) return -1;
-  	if (minor0 > minor1) return 1;
-  	if (minor0 < minor1) return -1;
-  	return 0;
-  }
-
   private CoreHelper() {
     // Disallow instantiation.
   }

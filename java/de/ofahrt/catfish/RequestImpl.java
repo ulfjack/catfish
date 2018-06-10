@@ -29,6 +29,7 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 
 import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.bridge.Enumerations;
 import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.HttpFieldName;
@@ -49,8 +50,7 @@ public final class RequestImpl implements HttpServletRequest {
   private Locale defaultLocale = Locale.US;
   private final ResponseImpl response;
 
-  private final int majorVersion;
-  private final int minorVersion;
+  private final HttpVersion version;
   private String charset = DEFAULT_CHARSET;
   private final InetSocketAddress localAddress;
   private final InetSocketAddress clientAddress;
@@ -74,8 +74,7 @@ public final class RequestImpl implements HttpServletRequest {
 
   private RequestImpl(Builder builder) {
     this.response = new ResponseImpl();
-    this.majorVersion = builder.majorVersion;
-    this.minorVersion = builder.minorVersion;
+    this.version = builder.version;
     this.localAddress = builder.localAddress;
     this.clientAddress = builder.clientAddress;
     this.method = builder.method;
@@ -122,12 +121,8 @@ public final class RequestImpl implements HttpServletRequest {
     return response;
   }
 
-  public int getMajorVersion() {
-    return majorVersion;
-  }
-
-  public int getMinorVersion() {
-    return minorVersion;
+  public HttpVersion getVersion() {
+    return version;
   }
 
   public String getUnparsedUri() {
@@ -161,7 +156,7 @@ public final class RequestImpl implements HttpServletRequest {
   }
 
   public boolean mayKeepAlive() {
-    if (CoreHelper.compareVersion(majorVersion, minorVersion, 1, 1) >= 0) {
+    if (version.compareTo(HttpVersion.HTTP_1_1) >= 0) {
       if ("close".equals(getHeader(HttpFieldName.CONNECTION))) {
         return false;
       } else {
@@ -312,7 +307,7 @@ public final class RequestImpl implements HttpServletRequest {
 
   @Override
   public String getProtocol() {
-    return "HTTP/" + majorVersion + "." + minorVersion;
+    return version.toString();
   }
 
   @Override
@@ -591,11 +586,10 @@ public final class RequestImpl implements HttpServletRequest {
   }
 
   public static class Builder {
-    private int majorVersion = 0;
-    private int minorVersion = 9;
-    private InetSocketAddress localAddress = null;
-    private InetSocketAddress clientAddress = null;
-    private String method = "UNKNOWN";
+    private HttpVersion version;
+    private InetSocketAddress localAddress;
+    private InetSocketAddress clientAddress;
+    private String method;
     private URI uri;
     private String unparsedUri;
 
@@ -603,21 +597,22 @@ public final class RequestImpl implements HttpServletRequest {
 //    private SessionManager sessionManager;
 //    private HttpSession session;
 
-    private Map<String,String> headers = new TreeMap<>();
+    private Map<String,String> headers;
 
     private byte[] body;
 
     private HttpResponse errorResponse;
 
     public Builder() {
+      reset();
     }
 
     public void reset() {
-      majorVersion = 0;
-      minorVersion = 9;
+      version = HttpVersion.HTTP_0_9;
       method = "UNKNOWN";
       uri = null;
       unparsedUri = null;
+      ssl = false;
       headers = new TreeMap<>();
       body = null;
       errorResponse = null;
@@ -625,7 +620,7 @@ public final class RequestImpl implements HttpServletRequest {
 
     public RequestImpl build() {
       if ((errorResponse == null)
-          && ((majorVersion > 1) || ((majorVersion == 1) && (minorVersion >= 1)))
+          && (version.compareTo(HttpVersion.HTTP_1_1) >= 0)
           && !headers.containsKey(HttpFieldName.HOST)) {
         setError(HttpServletResponse.SC_BAD_REQUEST, "Missing 'Host' field");
       }
@@ -650,13 +645,8 @@ public final class RequestImpl implements HttpServletRequest {
       return this;
     }
 
-    public Builder setMajorVersion(int majorVersion) {
-      this.majorVersion = majorVersion;
-      return this;
-    }
-
-    public Builder setMinorVersion(int minorVersion) {
-      this.minorVersion = minorVersion;
+    public Builder setVersion(HttpVersion version) {
+      this.version = version;
       return this;
     }
 
