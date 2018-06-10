@@ -2,12 +2,11 @@ package de.ofahrt.catfish;
 
 import java.io.PrintStream;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
-import de.ofahrt.catfish.utils.HttpDate;
-import de.ofahrt.catfish.utils.HttpResponseCode;
+import de.ofahrt.catfish.api.HttpResponse;
 
 final class CoreHelper {
 
@@ -52,21 +51,11 @@ final class CoreHelper {
     return name.startsWith("text/");
   }
 
-  public static final String formatDate(long date) {
-    return HttpDate.formatDate(date);
-  }
-
-  public static final long parseDate(String date) {
-    return HttpDate.parseDate(date);
-  }
-
   // Response text output for debugging:
-  public static final void printResponse(PrintStream out, ReadableHttpResponse response) {
-    out.println(response.getProtocol() + " " + HttpResponseCode.getStatusText(response.getStatusCode()));
-    Enumeration<String> it = response.getHeaderNames();
-    while (it.hasMoreElements()) {
-    	String key = it.nextElement();
-    	out.println(key+": "+response.getHeader(key));
+  public static final void printResponse(PrintStream out, HttpResponse response) {
+    out.println(response.getProtocol() + " " + response.getStatusLine());
+    for (Map.Entry<String, String> e : response.getHeaders()) {
+    	out.println(e.getKey() + ": " + e.getValue());
     }
     out.flush();
   }

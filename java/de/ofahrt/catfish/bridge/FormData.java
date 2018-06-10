@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.utils;
+package de.ofahrt.catfish.bridge;
 
 import java.util.Map;
 import java.util.TreeMap;

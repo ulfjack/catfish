@@ -7,8 +7,8 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import de.ofahrt.catfish.bridge.ServletHelper;
 import de.ofahrt.catfish.utils.MimeType;
-import de.ofahrt.catfish.utils.ServletHelper;
 
 public final class CheckCompression extends HttpServlet {
 

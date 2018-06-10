@@ -9,8 +9,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import javax.servlet.http.HttpServletRequest;
 
-import de.ofahrt.catfish.ReadableHttpResponse;
 import de.ofahrt.catfish.RequestListener;
+import de.ofahrt.catfish.api.HttpResponse;
 
 public final class WebalizerLogger implements RequestListener {
 
@@ -77,7 +77,7 @@ public final class WebalizerLogger implements RequestListener {
   }
 
   @Override
-  public void notifySent(HttpServletRequest request, ReadableHttpResponse response, int amount) {
+  public void notifySent(HttpServletRequest request, HttpResponse response, int amount) {
   	String logentry = formatter.format(request, response, amount);
     try {
       jobs.put(logentry);

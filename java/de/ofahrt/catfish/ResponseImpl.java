@@ -9,27 +9,22 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.Writer;
-import java.nio.charset.Charset;
-import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Locale;
-import java.util.Map;
 import java.util.zip.GZIPOutputStream;
 
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletResponse;
 
-import de.ofahrt.catfish.utils.Enumerations;
+import de.ofahrt.catfish.api.HttpHeaders;
+import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.utils.HttpContentType;
+import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.HttpFieldName;
 import de.ofahrt.catfish.utils.HttpResponseCode;
-import de.ofahrt.catfish.utils.ServletHelper;
 
-public final class ResponseImpl implements HttpServletResponse, ReadableHttpResponse {
-  private static final Charset DEFAULT_CHARSET = Charset.forName("UTF-8");
-  private static final String CRLF = "\r\n";
-
+public final class ResponseImpl implements HttpServletResponse, HttpResponse {
   private boolean isCommitted;
   private boolean isCompleted;
 
@@ -92,22 +87,8 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
     header.put(canonicalize(key), value);
   }
 
-  @Override
-  public String getHeader(String key) {
+  private String getHeader(String key) {
     return header.get(canonicalize(key));
-  }
-
-  @Override
-  public Enumeration<String> getHeaderNames() {
-    return Enumerations.of(header.keySet());
-  }
-
-  public Iterator<String> getHeaderKeyIterator() {
-    return header.keySet().iterator();
-  }
-
-  boolean isKeepAlive() {
-    return "keep-alive".equals(getHeader(HttpFieldName.CONNECTION));
   }
 
   void setCompressionAllowed(boolean how) {
@@ -223,38 +204,8 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
     }
   }
 
-  byte[] getHeaders() {
-    if (!isCommitted) {
-      commit();
-    }
-    if (!isCompleted) {
-      close();
-    }
-    if ((keepWriter != null) || (keepStream != null)) {
-      throw new IllegalStateException();
-    }
-    StringBuilder buffer = new StringBuilder(200);
-
-    buffer.append("HTTP/");
-    buffer.append(majorVersion).append(".").append(minorVersion);
-    buffer.append(" ");
-    buffer.append(HttpResponseCode.getStatusText(status));
-    buffer.append(CRLF);
-
-    Iterator<Map.Entry<String, String>> it = header.entrySet().iterator();
-    while (it.hasNext()) {
-      Map.Entry<String, String> entry = it.next();
-      buffer.append(entry.getKey());
-      buffer.append(": ");
-      buffer.append(entry.getValue());
-      buffer.append(CRLF);
-    }
-    buffer.append(CRLF);
-    return buffer.toString().getBytes(DEFAULT_CHARSET);
-  }
-
-  byte[] getBody() {
-    return isHeadRequest ? null : bodyData;
+  byte[] bodyToByteArray() {
+    return isHeadRequest || bodyData == null ? new byte[0] : bodyData;
   }
 
   // ServletResponse API Implementation
@@ -358,7 +309,7 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
     if (type == null) {
       throw new NullPointerException();
     }
-    if (!CoreHelper.shouldCompress(ServletHelper.getMimeTypeFromContentType(type))) {
+    if (!CoreHelper.shouldCompress(HttpContentType.getMimeTypeFromContentType(type))) {
       disableCompression();
     }
     // TODO: The charset may not be set yet. Store the content type as a field and only set the
@@ -391,7 +342,7 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
     if (isCommitted) {
       throw new IllegalStateException();
     }
-    addHeader(canonicalize(name), CoreHelper.formatDate(date));
+    addHeader(canonicalize(name), HttpDate.formatDate(date));
   }
 
   @Override
@@ -476,7 +427,7 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
     if (isCommitted) {
       throw new IllegalStateException();
     }
-    setHeaderInternal(name, CoreHelper.formatDate(date));
+    setHeaderInternal(name, HttpDate.formatDate(date));
   }
 
   @Override
@@ -512,6 +463,21 @@ public final class ResponseImpl implements HttpServletResponse, ReadableHttpResp
     if (isCommitted) {
       throw new IllegalStateException();
     }
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public HttpHeaders getHeaders() {
+    return HttpHeaders.of(header);
+  }
+
+  @Override
+  public byte[] getBody() {
+    return bodyToByteArray();
+  }
+
+  @Override
+  public void writeBodyTo(OutputStream out) throws IOException {
     throw new UnsupportedOperationException();
   }
 }

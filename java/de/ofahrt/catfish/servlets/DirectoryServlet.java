@@ -8,9 +8,9 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import de.ofahrt.catfish.bridge.ServletHelper;
 import de.ofahrt.catfish.utils.MimeType;
 import de.ofahrt.catfish.utils.MimeTypeRegistry;
-import de.ofahrt.catfish.utils.ServletHelper;
 
 public final class DirectoryServlet extends HttpServlet {
   private static final long serialVersionUID = 1L;

@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import de.ofahrt.catfish.MimeMultipartContainer.Part;
-import de.ofahrt.catfish.utils.ServletHelper;
+import de.ofahrt.catfish.utils.HttpContentType;
 
 final class IncrementalMimeMultipartParser {
 
@@ -38,7 +38,7 @@ final class IncrementalMimeMultipartParser {
   private List<Part> parts = new ArrayList<>();
 
   public IncrementalMimeMultipartParser(String contentType) {
-  	String[] parsedContentType = ServletHelper.parseContentType(contentType);
+  	String[] parsedContentType = HttpContentType.parseContentType(contentType);
   	if (!"multipart".equals(parsedContentType[0]))
   		throw new IllegalArgumentException("content type must be a multipart type");
   	char[] foundBoundary = null;

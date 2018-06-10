@@ -28,7 +28,9 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 
-import de.ofahrt.catfish.utils.Enumerations;
+import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.bridge.Enumerations;
+import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.HttpFieldName;
 
 public final class RequestImpl implements HttpServletRequest {
@@ -57,7 +59,7 @@ public final class RequestImpl implements HttpServletRequest {
   private final String unparsedUri;
 
   // Session Management & Security
-  private final boolean secure;
+  private final boolean ssl;
   private SessionManager sessionManager;
   private HttpSession session;
 
@@ -68,8 +70,7 @@ public final class RequestImpl implements HttpServletRequest {
 
   private byte[] body;
 
-  private final int errorCode;
-  private final String error;
+  private final HttpResponse errorResponse;
 
   private RequestImpl(Builder builder) {
     this.response = new ResponseImpl();
@@ -81,10 +82,9 @@ public final class RequestImpl implements HttpServletRequest {
     this.unparsedUri = builder.unparsedUri;
     this.uri = builder.uri;
     this.headers = builder.headers;
-    this.secure = builder.secure;
+    this.ssl = builder.ssl;
     this.body = builder.body;
-    this.errorCode = builder.errorCode;
-    this.error = builder.error;
+    this.errorResponse = builder.errorResponse;
   }
 
   private static Map<String, String> parseQuery(String query, String charset) {
@@ -111,15 +111,11 @@ public final class RequestImpl implements HttpServletRequest {
   }
 
   boolean hasError() {
-    return error != null;
+    return errorResponse != null;
   }
 
-  int getErrorCode() {
-    return errorCode;
-  }
-
-  String getError() {
-    return error;
+  HttpResponse getErrorResponse() {
+    return errorResponse;
   }
 
   public ResponseImpl getResponse() {
@@ -354,7 +350,7 @@ public final class RequestImpl implements HttpServletRequest {
 
   @Override
   public String getScheme() {
-    return secure ? "https" : "http";
+    return ssl ? "https" : "http";
   }
 
   @Override
@@ -388,13 +384,13 @@ public final class RequestImpl implements HttpServletRequest {
           }
         }
       }
-      return secure ? HTTPS_PORT : HTTP_PORT;
+      return ssl ? HTTPS_PORT : HTTP_PORT;
     } else if ((uri != null) && uri.isAbsolute()) {
       int result = uri.getPort();
       if (result >= 0) {
         return result;
       }
-      return secure ? HTTPS_PORT : HTTP_PORT;
+      return ssl ? HTTPS_PORT : HTTP_PORT;
     } else {
       return localAddress.getPort();
     }
@@ -402,7 +398,7 @@ public final class RequestImpl implements HttpServletRequest {
 
   @Override
   public boolean isSecure() {
-    return secure;
+    return ssl;
   }
 
   @Override
@@ -446,7 +442,7 @@ public final class RequestImpl implements HttpServletRequest {
     if (value == null) {
       return -1;
     }
-    return CoreHelper.parseDate(value);
+    return HttpDate.parseDate(value);
   }
 
   @Override
@@ -525,7 +521,7 @@ public final class RequestImpl implements HttpServletRequest {
     result.append(getScheme()).append("://");
     result.append(getServerName());
     int port = getServerPort();
-    if ((secure && (port != HTTPS_PORT)) || (!secure && port != HTTP_PORT)) {
+    if ((ssl && (port != HTTPS_PORT)) || (!ssl && port != HTTP_PORT)) {
       result.append(':').append(port);
     }
     if (uri != null) {
@@ -556,7 +552,7 @@ public final class RequestImpl implements HttpServletRequest {
 
       session = sessionManager.getSession(id);
       if ((id == null) || !id.equals(session.getId())) {
-        response.setCookie("id="+session.getId()+"; path=/");
+        response.setCookie("id=" + session.getId() + "; path=/");
       }
     }
     return session;
@@ -603,7 +599,7 @@ public final class RequestImpl implements HttpServletRequest {
     private URI uri;
     private String unparsedUri;
 
-    private boolean secure = false;
+    private boolean ssl;
 //    private SessionManager sessionManager;
 //    private HttpSession session;
 
@@ -611,8 +607,7 @@ public final class RequestImpl implements HttpServletRequest {
 
     private byte[] body;
 
-    private int errorCode;
-    private String error;
+    private HttpResponse errorResponse;
 
     public Builder() {
     }
@@ -625,17 +620,16 @@ public final class RequestImpl implements HttpServletRequest {
       unparsedUri = null;
       headers = new TreeMap<>();
       body = null;
-      errorCode = 0;
-      error = null;
+      errorResponse = null;
     }
 
     public RequestImpl build() {
-      if ((error == null)
+      if ((errorResponse == null)
           && ((majorVersion > 1) || ((majorVersion == 1) && (minorVersion >= 1)))
           && !headers.containsKey(HttpFieldName.HOST)) {
         setError(HttpServletResponse.SC_BAD_REQUEST, "Missing 'Host' field");
       }
-      if ((uri == null) && !"*".equals(unparsedUri) && (error == null)) {
+      if ((uri == null) && !"*".equals(unparsedUri) && (errorResponse == null)) {
         throw new IllegalStateException("Missing URI!");
       }
       return new RequestImpl(this);
@@ -651,8 +645,8 @@ public final class RequestImpl implements HttpServletRequest {
       return this;
     }
 
-    public Builder setSecure(boolean secure) {
-      this.secure = secure;
+    public Builder setSsl(boolean ssl) {
+      this.ssl = ssl;
       return this;
     }
 
@@ -687,7 +681,8 @@ public final class RequestImpl implements HttpServletRequest {
       key = HttpFieldName.canonicalize(key);
       if (headers.get(key) != null) {
         if (!HttpFieldHelper.mayOccurMultipleTimes(key)) {
-          setError(HttpServletResponse.SC_BAD_REQUEST,
+          setError(
+              HttpServletResponse.SC_BAD_REQUEST,
               "Illegal message headers: multiple occurrance for non-list field");
           return this;
         }
@@ -695,7 +690,8 @@ public final class RequestImpl implements HttpServletRequest {
       }
       if (HttpFieldName.HOST.equals(key)) {
         if (!HttpFieldHelper.validHostPort(value)) {
-          setError(HttpServletResponse.SC_BAD_REQUEST,
+          setError(
+              HttpServletResponse.SC_BAD_REQUEST,
               "Illegal 'Host' header");
           return this;
         }
@@ -714,8 +710,17 @@ public final class RequestImpl implements HttpServletRequest {
     }
 
     public Builder setError(int errorCode, String error) {
-      this.errorCode = errorCode;
-      this.error = error;
+      this.errorResponse = new HttpResponse() {
+        @Override
+        public int getStatusCode() {
+          return errorCode;
+        }
+
+        @Override
+        public String getStatusLine() {
+          return error;
+        }
+      };
       return this;
     }
   }

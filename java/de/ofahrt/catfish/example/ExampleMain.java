@@ -7,10 +7,10 @@ import java.io.InputStream;
 import javax.net.ssl.SSLContext;
 
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.CatfishHttpServer.EventType;
-import de.ofahrt.catfish.CatfishHttpServer.ServerListener;
-import de.ofahrt.catfish.ConnectionId;
-import de.ofahrt.catfish.VirtualHost;
+import de.ofahrt.catfish.Connection;
+import de.ofahrt.catfish.HttpHost;
+import de.ofahrt.catfish.HttpServerListener;
+import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.fastcgi.FcgiServlet;
 import de.ofahrt.catfish.servlets.CheckCompression;
 import de.ofahrt.catfish.servlets.CheckPost;
@@ -44,49 +44,41 @@ public class ExampleMain {
       domainName = sslInfo.getCertificateCommonName();
     }
 
-    CatfishHttpServer server = new CatfishHttpServer(new ServerListener() {
+    CatfishHttpServer server = new CatfishHttpServer(new HttpServerListener() {
       @Override
       public void shutdown() {
         System.out.println("[CATFISH] Server stopped.");
       }
 
       @Override
-      public void openPort(int port, boolean ssl) {
+      public void portOpened(int port, boolean ssl) {
         System.out.println("[CATFISH] Opening socket on port "+port+(ssl ? " (ssl)" : ""));
       }
 
       @Override
-      public void event(ConnectionId id, EventType event) {
-        // No output for now.
-      }
-
-      @Override
-      public void notifyException(ConnectionId id, Throwable throwable) {
+      public void notifyInternalError(Connection id, Throwable throwable) {
         throwable.printStackTrace();
       }
 
       @Override
-      public void notifyBadRequest(ConnectionId id, Throwable throwable) {
-        throwable.printStackTrace();
-      }
-
-      @Override
-      public void notifyBadRequest(ConnectionId id, String msg) {
-        System.out.println("BAD REQUEST: " + msg);
+      public void notifyRequest(Connection id, HttpResponse response) {
+        if (response.getStatusCode() >= 400) {
+          System.out.println("REQUEST FAILED: " + response.getStatusCode() + " " + response.getStatusLine());
+        }
       }
     });
 
-    VirtualHost.Builder dir = new VirtualHost.Builder()
+    HttpHost.Builder dir = new HttpHost.Builder()
        .exact("/hello.php", new FcgiServlet())
        .exact("/post", new CheckPost())
        .directory("/", new CheckCompression());
 
-    server.addVirtualHost("localhost", dir.build());
+    server.addHttpHost("localhost", dir.build());
     server.setKeepAliveAllowed(true);
     server.listenHttp(8080);
     if (sslContext != null) {
       // TODO: This doesn't work for wildcard certificates.
-      server.addVirtualHost(domainName, dir.withSSLContext(sslContext).build());
+      server.addHttpHost(domainName, dir.withSSLContext(sslContext).build());
       server.listenHttps(8081);
     }
   }

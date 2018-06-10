@@ -77,7 +77,7 @@ public final class HashConflictGenerator {
   }
 
   public List<String> generateList(final int maxCount) {
-    final List<String> result = new ArrayList<String>();
+    final List<String> result = new ArrayList<>();
     try {
       generateConflictingStrings(new HashConflictGenerator.StringListener() {
         @Override

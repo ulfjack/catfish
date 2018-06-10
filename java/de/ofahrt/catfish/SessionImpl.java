@@ -8,7 +8,7 @@ import javax.servlet.ServletContext;
 import javax.servlet.http.HttpSession;
 import javax.servlet.http.HttpSessionContext;
 
-import de.ofahrt.catfish.utils.Enumerations;
+import de.ofahrt.catfish.bridge.Enumerations;
 
 @SuppressWarnings("deprecation")
 final class SessionImpl implements HttpSession, Serializable {

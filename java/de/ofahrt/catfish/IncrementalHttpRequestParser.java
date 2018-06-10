@@ -39,7 +39,7 @@ final class IncrementalHttpRequestParser {
     request = new RequestImpl.Builder();
     request.setLocalAddress(localAddress);
     request.setClientAddress(remoteAddress);
-    request.setSecure(secure);
+    request.setSsl(secure);
   	this.maxContentLength = 1000000;
   }
 

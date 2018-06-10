@@ -14,35 +14,22 @@ import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLContext;
 import javax.servlet.http.HttpServletResponse;
 
+import de.ofahrt.catfish.api.HttpHeaders;
+import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.HttpFieldName;
-import de.ofahrt.catfish.utils.HttpResponseCode;
+import de.ofahrt.catfish.utils.HttpMethodName;
 
 /**
  * A <code>CatfishHttpServer</code> manages a HTTP-Server.
  */
 public final class CatfishHttpServer {
 
-  public enum EventType {
-    OPEN_CONNECTION, CLOSE_CONNECTION,
-    RECV_START, RECV_END,
-    SERVLET_START, SERVLET_END,
-    WRITE_START, WRITE_END;
-  }
-
-  public interface ServerListener {
-    void openPort(int port, boolean ssl);
-    void shutdown();
-    void event(ConnectionId id, EventType event);
-    void notifyException(ConnectionId id, Throwable throwable);
-    void notifyBadRequest(ConnectionId id, Throwable throwable);
-    void notifyBadRequest(ConnectionId id, String msg);
-  }
-
   interface RequestCallback extends Runnable {
     void reject();
   }
 
-  private final ServerListener serverListener;
+  private final HttpServerListener serverListener;
 
   private volatile InternalVirtualHost defaultDomain;
 
@@ -61,7 +48,7 @@ public final class CatfishHttpServer {
   private final ThreadPoolExecutor executor =
       new ThreadPoolExecutor(4, 4, 1L, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(50));
 
-  public CatfishHttpServer(ServerListener serverListener) throws IOException {
+  public CatfishHttpServer(HttpServerListener serverListener) throws IOException {
     this.serverListener = serverListener;
     executor.setRejectedExecutionHandler(new RejectedExecutionHandler() {
       @Override
@@ -74,7 +61,7 @@ public final class CatfishHttpServer {
     this.engine = new NioEngine(this);
   }
 
-  ServerListener getServerListener() {
+  HttpServerListener getServerListener() {
     return serverListener;
   }
 
@@ -90,7 +77,7 @@ public final class CatfishHttpServer {
     hosts.put(name, domain);
   }
 
-  public void addVirtualHost(String name, VirtualHost virtualHost) {
+  public void addHttpHost(String name, HttpHost virtualHost) {
     if (defaultDomain == null) {
       defaultDomain = virtualHost;
     }
@@ -125,7 +112,7 @@ public final class CatfishHttpServer {
     return "Catfish/11.0";
   }
 
-  void notifySent(RequestImpl request, ResponseImpl response, int amount) {
+  void notifySent(RequestImpl request, HttpResponse response, int amount) {
     for (int i = 0; i < listeners.size(); i++) {
       RequestListener l = listeners.get(i);
       try {
@@ -153,63 +140,52 @@ public final class CatfishHttpServer {
     return domain == null ? defaultDomain.getSSLContext() : domain.getSSLContext();
   }
 
-  ResponseImpl createErrorResponse(RequestImpl request) {
-    return createErrorResponse(request.getErrorCode(), request.getError());
-  }
-
-  ResponseImpl createErrorResponse(int statusCode) {
-    return createErrorResponse(statusCode, HttpResponseCode.getStatusText(statusCode));
-  }
-
-  ResponseImpl createErrorResponse(int statusCode, String message) {
-    ResponseImpl response = new ResponseImpl();
-    response.setCharacterEncoding(defaultCharset);
-    response.setVersion(1, 1);
-    response.setHeader(HttpFieldName.SERVER, getServerName());
-    response.setHeader(HttpFieldName.DATE, CoreHelper.formatDate(System.currentTimeMillis()));
-    response.setStatus(statusCode);
-    response.setContentType(CoreHelper.MIME_TEXT_PLAIN);
-    response.setBodyString(message);
-    response.close();
-    return response;
-  }
-
-  ResponseImpl createResponse(RequestImpl request) {
+  ResponseGenerator createResponse(Connection connection, RequestImpl request) {
     request.setSessionManager(sessionManager);
+    HttpResponse response;
+    if (request.hasError()) {
+      response = request.getErrorResponse();
+    } else if (request.getHeader(HttpFieldName.EXPECT) != null) {
+      response = HttpResponse.EXPECTATION_FAILED;
+    } else if ("*".equals(request.getUnparsedUri())) {
+      response = HttpResponse.BAD_REQUEST;
+    } else {
+      response = evaluateServletRequest(request);
+    }
+    serverListener.notifyRequest(connection, response);
+
+    HttpHeaders overrides = HttpHeaders.of(
+        HttpFieldName.SERVER, getServerName(),
+        HttpFieldName.DATE, HttpDate.formatDate(System.currentTimeMillis()));
+    try {
+      return ResponseGenerator.of(response.withHeaderOverrides(overrides));
+    } catch (IOException e) {
+      notifyInternalError(request, e);
+      return ResponseGenerator.newInternalServerError(overrides);
+    }
+  }
+
+  private HttpResponse evaluateServletRequest(RequestImpl request) {
     ResponseImpl response = request.getResponse();
-    if ("HEAD".equals(request.getMethod())) {
+    if (HttpMethodName.HEAD.equals(request.getMethod())) {
       response.setHeadRequest();
     }
     response.setCharacterEncoding(defaultCharset);
     response.setVersion(1, 1);
-    response.setHeader(HttpFieldName.SERVER, getServerName());
-
     if (mayCompress) {
       response.setCompressionAllowed(request.supportGzipCompression());
     }
     if (mayKeepAlive && request.mayKeepAlive()) {
       response.setHeader(HttpFieldName.CONNECTION, "keep-alive");
     }
-
-    if ((request.getMajorVersion() == 1) && (request.getMinorVersion() == 1) &&
-        (request.getHeader(HttpFieldName.HOST) == null)) {
-      response.sendError(HttpServletResponse.SC_BAD_REQUEST);
-    } else if (request.getHeader(HttpFieldName.EXPECT) != null) {
-      response.sendError(HttpServletResponse.SC_EXPECTATION_FAILED);
-    } else if ("*".equals(request.getUnparsedUri())) {
-      response.setStatus(HttpServletResponse.SC_OK);
-    } else {
-      try {
-        FilterDispatcher dispatcher = determineDispatcher(request);
-        dispatcher.dispatch(request, response);
-      } catch (Exception e) {
-        if (e instanceof FileNotFoundException) {
-          return createErrorResponse(HttpServletResponse.SC_NOT_FOUND);
-        } else {
-          notifyInternalError(request, e);
-          return createErrorResponse(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-        }
-      }
+    try {
+      FilterDispatcher dispatcher = determineDispatcher(request);
+      dispatcher.dispatch(request, response);
+    } catch (FileNotFoundException e) {
+      response.sendError(HttpServletResponse.SC_NOT_FOUND);
+    } catch (Exception e) {
+      response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+    } finally {
     }
     response.close();
     return response;

@@ -6,11 +6,10 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
 @SuiteClasses({
+  HttpContentTypeTest.class,
   HttpDateTest.class,
   HttpFieldNameTest.class,
   HttpResponseCodeTest.class,
-  ServletHelperTest.class,
-  XsrfTokenTest.class,
 })
 public class CatfishUtilsTestSuite {
 }

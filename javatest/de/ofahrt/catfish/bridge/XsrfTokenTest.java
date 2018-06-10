@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.utils;
+package de.ofahrt.catfish.bridge;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -9,6 +9,7 @@ import javax.servlet.http.HttpSession;
 import org.junit.Test;
 
 import de.ofahrt.catfish.TestHelper;
+import de.ofahrt.catfish.bridge.XsrfToken;
 
 public class XsrfTokenTest {
 
@@ -17,7 +18,7 @@ public class XsrfTokenTest {
     HttpSession session = TestHelper.createSessionForTesting();
     String token = XsrfToken.getToken(session);
     assertNotNull(token);
-    assertTrue(token.length() >= 64);
+    assertTrue(token.length() >= 16);
     assertTrue(XsrfToken.isValid(session, token));
     assertFalse(XsrfToken.isValid(session, token + "x"));
   }

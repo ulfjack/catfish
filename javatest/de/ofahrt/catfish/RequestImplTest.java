@@ -15,8 +15,8 @@ import java.util.Locale;
 
 import org.junit.Test;
 
+import de.ofahrt.catfish.bridge.ServletHelper;
 import de.ofahrt.catfish.utils.HttpFieldName;
-import de.ofahrt.catfish.utils.ServletHelper;
 
 /**
  * Tests for {@link RequestImpl}.
@@ -172,7 +172,7 @@ public class RequestImplTest {
   public void getRequestURLSecureOnNormalPort() throws Exception {
     RequestImpl request = new RequestImpl.Builder()
         .setUri(new URI("/"))
-        .setSecure(true)
+        .setSsl(true)
         .addHeader("Host", "host:80")
         .build();
     assertFalse(request.hasError());
@@ -183,7 +183,7 @@ public class RequestImplTest {
   public void getRequestURLSecure() throws Exception {
     RequestImpl request = new RequestImpl.Builder()
         .setUri(new URI("/"))
-        .setSecure(true)
+        .setSsl(true)
         .addHeader("Host", "host:443")
         .build();
     assertFalse(request.hasError());

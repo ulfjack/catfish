@@ -12,7 +12,7 @@ public class VirtualHostTest {
 
   @Test
   public void empty() {
-  	VirtualHost host = new VirtualHost.Builder().build();
+  	HttpHost host = new HttpHost.Builder().build();
   	assertNotNull(host);
   	assertNull(host.find("/"));
   }
@@ -20,7 +20,7 @@ public class VirtualHostTest {
   @Test
   public void rootDirectory() {
     Servlet servlet = new DefaultNotFoundServlet();
-    VirtualHost host = new VirtualHost.Builder().directory("/", servlet).build();
+    HttpHost host = new HttpHost.Builder().directory("/", servlet).build();
     assertSame(servlet, host.find("/"));
     assertSame(servlet, host.find("/index.html"));
     assertNull(host.find("/foo/"));
@@ -30,7 +30,7 @@ public class VirtualHostTest {
   @Test
   public void subDirectory() {
     Servlet servlet = new DefaultNotFoundServlet();
-    VirtualHost host = new VirtualHost.Builder().directory("/foo/", servlet).build();
+    HttpHost host = new HttpHost.Builder().directory("/foo/", servlet).build();
     assertNull(host.find("/"));
     assertNull(host.find("/e/"));
     assertNull(host.find("/g/"));
@@ -42,7 +42,7 @@ public class VirtualHostTest {
   public void multipleSubDirectory() {
     Servlet servletA = new DefaultNotFoundServlet();
     Servlet servletB = new DefaultNotFoundServlet();
-    VirtualHost host = new VirtualHost.Builder()
+    HttpHost host = new HttpHost.Builder()
         .directory("/bar/", servletA)
         .directory("/foo/", servletB)
         .build();
@@ -61,7 +61,7 @@ public class VirtualHostTest {
   public void subWithSubSubDirectory() {
     Servlet servletA = new DefaultNotFoundServlet();
     Servlet servletB = new DefaultNotFoundServlet();
-    VirtualHost host = new VirtualHost.Builder()
+    HttpHost host = new HttpHost.Builder()
         .directory("/foo/", servletA)
         .directory("/foo/bar/", servletB)
         .build();
@@ -73,7 +73,7 @@ public class VirtualHostTest {
   @Test
   public void exactPath() {
     Servlet servlet = new DefaultNotFoundServlet();
-    VirtualHost host = new VirtualHost.Builder().exact("/", servlet).build();
+    HttpHost host = new HttpHost.Builder().exact("/", servlet).build();
     assertSame(servlet, host.find("/"));
     assertNull(host.find("/index.html"));
     assertNull(host.find("/foo/"));
@@ -83,7 +83,7 @@ public class VirtualHostTest {
   @Test
   public void exactSubDirectory() {
     Servlet servlet = new DefaultNotFoundServlet();
-    VirtualHost host = new VirtualHost.Builder().exact("/foo", servlet).build();
+    HttpHost host = new HttpHost.Builder().exact("/foo", servlet).build();
     assertNull(host.find("/"));
     assertNull(host.find("/e"));
     assertNull(host.find("/g"));
@@ -96,7 +96,7 @@ public class VirtualHostTest {
   public void multipleExactSubDirectory() {
     Servlet servletA = new DefaultNotFoundServlet();
     Servlet servletB = new DefaultNotFoundServlet();
-    VirtualHost host = new VirtualHost.Builder()
+    HttpHost host = new HttpHost.Builder()
         .exact("/bar", servletA)
         .exact("/foo", servletB)
         .build();
@@ -125,7 +125,7 @@ public class VirtualHostTest {
   @Test
   public void recursiveDirectory() {
     Servlet servlet = new DefaultNotFoundServlet();
-    VirtualHost host = new VirtualHost.Builder().recursive("/", servlet).build();
+    HttpHost host = new HttpHost.Builder().recursive("/", servlet).build();
     assertSame(servlet, host.find("/"));
     assertSame(servlet, host.find("/index.html"));
     assertSame(servlet, host.find("/foo/"));
@@ -135,7 +135,7 @@ public class VirtualHostTest {
   @Test
   public void recursiveSubDirectory() {
     Servlet servlet = new DefaultNotFoundServlet();
-    VirtualHost host = new VirtualHost.Builder().recursive("/foo/", servlet).build();
+    HttpHost host = new HttpHost.Builder().recursive("/foo/", servlet).build();
     assertNull(host.find("/"));
     assertNull(host.find("/e/"));
     assertNull(host.find("/g/"));
@@ -147,7 +147,7 @@ public class VirtualHostTest {
   public void multipleRecursiveSubDirectory() {
     Servlet servletA = new DefaultNotFoundServlet();
     Servlet servletB = new DefaultNotFoundServlet();
-    VirtualHost host = new VirtualHost.Builder()
+    HttpHost host = new HttpHost.Builder()
         .recursive("/bar/", servletA)
         .recursive("/foo/", servletB)
         .build();
@@ -164,7 +164,7 @@ public class VirtualHostTest {
   public void recursiveSubWithRecursiveSubSubDirectory() {
     Servlet servletA = new DefaultNotFoundServlet();
     Servlet servletB = new DefaultNotFoundServlet();
-    VirtualHost host = new VirtualHost.Builder()
+    HttpHost host = new HttpHost.Builder()
         .recursive("/foo/", servletA)
         .recursive("/foo/bar/", servletB)
         .build();

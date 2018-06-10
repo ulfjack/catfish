@@ -7,9 +7,9 @@ import java.io.UnsupportedEncodingException;
 
 import org.junit.Test;
 
-public class IncrementalHttpResponseGeneratorTest {
+public class ResponseGeneratorTest {
 
-  private byte[] readFully(IncrementalHttpResponseGenerator generator) {
+  private byte[] readFully(ResponseGenerator generator) {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     byte[] buffer = new byte[39];
     int len;
@@ -19,7 +19,7 @@ public class IncrementalHttpResponseGeneratorTest {
     return out.toByteArray();
   }
 
-  private String toString(IncrementalHttpResponseGenerator generator) throws UnsupportedEncodingException {
+  private String toString(ResponseGenerator generator) throws UnsupportedEncodingException {
     return new String(readFully(generator), "UTF-8");
   }
 
@@ -27,7 +27,8 @@ public class IncrementalHttpResponseGeneratorTest {
   public void simple() throws Exception {
     ResponseImpl response = new ResponseImpl();
     response.setStatus(200);
-    IncrementalHttpResponseGenerator generator = new IncrementalHttpResponseGenerator(response);
+    response.close();
+    ResponseGenerator generator = ResponseGenerator.of(response);
     assertEquals("HTTP/0.9 200 OK\r\nContent-Length: 0\r\n\r\n", toString(generator));
   }
 
@@ -36,7 +37,8 @@ public class IncrementalHttpResponseGeneratorTest {
     ResponseImpl response = new ResponseImpl();
     response.setStatus(200);
     response.getWriter().write("xx");
-    IncrementalHttpResponseGenerator generator = new IncrementalHttpResponseGenerator(response);
+    response.close();
+    ResponseGenerator generator = ResponseGenerator.of(response);
     assertEquals("HTTP/0.9 200 OK\r\nContent-Length: 2\r\n\r\nxx", toString(generator));
   }
 }

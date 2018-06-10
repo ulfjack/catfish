@@ -1,12 +1,12 @@
-package de.ofahrt.catfish.utils;
+package de.ofahrt.catfish.bridge;
 
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.servlet.http.HttpSession;
 
 public final class XsrfToken {
   private static final String TOKEN_KEY = "xsrf-token";
-  private static final UuidGenerator uuidGenerator = new UuidGenerator();
 
   public static String getToken(HttpSession session) {
     if (session == null) {
@@ -18,7 +18,7 @@ public final class XsrfToken {
       result = cast(session.getAttribute(TOKEN_KEY));
     }
     if (result.get() == null) {
-      result.compareAndSet(null, uuidGenerator.generateID());
+      result.compareAndSet(null, UUID.randomUUID().toString());
     }
     return result.get();
   }

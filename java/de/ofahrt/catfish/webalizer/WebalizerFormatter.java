@@ -7,9 +7,9 @@ import java.util.Locale;
 
 import javax.servlet.http.HttpServletRequest;
 
-import de.ofahrt.catfish.ReadableHttpResponse;
+import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.bridge.ServletHelper;
 import de.ofahrt.catfish.utils.HttpFieldName;
-import de.ofahrt.catfish.utils.ServletHelper;
 
 public final class WebalizerFormatter {
 
@@ -20,7 +20,7 @@ public final class WebalizerFormatter {
     return DATE_FORMAT.format(date);
   }
 
-  public String format(HttpServletRequest request, ReadableHttpResponse response, int amount) {
+  public String format(HttpServletRequest request, HttpResponse response, int amount) {
   	// LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-agent}i\""
   	// client unknown unknown time request-line(method,url,protocol) status-code bytes-sent referer user-agent
     String ua = request.getHeader(HttpFieldName.USER_AGENT);

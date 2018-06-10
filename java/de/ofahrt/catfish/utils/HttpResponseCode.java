@@ -18,6 +18,7 @@ public enum HttpResponseCode {
   SEE_OTHER              (303, "See Other"),
   NOT_MODIFIED           (304, "Not Modified"),
   USE_PROXY              (305, "Use Proxy"),
+  TEMPORARY_REDIRECT     (307, "Temporary Redirect"),
 
   BAD_REQUEST            (400, "Bad Request"),
   UNAUTHORIZED           (401, "Unauthorized"),

@@ -57,11 +57,12 @@ public class HttpConnectionTest {
     FakeServer server = new FakeServer(9876,
         toBytes("HTTP/1.1 200 OK\n\nHTTP/1.1 200 OK\n\n"));
     server.start();
-    HttpConnection connection = HttpConnection.connect("localhost", 9876);
-    HttpResponse response = connection.readResponse();
-    assertEquals(200, response.getStatusCode());
-    response = connection.readResponse();
-    assertEquals(200, response.getStatusCode());
+    try (HttpConnection connection = HttpConnection.connect("localhost", 9876)) {
+      HttpResponse response = connection.readResponse();
+      assertEquals(200, response.getStatusCode());
+      response = connection.readResponse();
+      assertEquals(200, response.getStatusCode());
+    }
     server.waitForStop();
   }
 }

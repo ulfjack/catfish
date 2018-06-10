@@ -2,8 +2,9 @@ package de.ofahrt.catfish;
 
 import javax.servlet.http.HttpServletRequest;
 
-public interface RequestListener {
+import de.ofahrt.catfish.api.HttpResponse;
 
-  void notifySent(HttpServletRequest request, ReadableHttpResponse response, int amount);
+public interface RequestListener {
+  void notifySent(HttpServletRequest request, HttpResponse response, int bytesSent);
   void notifyInternalError(HttpServletRequest request, Throwable exception);
 }

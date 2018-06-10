@@ -74,7 +74,7 @@ public class IncrementalHttpParserIncrementalTest extends HttpParserTest {
   	assertTrue(parser.isDone());
   	RequestImpl result = parser.getRequest();
   	if (result.hasError()) {
-  	  throw new MalformedRequestException(result.getError());
+  	  throw new MalformedRequestException(result.getErrorResponse().getStatusLine());
   	}
   	return result;
   }

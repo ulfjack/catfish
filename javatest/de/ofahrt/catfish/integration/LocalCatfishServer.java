@@ -4,12 +4,11 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.CatfishHttpServer.EventType;
-import de.ofahrt.catfish.CatfishHttpServer.ServerListener;
-import de.ofahrt.catfish.ConnectionId;
+import de.ofahrt.catfish.Connection;
+import de.ofahrt.catfish.HttpHost;
+import de.ofahrt.catfish.HttpServerListener;
 import de.ofahrt.catfish.TestHelper;
 import de.ofahrt.catfish.TestServlet;
-import de.ofahrt.catfish.VirtualHost;
 import de.ofahrt.catfish.client.HttpConnection;
 import de.ofahrt.catfish.client.HttpResponse;
 
@@ -23,40 +22,20 @@ final class LocalCatfishServer implements Server {
   public static final String HTTP_ROOT = "http://localhost:" + HTTP_PORT;
   public static final String HTTPS_ROOT = "https://localhost:" + HTTPS_PORT;
 
-  private final CatfishHttpServer server = new CatfishHttpServer(new ServerListener() {
+  private final CatfishHttpServer server = new CatfishHttpServer(new HttpServerListener() {
     @Override
     public void shutdown() {
       if (DEBUG) System.out.println("[CATFISH] Server stopped.");
     }
 
     @Override
-    public void openPort(int port, boolean ssl) {
+    public void portOpened(int port, boolean ssl) {
       if (DEBUG) System.out.println("[CATFISH] Opening socket on port " + port + (ssl ? " (ssl)" : ""));
     }
 
     @Override
-    public void event(ConnectionId id, EventType event) {
-      if (DEBUG) {
-        if (event == EventType.OPEN_CONNECTION) {
-          System.out.println(id + " NEW " + id.getStartTimeNanos());
-        }
-        System.out.println(id + " " + event + " +" + ((System.nanoTime() - id.getStartTimeNanos()) / 1000000L) + "ms");
-      }
-    }
-
-    @Override
-    public void notifyException(ConnectionId id, Throwable throwable) {
+    public void notifyInternalError(Connection id, Throwable throwable) {
       throwable.printStackTrace();
-    }
-
-    @Override
-    public void notifyBadRequest(ConnectionId id, Throwable throwable) {
-      // Ignore - we intentionally create bad requests.
-    }
-
-    @Override
-    public void notifyBadRequest(ConnectionId id, String msg) {
-      // Ignore - we intentionally create bad requests.
     }
   });
 
@@ -83,14 +62,14 @@ final class LocalCatfishServer implements Server {
 
   @Override
   public void start() throws Exception {
-    VirtualHost.Builder builder = new VirtualHost.Builder()
+    HttpHost.Builder builder = new HttpHost.Builder()
         .exact("/compression.html", new TestServlet())
         .directory("/", new HttpRequestTestServlet());
 
     if (startSsl) {
       builder.withSSLContext(TestHelper.getSSLContext());
     }
-    server.addVirtualHost("localhost", builder.build());
+    server.addHttpHost("localhost", builder.build());
     server.setKeepAliveAllowed(true);
     server.listenHttp(HTTP_PORT);
     if (startSsl) {

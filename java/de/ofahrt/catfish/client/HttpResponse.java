@@ -42,10 +42,6 @@ public final class HttpResponse {
     return minorVersion;
   }
 
-  public String getProtocol() {
-    throw new UnsupportedOperationException();
-  }
-
   public int getStatusCode() {
     return statusCode;
   }

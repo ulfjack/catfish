@@ -9,10 +9,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.TreeSet;
+import java.util.UUID;
 
 import javax.servlet.http.HttpSession;
-
-import de.ofahrt.catfish.utils.UuidGenerator;
 
 final class SessionManager {
 
@@ -47,7 +46,6 @@ final class SessionManager {
 
   private static final long DEFAULT_COOKIE_VALIDITY = 60 * 60 * 1000; // 1 Hour
 
-  private final UuidGenerator uuidGenerator = new UuidGenerator();
   private final Clock clock;
   private long entryNumber = 0;
   private final HashMap<String,SessionEntry> sessions = new HashMap<>();
@@ -80,7 +78,7 @@ final class SessionManager {
 	
   	SessionEntry result = sessions.get(id);
   	if (result == null) {
-  		id = uuidGenerator.generateID();
+  		id = UUID.randomUUID().toString();
   		result = new SessionEntry(entryNumber++, new SessionImpl(id, time, DEFAULT_COOKIE_VALIDITY));
   		sessions.put(id, result);
   	} else {

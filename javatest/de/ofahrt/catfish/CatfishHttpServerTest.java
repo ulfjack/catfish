@@ -10,6 +10,8 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.junit.Test;
 
+import de.ofahrt.catfish.api.HttpResponse;
+
 public class CatfishHttpServerTest {
 
   private static RequestImpl parse(String text) throws Exception {
@@ -22,44 +24,44 @@ public class CatfishHttpServerTest {
   	return parser.getRequest();
   }
 
-  private static ResponseImpl createResponse(String text) throws Exception {
+  private static HttpResponse createResponse(String text) throws Exception {
   	RequestImpl request = parse(text);
-  	CatfishHttpServer server = new CatfishHttpServer(null);
-  	VirtualHost host = new VirtualHost.Builder()
+  	CatfishHttpServer server = new CatfishHttpServer(HttpServerListener.NULL);
+  	HttpHost host = new HttpHost.Builder()
   	    .exact("/index", new TestServlet())
   	    .build();
-  	server.addVirtualHost("localhost", host);
+  	server.addHttpHost("localhost", host);
   	server.setCompressionAllowed(true);
-  	return server.createResponse(request);
+  	return server.createResponse(null, request).getResponse();
   }
 
   @Test
   public void noHostOnHttp11RequestResultsIn400() throws Exception {
-  	ResponseImpl response = createResponse("GET / HTTP/1.1\n\n");
+  	HttpResponse response = createResponse("GET / HTTP/1.1\n\n");
   	assertEquals(HttpServletResponse.SC_BAD_REQUEST, response.getStatusCode());
   }
 
   @Test
   public void headRequestToExistingUrl() throws Exception {
-  	ResponseImpl response = createResponse("HEAD /index HTTP/1.1\nHost: localhost\n\n");
+    HttpResponse response = createResponse("HEAD /index HTTP/1.1\nHost: localhost\n\n");
   	assertEquals(HttpServletResponse.SC_OK, response.getStatusCode());
   }
 
   @Test
   public void headRequestToNonExistentUrl() throws Exception {
-  	ResponseImpl response = createResponse("HEAD /nowhere HTTP/1.1\nHost: localhost\n\n");
+    HttpResponse response = createResponse("HEAD /nowhere HTTP/1.1\nHost: localhost\n\n");
   	assertEquals(HttpServletResponse.SC_NOT_FOUND, response.getStatusCode());
   }
 
   @Test
   public void nonClosingServletWorksWithCompression() throws Exception {
-  	ResponseImpl response = createResponse("GET /index HTTP/1.1\nHost: localhost\nAccept-Encoding: gzip\n\n");
+    HttpResponse response = createResponse("GET /index HTTP/1.1\nHost: localhost\nAccept-Encoding: gzip\n\n");
   	assertEquals(HttpServletResponse.SC_OK, response.getStatusCode());
   }
 
   @Test
   public void emptyPost() throws Exception {
-  	ResponseImpl response = createResponse("POST /index HTTP/1.1\nHost: localhost\n\n");
+    HttpResponse response = createResponse("POST /index HTTP/1.1\nHost: localhost\n\n");
   	assertEquals(HttpServletResponse.SC_OK, response.getStatusCode());
   }
 
@@ -73,7 +75,7 @@ public class CatfishHttpServerTest {
         + "-----------------------------12184522311670376405338810566--\n" // 60+1
         + "";
     assertEquals(164, content.getBytes(Charset.forName("ISO-8859-1")).length);
-  	ResponseImpl response = createResponse(
+    HttpResponse response = createResponse(
   			"POST /index HTTP/1.1\nHost: localhost\n"
   			+ "Content-Type: multipart/form-data; boundary=---------------------------13751323931886145875850488035\n"
   			+ "Content-Length: 164\n"

@@ -10,12 +10,12 @@ import javax.net.ssl.SSLContext;
 import javax.servlet.Filter;
 import javax.servlet.Servlet;
 
-public final class VirtualHost implements InternalVirtualHost {
+public final class HttpHost implements InternalVirtualHost {
   private final Servlet notFoundServlet = new DefaultNotFoundServlet();
   private final SSLContext sslContext;
   private final Directory root;
 
-  VirtualHost(Builder builder) {
+  HttpHost(Builder builder) {
     this.sslContext = builder.sslContext;
     this.root = builder.root.createDirectory();
   }
@@ -153,8 +153,8 @@ public final class VirtualHost implements InternalVirtualHost {
     private SSLContext sslContext;
     private final DirectoryBuilder root = new DirectoryBuilder();
 
-    public VirtualHost build() {
-      return new VirtualHost(this);
+    public HttpHost build() {
+      return new HttpHost(this);
     }
 
     public Builder withSSLContext(@SuppressWarnings("hiding") SSLContext sslContext) {
