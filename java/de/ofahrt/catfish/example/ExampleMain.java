@@ -8,7 +8,7 @@ import javax.net.ssl.SSLContext;
 
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.Connection;
-import de.ofahrt.catfish.HttpHost;
+import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.HttpServerListener;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.fastcgi.FcgiServlet;
@@ -68,7 +68,7 @@ public class ExampleMain {
       }
     });
 
-    HttpHost.Builder dir = new HttpHost.Builder()
+    HttpVirtualHost.Builder dir = new HttpVirtualHost.Builder()
        .exact("/hello.php", new FcgiServlet())
        .exact("/post", new CheckPost())
        .directory("/", new CheckCompression());

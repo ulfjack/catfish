@@ -1,12 +1,10 @@
 package de.ofahrt.catfish;
 
-import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.URISyntaxException;
-
 import javax.servlet.http.HttpServletResponse;
 
+import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpVersion;
+import de.ofahrt.catfish.api.SimpleHttpRequest;
 import de.ofahrt.catfish.utils.HttpFieldName;
 
 final class IncrementalHttpRequestParser {
@@ -19,12 +17,9 @@ final class IncrementalHttpRequestParser {
     CONTENT;
   }
 
-  private final InetSocketAddress localAddress;
-  private final InetSocketAddress remoteAddress;
   private final int maxContentLength;
-  private final boolean ssl;
 
-  private final RequestImpl.Builder request = new RequestImpl.Builder();
+  private final SimpleHttpRequest.Builder builder = new SimpleHttpRequest.Builder();
 
   private State state;
   private StringBuilder elementBuffer;
@@ -40,12 +35,8 @@ final class IncrementalHttpRequestParser {
   private byte[] content;
   private int contentIndex;
 
-  public IncrementalHttpRequestParser(
-      InetSocketAddress localAddress, InetSocketAddress remoteAddress, boolean ssl) {
-    this.localAddress = localAddress;
-    this.remoteAddress = remoteAddress;
+  public IncrementalHttpRequestParser() {
     this.maxContentLength = 1000000;
-    this.ssl = ssl;
     reset();
   }
 
@@ -56,10 +47,7 @@ final class IncrementalHttpRequestParser {
     expectLineFeed = false;
 
     done = false;
-    request.reset();
-    request.setLocalAddress(localAddress);
-    request.setClientAddress(remoteAddress);
-    request.setSsl(ssl);
+    builder.reset();
 
     majorVersion = 0;
     messageHeaderName = null;
@@ -131,7 +119,7 @@ final class IncrementalHttpRequestParser {
             if (elementBuffer.length() == 0) {
               return setError("Expected request method, but <space> found");
             }
-            request.setMethod(elementBuffer.toString());
+            builder.setMethod(elementBuffer.toString());
             counter = 0;
             elementBuffer.setLength(0);
             state = State.REQUEST_URI;
@@ -144,15 +132,7 @@ final class IncrementalHttpRequestParser {
         case REQUEST_URI : // "*" | absoluteURI | abs_path | authority
           if (c == ' ') {
             String unparsedUri = elementBuffer.toString();
-            request.setUnparsedUri(unparsedUri);
-            if (!"*".equals(unparsedUri)) {
-              try {
-                request.setUri(new URI(unparsedUri));
-              } catch (URISyntaxException e) {
-                // TODO: Maybe return the exception as well?
-                return setError("Bad URI syntax");
-              }
-            }
+            builder.setUri(unparsedUri);
             counter = 0;
             elementBuffer.setLength(0);
             state = State.REQUEST_VERSION_HTTP;
@@ -234,7 +214,7 @@ final class IncrementalHttpRequestParser {
               return setError("Http minor version is too long");
             }
             int minorVersion = Integer.parseInt(elementBuffer.toString());
-            request.setVersion(HttpVersion.of(majorVersion, minorVersion));
+            builder.setVersion(HttpVersion.of(majorVersion, minorVersion));
             counter = 0;
             elementBuffer.setLength(0);
             state = State.MESSAGE_HEADER_NAME;
@@ -297,12 +277,12 @@ final class IncrementalHttpRequestParser {
             break;
           }
 
-          request.addHeader(messageHeaderName, messageHeaderValue);
+          builder.addHeader(messageHeaderName, messageHeaderValue);
           messageHeaderName = null;
           messageHeaderValue = null;
 
           if (c == '\n') {
-            String contentLengthValue = request.getHeader(HttpFieldName.CONTENT_LENGTH);
+            String contentLengthValue = builder.getHeader(HttpFieldName.CONTENT_LENGTH);
             if (contentLengthValue != null) {
               long contentLength;
               try {
@@ -339,7 +319,7 @@ final class IncrementalHttpRequestParser {
           i += maxCopy;
           contentIndex += maxCopy;
           if (contentIndex == content.length) {
-            request.setBody(content);
+            builder.setBody(content);
             done = true;
             return i;
           }
@@ -356,7 +336,7 @@ final class IncrementalHttpRequestParser {
   }
 
   private int setError(int errorCode, String error) {
-    request.setError(errorCode, error);
+    builder.setError(errorCode, error);
     done = true;
     return 1;
   }
@@ -365,10 +345,10 @@ final class IncrementalHttpRequestParser {
     return done;
   }
 
-  public RequestImpl getRequest() {
+  public HttpRequest getRequest() throws MalformedRequestException {
     if (!done) {
       throw new IllegalStateException("No parsed request available!");
     }
-    return request.build();
+    return builder.build();
   }
 }

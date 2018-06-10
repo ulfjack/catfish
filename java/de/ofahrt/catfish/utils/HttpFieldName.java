@@ -2,9 +2,12 @@ package de.ofahrt.catfish.utils;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 public final class HttpFieldName {
 
@@ -58,7 +61,47 @@ public final class HttpFieldName {
   public static final String WARNING             = "Warning";
   public static final String WWW_AUTHENTICATE    = "WWW-Authenticate";
 
+  private static final HashSet<String> MULTIPLE_OCCURANCE_BLACKLIST = new HashSet<>(Arrays.asList(
+      HOST
+  ));
+
   private static Map<String,String> CANONICALIZATION_MAP = getCanonicalizationMap();
+
+  // RFC 3986: Uniform Resource Identifier (URI): Generic Syntax
+  private static final String HEXDIG = "[0-9A-F]";
+
+  // unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~"
+  private static final String UNRESERVED = "[0-9a-zA-Z._~-]";
+  // sub-delims = "!" / "$" / "&" / "'" / "(" / ")" / "*" / "+" / "," / ";" / "="
+  private static final String SUBDELIMS = "[!$&'()*+,;=]";
+  // pct-encoded = "%" HEXDIG HEXDIG
+  private static final String PCT_ENCODED = "(?:%" + HEXDIG + HEXDIG + ")";
+  private static final String REG_NAME = "(?:(?:" + UNRESERVED + "|" + SUBDELIMS + "|" + PCT_ENCODED + ")*)";
+
+  // dec-octet     = DIGIT                 ; 0-9
+  //               / %x31-39 DIGIT         ; 10-99
+  //               / "1" 2DIGIT            ; 100-199
+  //               / "2" %x30-34 DIGIT     ; 200-249
+  //               / "25" %x30-35          ; 250-255
+  private static final String DEC_OCTET =
+      "(?:[0-9]|(?:[1-9][0-9])|(?:1[0-9][0-9])|(?:2[0-4][0-9])|(?:25[0-5]))";
+  // IPv4address = dec-octet "." dec-octet "." dec-octet "." dec-octet
+  private static final String IPV4 = DEC_OCTET + "\\." + DEC_OCTET + "\\." + DEC_OCTET + "\\." + DEC_OCTET;
+
+  // host = IP-literal / IPv4address / reg-name
+  private static final String HOST_PATTERN = "(?:" + REG_NAME + "|" + IPV4 + ")";
+
+  // RFC 2616: Hypertext Transfer Protocol -- HTTP/1.1
+  // Host = "Host" ":" host [ ":" port ]
+  private static final Pattern HOST_PORT_PATTERN = Pattern.compile(
+      "(" + HOST_PATTERN + ")(:\\d*)?");
+
+  public static boolean mayOccurMultipleTimes(String fieldName) {
+    if (MULTIPLE_OCCURANCE_BLACKLIST.contains(fieldName)) {
+      return false;
+    }
+    return true;
+  }
 
   private static Map<String,String> getCanonicalizationMap() {
   	Map<String,String> result = new HashMap<>();
@@ -116,6 +159,14 @@ public final class HttpFieldName {
   			public boolean matches(String value)
   			{ return canonicalName.equals(canonicalize(value)); }
   		};
+  }
+
+  /**
+   * Implements a syntax check for hostport according to RFC 3986. Does not support IPv6 addresses
+   * or future IP literals.
+   */
+  public static boolean validHostPort(String text) {
+    return HOST_PORT_PATTERN.matcher(text).matches();
   }
 
   private HttpFieldName() {

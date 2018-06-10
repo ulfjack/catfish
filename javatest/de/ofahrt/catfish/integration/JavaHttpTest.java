@@ -30,7 +30,7 @@ public class JavaHttpTest {
   @Test
   public void getWithJavaHttpUrlConnection() throws IOException {
   	CatfishHttpClient client = CatfishHttpClient.createNetworkedClient();
-  	HttpResponse response = client.send(LocalCatfishServer.HTTP_ROOT + "/compression.html");
+  	HttpResponse response = client.get(LocalCatfishServer.HTTP_ROOT + "/compression.html");
   	assertNotNull(response);
   	assertEquals(200, response.getStatusCode());
   }
@@ -38,7 +38,7 @@ public class JavaHttpTest {
   @Test
   public void sslGetWithJavaHttpUrlConnection() throws IOException {
   	CatfishHttpClient client = CatfishHttpClient.createNetworkedClient();
-  	HttpResponse response = client.send(LocalCatfishServer.HTTPS_ROOT + "/compression.html");
+  	HttpResponse response = client.get(LocalCatfishServer.HTTPS_ROOT + "/compression.html");
   	assertNotNull(response);
   	assertEquals(200, response.getStatusCode());
   }

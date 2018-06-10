@@ -1,20 +1,19 @@
 package de.ofahrt.catfish;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.InputStream;
 import java.net.InetSocketAddress;
-import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
 import org.junit.Test;
 
+import de.ofahrt.catfish.api.SimpleHttpRequest;
 import de.ofahrt.catfish.bridge.ServletHelper;
 import de.ofahrt.catfish.utils.HttpFieldName;
 
@@ -22,35 +21,33 @@ import de.ofahrt.catfish.utils.HttpFieldName;
  * Tests for {@link RequestImpl}.
  */
 public class RequestImplTest {
+  private RequestImpl toRequestImpl(SimpleHttpRequest.Builder builder) throws Exception {
+    return new RequestImpl(builder.build(), new Connection(null, null, false));
+  }
 
   @Test(expected = IllegalStateException.class)
-  public void missingUri() {
-    new RequestImpl.Builder().build();
+  public void missingUri() throws MalformedRequestException {
+    new SimpleHttpRequest.Builder().build();
   }
 
-  private RequestImpl empty() {
-    RequestImpl result = new RequestImpl.Builder()
-        .setUnparsedUri("*")
-        .build();
-    assertFalse(result.hasError());
+  private RequestImpl empty() throws Exception {
+    RequestImpl result = toRequestImpl(new SimpleHttpRequest.Builder().setUri("*"));
     return result;
   }
 
-  private RequestImpl requestForBody(byte[] data) {
-    RequestImpl result = new RequestImpl.Builder()
-        .setBody(data)
-        .setUnparsedUri("*")
-        .build();
-    assertFalse(result.hasError());
+  private RequestImpl requestForBody(byte[] data) throws Exception {
+    RequestImpl result = toRequestImpl(
+        new SimpleHttpRequest.Builder()
+            .setBody(data)
+            .setUri("*"));
     return result;
   }
 
-  private RequestImpl requestForHeader(String key, String value) {
-    RequestImpl result = new RequestImpl.Builder()
-        .addHeader(key, value)
-        .setUnparsedUri("*")
-        .build();
-    assertFalse(result.hasError());
+  private RequestImpl requestForHeader(String key, String value) throws Exception {
+    RequestImpl result = toRequestImpl(
+        new SimpleHttpRequest.Builder()
+            .addHeader(key, value)
+            .setUri("*"));
     return result;
   }
 
@@ -62,26 +59,31 @@ public class RequestImplTest {
   }
 
   @Test
-  public void badRepeatedHost() {
-    RequestImpl request = new RequestImpl.Builder()
-        .addHeader("Host", "a")
-        .addHeader("Host", "b")
-        .build();
-    assertTrue(request.hasError());
-    assertEquals("a", request.getHeader("Host"));
+  public void badRepeatedHost() throws Exception {
+    try {
+      new SimpleHttpRequest.Builder()
+          .addHeader("Host", "a")
+          .addHeader("Host", "b")
+          .build();
+      fail();
+    } catch (MalformedRequestException expected) {
+      assertNotNull(expected.getErrorResponse());
+    }
   }
 
   @Test
-  public void badHost() {
-    RequestImpl request = new RequestImpl.Builder()
-        .addHeader("Host", "abc.com:12<")
-        .build();
-    assertTrue(request.hasError());
-    assertNull(request.getHeader("Host"));
+  public void badHost() throws Exception {
+    try {
+      new SimpleHttpRequest.Builder()
+          .addHeader("Host", "abc.com:12<")
+          .build();
+      fail();
+    } catch (MalformedRequestException expected) {
+    }
   }
 
   @Test
-  public void getHeaders() {
+  public void getHeaders() throws Exception {
     assertEquals(Arrays.asList(),
         CollectionsUtils.toList(empty().getHeaders(HttpFieldName.ACCEPT_CHARSET)));
     assertNull(empty().getHeader("key"));
@@ -126,18 +128,18 @@ public class RequestImplTest {
   }
 
   @Test
-  public void regressionTestForGetCompleteUrl() {
-    RequestImpl request = new RequestImpl.Builder()
-        .setLocalAddress(new InetSocketAddress(80))
-        .setBody(new byte[] { -1, -1 })
-        .setUnparsedUri("*")
-        .build();
-    assertFalse(request.hasError());
+  public void regressionTestForGetCompleteUrl() throws Exception {
+    RequestImpl request = new RequestImpl(
+        new SimpleHttpRequest.Builder()
+            .setBody(new byte[] { -1, -1 })
+            .setUri("*")
+            .build(),
+        new Connection(new InetSocketAddress(80), null, false));
     ServletHelper.getCompleteUrl(request);
   }
 
   @Test
-  public void locale() {
+  public void locale() throws Exception {
     assertEquals(Locale.US, empty().getLocale());
     assertEquals(Locale.GERMAN, requestForHeader(HttpFieldName.ACCEPT_LANGUAGE, "de").getLocale());
     assertEquals(Locale.GERMANY, requestForHeader(HttpFieldName.ACCEPT_LANGUAGE, "de-de").getLocale());
@@ -146,7 +148,7 @@ public class RequestImplTest {
   }
 
   @Test
-  public void multiLocale() {
+  public void multiLocale() throws Exception {
     assertEquals(Arrays.asList(Locale.US),
         CollectionsUtils.toList(empty().getLocales()));
     assertEquals(Arrays.asList(Locale.GERMAN),
@@ -160,33 +162,31 @@ public class RequestImplTest {
 
   @Test
   public void getRequestURL() throws Exception {
-    RequestImpl request = new RequestImpl.Builder()
-        .setUri(new URI("/"))
-        .addHeader("Host", "host:80")
-        .build();
-    assertFalse(request.hasError());
+    RequestImpl request = toRequestImpl(
+        new SimpleHttpRequest.Builder()
+            .setUri("/")
+            .addHeader("Host", "host:80"));
     assertEquals("http://host/", request.getRequestURL().toString());
   }
 
   @Test
   public void getRequestURLSecureOnNormalPort() throws Exception {
-    RequestImpl request = new RequestImpl.Builder()
-        .setUri(new URI("/"))
-        .setSsl(true)
-        .addHeader("Host", "host:80")
-        .build();
-    assertFalse(request.hasError());
+    RequestImpl request = new RequestImpl(
+        new SimpleHttpRequest.Builder()
+            .setUri("/")
+            .addHeader("Host", "host:80").build(),
+        new Connection(null, null, true));
     assertEquals("https://host:80/", request.getRequestURL().toString());
   }
 
   @Test
   public void getRequestURLSecure() throws Exception {
-    RequestImpl request = new RequestImpl.Builder()
-        .setUri(new URI("/"))
-        .setSsl(true)
-        .addHeader("Host", "host:443")
-        .build();
-    assertFalse(request.hasError());
+    RequestImpl request = new RequestImpl(
+        new SimpleHttpRequest.Builder()
+            .setUri("/")
+            .addHeader("Host", "host:443")
+            .build(),
+        new Connection(null, null, true));
     assertEquals("https://host/", request.getRequestURL().toString());
   }
 
@@ -197,9 +197,8 @@ public class RequestImplTest {
           .withHashCode(0).withLength(10).generateList(40000);
 
   @Test(timeout = 1000) // takes 14.290s with HashMap and 0.452s with TreeMap
-  public void hashCollision() {
-    RequestImpl.Builder builder = new RequestImpl.Builder()
-        .setUnparsedUri("*");
+  public void hashCollision() throws Exception {
+    SimpleHttpRequest.Builder builder = new SimpleHttpRequest.Builder().setUri("*");
     for (String s : REALLY_BAD_STRINGS) {
       builder.addHeader(s, "x");
     }

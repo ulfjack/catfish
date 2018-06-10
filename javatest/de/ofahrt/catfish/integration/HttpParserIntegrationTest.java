@@ -13,8 +13,8 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import de.ofahrt.catfish.BadRequestException;
 import de.ofahrt.catfish.HttpParserTest;
+import de.ofahrt.catfish.MalformedRequestException;
 import de.ofahrt.catfish.client.HttpConnection;
 import de.ofahrt.catfish.client.HttpResponse;
 
@@ -45,7 +45,7 @@ public class HttpParserIntegrationTest extends HttpParserTest {
     connection.close();
     assertNotNull(response);
     if (response.getStatusCode() != 200) {
-      throw new BadRequestException(response.getStatusCode() + " " + response.getReasonPhrase());
+      throw new MalformedRequestException(null);
     }
     try (InputStream in = response.getInputStream()) {
       if (in.available() == 0) {

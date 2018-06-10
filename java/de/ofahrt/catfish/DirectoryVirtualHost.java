@@ -24,13 +24,13 @@ class DirectoryVirtualHost implements InternalVirtualHost {
   }
 
   @Override
-  public FilterDispatcher determineDispatcher(RequestImpl request) {
+  public FilterDispatcher determineDispatcher(String path) {
     Directory current = root;
 
     if (current == null) {
       return new FilterDispatcher(Collections.<Filter>emptyList(), notFoundServlet);
     } else {
-      PathTracker tracker = new PathTracker(request.getPath());
+      PathTracker tracker = new PathTracker(path);
 
       ArrayList<Filter> allFilters = new ArrayList<>();
       allFilters.addAll(current.getFilters());

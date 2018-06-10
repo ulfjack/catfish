@@ -4,9 +4,9 @@ import java.util.Map;
 import java.util.TreeMap;
 
 public final class SiteLayout {
-  private final Map<String, HttpPage> exact;
-  private final Map<String, HttpPage> directory;
-  private final Map<String, HttpPage> recursive;
+  private final Map<String, HttpHandler> exact;
+  private final Map<String, HttpHandler> directory;
+  private final Map<String, HttpHandler> recursive;
 
   private SiteLayout(Builder builder) {
     this.exact = new TreeMap<>(builder.exact);
@@ -14,8 +14,8 @@ public final class SiteLayout {
     this.recursive = new TreeMap<>(builder.recursive);
   }
 
-  public HttpPage findPage(String path) {
-    HttpPage page = exact.get(path);
+  public HttpHandler findPage(String path) {
+    HttpHandler page = exact.get(path);
     if (page != null) {
       return page;
     }
@@ -40,37 +40,37 @@ public final class SiteLayout {
   }
 
   public static final class Builder {
-    private final Map<String, HttpPage> exact = new TreeMap<>();
-    private final Map<String, HttpPage> directory = new TreeMap<>();
-    private final Map<String, HttpPage> recursive = new TreeMap<>();
+    private final Map<String, HttpHandler> exact = new TreeMap<>();
+    private final Map<String, HttpHandler> directory = new TreeMap<>();
+    private final Map<String, HttpHandler> recursive = new TreeMap<>();
 
     public SiteLayout build() {
       return new SiteLayout(this);
     }
 
-    public Builder exact(String path, HttpPage page) {
+    public Builder exact(String path, HttpHandler handler) {
       Preconditions.checkArgument(path.startsWith("/"));
-      Preconditions.checkNotNull(page);
+      Preconditions.checkNotNull(handler);
       Preconditions.checkState(!exact.containsKey(path));
-      exact.put(path, page);
+      exact.put(path, handler);
       return this;
     }
 
-    public Builder directory(String prefix, HttpPage page) {
+    public Builder directory(String prefix, HttpHandler handler) {
       Preconditions.checkArgument(prefix.startsWith("/"));
       Preconditions.checkArgument(prefix.endsWith("/"));
-      Preconditions.checkNotNull(page);
+      Preconditions.checkNotNull(handler);
       Preconditions.checkState(!directory.containsKey(prefix));
-      directory.put(prefix, page);
+      directory.put(prefix, handler);
       return this;
     }
 
-    public Builder recursive(String prefix, HttpPage page) {
+    public Builder recursive(String prefix, HttpHandler handler) {
       Preconditions.checkArgument(prefix.startsWith("/"));
       Preconditions.checkArgument(prefix.endsWith("/"));
-      Preconditions.checkNotNull(page);
+      Preconditions.checkNotNull(handler);
       Preconditions.checkState(!recursive.containsKey(prefix));
-      recursive.put(prefix, page);
+      recursive.put(prefix, handler);
       return this;
     }
   }

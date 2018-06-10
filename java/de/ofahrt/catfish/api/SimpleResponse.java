@@ -2,19 +2,25 @@ package de.ofahrt.catfish.api;
 
 import de.ofahrt.catfish.utils.HttpResponseCode;
 
-final class BodylessResponse implements HttpResponse {
+final class SimpleResponse implements HttpResponse {
   private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
   private final int statusCode;
   private final HttpHeaders headers;
+  private final byte[] body;
 
-  public BodylessResponse(HttpResponseCode statusCode, HttpHeaders headers) {
+  public SimpleResponse(HttpResponseCode statusCode, HttpHeaders headers, byte[] body) {
     this.statusCode = statusCode.getCode();
     this.headers = headers;
+    this.body = body;
   }
 
-  public BodylessResponse(HttpResponseCode statusCode) {
-    this(statusCode, HttpHeaders.NONE);
+  public SimpleResponse(HttpResponseCode statusCode, HttpHeaders headers) {
+    this(statusCode, headers, EMPTY_BYTE_ARRAY);
+  }
+
+  public SimpleResponse(HttpResponseCode statusCode) {
+    this(statusCode, HttpHeaders.NONE, EMPTY_BYTE_ARRAY);
   }
 
   @Override
@@ -29,6 +35,6 @@ final class BodylessResponse implements HttpResponse {
 
   @Override
   public byte[] getBody() {
-    return EMPTY_BYTE_ARRAY;
+    return body;
   }
 }

@@ -7,9 +7,9 @@ import java.io.PrintStream;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import javax.servlet.http.HttpServletRequest;
-
+import de.ofahrt.catfish.Connection;
 import de.ofahrt.catfish.RequestListener;
+import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 
 public final class WebalizerLogger implements RequestListener {
@@ -72,13 +72,13 @@ public final class WebalizerLogger implements RequestListener {
   }
 
   @Override
-  public void notifyInternalError(HttpServletRequest request, Throwable exception) {
+  public void notifyInternalError(Connection connection, HttpRequest request, Throwable exception) {
     // Ignore errors; no logging.
   }
 
   @Override
-  public void notifySent(HttpServletRequest request, HttpResponse response, int amount) {
-  	String logentry = formatter.format(request, response, amount);
+  public void notifySent(Connection connection, HttpRequest request, HttpResponse response, int amount) {
+  	String logentry = formatter.format(connection, request, response, amount);
     try {
       jobs.put(logentry);
     } catch (InterruptedException e) {

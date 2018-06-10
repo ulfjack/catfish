@@ -1,9 +1,7 @@
 package de.ofahrt.catfish;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
@@ -38,7 +36,6 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
   private Locale locale;
 
   private byte[] bodyData;
-  private int contentLength = -1;
 
   private boolean compressable;
 
@@ -51,11 +48,8 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
   ResponseImpl() {
   }
 
-  void setHeadRequest() {
-    if (isHeadRequest) {
-      throw new IllegalStateException();
-    }
-    isHeadRequest = true;
+  void setHeadRequest(boolean isHeadRequest) {
+    this.isHeadRequest = isHeadRequest;
   }
 
   void setVersion(HttpVersion version) {
@@ -66,7 +60,7 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
   }
 
   @Override
-  public HttpVersion getProtocol() {
+  public HttpVersion getProtocolVersion() {
     return version;
   }
 
@@ -181,30 +175,11 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
       throw new RuntimeException(e);
     }
 
-    if (bodyData != null) {
-      setHeaderInternal(HttpFieldName.CONTENT_LENGTH, Integer.toString(bodyData.length));
-    } else if (contentLength != -1) {
-      setHeaderInternal(HttpFieldName.CONTENT_LENGTH, Integer.toString(contentLength));
-    } else {
-      setHeaderInternal(HttpFieldName.CONTENT_LENGTH, "0");
-    }
     // The servlet specification requires writing out the content-language.
     // But locale.toString is clearly not correct.
     // if ((locale != null) && containsHeader(HttpFieldName.CONTENT_TYPE))
     // setHeader(HttpFieldName.CONTENT_LANGUAGE, locale.toString());
     isCompleted = true;
-  }
-
-  public InputStream getInputStream() {
-    if (!isHeadRequest && (bodyData != null)) {
-      return new ByteArrayInputStream(bodyData);
-    } else {
-      return new ByteArrayInputStream(new byte[0]);
-    }
-  }
-
-  byte[] bodyToByteArray() {
-    return isHeadRequest || bodyData == null ? new byte[0] : bodyData;
   }
 
   // ServletResponse API Implementation
@@ -290,14 +265,9 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
 
   @Override
   public void setContentLength(int len) {
-    if (isHeadRequest) {
-      contentLength = len;
-      return;
-    }
-    if (isCommitted) {
-      throw new IllegalStateException();
-    }
-    contentLength = len;
+    // Ignore servlet-provided setting. It might be wrong, and we're going to override it anyway
+    // (or used chunked encoding). We allow this to go through even when the response is already
+    // committed.
   }
 
   @Override
@@ -472,7 +442,7 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
 
   @Override
   public byte[] getBody() {
-    return bodyToByteArray();
+    return isHeadRequest || bodyData == null ? new byte[0] : bodyData;
   }
 
   @Override

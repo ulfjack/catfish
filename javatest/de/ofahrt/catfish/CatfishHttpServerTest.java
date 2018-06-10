@@ -3,42 +3,70 @@ package de.ofahrt.catfish;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.servlet.http.HttpServletResponse;
 
 import org.junit.Test;
 
+import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.api.HttpResponseWriter;
 
 public class CatfishHttpServerTest {
 
-  private static RequestImpl parse(String text) throws Exception {
+  private static HttpRequest parse(String text) throws Exception {
   	byte[] data = text.getBytes("ISO-8859-1");
-  	IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser(
-  			new InetSocketAddress("127.0.0.1", 80), new InetSocketAddress("127.0.0.1", 1234), false);
+  	IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
   	int consumed = parser.parse(data);
   	assertEquals(data.length, consumed);
   	assertTrue("parser not done at end of input", parser.isDone());
   	return parser.getRequest();
   }
 
-  private static HttpResponse createResponse(String text) throws Exception {
-  	RequestImpl request = parse(text);
-  	CatfishHttpServer server = new CatfishHttpServer(HttpServerListener.NULL);
-  	HttpHost host = new HttpHost.Builder()
-  	    .exact("/index", new TestServlet())
-  	    .build();
-  	server.addHttpHost("localhost", host);
-  	server.setCompressionAllowed(true);
-  	return server.createResponse(null, request).getResponse();
+  private static HttpResponse createResponse(HttpRequest request) throws Exception {
+    CatfishHttpServer server = new CatfishHttpServer(HttpServerListener.NULL);
+    HttpVirtualHost host = new HttpVirtualHost.Builder()
+        .exact("/index", new TestServlet())
+        .build();
+    server.addHttpHost("localhost", host);
+    server.setCompressionAllowed(true);
+    final AtomicReference<HttpResponse> writtenResponse = new AtomicReference<>();
+    final AtomicReference<ByteArrayOutputStream> writtenOutput = new AtomicReference<>();
+    HttpResponseWriter writer = new HttpResponseWriter() {
+      @Override
+      public void commitBuffered(HttpResponse response) {
+        if (!writtenResponse.compareAndSet(null, response)) {
+          throw new IllegalStateException("Already set!");
+        }
+      }
+
+      @Override
+      public OutputStream commitStreamed(HttpResponse response) throws IOException {
+        if (!writtenResponse.compareAndSet(null, response)) {
+          throw new IllegalStateException("Already set!");
+        }
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        if (!writtenOutput.compareAndSet(null, out)) {
+          throw new IllegalStateException("Already set!");
+        }
+        return out;
+      }
+    };
+    Connection connection = new Connection(
+        new InetSocketAddress("127.0.0.1", 80), new InetSocketAddress("127.0.0.1", 1234), false);
+    server.createResponse(connection, request, writer);
+    ByteArrayOutputStream out = writtenOutput.get();
+    return out == null ? writtenResponse.get() : writtenResponse.get().withBody(out.toByteArray());
   }
 
-  @Test
-  public void noHostOnHttp11RequestResultsIn400() throws Exception {
-  	HttpResponse response = createResponse("GET / HTTP/1.1\n\n");
-  	assertEquals(HttpServletResponse.SC_BAD_REQUEST, response.getStatusCode());
+  private static HttpResponse createResponse(String text) throws Exception {
+  	return createResponse(parse(text));
   }
 
   @Test

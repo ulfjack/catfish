@@ -6,10 +6,10 @@ import java.io.IOException;
 import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.HttpFieldName;
 
-public final class DirectoryPage implements HttpPage {
+public final class DirectoryHandler implements HttpHandler {
   private final String internalPath;
 
-  public DirectoryPage(String internalPath) {
+  public DirectoryHandler(String internalPath) {
     if (!internalPath.endsWith("/")) {
       throw new IllegalArgumentException("Path must end with a '/'");
     }

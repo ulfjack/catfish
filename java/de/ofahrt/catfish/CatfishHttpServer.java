@@ -14,10 +14,10 @@ import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLContext;
 import javax.servlet.http.HttpServletResponse;
 
-import de.ofahrt.catfish.api.HttpHeaders;
+import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpVersion;
-import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.HttpFieldName;
 import de.ofahrt.catfish.utils.HttpMethodName;
 
@@ -39,7 +39,6 @@ public final class CatfishHttpServer {
 
   private volatile boolean mayCompress = true;
   private volatile boolean mayKeepAlive = false;
-  private volatile String defaultCharset = "UTF-8";
 
   private final ArrayList<RequestListener> listeners = new ArrayList<>();
   private final NioEngine engine;
@@ -78,7 +77,7 @@ public final class CatfishHttpServer {
     hosts.put(name, domain);
   }
 
-  public void addHttpHost(String name, HttpHost virtualHost) {
+  public void addHttpHost(String name, HttpVirtualHost virtualHost) {
     if (defaultDomain == null) {
       defaultDomain = virtualHost;
     }
@@ -89,16 +88,20 @@ public final class CatfishHttpServer {
     aliases.put(alias, name);
   }
 
-  public void setDefaultCharset(String defaultCharset) {
-    this.defaultCharset = defaultCharset;
-  }
-
   public void setCompressionAllowed(boolean how) {
     mayCompress = how;
   }
 
+  public boolean isCompressionAllowed() {
+    return mayCompress;
+  }
+
   public void setKeepAliveAllowed(boolean how) {
     mayKeepAlive = how;
+  }
+
+  public boolean isKeepAliveAllowed() {
+    return mayKeepAlive;
   }
 
   public void addRequestListener(RequestListener l) {
@@ -113,23 +116,23 @@ public final class CatfishHttpServer {
     return "Catfish/11.0";
   }
 
-  void notifySent(RequestImpl request, HttpResponse response, int amount) {
+  void notifySent(Connection connection, HttpRequest request, HttpResponse response, int amount) {
     for (int i = 0; i < listeners.size(); i++) {
       RequestListener l = listeners.get(i);
       try {
-        l.notifySent(request, response, amount);
+        l.notifySent(connection, request, response, amount);
       } catch (Throwable error) {
         error.printStackTrace();
       }
     }
   }
 
-  void notifyInternalError(RequestImpl req, Throwable e) {
+  void notifyInternalError(Connection connection, HttpRequest req, Throwable e) {
     e.printStackTrace();
     for (int i = 0; i < listeners.size(); i++) {
       RequestListener l = listeners.get(i);
       try {
-        l.notifyInternalError(req, e);
+        l.notifyInternalError(connection, req, e);
       } catch (Throwable error) {
         error.printStackTrace();
       }
@@ -141,59 +144,47 @@ public final class CatfishHttpServer {
     return domain == null ? defaultDomain.getSSLContext() : domain.getSSLContext();
   }
 
-  ResponseGenerator createResponse(Connection connection, RequestImpl request) {
-    request.setSessionManager(sessionManager);
-    HttpResponse response;
-    if (request.hasError()) {
-      response = request.getErrorResponse();
-    } else if (request.getHeader(HttpFieldName.EXPECT) != null) {
-      response = HttpResponse.EXPECTATION_FAILED;
-    } else if ("*".equals(request.getUnparsedUri())) {
-      response = HttpResponse.BAD_REQUEST;
+  void createResponse(Connection connection, HttpRequest request, HttpResponseWriter writer) {
+    if (request.getHeaders().get(HttpFieldName.EXPECT) != null) {
+      writer.commitBuffered(HttpResponse.EXPECTATION_FAILED);
+    } else if ("*".equals(request.getUri())) {
+      writer.commitBuffered(HttpResponse.BAD_REQUEST);
     } else {
-      response = evaluateServletRequest(request);
-    }
-    serverListener.notifyRequest(connection, response);
-
-    HttpHeaders overrides = HttpHeaders.of(
-        HttpFieldName.SERVER, getServerName(),
-        HttpFieldName.DATE, HttpDate.formatDate(System.currentTimeMillis()));
-    try {
-      return ResponseGenerator.of(response.withHeaderOverrides(overrides));
-    } catch (IOException e) {
-      notifyInternalError(request, e);
-      return ResponseGenerator.newInternalServerError(overrides);
+      evaluateServletRequest(connection, request, writer);
     }
   }
 
-  private HttpResponse evaluateServletRequest(RequestImpl request) {
-    ResponseImpl response = request.getResponse();
-    if (HttpMethodName.HEAD.equals(request.getMethod())) {
-      response.setHeadRequest();
-    }
-    response.setCharacterEncoding(defaultCharset);
-    response.setVersion(HttpVersion.HTTP_1_1);
-    if (mayCompress) {
-      response.setCompressionAllowed(request.supportGzipCompression());
-    }
-    if (mayKeepAlive && request.mayKeepAlive()) {
-      response.setHeader(HttpFieldName.CONNECTION, "keep-alive");
-    }
+  private void evaluateServletRequest(Connection connection, HttpRequest request, HttpResponseWriter writer) {
+    RequestImpl servletRequest;
     try {
-      FilterDispatcher dispatcher = determineDispatcher(request);
-      dispatcher.dispatch(request, response);
+      servletRequest = new RequestImpl(request, connection);
+    } catch (MalformedRequestException e) {
+      writer.commitBuffered(e.getErrorResponse());
+      return;
+    }
+    ResponseImpl response = servletRequest.getResponse();
+    if (mayCompress) {
+      response.setCompressionAllowed(servletRequest.supportGzipCompression());
+    }
+    servletRequest.supportGzipCompression();
+    servletRequest.setSessionManager(sessionManager);
+    FilterDispatcher dispatcher = determineDispatcher(servletRequest);
+    response.setHeadRequest(HttpMethodName.HEAD.equals(request.getMethod()));
+    response.setVersion(HttpVersion.HTTP_1_1);
+    try {
+      dispatcher.dispatch(servletRequest, response);
     } catch (FileNotFoundException e) {
       response.sendError(HttpServletResponse.SC_NOT_FOUND);
     } catch (Exception e) {
+      e.printStackTrace();
       response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-    } finally {
     }
     response.close();
-    return response;
-  }
-
-  void queueRequest(Runnable runnable) {
-    executor.execute(runnable);
+    try {
+      writer.commitStreamed(response).write(response.getBody());
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private FilterDispatcher determineDispatcher(RequestImpl request) {
@@ -204,7 +195,11 @@ public final class CatfishHttpServer {
       }
     }
     InternalVirtualHost virtualHost = findVirtualHost(host);
-    return virtualHost.determineDispatcher(request);
+    return virtualHost.determineDispatcher(request.getPath());
+  }
+
+  void queueRequest(Runnable runnable) {
+    executor.execute(runnable);
   }
 
   private InternalVirtualHost findVirtualHost(String hostName) {

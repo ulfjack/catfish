@@ -5,7 +5,7 @@ import java.io.UnsupportedEncodingException;
 
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.Connection;
-import de.ofahrt.catfish.HttpHost;
+import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.HttpServerListener;
 import de.ofahrt.catfish.TestHelper;
 import de.ofahrt.catfish.TestServlet;
@@ -62,7 +62,7 @@ final class LocalCatfishServer implements Server {
 
   @Override
   public void start() throws Exception {
-    HttpHost.Builder builder = new HttpHost.Builder()
+    HttpVirtualHost.Builder builder = new HttpVirtualHost.Builder()
         .exact("/compression.html", new TestServlet())
         .directory("/", new HttpRequestTestServlet());
 

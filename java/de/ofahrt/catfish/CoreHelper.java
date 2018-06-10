@@ -53,7 +53,7 @@ final class CoreHelper {
 
   // Response text output for debugging:
   public static final void printResponse(PrintStream out, HttpResponse response) {
-    out.println(response.getProtocol() + " " + response.getStatusLine());
+    out.println(response.getProtocolVersion() + " " + response.getStatusLine());
     for (Map.Entry<String, String> e : response.getHeaders()) {
     	out.println(e.getKey() + ": " + e.getValue());
     }

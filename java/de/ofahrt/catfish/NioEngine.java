@@ -1,6 +1,8 @@
 package de.ofahrt.catfish;
 
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -9,6 +11,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -22,7 +25,9 @@ import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
 
 import de.ofahrt.catfish.CatfishHttpServer.RequestCallback;
-import de.ofahrt.catfish.bridge.ServletHelper;
+import de.ofahrt.catfish.api.HttpRequest;
+import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.api.HttpResponseWriter;
 
 final class NioEngine {
 
@@ -39,14 +44,14 @@ final class NioEngine {
     void handleEvent() throws IOException;
   }
 
-  private abstract class NioConnection implements EventHandler {
+  private abstract class NioConnectionHandler implements EventHandler {
     private final SelectorQueue queue;
-    protected final Connection connectionId;
+    protected final Connection connection;
     protected final SocketChannel socketChannel;
     protected final SelectionKey key;
 
     protected final IncrementalHttpRequestParser parser;
-    protected RequestImpl request;
+    protected HttpRequest request;
     protected byte[] inputBuffer = new byte[1024];
     protected ByteBuffer inputByteBuffer = ByteBuffer.wrap(inputBuffer);
 
@@ -57,20 +62,16 @@ final class NioEngine {
 
     protected State state = State.READ_REQUEST;
 
-    NioConnection(
+    NioConnectionHandler(
         SelectorQueue queue,
-        Connection connectionId,
-        boolean ssl,
+        Connection connection,
         SocketChannel socketChannel,
         SelectionKey key) {
       this.queue = queue;
-      this.connectionId = connectionId;
+      this.connection = connection;
       this.socketChannel = socketChannel;
       this.key = key;
-
-      InetSocketAddress localAddress = (InetSocketAddress) socketChannel.socket().getLocalSocketAddress();
-      InetSocketAddress remoteAddress = (InetSocketAddress) socketChannel.socket().getRemoteSocketAddress();
-      this.parser = new IncrementalHttpRequestParser(localAddress, remoteAddress, ssl);
+      this.parser = new IncrementalHttpRequestParser();
 
       outputByteBuffer.clear();
       outputByteBuffer.flip();
@@ -101,7 +102,7 @@ final class NioEngine {
       try {
         writeImpl();
       } catch (IOException e) {
-        serverListener.notifyInternalError(connectionId, e);
+        serverListener.notifyInternalError(connection, e);
         key.cancel();
       }
     }
@@ -121,8 +122,12 @@ final class NioEngine {
       inputByteBuffer.position(consumed);
       inputByteBuffer.compact();
       if (parser.isDone()) {
-        request = parser.getRequest();
-        if (DEBUG) ServletHelper.printRequest(System.out, request);
+        try {
+          request = parser.getRequest();
+          if (DEBUG) printRequest(System.out);
+        } catch (MalformedRequestException e) {
+          throw new IllegalStateException("Implement me!");
+        }
         key.interestOps(0);
         submitJob();
         return true;
@@ -130,13 +135,51 @@ final class NioEngine {
       return false;
     }
 
+    private final void printRequest(PrintStream out) {
+      out.println(request.getVersion() + " " + request.getMethod() + " " + request.getUri());
+      for (Map.Entry<String, String> e : request.getHeaders()) {
+        out.println(e.getKey() + ": " + e.getValue());
+      }
+//      out.println("Query Parameters:");
+//      Map<String, String> queries = parseQuery(request);
+//      for (Map.Entry<String, String> e : queries.entrySet()) {
+//        out.println("  " + e.getKey() + ": " + e.getValue());
+//      }
+//      try {
+//        FormData formData = parseFormData(request);
+//        out.println("Post Parameters:");
+//        for (Map.Entry<String, String> e : formData.data.entrySet()) {
+//          out.println("  " + e.getKey() + ": " + e.getValue());
+//        }
+//      } catch (IllegalArgumentException e) {
+//        out.println("Exception trying to parse post parameters:");
+//        e.printStackTrace(out);
+//      } catch (IOException e) {
+//        out.println("Exception trying to parse post parameters:");
+//        e.printStackTrace(out);
+//      }
+      out.flush();
+    }
+
     protected final void submitJob() {
       server.queueRequest(new RequestCallback() {
         @Override
         public void run() {
-          ResponseGenerator gen = server.createResponse(connectionId, request);
-          // This runs in a thread pool thread, so we need to wake up the main thread.
-          queue.queue(() -> startOutput(gen));
+          HttpResponseWriter writer = new HttpResponseWriter() {
+            @Override
+            public void commitBuffered(HttpResponse response) {
+              serverListener.notifyRequest(connection, response);
+              ResponseGenerator gen = ResponseGenerator.buffered(response, false);
+              // This runs in a thread pool thread, so we need to wake up the main thread.
+              queue.queue(() -> startOutput(gen));
+            }
+
+            @Override
+            public OutputStream commitStreamed(HttpResponse response) throws IOException {
+              throw new UnsupportedOperationException();
+            }
+          };
+          server.createResponse(connection, request, writer);
         }
 
         @Override
@@ -175,18 +218,18 @@ final class NioEngine {
         socketChannel.close();
       } catch (IOException ignored) {
         // There's nothing we can do if this fails.
-        serverListener.notifyInternalError(connectionId, ignored);
+        serverListener.notifyInternalError(connection, ignored);
       }
     }
   }
 
-  class NetConnection extends NioConnection {
+  class NetConnection extends NioConnectionHandler {
     public NetConnection(
         SelectorQueue queue,
-        Connection connectionId,
+        Connection connection,
         SocketChannel socketChannel,
         SelectionKey key) {
-      super(queue, connectionId, false, socketChannel, key);
+      super(queue, connection, socketChannel, key);
     }
 
     @Override
@@ -201,7 +244,7 @@ final class NioEngine {
           consumeInput();
         }
       } catch (IOException e) {
-        serverListener.notifyInternalError(connectionId, e);
+        serverListener.notifyInternalError(connection, e);
         key.cancel();
       }
     }
@@ -224,7 +267,7 @@ final class NioEngine {
       }
       if (outputByteBuffer.remaining() == 0) {
         if (generator != null) {
-          server.notifySent(request, generator.getResponse(), 0);
+          server.notifySent(connection, request, generator.getResponse(), 0);
         }
         if (isKeepAlive) {
           reset();
@@ -237,7 +280,7 @@ final class NioEngine {
     }
   }
 
-  class SSLConnection extends NioConnection {
+  class SSLConnection extends NioConnectionHandler {
     private boolean lookingForSni = true;
     private SSLEngine sslEngine;
     private final ByteBuffer netInputBuffer = ByteBuffer.allocate(18000);
@@ -245,10 +288,10 @@ final class NioEngine {
 
     public SSLConnection(
         SelectorQueue queue,
-        Connection connectionId,
+        Connection connection,
         SocketChannel socketChannel,
         SelectionKey key) {
-      super(queue, connectionId, true, socketChannel, key);
+      super(queue, connection, socketChannel, key);
       outputByteBuffer.clear();
       outputByteBuffer.flip();
       netOutputBuffer.clear();
@@ -351,10 +394,10 @@ final class NioEngine {
           }
         }
       } catch (SSLException e) {
-        serverListener.notifyInternalError(connectionId, e);
+        serverListener.notifyInternalError(connection, e);
         close();
       } catch (IOException e) {
-        serverListener.notifyInternalError(connectionId, e);
+        serverListener.notifyInternalError(connection, e);
         key.cancel();
       }
     }
@@ -395,7 +438,7 @@ final class NioEngine {
         if (DEBUG) System.out.println("After generating response: "+outputByteBuffer.remaining());
         if (outputByteBuffer.remaining() == 0) {
           if (generator != null) {
-            server.notifySent(request, generator.getResponse(), 0);
+            server.notifySent(connection, request, generator.getResponse(), 0);
           }
           if (isKeepAlive) {
             reset();
@@ -426,13 +469,15 @@ final class NioEngine {
         @SuppressWarnings("resource")
         SocketChannel socketChannel = serverChannel.accept();
         openCounter.incrementAndGet();
-        Connection connection = new Connection();
+        Connection connection = new Connection(
+            (InetSocketAddress) socketChannel.socket().getLocalSocketAddress(),
+            (InetSocketAddress) socketChannel.socket().getRemoteSocketAddress(),
+            ssl);
         socketChannel.configureBlocking(false);
         socketChannel.socket().setTcpNoDelay(true);
         socketChannel.socket().setKeepAlive(true);
         if (DEBUG) {
-          System.out.println("New connection: " + socketChannel.socket().getRemoteSocketAddress()
-              + " " + connection);
+          System.out.println("New connection: " + connection);
         }
         attachConnection(connection, socketChannel, ssl);
       }
@@ -514,7 +559,7 @@ final class NioEngine {
         public void run() {
           try {
             SelectionKey socketKey = socketChannel.register(selector, SelectionKey.OP_READ);
-            NioConnection nioConnection;
+            NioConnectionHandler nioConnection;
             if (!ssl) {
               nioConnection =
                   new NetConnection(SelectorQueue.this, connection, socketChannel, socketKey);

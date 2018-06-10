@@ -6,10 +6,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-import javax.servlet.http.HttpServletResponse;
-
 import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpResponseCode;
 import de.ofahrt.catfish.utils.MimeType;
 import de.ofahrt.catfish.utils.MimeTypeRegistry;
 
@@ -31,7 +30,7 @@ final class FileResponse implements HttpResponse {
 
   @Override
   public int getStatusCode() {
-    return HttpServletResponse.SC_OK;
+    return HttpResponseCode.OK.getCode();
   }
 
   @Override

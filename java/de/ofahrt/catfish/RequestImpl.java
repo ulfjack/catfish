@@ -7,6 +7,7 @@ import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.security.Principal;
@@ -25,9 +26,9 @@ import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletInputStream;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 
+import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.bridge.Enumerations;
@@ -35,7 +36,6 @@ import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.HttpFieldName;
 
 public final class RequestImpl implements HttpServletRequest {
-
   private static final String DEFAULT_CHARSET = "UTF-8";
   private static final Pattern HTTP_LOCALE_PATTERN =
       Pattern.compile("((\\w\\w)(?:-(\\w\\w))?(;q=[0-9.]+)?)(,|$)");
@@ -48,42 +48,44 @@ public final class RequestImpl implements HttpServletRequest {
   private static final int HTTPS_PORT = 443;
 
   private Locale defaultLocale = Locale.US;
-  private final ResponseImpl response;
+  private String charset = DEFAULT_CHARSET;
 
   private final HttpVersion version;
-  private String charset = DEFAULT_CHARSET;
-  private final InetSocketAddress localAddress;
-  private final InetSocketAddress clientAddress;
   private final String method;
   private final URI uri;
   private final String unparsedUri;
+  private final Map<String, String> headers;
+  private byte[] body;
 
+  private final ResponseImpl response;
+  private final InetSocketAddress localAddress;
+  private final InetSocketAddress clientAddress;
   // Session Management & Security
   private final boolean ssl;
   private SessionManager sessionManager;
   private HttpSession session;
-
-  private final Map<String, String> headers;
   private Map<String, String> parameters;
-
   private final HashMap<String, Object> attributes = new HashMap<>();
 
-  private byte[] body;
-
-  private final HttpResponse errorResponse;
-
-  private RequestImpl(Builder builder) {
+  public RequestImpl(HttpRequest request, Connection connection) throws MalformedRequestException {
     this.response = new ResponseImpl();
-    this.version = builder.version;
-    this.localAddress = builder.localAddress;
-    this.clientAddress = builder.clientAddress;
-    this.method = builder.method;
-    this.unparsedUri = builder.unparsedUri;
-    this.uri = builder.uri;
-    this.headers = builder.headers;
-    this.ssl = builder.ssl;
-    this.body = builder.body;
-    this.errorResponse = builder.errorResponse;
+    this.version = request.getVersion();
+    this.method = request.getMethod();
+    this.unparsedUri = request.getUri();
+    this.headers = new TreeMap<>();
+    for (Map.Entry<String, String> e : request.getHeaders()) {
+      this.headers.put(e.getKey(), e.getValue());
+    }
+    this.body = request.getBody();
+
+    this.localAddress = connection.getLocalAddress();
+    this.clientAddress = connection.getRemoteAddress();
+    this.ssl = connection.isSsl();
+    try {
+      this.uri = new URI(unparsedUri);
+    } catch (URISyntaxException e) {
+      throw new MalformedRequestException(HttpResponse.BAD_REQUEST);
+    }
   }
 
   private static Map<String, String> parseQuery(String query, String charset) {
@@ -107,14 +109,6 @@ public final class RequestImpl implements HttpServletRequest {
     if (parameters == null) {
       parameters = parseQuery(uri == null ? null : uri.getRawQuery(), charset);
     }
-  }
-
-  boolean hasError() {
-    return errorResponse != null;
-  }
-
-  HttpResponse getErrorResponse() {
-    return errorResponse;
   }
 
   public ResponseImpl getResponse() {
@@ -583,135 +577,5 @@ public final class RequestImpl implements HttpServletRequest {
   @Override
   public boolean isUserInRole(String role) {
     throw new UnsupportedOperationException();
-  }
-
-  public static class Builder {
-    private HttpVersion version;
-    private InetSocketAddress localAddress;
-    private InetSocketAddress clientAddress;
-    private String method;
-    private URI uri;
-    private String unparsedUri;
-
-    private boolean ssl;
-//    private SessionManager sessionManager;
-//    private HttpSession session;
-
-    private Map<String,String> headers;
-
-    private byte[] body;
-
-    private HttpResponse errorResponse;
-
-    public Builder() {
-      reset();
-    }
-
-    public void reset() {
-      version = HttpVersion.HTTP_0_9;
-      method = "UNKNOWN";
-      uri = null;
-      unparsedUri = null;
-      ssl = false;
-      headers = new TreeMap<>();
-      body = null;
-      errorResponse = null;
-    }
-
-    public RequestImpl build() {
-      if ((errorResponse == null)
-          && (version.compareTo(HttpVersion.HTTP_1_1) >= 0)
-          && !headers.containsKey(HttpFieldName.HOST)) {
-        setError(HttpServletResponse.SC_BAD_REQUEST, "Missing 'Host' field");
-      }
-      if ((uri == null) && !"*".equals(unparsedUri) && (errorResponse == null)) {
-        throw new IllegalStateException("Missing URI!");
-      }
-      return new RequestImpl(this);
-    }
-
-    public Builder setLocalAddress(InetSocketAddress localAddress) {
-      this.localAddress = localAddress;
-      return this;
-    }
-
-    public Builder setClientAddress(InetSocketAddress clientAddress) {
-      this.clientAddress = clientAddress;
-      return this;
-    }
-
-    public Builder setSsl(boolean ssl) {
-      this.ssl = ssl;
-      return this;
-    }
-
-    public Builder setVersion(HttpVersion version) {
-      this.version = version;
-      return this;
-    }
-
-    public Builder setMethod(String method) {
-      this.method = method;
-      return this;
-    }
-
-    public Builder setUnparsedUri(String unparsedUri) {
-      this.unparsedUri = unparsedUri;
-      return this;
-    }
-
-    public Builder setUri(URI uri) {
-      this.uri = uri;
-      return this;
-    }
-
-    public Builder addHeader(String key, String value) {
-      Preconditions.checkNotNull(key);
-      Preconditions.checkNotNull(value);
-      key = HttpFieldName.canonicalize(key);
-      if (headers.get(key) != null) {
-        if (!HttpFieldHelper.mayOccurMultipleTimes(key)) {
-          setError(
-              HttpServletResponse.SC_BAD_REQUEST,
-              "Illegal message headers: multiple occurrance for non-list field");
-          return this;
-        }
-        value = headers.get(key)+", "+value;
-      }
-      if (HttpFieldName.HOST.equals(key)) {
-        if (!HttpFieldHelper.validHostPort(value)) {
-          setError(
-              HttpServletResponse.SC_BAD_REQUEST,
-              "Illegal 'Host' header");
-          return this;
-        }
-      }
-      headers.put(key, value);
-      return this;
-    }
-
-    public String getHeader(String key) {
-      return headers.get(key);
-    }
-
-    public Builder setBody(byte[] body) {
-      this.body = body;
-      return this;
-    }
-
-    public Builder setError(int errorCode, String error) {
-      this.errorResponse = new HttpResponse() {
-        @Override
-        public int getStatusCode() {
-          return errorCode;
-        }
-
-        @Override
-        public String getStatusLine() {
-          return error;
-        }
-      };
-      return this;
-    }
   }
 }

@@ -35,8 +35,6 @@ public abstract class HttpParserTest {
       fail();
     } catch (MalformedRequestException e) {
       assertEquals(errorMessage, e.getMessage());
-    } catch (BadRequestException e) {
-      // Don't check the error message for now.
     }
   }
 
@@ -261,7 +259,7 @@ public abstract class HttpParserTest {
 
   @Test
   public void badUriSyntax() throws Exception {
-    checkError("Bad URI syntax", "GET 12:/path HTTP/1.0\n\n");
+    checkError("400 Bad Request", "GET 12:/path HTTP/1.0\n\n");
   }
 
   @Test

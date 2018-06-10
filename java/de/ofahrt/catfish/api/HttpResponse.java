@@ -2,103 +2,37 @@ package de.ofahrt.catfish.api;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.io.Writer;
-import java.nio.charset.StandardCharsets;
 
-import de.ofahrt.catfish.utils.HttpFieldName;
 import de.ofahrt.catfish.utils.HttpResponseCode;
 
 public interface HttpResponse {
-  public static final HttpResponse NO_CONTENT = new BodylessResponse(HttpResponseCode.NO_CONTENT);
-  public static final HttpResponse METHOD_NOT_ALLOWED = new BodylessResponse(HttpResponseCode.METHOD_NOT_ALLOWED);
-  public static final HttpResponse NOT_FOUND = new BodylessResponse(HttpResponseCode.NOT_FOUND);
-  public static final HttpResponse NOT_MODIFIED = new BodylessResponse(HttpResponseCode.NOT_MODIFIED);
-  public static final HttpResponse INTERNAL_SERVER_ERROR = new BodylessResponse(HttpResponseCode.INTERNAL_SERVER_ERROR);
-  public static final HttpResponse BAD_REQUEST = new BodylessResponse(HttpResponseCode.BAD_REQUEST);
-  public static final HttpResponse EXPECTATION_FAILED = new BodylessResponse(HttpResponseCode.EXPECTATION_FAILED);
+  public static final HttpResponse NO_CONTENT = new SimpleResponse(HttpResponseCode.NO_CONTENT);
+  public static final HttpResponse METHOD_NOT_ALLOWED = new SimpleResponse(HttpResponseCode.METHOD_NOT_ALLOWED);
+  public static final HttpResponse NOT_FOUND = new SimpleResponse(HttpResponseCode.NOT_FOUND);
+  public static final HttpResponse NOT_MODIFIED = new SimpleResponse(HttpResponseCode.NOT_MODIFIED);
+  public static final HttpResponse INTERNAL_SERVER_ERROR = new SimpleResponse(HttpResponseCode.INTERNAL_SERVER_ERROR);
+  public static final HttpResponse BAD_REQUEST = new SimpleResponse(HttpResponseCode.BAD_REQUEST);
+  public static final HttpResponse EXPECTATION_FAILED = new SimpleResponse(HttpResponseCode.EXPECTATION_FAILED);
 
-  public static HttpResponse forInternalServerError(Exception exception) {
-    return exception == null ? INTERNAL_SERVER_ERROR : new InternalErrorResponse(exception);
+  public static HttpResponse forInternalServerError(Throwable throwable) {
+    return throwable == null
+        ? INTERNAL_SERVER_ERROR
+        : InternalServerErrorResponse.create(throwable);
   }
 
   public static HttpResponse foundAt(String destinationUrl) {
-    return new RedirectResponse(HttpResponseCode.FOUND, destinationUrl);
+    return RedirectResponse.create(HttpResponseCode.FOUND, destinationUrl);
   }
 
   public static HttpResponse movedPermanentlyTo(String destinationUrl) {
-    return new RedirectResponse(HttpResponseCode.MOVED_PERMANENTLY, destinationUrl);
+    return RedirectResponse.create(HttpResponseCode.MOVED_PERMANENTLY, destinationUrl);
   }
 
   public static HttpResponse temporaryRedirect(String destinationUrl) {
-    return new RedirectResponse(HttpResponseCode.TEMPORARY_REDIRECT, destinationUrl);
+    return RedirectResponse.create(HttpResponseCode.TEMPORARY_REDIRECT, destinationUrl);
   }
 
-  final class InternalErrorResponse implements HttpResponse {
-    private static final String TEXT_PLAIN_UTF_8 = "text/plain; charset=UTF-8";
-    private static final HttpHeaders HEADERS =
-        HttpHeaders.of(HttpFieldName.CONTENT_TYPE, TEXT_PLAIN_UTF_8);
-
-    private final Exception exception;
-
-    private InternalErrorResponse(Exception exception) {
-      this.exception = exception;
-    }
-
-    @Override
-    public int getStatusCode() {
-      return HttpResponseCode.INTERNAL_SERVER_ERROR.getCode();
-    }
-
-    @Override
-    public HttpHeaders getHeaders() {
-      return HEADERS;
-    }
-
-    @Override
-    public void writeBodyTo(OutputStream out) throws IOException {
-      try (PrintWriter writer = new PrintWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
-        writer.write(getStatusCode() + " Internal server error\n");
-        exception.printStackTrace(writer);
-      }
-    }
-  }
-
-  final class RedirectResponse implements HttpResponse {
-    private static final String TEXT_HTML_UTF_8 = "text/html; charset=UTF-8";
-
-    private final int statusCode;
-    private final String destinationUrl;
-
-    RedirectResponse(HttpResponseCode statusCode, String destinationUrl) {
-      this.statusCode = statusCode.getCode();
-      this.destinationUrl = destinationUrl;
-    }
-
-    @Override
-    public int getStatusCode() {
-      return statusCode;
-    }
-
-    @Override
-    public HttpHeaders getHeaders() {
-      return HttpHeaders.of(
-          HttpFieldName.LOCATION, destinationUrl,
-          HttpFieldName.CONTENT_TYPE, TEXT_HTML_UTF_8);
-    }
-
-    @Override
-    public void writeBodyTo(OutputStream out) throws IOException {
-      try (Writer writer = new OutputStreamWriter(out, StandardCharsets.UTF_8)) {
-        writer.append("<html><head><meta http-equiv=\"refresh\" content=\"1; URL=");
-        writer.append(destinationUrl);
-        writer.append("\"></head><body>REDIRECT</body></html>");
-      }
-    }
-  }
-
-  default HttpVersion getProtocol() {
+  default HttpVersion getProtocolVersion() {
     return HttpVersion.HTTP_1_1;
   }
 
@@ -130,8 +64,8 @@ public interface HttpResponse {
   default HttpResponse withHeaderOverrides(HttpHeaders overrides) {
     return new HttpResponse() {
       @Override
-      public HttpVersion getProtocol() {
-        return HttpResponse.this.getProtocol();
+      public HttpVersion getProtocolVersion() {
+        return HttpResponse.this.getProtocolVersion();
       }
 
       @Override
@@ -157,6 +91,40 @@ public interface HttpResponse {
       @Override
       public void writeBodyTo(OutputStream out) throws IOException {
         HttpResponse.this.writeBodyTo(out);
+      }
+    };
+  }
+
+  default HttpResponse withBody(byte[] body) {
+    return new HttpResponse() {
+      @Override
+      public HttpVersion getProtocolVersion() {
+        return HttpResponse.this.getProtocolVersion();
+      }
+
+      @Override
+      public int getStatusCode() {
+        return HttpResponse.this.getStatusCode();
+      }
+
+      @Override
+      public String getStatusLine() {
+        return HttpResponse.this.getStatusLine();
+      }
+
+      @Override
+      public HttpHeaders getHeaders() {
+        return HttpResponse.this.getHeaders();
+      }
+
+      @Override
+      public byte[] getBody() {
+        return body;
+      }
+
+      @Override
+      public void writeBodyTo(OutputStream out) throws IOException {
+        throw new UnsupportedOperationException();
       }
     };
   }

@@ -8,6 +8,7 @@ import org.junit.runners.Suite.SuiteClasses;
 @SuiteClasses({
   HttpHeadersTest.class,
   HttpVersionTest.class,
+  SimpleHttpRequestTest.class,
 })
 public class CatfishApiTestSuite {
 }

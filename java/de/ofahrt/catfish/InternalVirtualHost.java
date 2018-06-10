@@ -4,5 +4,5 @@ import javax.net.ssl.SSLContext;
 
 interface InternalVirtualHost {
   SSLContext getSSLContext();
-  FilterDispatcher determineDispatcher(RequestImpl request);
+  FilterDispatcher determineDispatcher(String path);
 }

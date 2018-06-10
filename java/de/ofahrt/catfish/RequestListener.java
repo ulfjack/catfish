@@ -1,10 +1,9 @@
 package de.ofahrt.catfish;
 
-import javax.servlet.http.HttpServletRequest;
-
+import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 
 public interface RequestListener {
-  void notifySent(HttpServletRequest request, HttpResponse response, int bytesSent);
-  void notifyInternalError(HttpServletRequest request, Throwable exception);
+  void notifySent(Connection connection, HttpRequest request, HttpResponse response, int bytesSent);
+  void notifyInternalError(Connection connection, HttpRequest request, Throwable exception);
 }

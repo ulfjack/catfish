@@ -55,9 +55,7 @@ public class IncrementalHttpParserIncrementalTest extends HttpParserTest {
 
   @Override
   public RequestImpl parse(byte[] data) throws Exception {
-  	IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser(
-  			new InetSocketAddress("127.0.0.1", 8080), new InetSocketAddress("127.0.0.1", 1234),
-  			false);
+  	IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
   	int pos = 0;
   	for (int i = 0; i < lengths.length; i++) {
   		int len = Math.min(data.length-pos, lengths[i]);
@@ -72,10 +70,11 @@ public class IncrementalHttpParserIncrementalTest extends HttpParserTest {
   		}
   	}
   	assertTrue(parser.isDone());
-  	RequestImpl result = parser.getRequest();
-  	if (result.hasError()) {
-  	  throw new MalformedRequestException(result.getErrorResponse().getStatusLine());
-  	}
-  	return result;
+  	return new RequestImpl(
+  	    parser.getRequest(),
+  	    new Connection(
+  	        new InetSocketAddress("127.0.0.1", 8080),
+  	        new InetSocketAddress("127.0.0.1", 1234),
+  	        false));
   }
 }

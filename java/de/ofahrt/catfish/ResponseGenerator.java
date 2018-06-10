@@ -1,7 +1,5 @@
 package de.ofahrt.catfish;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
@@ -11,23 +9,16 @@ import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.utils.HttpFieldName;
 
 final class ResponseGenerator {
+  private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
   private static final String CRLF = "\r\n";
 
-  public static ResponseGenerator newInternalServerError(HttpHeaders headers) {
-    HttpResponse response = HttpResponse.INTERNAL_SERVER_ERROR;
-    byte[][] data = new byte[][] {
-      statusLineToByteArray(response),
-      headersToByteArray(headers)
-    };
-    boolean keepAlive = false;
-    return new ResponseGenerator(response, keepAlive, data);
-  }
-
-  static ResponseGenerator of(HttpResponse response) throws IOException {
-    byte[] body = response.getBody();
+  static ResponseGenerator buffered(HttpResponse response, boolean includeBody) {
+    byte[] body = includeBody ? response.getBody() : EMPTY_BYTE_ARRAY;
     if (body == null) {
-      body = bodyToByteArray(response);
+      throw new IllegalArgumentException();
     }
+    response = response.withHeaderOverrides(
+        HttpHeaders.of(HttpFieldName.CONTENT_LENGTH, Integer.toString(body.length)));
     HttpHeaders headers = response.getHeaders();
     byte[][] data = new byte[][] {
       statusLineToByteArray(response),
@@ -40,7 +31,7 @@ final class ResponseGenerator {
 
   private static byte[] statusLineToByteArray(HttpResponse response) {
     StringBuilder buffer = new StringBuilder(200);
-    buffer.append(response.getProtocol());
+    buffer.append(response.getProtocolVersion());
     buffer.append(" ");
     buffer.append(response.getStatusLine());
     buffer.append(CRLF);
@@ -59,12 +50,6 @@ final class ResponseGenerator {
     }
     buffer.append(CRLF);
     return buffer.toString().getBytes(StandardCharsets.UTF_8);
-  }
-
-  private static byte[] bodyToByteArray(HttpResponse response) throws IOException {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    response.writeBodyTo(out);
-    return out.toByteArray();
   }
 
   private final HttpResponse response;
