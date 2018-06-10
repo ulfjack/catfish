@@ -220,10 +220,6 @@ final class NioEngine {
       this.generator = gen;
       isKeepAlive = "keep-alive".equals(response.getHeaders().get(HttpFieldName.CONNECTION));
       if (DEBUG) CoreHelper.printResponse(System.out, response);
-      resumeOutput();
-    }
-
-    private void resumeOutput() {
       if (!key.isValid()) {
         return;
       }
@@ -236,6 +232,13 @@ final class NioEngine {
         return;
       }
       outputByteBuffer.limit(available);
+      resumeOutput();
+    }
+
+    private void resumeOutput() {
+      if (!key.isValid()) {
+        return;
+      }
       key.interestOps(SelectionKey.OP_WRITE);
     }
 
