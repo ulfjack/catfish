@@ -12,6 +12,7 @@ import de.ofahrt.catfish.api.HttpResponse;
 
 final class StreamingResponseGenerator implements AsyncInputStream {
   private static final String CRLF = "\r\n";
+  private static final boolean DEBUG = false;
 
   private final HttpResponse response;
   private final Runnable dataAvailableCallback;
@@ -50,6 +51,10 @@ final class StreamingResponseGenerator implements AsyncInputStream {
         len -= bytesToCopy;
         writePosition = (writePosition + bytesToCopy) % buffer.length;
         isFull = writePosition == readPosition;
+        if (DEBUG) {
+          System.out.println(
+              "WROTE " + bytesToCopy + " -> " + readPosition + " " + writePosition + (isFull ? " FULL" : ""));
+        }
       }
       dataAvailableCallback.run();
     }
@@ -88,9 +93,6 @@ final class StreamingResponseGenerator implements AsyncInputStream {
 
   @Override
   public synchronized int readAsync(byte[] dest, int offset, int length) {
-    if (isDone) {
-      return -1;
-    }
     int totalBytesCopied = 0;
     while (length > 0) {
       int bytesAvailable = (writePosition >= readPosition) && !isFull
@@ -106,6 +108,12 @@ final class StreamingResponseGenerator implements AsyncInputStream {
       totalBytesCopied += bytesToCopy;
       readPosition = (readPosition + bytesToCopy) % buffer.length;
       isFull = false;
+      if (DEBUG) {
+        System.out.println("READ " + bytesToCopy + " -> " + readPosition + " " + writePosition);
+      }
+    }
+    if (totalBytesCopied == 0 && isDone) {
+      return -1;
     }
     notify();
     return totalBytesCopied;

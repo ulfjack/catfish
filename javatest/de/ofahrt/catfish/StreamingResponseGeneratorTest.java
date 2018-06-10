@@ -1,15 +1,10 @@
 package de.ofahrt.catfish;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 
-import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import javax.servlet.Servlet;
+import java.nio.charset.StandardCharsets;
 
 import org.junit.Test;
 
@@ -17,17 +12,29 @@ import de.ofahrt.catfish.api.HttpResponse;
 
 public class StreamingResponseGeneratorTest {
 
+  private byte[] readFully(AsyncInputStream in) {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    byte[] buffer = new byte[13];
+    while (true) {
+      int len = in.readAsync(buffer, 0, buffer.length);
+      if (len > 0) {
+        out.write(buffer, 0, len);
+      } else if (len == 0) {
+        throw new IllegalStateException();
+      } else {
+        break;
+      }
+    }
+    return out.toByteArray();
+  }
+
   @Test
   public void smoke() throws Exception {
-    AtomicBoolean callbackCalled = new AtomicBoolean();
-    StreamingResponseGenerator gen = new StreamingResponseGenerator(
-        HttpResponse.OK, () -> {
-          if (!callbackCalled.compareAndSet(false, true)) {
-            throw new IllegalStateException();
-          }
-        });
+    StreamingResponseGenerator gen = new StreamingResponseGenerator(HttpResponse.OK, () -> {});
     OutputStream out = gen.getOutputStream();
-    assertTrue(callbackCalled.getAndSet(false));
     out.write(new byte[] { 'x', 'y' });
+    out.close();
+    String response = new String(readFully(gen), StandardCharsets.UTF_8);
+    assertEquals("HTTP/1.1 200 OK\r\n\r\nxy", response);
   }
 }
