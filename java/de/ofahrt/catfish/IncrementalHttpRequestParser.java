@@ -4,8 +4,9 @@ import javax.servlet.http.HttpServletResponse;
 
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpVersion;
+import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.api.SimpleHttpRequest;
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 
 final class IncrementalHttpRequestParser {
 
@@ -282,7 +283,7 @@ final class IncrementalHttpRequestParser {
           messageHeaderValue = null;
 
           if (c == '\n') {
-            String contentLengthValue = builder.getHeader(HttpFieldName.CONTENT_LENGTH);
+            String contentLengthValue = builder.getHeader(HttpHeaderName.CONTENT_LENGTH);
             if (contentLengthValue != null) {
               long contentLength;
               try {

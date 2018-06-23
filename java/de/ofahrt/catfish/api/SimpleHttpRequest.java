@@ -5,8 +5,7 @@ import java.util.TreeMap;
 
 import javax.servlet.http.HttpServletResponse;
 
-import de.ofahrt.catfish.MalformedRequestException;
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 
 public final class SimpleHttpRequest implements HttpRequest {
   private final HttpVersion version;
@@ -72,7 +71,7 @@ public final class SimpleHttpRequest implements HttpRequest {
 
     public HttpRequest build() throws MalformedRequestException {
       if ((errorResponse == null) && (version.compareTo(HttpVersion.HTTP_1_1) >= 0)
-          && !headers.containsKey(HttpFieldName.HOST)) {
+          && !headers.containsKey(HttpHeaderName.HOST)) {
         setError(HttpServletResponse.SC_BAD_REQUEST, "Missing 'Host' field");
       }
       if ((unparsedUri == null) && (errorResponse == null)) {
@@ -102,16 +101,16 @@ public final class SimpleHttpRequest implements HttpRequest {
     public Builder addHeader(String key, String value) {
       Preconditions.checkNotNull(key);
       Preconditions.checkNotNull(value);
-      key = HttpFieldName.canonicalize(key);
+      key = HttpHeaderName.canonicalize(key);
       if (headers.get(key) != null) {
-        if (!HttpFieldName.mayOccurMultipleTimes(key)) {
+        if (!HttpHeaderName.mayOccurMultipleTimes(key)) {
           setError(HttpServletResponse.SC_BAD_REQUEST, "Illegal message headers: multiple occurrance for non-list field");
           return this;
         }
         value = headers.get(key) + ", " + value;
       }
-      if (HttpFieldName.HOST.equals(key)) {
-        if (!HttpFieldName.validHostPort(value)) {
+      if (HttpHeaderName.HOST.equals(key)) {
+        if (!HttpHeaderName.validHostPort(value)) {
           setError(HttpServletResponse.SC_BAD_REQUEST, "Illegal 'Host' header");
           return this;
         }

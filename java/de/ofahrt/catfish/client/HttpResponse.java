@@ -6,7 +6,7 @@ import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
 
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 
 public final class HttpResponse {
   private final int majorVersion;
@@ -110,7 +110,7 @@ public final class HttpResponse {
       if (value == null) {
         throw new NullPointerException();
       }
-      key = HttpFieldName.canonicalize(key);
+      key = HttpHeaderName.canonicalize(key);
       if (headers.get(key) != null) {
         value = headers.get(key)+", "+value;
       }

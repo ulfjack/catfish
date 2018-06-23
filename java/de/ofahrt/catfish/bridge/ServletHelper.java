@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 import de.ofahrt.catfish.utils.MimeType;
 
 public class ServletHelper {
@@ -149,7 +149,7 @@ public class ServletHelper {
   }
 
   public static boolean supportCompression(HttpServletRequest request) {
-    String temp = request.getHeader(HttpFieldName.ACCEPT_ENCODING);
+    String temp = request.getHeader(HttpHeaderName.ACCEPT_ENCODING);
     if (temp != null) {
       if (temp.toLowerCase(Locale.ENGLISH).indexOf("gzip") >= 0) {
         return true;
@@ -325,8 +325,8 @@ public class ServletHelper {
   }
 
   public static FormData parseFormData(HttpServletRequest request) throws IOException {
-    String clen = request.getHeader(HttpFieldName.CONTENT_LENGTH);
-    String ctHeader = request.getHeader(HttpFieldName.CONTENT_TYPE);
+    String clen = request.getHeader(HttpHeaderName.CONTENT_LENGTH);
+    String ctHeader = request.getHeader(HttpHeaderName.CONTENT_TYPE);
     if ((clen != null) && (ctHeader != null)) {
       return parseFormData(Integer.parseInt(clen), request.getInputStream(), ctHeader);
     }

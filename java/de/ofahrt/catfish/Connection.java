@@ -5,12 +5,16 @@ import java.util.UUID;
 
 public final class Connection {
   private final UUID id;
+  private final long startTimeMillis;
+  private final long startTimeNanos;
   private final InetSocketAddress localAddress;
   private final InetSocketAddress remoteAddress;
   private final boolean ssl;
 
   public Connection(InetSocketAddress localAddress, InetSocketAddress remoteAddress, boolean ssl) {
     this.id = UUID.randomUUID();
+    this.startTimeMillis = System.currentTimeMillis();
+    this.startTimeNanos = System.nanoTime();
     this.localAddress = localAddress;
     this.remoteAddress = remoteAddress;
     this.ssl = ssl;
@@ -18,6 +22,14 @@ public final class Connection {
 
   public UUID getId() {
     return id;
+  }
+
+  public long startTimeMillis() {
+    return startTimeMillis;
+  }
+
+  public long startTimeNanos() {
+    return startTimeNanos;
   }
 
   public InetSocketAddress getLocalAddress() {
@@ -30,5 +42,10 @@ public final class Connection {
 
   public boolean isSsl() {
     return ssl;
+  }
+
+  @Override
+  public String toString() {
+    return id.toString();
   }
 }

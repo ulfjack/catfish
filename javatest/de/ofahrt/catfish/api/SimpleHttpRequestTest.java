@@ -5,7 +5,6 @@ import static org.junit.Assert.fail;
 
 import org.junit.Test;
 
-import de.ofahrt.catfish.MalformedRequestException;
 import de.ofahrt.catfish.utils.HttpMethodName;
 import de.ofahrt.catfish.utils.HttpResponseCode;
 

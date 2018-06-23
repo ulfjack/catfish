@@ -9,98 +9,98 @@ import org.junit.Test;
 public class HttpFieldNameTest {
   @Test
   public void returnIdentical() {
-    assertEquals(HttpFieldName.ACCEPT, HttpFieldName.canonicalize(HttpFieldName.ACCEPT));
+    assertEquals(HttpHeaderName.ACCEPT, HttpHeaderName.canonicalize(HttpHeaderName.ACCEPT));
   }
 
   @Test
   public void returnCorrectCapitalization() {
-    assertEquals(HttpFieldName.ACCEPT, HttpFieldName.canonicalize("aCCEPT"));
+    assertEquals(HttpHeaderName.ACCEPT, HttpHeaderName.canonicalize("aCCEPT"));
   }
 
   @Test
   public void returnLowerCaseForUnknown() {
-    assertEquals("x-catfish-unknown", HttpFieldName.canonicalize("X-CATFISH-UNkNOWN"));
+    assertEquals("x-catfish-unknown", HttpHeaderName.canonicalize("X-CATFISH-UNkNOWN"));
   }
 
   @Test
   public void areEqualSimple() {
-    assertTrue(HttpFieldName.areEqual(HttpFieldName.ACCEPT, HttpFieldName.ACCEPT));
+    assertTrue(HttpHeaderName.areEqual(HttpHeaderName.ACCEPT, HttpHeaderName.ACCEPT));
   }
 
   @Test
   public void areEqualCapitalization() {
-    assertTrue(HttpFieldName.areEqual(HttpFieldName.ACCEPT, "aCCEpT"));
+    assertTrue(HttpHeaderName.areEqual(HttpHeaderName.ACCEPT, "aCCEpT"));
   }
 
   @Test
   public void areEqualNotEqual() {
-    assertFalse(HttpFieldName.areEqual(HttpFieldName.ACCEPT, "aCxEpT"));
+    assertFalse(HttpHeaderName.areEqual(HttpHeaderName.ACCEPT, "aCxEpT"));
   }
 
   @Test
   public void areEqualForUnknown() {
-    assertTrue(HttpFieldName.areEqual("x-catfish-unknown", "X-CATFISH-UNkNOWN"));
+    assertTrue(HttpHeaderName.areEqual("x-catfish-unknown", "X-CATFISH-UNkNOWN"));
   }
 
   @Test
   public void validHost() {
     // Valid for RFC 2396
-    assertTrue(HttpFieldName.validHostPort("abc.com"));
-    assertTrue(HttpFieldName.validHostPort("com"));
-    assertTrue(HttpFieldName.validHostPort("com."));
-    assertTrue(HttpFieldName.validHostPort("a-c.com"));
-    assertTrue(HttpFieldName.validHostPort("c-2"));
-    assertTrue(HttpFieldName.validHostPort("com123"));
-    assertTrue(HttpFieldName.validHostPort("a"));
-    assertTrue(HttpFieldName.validHostPort("1.2.3.4"));
-    assertTrue(HttpFieldName.validHostPort(""));
+    assertTrue(HttpHeaderName.validHostPort("abc.com"));
+    assertTrue(HttpHeaderName.validHostPort("com"));
+    assertTrue(HttpHeaderName.validHostPort("com."));
+    assertTrue(HttpHeaderName.validHostPort("a-c.com"));
+    assertTrue(HttpHeaderName.validHostPort("c-2"));
+    assertTrue(HttpHeaderName.validHostPort("com123"));
+    assertTrue(HttpHeaderName.validHostPort("a"));
+    assertTrue(HttpHeaderName.validHostPort("1.2.3.4"));
+    assertTrue(HttpHeaderName.validHostPort(""));
 
     // Valid for RFC 3986
-    assertTrue(HttpFieldName.validHostPort("com_"));
-    assertTrue(HttpFieldName.validHostPort("0m"));
-    assertTrue(HttpFieldName.validHostPort("1a2.3.4"));
-    assertTrue(HttpFieldName.validHostPort("!$&'()*+,;=._~-"));
-    assertTrue(HttpFieldName.validHostPort("%1F"));
-    assertTrue(HttpFieldName.validHostPort("256.256.256.257")); // This is allowed under reg-name.
+    assertTrue(HttpHeaderName.validHostPort("com_"));
+    assertTrue(HttpHeaderName.validHostPort("0m"));
+    assertTrue(HttpHeaderName.validHostPort("1a2.3.4"));
+    assertTrue(HttpHeaderName.validHostPort("!$&'()*+,;=._~-"));
+    assertTrue(HttpHeaderName.validHostPort("%1F"));
+    assertTrue(HttpHeaderName.validHostPort("256.256.256.257")); // This is allowed under reg-name.
 
     // Invalid
-    assertFalse(HttpFieldName.validHostPort("abc/com"));
-    assertFalse(HttpFieldName.validHostPort("abc%com"));
-    assertFalse(HttpFieldName.validHostPort("%1f"));
-    assertFalse(HttpFieldName.validHostPort("%1_"));
-    assertFalse(HttpFieldName.validHostPort("%"));
-    assertFalse(HttpFieldName.validHostPort("%f0"));
-    assertFalse(HttpFieldName.validHostPort("%%"));
-    assertFalse(HttpFieldName.validHostPort("abc%"));
-    assertFalse(HttpFieldName.validHostPort("@"));
-    assertFalse(HttpFieldName.validHostPort("abc<"));
-    assertFalse(HttpFieldName.validHostPort("abc>"));
+    assertFalse(HttpHeaderName.validHostPort("abc/com"));
+    assertFalse(HttpHeaderName.validHostPort("abc%com"));
+    assertFalse(HttpHeaderName.validHostPort("%1f"));
+    assertFalse(HttpHeaderName.validHostPort("%1_"));
+    assertFalse(HttpHeaderName.validHostPort("%"));
+    assertFalse(HttpHeaderName.validHostPort("%f0"));
+    assertFalse(HttpHeaderName.validHostPort("%%"));
+    assertFalse(HttpHeaderName.validHostPort("abc%"));
+    assertFalse(HttpHeaderName.validHostPort("@"));
+    assertFalse(HttpHeaderName.validHostPort("abc<"));
+    assertFalse(HttpHeaderName.validHostPort("abc>"));
   }
 
   @Test
   public void validHostWithPort() {
-    assertTrue(HttpFieldName.validHostPort("abc.com:"));
-    assertTrue(HttpFieldName.validHostPort("com:2"));
-    assertTrue(HttpFieldName.validHostPort("com.:3"));
-    assertTrue(HttpFieldName.validHostPort("a-c.com:4"));
-    assertTrue(HttpFieldName.validHostPort("c-2:5"));
-    assertTrue(HttpFieldName.validHostPort("com123:6"));
-    assertTrue(HttpFieldName.validHostPort("1.2.3.4:7"));
-    assertTrue(HttpFieldName.validHostPort(":8"));
-    assertTrue(HttpFieldName.validHostPort(":"));
+    assertTrue(HttpHeaderName.validHostPort("abc.com:"));
+    assertTrue(HttpHeaderName.validHostPort("com:2"));
+    assertTrue(HttpHeaderName.validHostPort("com.:3"));
+    assertTrue(HttpHeaderName.validHostPort("a-c.com:4"));
+    assertTrue(HttpHeaderName.validHostPort("c-2:5"));
+    assertTrue(HttpHeaderName.validHostPort("com123:6"));
+    assertTrue(HttpHeaderName.validHostPort("1.2.3.4:7"));
+    assertTrue(HttpHeaderName.validHostPort(":8"));
+    assertTrue(HttpHeaderName.validHostPort(":"));
 
-    assertFalse(HttpFieldName.validHostPort("com:a"));
-    assertFalse(HttpFieldName.validHostPort("com:-"));
-    assertFalse(HttpFieldName.validHostPort("com: "));
-    assertFalse(HttpFieldName.validHostPort("1.2.3.4:b"));
-    assertFalse(HttpFieldName.validHostPort("::"));
-    assertFalse(HttpFieldName.validHostPort("a:b:c"));
-    assertFalse(HttpFieldName.validHostPort("a:b:123"));
+    assertFalse(HttpHeaderName.validHostPort("com:a"));
+    assertFalse(HttpHeaderName.validHostPort("com:-"));
+    assertFalse(HttpHeaderName.validHostPort("com: "));
+    assertFalse(HttpHeaderName.validHostPort("1.2.3.4:b"));
+    assertFalse(HttpHeaderName.validHostPort("::"));
+    assertFalse(HttpHeaderName.validHostPort("a:b:c"));
+    assertFalse(HttpHeaderName.validHostPort("a:b:123"));
   }
 
   @Test
   public void mayOccurMultipleTimes() {
-    assertFalse(HttpFieldName.mayOccurMultipleTimes("Host"));
-    assertTrue(HttpFieldName.mayOccurMultipleTimes("Accept"));
+    assertFalse(HttpHeaderName.mayOccurMultipleTimes("Host"));
+    assertTrue(HttpHeaderName.mayOccurMultipleTimes("Accept"));
   }
 }

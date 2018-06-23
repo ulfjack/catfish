@@ -7,7 +7,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 import de.ofahrt.catfish.utils.HttpDate;
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 import de.ofahrt.catfish.utils.HttpResponseCode;
 import de.ofahrt.catfish.utils.MimeType;
 import de.ofahrt.catfish.utils.MimeTypeRegistry;
@@ -36,8 +36,8 @@ final class FileResponse implements HttpResponse {
   @Override
   public HttpHeaders getHeaders() {
     return HttpHeaders.of(
-        HttpFieldName.LAST_MODIFIED, HttpDate.formatDate(f.lastModified()),
-        HttpFieldName.CONTENT_TYPE, guessContentType(f));
+        HttpHeaderName.LAST_MODIFIED, HttpDate.formatDate(f.lastModified()),
+        HttpHeaderName.CONTENT_TYPE, guessContentType(f));
   }
 
   @Override

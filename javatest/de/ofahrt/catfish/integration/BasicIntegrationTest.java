@@ -13,7 +13,7 @@ import org.junit.Test;
 
 import de.ofahrt.catfish.client.HttpConnection;
 import de.ofahrt.catfish.client.HttpResponse;
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 
 public class BasicIntegrationTest {
   private static LocalCatfishServer localServer;
@@ -62,7 +62,7 @@ public class BasicIntegrationTest {
   public void optionsStar() throws IOException {
     HttpResponse response = localServer.send("OPTIONS * HTTP/1.0\n\n");
     assertEquals(200, response.getStatusCode());
-    assertEquals("0", response.getHeader(HttpFieldName.CONTENT_LENGTH));
+    assertEquals("0", response.getHeader(HttpHeaderName.CONTENT_LENGTH));
   }
 
   @Test

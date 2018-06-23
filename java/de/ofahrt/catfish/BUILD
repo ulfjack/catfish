@@ -4,6 +4,7 @@ java_library(
   name = "catfish",
   srcs = glob(["*.java"]),
   deps = [
+    "//java/de/ofahrt/catfish/api",
     "//java/de/ofahrt/catfish/bridge",
     "//java/de/ofahrt/catfish/utils",
     "//third_party/servlet-api",

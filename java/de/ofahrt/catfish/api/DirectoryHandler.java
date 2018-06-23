@@ -4,7 +4,7 @@ import java.io.File;
 import java.io.IOException;
 
 import de.ofahrt.catfish.utils.HttpDate;
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 
 public final class DirectoryHandler implements HttpHandler {
   private final String internalPath;
@@ -30,7 +30,7 @@ public final class DirectoryHandler implements HttpHandler {
     }
 
     long lastModified = f.lastModified();
-    String ifModifiedSinceText = request.getHeader(HttpFieldName.IF_MODIFIED_SINCE);
+    String ifModifiedSinceText = request.getHeader(HttpHeaderName.IF_MODIFIED_SINCE);
     if (ifModifiedSinceText != null) {
       long ifModifiedSince = HttpDate.parseDate(ifModifiedSinceText);
       if (ifModifiedSince >= lastModified) {

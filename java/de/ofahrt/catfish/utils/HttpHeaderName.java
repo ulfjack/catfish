@@ -9,7 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-public final class HttpFieldName {
+public final class HttpHeaderName {
 
   public static final String ACCEPT              = "Accept";
   public static final String ACCEPT_CHARSET      = "Accept-Charset";
@@ -105,7 +105,7 @@ public final class HttpFieldName {
 
   private static Map<String,String> getCanonicalizationMap() {
   	Map<String,String> result = new HashMap<>();
-  	for (Field field : HttpFieldName.class.getFields()) {
+  	for (Field field : HttpHeaderName.class.getFields()) {
   		if (Modifier.isPublic(field.getModifiers()) && Modifier.isStatic(field.getModifiers()) &&
   				Modifier.isFinal(field.getModifiers()) && String.class.equals(field.getType())) {
   			try {
@@ -169,7 +169,7 @@ public final class HttpFieldName {
     return HOST_PORT_PATTERN.matcher(text).matches();
   }
 
-  private HttpFieldName() {
+  private HttpHeaderName() {
     // Not instantiable.
   }
 }

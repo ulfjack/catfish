@@ -1,8 +1,6 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.api;
 
 import java.io.IOException;
-
-import de.ofahrt.catfish.api.HttpResponse;
 
 public final class MalformedRequestException extends IOException {
   private static final long serialVersionUID = 1L;

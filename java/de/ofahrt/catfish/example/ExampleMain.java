@@ -63,7 +63,7 @@ public class ExampleMain {
     HttpVirtualHost.Builder dir = new HttpVirtualHost.Builder()
        .exact("/hello.php", new FcgiServlet())
        .exact("/post", new CheckPost())
-       .directory("/", new CheckCompression());
+       .exact("/", new CheckCompression());
 
     server.addHttpHost("localhost", dir.build());
     server.setKeepAliveAllowed(true);

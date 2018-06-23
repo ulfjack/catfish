@@ -24,7 +24,7 @@ import javax.servlet.http.HttpSession;
 
 import de.ofahrt.catfish.InputStreams;
 import de.ofahrt.catfish.bridge.Enumerations;
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 
 @SuppressWarnings("rawtypes")
 public final class SerializableHttpServletRequest implements HttpServletRequest, Serializable {
@@ -276,13 +276,13 @@ public final class SerializableHttpServletRequest implements HttpServletRequest,
 
   @Override
   public String getHeader(String name) {
-    String[] value = headers.get(HttpFieldName.canonicalize(name));
+    String[] value = headers.get(HttpHeaderName.canonicalize(name));
     return value == null ? null : value[0];
   }
 
   @Override
   public Enumeration getHeaders(String name) {
-    return Enumerations.of(Arrays.asList(headers.get(HttpFieldName.canonicalize(name))));
+    return Enumerations.of(Arrays.asList(headers.get(HttpHeaderName.canonicalize(name))));
   }
 
   @Override

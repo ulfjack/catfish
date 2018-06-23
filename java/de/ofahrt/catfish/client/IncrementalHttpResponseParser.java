@@ -2,7 +2,7 @@ package de.ofahrt.catfish.client;
 
 import java.util.Arrays;
 
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 
 final class IncrementalHttpResponseParser {
 
@@ -250,7 +250,7 @@ final class IncrementalHttpResponseParser {
           messageHeaderValue = null;
 
           if (c == '\n') {
-            String contentLengthValue = response.getHeader(HttpFieldName.CONTENT_LENGTH);
+            String contentLengthValue = response.getHeader(HttpHeaderName.CONTENT_LENGTH);
             if (contentLengthValue != null) {
               long contentLength;
               try {
@@ -268,8 +268,8 @@ final class IncrementalHttpResponseParser {
               content = new byte[(int) contentLength];
               contentIndex = 0;
               state = State.CONTENT;
-            } else if (response.getHeader(HttpFieldName.TRANSFER_ENCODING) != null) {
-              String transferEncoding = response.getHeader(HttpFieldName.TRANSFER_ENCODING);
+            } else if (response.getHeader(HttpHeaderName.TRANSFER_ENCODING) != null) {
+              String transferEncoding = response.getHeader(HttpHeaderName.TRANSFER_ENCODING);
               if ("chunked".equals(transferEncoding)) {
                 state = State.CHUNKED_CONTENT_LENGTH;
               }

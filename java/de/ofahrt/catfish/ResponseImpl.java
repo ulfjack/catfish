@@ -20,7 +20,7 @@ import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.utils.HttpContentType;
 import de.ofahrt.catfish.utils.HttpDate;
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 import de.ofahrt.catfish.utils.HttpResponseCode;
 
 public final class ResponseImpl implements HttpServletResponse, HttpResponse {
@@ -70,7 +70,7 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
   }
 
   private String canonicalize(String key) {
-    return HttpFieldName.canonicalize(key);
+    return HttpHeaderName.canonicalize(key);
   }
 
   private void setHeaderInternal(String key, String value) {
@@ -103,7 +103,7 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
     if (isCommitted) {
       throw new IllegalStateException();
     }
-    setHeader(HttpFieldName.SET_COOKIE, cookie);
+    setHeader(HttpHeaderName.SET_COOKIE, cookie);
   }
 
   private OutputStream internalOutputStream(boolean shouldCompress) throws IOException {
@@ -121,7 +121,7 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
     bodyData = null;
 
     if (shouldCompress) {
-      setHeaderInternal(HttpFieldName.CONTENT_ENCODING, "gzip");
+      setHeaderInternal(HttpHeaderName.CONTENT_ENCODING, "gzip");
       keepStream = new GZIPOutputStream(internalStream);
       return keepStream;
     } else {
@@ -200,7 +200,7 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
 
   @Override
   public String getContentType() {
-    return getHeader(HttpFieldName.CONTENT_TYPE);
+    return getHeader(HttpHeaderName.CONTENT_TYPE);
   }
 
   @Override
@@ -286,7 +286,7 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
     if (CoreHelper.isTextMimeType(type) && (charset != null)) {
       type += "; charset=" + charset;
     }
-    setHeader(HttpFieldName.CONTENT_TYPE, type);
+    setHeader(HttpHeaderName.CONTENT_TYPE, type);
   }
 
   @Override
@@ -382,7 +382,7 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
       throw new IllegalStateException();
     }
     setStatus(HttpServletResponse.SC_FOUND);
-    setHeader(HttpFieldName.LOCATION, location);
+    setHeader(HttpHeaderName.LOCATION, location);
     setContentType(CoreHelper.MIME_TEXT_HTML);
     setBodyString(
         "<html><head><meta http-equiv=\"refresh\" content=\"1; URL="

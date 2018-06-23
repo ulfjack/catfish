@@ -31,9 +31,10 @@ import javax.servlet.http.HttpSession;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpVersion;
+import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.bridge.Enumerations;
 import de.ofahrt.catfish.utils.HttpDate;
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 
 public final class RequestImpl implements HttpServletRequest {
   private static final String DEFAULT_CHARSET = "UTF-8";
@@ -50,8 +51,7 @@ public final class RequestImpl implements HttpServletRequest {
   private Locale defaultLocale = Locale.US;
   private String charset = DEFAULT_CHARSET;
 
-  private final HttpVersion version;
-  private final String method;
+  private final HttpRequest request;
   private final URI uri;
   private final String unparsedUri;
   private final Map<String, String> headers;
@@ -68,9 +68,8 @@ public final class RequestImpl implements HttpServletRequest {
   private final HashMap<String, Object> attributes = new HashMap<>();
 
   public RequestImpl(HttpRequest request, Connection connection) throws MalformedRequestException {
+    this.request = request;
     this.response = new ResponseImpl();
-    this.version = request.getVersion();
-    this.method = request.getMethod();
     this.unparsedUri = request.getUri();
     this.headers = new TreeMap<>();
     for (Map.Entry<String, String> e : request.getHeaders()) {
@@ -116,7 +115,7 @@ public final class RequestImpl implements HttpServletRequest {
   }
 
   public HttpVersion getVersion() {
-    return version;
+    return request.getVersion();
   }
 
   public String getUnparsedUri() {
@@ -132,7 +131,7 @@ public final class RequestImpl implements HttpServletRequest {
   }
 
   public boolean supportGzipCompression() {
-    String temp = getHeader(HttpFieldName.ACCEPT_ENCODING);
+    String temp = getHeader(HttpHeaderName.ACCEPT_ENCODING);
     if (temp != null) {
       if (temp.toLowerCase(Locale.US).indexOf("gzip") >= 0) {
         return true;
@@ -150,15 +149,7 @@ public final class RequestImpl implements HttpServletRequest {
   }
 
   public boolean mayKeepAlive() {
-    if (version.compareTo(HttpVersion.HTTP_1_1) >= 0) {
-      if ("close".equals(getHeader(HttpFieldName.CONNECTION))) {
-        return false;
-      } else {
-        return true;
-      }
-    } else {
-      return false;
-    }
+    return HttpConnection.mayKeepAlive(request);
   }
 
 
@@ -182,13 +173,13 @@ public final class RequestImpl implements HttpServletRequest {
 
   @Override
   public int getContentLength() {
-    String cl = getHeader(HttpFieldName.CONTENT_LENGTH);
+    String cl = getHeader(HttpHeaderName.CONTENT_LENGTH);
     return cl == null ? -1 : Integer.parseInt(cl);
   }
 
   @Override
   public String getContentType() {
-    return getHeader(HttpFieldName.CONTENT_TYPE);
+    return getHeader(HttpHeaderName.CONTENT_TYPE);
   }
 
   @Override
@@ -227,7 +218,7 @@ public final class RequestImpl implements HttpServletRequest {
 
   @Override
   public Locale getLocale() {
-    String value = getHeader(HttpFieldName.ACCEPT_LANGUAGE);
+    String value = getHeader(HttpHeaderName.ACCEPT_LANGUAGE);
     if (value == null) {
       return defaultLocale;
     }
@@ -247,7 +238,7 @@ public final class RequestImpl implements HttpServletRequest {
   @Override
   public Enumeration<Locale> getLocales() {
     final ArrayList<Locale> result = new ArrayList<>();
-    String value = getHeader(HttpFieldName.ACCEPT_LANGUAGE);
+    String value = getHeader(HttpHeaderName.ACCEPT_LANGUAGE);
     if (value != null) {
       Matcher m = HTTP_LOCALE_PATTERN.matcher(value);
       while (m.find()) {
@@ -301,7 +292,7 @@ public final class RequestImpl implements HttpServletRequest {
 
   @Override
   public String getProtocol() {
-    return version.toString();
+    return request.getVersion().toString();
   }
 
   @Override
@@ -344,7 +335,7 @@ public final class RequestImpl implements HttpServletRequest {
 
   @Override
   public String getServerName() {
-    String host = getHeader(HttpFieldName.HOST);
+    String host = getHeader(HttpHeaderName.HOST);
     if (host != null) {
       int index = host.indexOf(':');
       if (index >= 0) {
@@ -360,7 +351,7 @@ public final class RequestImpl implements HttpServletRequest {
 
   @Override
   public int getServerPort() {
-    String host = getHeader(HttpFieldName.HOST);
+    String host = getHeader(HttpHeaderName.HOST);
     if (host != null) {
       int index = host.indexOf(':');
       if (index >= 0) {
@@ -436,7 +427,7 @@ public final class RequestImpl implements HttpServletRequest {
 
   @Override
   public String getHeader(String name) {
-    return headers.get(HttpFieldName.canonicalize(name));
+    return headers.get(HttpHeaderName.canonicalize(name));
   }
 
   @Override
@@ -471,7 +462,7 @@ public final class RequestImpl implements HttpServletRequest {
 
   @Override
   public String getMethod() {
-    return method;
+    return request.getMethod();
   }
 
   @Override
@@ -533,7 +524,7 @@ public final class RequestImpl implements HttpServletRequest {
   public HttpSession getSession(boolean create) {
     if (create && (session == null)) {
       String id = null;
-      String s = getHeader(HttpFieldName.COOKIE);
+      String s = getHeader(HttpHeaderName.COOKIE);
       if (s != null) {
         Matcher m = COOKIE_PATTERN.matcher(s);
         if (m.matches()) id = m.group(1);

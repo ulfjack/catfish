@@ -14,7 +14,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import de.ofahrt.catfish.HttpParserTest;
-import de.ofahrt.catfish.MalformedRequestException;
+import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.client.HttpConnection;
 import de.ofahrt.catfish.client.HttpResponse;
 

@@ -5,7 +5,7 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 import de.ofahrt.catfish.utils.HttpResponseCode;
 
 public final class RedirectResponse {
@@ -13,8 +13,8 @@ public final class RedirectResponse {
 
   static HttpResponse create(HttpResponseCode statusCode, String destinationUrl) {
     HttpHeaders headers = HttpHeaders.of(
-        HttpFieldName.LOCATION, destinationUrl,
-        HttpFieldName.CONTENT_TYPE, TEXT_HTML_UTF_8);
+        HttpHeaderName.LOCATION, destinationUrl,
+        HttpHeaderName.CONTENT_TYPE, TEXT_HTML_UTF_8);
     return new SimpleResponse(statusCode, headers, toByteArray(destinationUrl));
   }
 

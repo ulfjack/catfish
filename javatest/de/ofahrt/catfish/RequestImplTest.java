@@ -13,9 +13,10 @@ import java.util.Locale;
 
 import org.junit.Test;
 
+import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.api.SimpleHttpRequest;
 import de.ofahrt.catfish.bridge.ServletHelper;
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 
 /**
  * Tests for {@link RequestImpl}.
@@ -85,7 +86,7 @@ public class RequestImplTest {
   @Test
   public void getHeaders() throws Exception {
     assertEquals(Arrays.asList(),
-        CollectionsUtils.toList(empty().getHeaders(HttpFieldName.ACCEPT_CHARSET)));
+        CollectionsUtils.toList(empty().getHeaders(HttpHeaderName.ACCEPT_CHARSET)));
     assertNull(empty().getHeader("key"));
 
     assertEquals(Arrays.asList("value"),
@@ -141,10 +142,10 @@ public class RequestImplTest {
   @Test
   public void locale() throws Exception {
     assertEquals(Locale.US, empty().getLocale());
-    assertEquals(Locale.GERMAN, requestForHeader(HttpFieldName.ACCEPT_LANGUAGE, "de").getLocale());
-    assertEquals(Locale.GERMANY, requestForHeader(HttpFieldName.ACCEPT_LANGUAGE, "de-de").getLocale());
+    assertEquals(Locale.GERMAN, requestForHeader(HttpHeaderName.ACCEPT_LANGUAGE, "de").getLocale());
+    assertEquals(Locale.GERMANY, requestForHeader(HttpHeaderName.ACCEPT_LANGUAGE, "de-de").getLocale());
     // Bad locale; fall back to default locale.
-    assertEquals(Locale.US, requestForHeader(HttpFieldName.ACCEPT_LANGUAGE, ";q=1").getLocale());
+    assertEquals(Locale.US, requestForHeader(HttpHeaderName.ACCEPT_LANGUAGE, ";q=1").getLocale());
   }
 
   @Test
@@ -152,12 +153,12 @@ public class RequestImplTest {
     assertEquals(Arrays.asList(Locale.US),
         CollectionsUtils.toList(empty().getLocales()));
     assertEquals(Arrays.asList(Locale.GERMAN),
-        CollectionsUtils.toList(requestForHeader(HttpFieldName.ACCEPT_LANGUAGE, "de").getLocales()));
+        CollectionsUtils.toList(requestForHeader(HttpHeaderName.ACCEPT_LANGUAGE, "de").getLocales()));
     assertEquals(Arrays.asList(Locale.GERMAN, Locale.US),
-        CollectionsUtils.toList(requestForHeader(HttpFieldName.ACCEPT_LANGUAGE, "de, en-us").getLocales()));
+        CollectionsUtils.toList(requestForHeader(HttpHeaderName.ACCEPT_LANGUAGE, "de, en-us").getLocales()));
     // Bad locale; return empty list. TODO: Is this correct?
     assertEquals(Arrays.asList(),
-        CollectionsUtils.toList(requestForHeader(HttpFieldName.ACCEPT_LANGUAGE, ";q=1").getLocales()));
+        CollectionsUtils.toList(requestForHeader(HttpHeaderName.ACCEPT_LANGUAGE, ";q=1").getLocales()));
   }
 
   @Test

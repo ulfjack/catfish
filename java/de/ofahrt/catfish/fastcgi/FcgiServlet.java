@@ -12,7 +12,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import de.ofahrt.catfish.fastcgi.IncrementalFcgiResponseParser.Callback;
 import de.ofahrt.catfish.fastcgi.IncrementalFcgiResponseParser.MalformedResponseException;
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 
 public class FcgiServlet extends HttpServlet {
   private static final long serialVersionUID = 1L;
@@ -56,8 +56,8 @@ public class FcgiServlet extends HttpServlet {
 
       @Override
       public void addHeader(String key, String value) {
-        key = HttpFieldName.canonicalize(key);
-        if (HttpFieldName.CONTENT_TYPE.equals(key)) {
+        key = HttpHeaderName.canonicalize(key);
+        if (HttpHeaderName.CONTENT_TYPE.equals(key)) {
           res.setContentType(value);
         } else {
           System.err.println(key + "=" + value);

@@ -5,12 +5,12 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 import de.ofahrt.catfish.utils.HttpResponseCode;
 
 final class InternalServerErrorResponse {
   private static final String TEXT_PLAIN_UTF_8 = "text/plain; charset=UTF-8";
-  private static final HttpHeaders HEADERS = HttpHeaders.of(HttpFieldName.CONTENT_TYPE, TEXT_PLAIN_UTF_8);
+  private static final HttpHeaders HEADERS = HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, TEXT_PLAIN_UTF_8);
 
   static HttpResponse create(Throwable exception) {
     return new SimpleResponse(

@@ -18,7 +18,8 @@ import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpVersion;
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.api.MalformedRequestException;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 import de.ofahrt.catfish.utils.HttpMethodName;
 
 /**
@@ -145,7 +146,7 @@ public final class CatfishHttpServer {
   }
 
   void createResponse(Connection connection, HttpRequest request, HttpResponseWriter writer) {
-    if (request.getHeaders().get(HttpFieldName.EXPECT) != null) {
+    if (request.getHeaders().get(HttpHeaderName.EXPECT) != null) {
       writer.commitBuffered(HttpResponse.EXPECTATION_FAILED);
     } else if ("*".equals(request.getUri())) {
       writer.commitBuffered(HttpResponse.BAD_REQUEST);
@@ -181,14 +182,21 @@ public final class CatfishHttpServer {
     }
     response.close();
     try {
-      writer.commitStreamed(response).write(response.getBody());
+      boolean streamResponse = false;
+      if (streamResponse) {
+        try (OutputStream out = writer.commitStreamed(response)) {
+          out.write(response.getBody());
+        }
+      } else {
+        writer.commitBuffered(response);
+      }
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
   }
 
   private FilterDispatcher determineDispatcher(RequestImpl request) {
-    String host = request.getHeader(HttpFieldName.HOST);
+    String host = request.getHeader(HttpHeaderName.HOST);
     if (host != null) {
       if (host.indexOf(':') >= 0) {
         host = host.substring(0, host.indexOf(':'));

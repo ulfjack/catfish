@@ -2,7 +2,6 @@ package de.ofahrt.catfish;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -11,362 +10,107 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.Status;
-import javax.net.ssl.SSLException;
+
 import de.ofahrt.catfish.CatfishHttpServer.RequestCallback;
 import de.ofahrt.catfish.api.HttpHeaders;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpResponseWriter;
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.api.MalformedRequestException;
+import de.ofahrt.catfish.utils.HttpHeaderName;
+import de.ofahrt.catfish.utils.HttpMethodName;
 
 final class NioEngine {
-  private static final boolean DEBUG = false;
-
-  private static enum State {
-    READ_REQUEST, WRITE_RESPONSE;
-  }
+  private static final boolean DEBUG = true;
 
   private interface EventHandler {
     void handleEvent() throws IOException;
   }
 
   // Incoming data:
-  // Socket -> SSL Engine -> HTTP Parser -> Request Queue
+  // Socket -> SSL Stage -> HTTP Stage -> Request Queue
   // Flow control: request queue -> socket read
   //
-  // Socket <- SSL Engine <- AsyncBuffer <- Servlet
-  //
+  // Socket <- SSL Stage <- HTTP Stage <- Response Stage <- AsyncBuffer <- Servlet
+  // Flow control: 
 
-  private abstract class NioConnectionHandler implements EventHandler {
-    private final SelectorQueue queue;
-    protected final Connection connection;
-    protected final SocketChannel socketChannel;
-    protected final SelectionKey key;
-
-    protected final IncrementalHttpRequestParser parser;
-    protected HttpRequest request;
-    protected HttpResponse response;
-    protected byte[] inputBuffer = new byte[1024];
-    protected ByteBuffer inputByteBuffer = ByteBuffer.wrap(inputBuffer);
-
-    protected boolean isKeepAlive;
-    protected AsyncInputStream generator;
-    protected byte[] outputBuffer = new byte[1024];
-    protected ByteBuffer outputByteBuffer = ByteBuffer.wrap(outputBuffer);
-
-    protected State state = State.READ_REQUEST;
-
-    NioConnectionHandler(
-        SelectorQueue queue,
-        Connection connection,
-        SocketChannel socketChannel,
-        SelectionKey key) {
-      this.queue = queue;
-      this.connection = connection;
-      this.socketChannel = socketChannel;
-      this.key = key;
-      this.parser = new IncrementalHttpRequestParser();
-
-      outputByteBuffer.clear();
-      outputByteBuffer.flip();
-    }
-
-    protected final void reset() {
-      if (DEBUG) System.out.println("NEXT REQUEST!");
-      parser.reset();
-      isKeepAlive = false;
-      state = State.READ_REQUEST;
-    }
-
-    @Override
-    public void handleEvent() {
-      if (key.isReadable()) {
-        read();
-      }
-      if (key.isValid() && key.isWritable()) {
-        write();
-      }
-    }
-
-    abstract void read();
-    abstract void writeImpl() throws IOException;
-
-    final void write() {
-      try {
-        writeImpl();
-      } catch (IOException e) {
-        serverListener.notifyInternalError(connection, e);
-        key.cancel();
-      }
-    }
-
-    final SocketChannel socketChannel() {
-      return socketChannel;
-    }
-
-    protected final boolean consumeInput() {
-      // invariant: inputByteBuffer is writable
-      if (inputByteBuffer.position() == 0) {
-        if (DEBUG) System.out.println("NO INPUT!");
-        return false;
-      }
-      inputByteBuffer.flip();
-      int consumed = parser.parse(inputBuffer, 0, inputByteBuffer.limit());
-      inputByteBuffer.position(consumed);
-      inputByteBuffer.compact();
-      if (parser.isDone()) {
-        try {
-          request = parser.getRequest();
-          if (DEBUG) printRequest(System.out);
-          key.interestOps(0);
-          submitJob();
-        } catch (MalformedRequestException e) {
-          HttpResponse responseToWrite = e.getErrorResponse();
-          ResponseGenerator gen = ResponseGenerator.buffered(responseToWrite, false);
-          startOutput(responseToWrite, gen);
-        }
-        return true;
-      }
-      return false;
-    }
-
-    private final void printRequest(PrintStream out) {
-      out.println(request.getVersion() + " " + request.getMethod() + " " + request.getUri());
-      for (Map.Entry<String, String> e : request.getHeaders()) {
-        out.println(e.getKey() + ": " + e.getValue());
-      }
-//      out.println("Query Parameters:");
-//      Map<String, String> queries = parseQuery(request);
-//      for (Map.Entry<String, String> e : queries.entrySet()) {
-//        out.println("  " + e.getKey() + ": " + e.getValue());
-//      }
-//      try {
-//        FormData formData = parseFormData(request);
-//        out.println("Post Parameters:");
-//        for (Map.Entry<String, String> e : formData.data.entrySet()) {
-//          out.println("  " + e.getKey() + ": " + e.getValue());
-//        }
-//      } catch (IllegalArgumentException e) {
-//        out.println("Exception trying to parse post parameters:");
-//        e.printStackTrace(out);
-//      } catch (IOException e) {
-//        out.println("Exception trying to parse post parameters:");
-//        e.printStackTrace(out);
-//      }
-      out.flush();
-    }
-
-    private final void submitJob() {
-      server.queueRequest(new RequestCallback() {
-        @Override
-        public void run() {
-          HttpResponseWriter writer = new HttpResponseWriter() {
-            @Override
-            public void commitBuffered(HttpResponse responseToWrite) {
-              byte[] body = response.getBody();
-              int announcedContentLength = parseContentLength(responseToWrite);
-              if (announcedContentLength != body.length) {
-                responseToWrite = responseToWrite.withHeaderOverrides(
-                    HttpHeaders.of(HttpFieldName.CONTENT_LENGTH, Integer.toString(body.length)));
-              }
-              HttpResponse actualResponse = responseToWrite;
-              // We want to create the ResponseGenerator on the current thread.
-              ResponseGenerator gen = ResponseGenerator.buffered(actualResponse, false);
-              // This runs in a thread pool thread, so we need to wake up the main thread.
-              queue.queue(() -> startOutput(actualResponse, gen));
-            }
-
-            @Override
-            public OutputStream commitStreamed(HttpResponse responseToWrite) throws IOException {
-              StreamingResponseGenerator gen = new StreamingResponseGenerator(
-                  responseToWrite, () -> { queue.queue(() -> resumeOutput()); });
-              queue.queue(() -> startOutput(responseToWrite, gen));
-              return gen.getOutputStream();
-            }
-          };
-          server.createResponse(connection, request, writer);
-        }
-
-        private int parseContentLength(HttpResponse responseToWrite) {
-          String value = responseToWrite.getHeaders().get(HttpFieldName.CONTENT_LENGTH);
-          if (value == null) {
-            return -1;
-          }
-          try {
-            return Integer.parseInt(value);
-          } catch (NumberFormatException e) {
-            return -1;
-          }
-        }
-
-        @Override
-        public void reject() {
-          // This will always be called in the event thread, so it's safe to access Connection here.
-          rejectedCounter.incrementAndGet();
-          HttpResponse responseToWrite = HttpResponse.SERVICE_UNAVAILABLE;
-          ResponseGenerator gen = ResponseGenerator.buffered(responseToWrite, false);
-          startOutput(responseToWrite, gen);
-        }
-      });
-    }
-
-    private final void startOutput(HttpResponse responseToWrite, AsyncInputStream gen) {
-      this.response = responseToWrite;
-      this.generator = gen;
-      isKeepAlive = "keep-alive".equals(response.getHeaders().get(HttpFieldName.CONNECTION));
-      if (DEBUG) CoreHelper.printResponse(System.out, response);
-      if (!key.isValid()) {
-        return;
-      }
-      state = State.WRITE_RESPONSE;
-      outputByteBuffer.clear();
-      int available = generator.readAsync(outputBuffer, 0, outputBuffer.length);
-      if (available <= 0) {
-        serverListener.notifyInternalError(connection, new IllegalStateException());
-        close();
-        return;
-      }
-      outputByteBuffer.limit(available);
-      resumeOutput();
-    }
-
-    private void resumeOutput() {
-      if (!key.isValid()) {
-        return;
-      }
-      key.interestOps(SelectionKey.OP_WRITE);
-    }
-
-    protected final void close() {
-      closedCounter.incrementAndGet();
-      if (DEBUG) System.out.println("Closed connection.");
-      key.cancel();
-      try {
-        socketChannel.close();
-      } catch (IOException ignored) {
-        // There's nothing we can do if this fails.
-        serverListener.notifyInternalError(connection, ignored);
-      }
-    }
+  private interface Stage {
+    void read() throws IOException;
+    void write() throws IOException;
   }
 
-  class NetConnection extends NioConnectionHandler {
-    public NetConnection(
-        SelectorQueue queue,
-        Connection connection,
-        SocketChannel socketChannel,
-        SelectionKey key) {
-      super(queue, connection, socketChannel, key);
-    }
-
-    @Override
-    public void read() {
-      try {
-        assert inputByteBuffer.remaining() != 0;
-        int readCount = socketChannel.read(inputByteBuffer);
-        if (readCount == -1) {
-          close();
-        } else {
-          if (DEBUG) System.out.println("Read: "+readCount);
-          consumeInput();
-        }
-      } catch (IOException e) {
-        serverListener.notifyInternalError(connection, e);
-        key.cancel();
-      }
-    }
-
-    @Override
-    public void writeImpl() throws IOException {
-      if (DEBUG) System.out.println("Writing: "+outputByteBuffer.remaining());
-      socketChannel.write(outputByteBuffer);
-      if (outputByteBuffer.remaining() > 0) {
-        outputByteBuffer.compact();
-        outputByteBuffer.flip();
-      } else {
-        outputByteBuffer.position(0);
-        outputByteBuffer.limit(0);
-      }
-      int freeSpace = outputByteBuffer.capacity() - outputByteBuffer.limit();
-      if ((freeSpace > 0) && (generator != null)) {
-        int bytesGenerated = generator.readAsync(outputBuffer, outputByteBuffer.limit(), freeSpace);
-        if (bytesGenerated > 0) {
-          outputByteBuffer.limit(outputByteBuffer.limit() + bytesGenerated);
-        } else if (bytesGenerated < 0) {
-          generator = null;
-        }
-      }
-      if (outputByteBuffer.remaining() == 0) {
-        if (generator == null) {
-          server.notifySent(connection, request, response, 0);
-          if (isKeepAlive) {
-            reset();
-            key.interestOps(SelectionKey.OP_READ);
-            consumeInput();
-          } else {
-            close();
-          }
-        } else {
-          key.interestOps(0);
-        }
-      }
-    }
+  private interface Pipeline {
+    Connection getConnection();
+    void writeAvailable();
+    void suppressReads();
+    void encourageReads();
+    void close();
+    void queue(Runnable runnable);
+    void log(String text);
   }
 
-  class SSLConnection extends NioConnectionHandler {
-    private boolean lookingForSni = true;
+  private final class SslStage implements Stage {
+    private final Pipeline parent;
+    private final Stage next;
+    private final ByteBuffer netInputBuffer;
+    private final ByteBuffer netOutputBuffer;
+    private final ByteBuffer inputBuffer;
+    private final ByteBuffer outputBuffer;
+    private boolean lookingForSni;
     private SSLEngine sslEngine;
-    private final ByteBuffer netInputBuffer = ByteBuffer.allocate(18000);
-    private final ByteBuffer netOutputBuffer = ByteBuffer.allocate(18000);
 
-    public SSLConnection(
-        SelectorQueue queue,
-        Connection connection,
-        SocketChannel socketChannel,
-        SelectionKey key) {
-      super(queue, connection, socketChannel, key);
-      outputByteBuffer.clear();
-      outputByteBuffer.flip();
-      netOutputBuffer.clear();
-      netOutputBuffer.flip();
-      netInputBuffer.clear();
-      netInputBuffer.flip();
-      reset();
+    public SslStage(
+        Pipeline parent,
+        Stage next,
+        ByteBuffer netInputBuffer,
+        ByteBuffer netOutputBuffer,
+        ByteBuffer inputBuffer,
+        ByteBuffer outputBuffer) {
+      this.parent = parent;
+      this.next = next;
+      this.netInputBuffer = netInputBuffer;
+      this.netOutputBuffer = netOutputBuffer;
+      this.inputBuffer = inputBuffer;
+      this.outputBuffer = outputBuffer;
+//      outputByteBuffer.clear();
+//      outputByteBuffer.flip();
+//      netOutputBuffer.clear();
+//      netOutputBuffer.flip();
+//      netInputBuffer.clear();
+//      netInputBuffer.flip();
+//      reset();
     }
 
     private void checkStatus() {
       while (true) {
         switch (sslEngine.getHandshakeStatus()) {
           case NEED_UNWRAP :
-            key.interestOps(SelectionKey.OP_READ);
+            // Want to read more.
+            parent.encourageReads();
             return;
           case NEED_WRAP :
-            key.interestOps(SelectionKey.OP_WRITE);
+            // Want to write some.
+            parent.writeAvailable();
             return;
           case NEED_TASK :
-            if (DEBUG) System.out.print("SSLEngine requires task run: ");
+            if (DEBUG) parent.log("SSLEngine delegated task");
             sslEngine.getDelegatedTask().run();
-            if (DEBUG) System.out.println("Done: "+sslEngine.getHandshakeStatus());
+            if (DEBUG) parent.log("Done: "+sslEngine.getHandshakeStatus());
             break;
           case FINISHED :
           case NOT_HANDSHAKING :
-            if (state == State.READ_REQUEST) {
-              key.interestOps(SelectionKey.OP_READ);
-            } else {
-              key.interestOps(SelectionKey.OP_WRITE);
-            }
             return;
         }
       }
@@ -404,106 +148,399 @@ final class NioEngine {
     }
 
     @Override
-    public void read() {
-      try {
-        netInputBuffer.compact(); // prepare for writing
-        int readCount = socketChannel.read(netInputBuffer);
-        netInputBuffer.flip(); // prepare for reading
-        if (readCount == -1) {
-          close();
-        } else {
-          if (DEBUG) System.out.println("Read: "+readCount+" == "+netInputBuffer.remaining());
-          Preconditions.checkState(!parser.isDone());
-          if (lookingForSni) {
-            // This call may change lookingForSni as a side effect!
-            findSni();
+    public void read() throws IOException {
+      if (lookingForSni) {
+        // This call may change lookingForSni as a side effect!
+        findSni();
+      }
+      // findSni may change lookingForSni as a side effect.
+      if (!lookingForSni) {
+        // TODO: This could end up an infinite loop if the SSL engine ever returns NEED_WRAP.
+        while (netInputBuffer.remaining() > 0) {
+          if (DEBUG) parent.log("Still stuff left: " + netInputBuffer.remaining());
+          SSLEngineResult result = sslEngine.unwrap(netInputBuffer, inputBuffer);
+          if (result.getStatus() == Status.CLOSED) {
+            parent.close();
+            break;
+          } else if (result.getStatus() != Status.OK) {
+            throw new IOException(result.toString());
           }
-
-          if (!lookingForSni) {
-            // TODO: This could end up an infinite loop if the SSL engine ever returns NEED_WRAP.
-            while (netInputBuffer.remaining() > 0) {
-              if (DEBUG) System.out.println("Still stuff left: "+netInputBuffer.remaining());
-              SSLEngineResult result = sslEngine.unwrap(netInputBuffer, inputByteBuffer);
-              if (result.getStatus() == Status.CLOSED) {
-                close();
-                break;
-              } else if (result.getStatus() != Status.OK) {
-                throw new IOException(result.toString());
-              }
-              if (DEBUG) System.out.println("STATUS = " + result.toString());
-              checkStatus();
-              if (consumeInput()) {
-                break;
-              }
-            }
+          if (DEBUG) parent.log("STATUS = " + result.toString());
+          checkStatus();
+          if (inputBuffer.hasRemaining()) {
+            next.read();
           }
         }
-      } catch (SSLException e) {
-        serverListener.notifyInternalError(connection, e);
-        close();
-      } catch (IOException e) {
-        serverListener.notifyInternalError(connection, e);
-        key.cancel();
       }
     }
 
     @Override
-    public void writeImpl() throws IOException {
-      // invariant: both netOutputBuffer and outputByteBuffer are readable
+    public void write() throws IOException {
+      next.write();
+      // invariant: both netOutputBuffer and outputBuffer are readable
       if (netOutputBuffer.remaining() == 0) {
         netOutputBuffer.clear(); // prepare for writing
-        if (DEBUG) System.out.println("Wrapping: " + outputByteBuffer.remaining());
-        SSLEngineResult result = sslEngine.wrap(outputByteBuffer, netOutputBuffer);
-        if (DEBUG) System.out.println("After Wrapping: " + outputByteBuffer.remaining());
+        if (DEBUG) parent.log("Wrapping: " + outputBuffer.remaining());
+        SSLEngineResult result = sslEngine.wrap(outputBuffer, netOutputBuffer);
+        if (DEBUG) parent.log("After Wrapping: " + outputBuffer.remaining());
         netOutputBuffer.flip(); // prepare for reading
         Preconditions.checkState(result.getStatus() == Status.OK);
         checkStatus();
         if (netOutputBuffer.remaining() == 0) {
-          if (DEBUG) System.out.println("Nothing to do.");
+          if (DEBUG) parent.log("Nothing to do.");
           return;
         }
       }
+    }
+  }
 
-      if (DEBUG) System.out.println("Writing: " + netOutputBuffer.remaining());
-      socketChannel.write(netOutputBuffer);
-      if (DEBUG) System.out.println("Remaining: " + netOutputBuffer.remaining());
-      if (netOutputBuffer.remaining() > 0) {
-        netOutputBuffer.compact(); // prepare for writing
-        netOutputBuffer.flip(); // prepare for reading
+  private final class CurrentResponseStage {
+    private final ByteBuffer outputBuffer;
+    private final HttpResponse response;
+    private final AsyncInputStream body;
+
+    public CurrentResponseStage(
+        ByteBuffer outputBuffer,
+        HttpResponse response,
+        AsyncInputStream body) {
+      this.response = response;
+      this.body = body;
+      this.outputBuffer = outputBuffer;
+    }
+
+    public boolean write() {
+      outputBuffer.clear();
+      int available = body.readAsync(outputBuffer.array(), outputBuffer.position(), outputBuffer.limit());
+      if (available < 0) {
+        outputBuffer.limit(0);
+        return true;
       }
+      outputBuffer.limit(outputBuffer.position() + available);
+      return false;
+    }
 
-      if (state == State.WRITE_RESPONSE) {
-        outputByteBuffer.compact(); // prepare for writing - if empty, equivalent to clear()
-        int freeSpace = outputByteBuffer.remaining();
-        if ((freeSpace > 0) && (generator != null)) {
-          int bytesGenerated = generator.readAsync(outputBuffer, outputByteBuffer.position(), freeSpace);
-          if (bytesGenerated > 0) {
-            outputByteBuffer.position(outputByteBuffer.position() + bytesGenerated);
-          } else if (bytesGenerated < 0) {
-            generator = null;
-          }
-        }
-        outputByteBuffer.flip(); // prepare for reading
-        if (DEBUG) System.out.println("After generating response: " + outputByteBuffer.remaining());
-        if (outputByteBuffer.remaining() == 0) {
-          if (generator == null) {
-            server.notifySent(connection, request, response, 0);
-            if (isKeepAlive) {
-              reset();
-              key.interestOps(SelectionKey.OP_READ);
-              consumeInput();
-            } else {
-              close();
+    public boolean keepAlive() {
+      return HttpConnection.isKeepAlive(response.getHeaders());
+    }
+  }
+
+  private final class HttpStage implements Stage {
+    private final Pipeline parent;
+    private final ByteBuffer inputBuffer;
+    private final ByteBuffer outputBuffer;
+    private final IncrementalHttpRequestParser parser;
+    private CurrentResponseStage response;
+
+    public HttpStage(
+        Pipeline parent,
+        ByteBuffer inputBuffer,
+        ByteBuffer outputBuffer) {
+      this.parent = parent;
+      this.inputBuffer = inputBuffer;
+      this.outputBuffer = outputBuffer;
+      this.parser = new IncrementalHttpRequestParser();
+    }
+
+    @Override
+    public void read() {
+      // invariant: inputBuffer is readable
+      if (inputBuffer.remaining() == 0) {
+        if (DEBUG) parent.log("NO INPUT!");
+        return;
+      }
+      int consumed = parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.limit());
+      inputBuffer.position(inputBuffer.position() + consumed);
+      if (parser.isDone()) {
+        processRequest();
+      }
+    }
+
+//    private final void printRequest(HttpRequest request, PrintStream out) {
+//      out.println(request.getVersion() + " " + request.getMethod() + " " + request.getUri());
+//      for (Map.Entry<String, String> e : request.getHeaders()) {
+//        out.println(e.getKey() + ": " + e.getValue());
+//      }
+////        out.println("Query Parameters:");
+////        Map<String, String> queries = parseQuery(request);
+////        for (Map.Entry<String, String> e : queries.entrySet()) {
+////          out.println("  " + e.getKey() + ": " + e.getValue());
+////        }
+////        try {
+////          FormData formData = parseFormData(request);
+////          out.println("Post Parameters:");
+////          for (Map.Entry<String, String> e : formData.data.entrySet()) {
+////            out.println("  " + e.getKey() + ": " + e.getValue());
+////          }
+////        } catch (IllegalArgumentException e) {
+////          out.println("Exception trying to parse post parameters:");
+////          e.printStackTrace(out);
+////        } catch (IOException e) {
+////          out.println("Exception trying to parse post parameters:");
+////          e.printStackTrace(out);
+////        }
+//      out.flush();
+//    }
+
+    private final void startOutput(HttpResponse responseToWrite, AsyncInputStream gen) {
+      this.response = new CurrentResponseStage(outputBuffer, responseToWrite, gen);
+      if (DEBUG) parent.log(responseToWrite.getProtocolVersion() + " " + responseToWrite.getStatusLine());
+      parent.writeAvailable();
+    }
+
+    private final void processRequest() {
+      if (response != null) {
+        parent.suppressReads();
+        return;
+      }
+      try {
+        HttpRequest request = parser.getRequest();
+        parser.reset();
+        if (DEBUG) parent.log(request.getVersion() + " " + request.getMethod() + " " + request.getUri());
+        queueRequest(request);
+      } catch (MalformedRequestException e) {
+        HttpResponse responseToWrite = e.getErrorResponse()
+            .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONNECTION, HttpConnection.CLOSE));
+        ResponseGenerator gen = ResponseGenerator.buffered(responseToWrite, true);
+        startOutput(responseToWrite, gen);
+      }
+    }
+
+    private final void queueRequest(HttpRequest request) {
+      server.queueRequest(new RequestCallback() {
+        @Override
+        public void run() {
+          HttpResponseWriter writer = new HttpResponseWriter() {
+            @Override
+            public void commitBuffered(HttpResponse responseToWrite) {
+              byte[] body = responseToWrite.getBody();
+              boolean keepAlive = HttpConnection.mayKeepAlive(request) && server.isKeepAliveAllowed();
+              responseToWrite = responseToWrite.withHeaderOverrides(
+                  HttpHeaders.of(
+                      HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length),
+                      HttpHeaderName.CONNECTION, HttpConnection.keepAliveToValue(keepAlive)));
+              boolean includeBody = !HttpMethodName.HEAD.equals(request.getMethod());
+              HttpResponse actualResponse = responseToWrite;
+              // We want to create the ResponseGenerator on the current thread.
+              ResponseGenerator gen = ResponseGenerator.buffered(actualResponse, includeBody);
+              // This runs in a thread pool thread, so we need to wake up the main thread.
+              parent.queue(() -> startOutput(actualResponse, gen));
             }
+
+            @Override
+            public OutputStream commitStreamed(HttpResponse responseToWrite) throws IOException {
+              StreamingResponseGenerator gen = new StreamingResponseGenerator(
+                  responseToWrite,
+                  () -> { parent.queue(parent::writeAvailable); });
+              parent.queue(() -> startOutput(responseToWrite, gen));
+              return gen.getOutputStream();
+            }
+          };
+          server.createResponse(parent.getConnection(), request, writer);
+        }
+
+//        private int parseContentLength(HttpResponse responseToWrite) {
+//          String value = responseToWrite.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
+//          if (value == null) {
+//            return -1;
+//          }
+//          try {
+//            return Integer.parseInt(value);
+//          } catch (NumberFormatException e) {
+//            return -1;
+//          }
+//        }
+
+        @Override
+        public void reject() {
+          // This will always be called in the event thread, so it's safe to access Connection here.
+          rejectedCounter.incrementAndGet();
+          HttpResponse responseToWrite = HttpResponse.SERVICE_UNAVAILABLE;
+          ResponseGenerator gen = ResponseGenerator.buffered(responseToWrite, true);
+          startOutput(responseToWrite, gen);
+        }
+      });
+    }
+
+    @Override
+    public void write() throws IOException {
+      if (response != null) {
+        boolean closed = response.write();
+        if (closed) {
+          if (DEBUG) {
+            parent.log("Completed. keepAlive=" + response.keepAlive());
+          }
+          if (response.keepAlive()) {
+            parent.encourageReads();
           } else {
-            key.interestOps(0);
+            parent.close();
+          }
+          response = null;
+          if (parser.isDone()) {
+            processRequest();
           }
         }
       }
     }
   }
 
-  class ServerSocketHandler implements EventHandler, Runnable {
+  private final class SocketHandler implements EventHandler, Pipeline {
+    private final SelectorQueue queue;
+    private final Connection connection;
+    private final SocketChannel socketChannel;
+    private final SelectionKey key;
+    private final ByteBuffer inputBuffer;
+    private final ByteBuffer outputBuffer;
+
+    private final Stage first;
+    private boolean reading = true;
+    private boolean writing;
+    private boolean closed;
+
+    SocketHandler(
+        SelectorQueue queue,
+        Connection connection,
+        SocketChannel socketChannel,
+        SelectionKey key,
+        boolean ssl) {
+      this.queue = queue;
+      this.connection = connection;
+      this.socketChannel = socketChannel;
+      this.key = key;
+      this.inputBuffer = ByteBuffer.allocate(4096);
+      this.outputBuffer = ByteBuffer.allocate(4096);
+      inputBuffer.clear();
+      inputBuffer.flip(); // prepare for reading
+      outputBuffer.clear();
+      outputBuffer.flip(); // prepare for reading
+      if (ssl) {
+        ByteBuffer decryptedInputBuffer = ByteBuffer.allocate(4096);
+        ByteBuffer decryptedOutputBuffer = ByteBuffer.allocate(4096);
+        HttpStage httpStage = new HttpStage(this, decryptedInputBuffer, decryptedOutputBuffer);
+        this.first = new SslStage(this, httpStage, inputBuffer, outputBuffer, decryptedInputBuffer, decryptedOutputBuffer);
+      } else {
+        this.first = new HttpStage(this, inputBuffer, outputBuffer);
+      }
+    }
+
+    @Override
+    public Connection getConnection() {
+      return connection;
+    }
+
+    private void updateSelector() {
+      if (closed) {
+        return;
+      }
+      key.interestOps(
+          (reading ? SelectionKey.OP_READ : 0)
+          | (writing ? SelectionKey.OP_WRITE : 0));
+    }
+
+    private void suppressWrites() {
+      writing = false;
+      updateSelector();
+    }
+
+    @Override
+    public void writeAvailable() {
+      if (writing) {
+        return;
+      }
+      writing = true;
+      updateSelector();
+    }
+
+    @Override
+    public void suppressReads() {
+      reading = false;
+      updateSelector();
+    }
+
+    @Override
+    public void encourageReads() {
+      if (reading) {
+        return;
+      }
+      reading = true;
+      updateSelector();
+    }
+
+    @Override
+    public void handleEvent() {
+      if (key.isReadable()) {
+        try {
+          inputBuffer.compact(); // prepare buffer for writing
+          int readCount = socketChannel.read(inputBuffer);
+          inputBuffer.flip(); // prepare buffer for reading
+          if (readCount == -1) {
+            close();
+          } else {
+            if (DEBUG) log("Read " + readCount + " bytes (" + inputBuffer.remaining() + " buffered)");
+            first.read();
+          }
+        } catch (IOException e) {
+          serverListener.notifyInternalError(connection, e);
+          close();
+          return;
+        }
+      }
+      if (key.isWritable()) {
+        try {
+          first.write();
+          if (outputBuffer.hasRemaining()) {
+            int before = outputBuffer.remaining();
+            socketChannel.write(outputBuffer);
+            if (DEBUG) log("Wrote " + (before - outputBuffer.remaining()) + " bytes");
+            if (outputBuffer.remaining() > 0) {
+              outputBuffer.compact(); // prepare for writing
+              outputBuffer.flip(); // prepare for reading
+            }
+          } else {
+            suppressWrites();
+          }
+        } catch (IOException e) {
+          serverListener.notifyInternalError(connection, e);
+          close();
+          return;
+        }
+      }
+      if (closed) {
+        closedCounter.incrementAndGet();
+        if (DEBUG) log("Close");
+        key.cancel();
+        try {
+          socketChannel.close();
+        } catch (IOException ignored) {
+          // There's nothing we can do if this fails.
+          serverListener.notifyInternalError(connection, ignored);
+        }
+      }
+    }
+
+    @Override
+    public void close() {
+      closed = true;
+    }
+
+    @Override
+    public void queue(Runnable runnable) {
+      queue.queue(runnable);
+    }
+
+    @Override
+    public void log(String text) {
+      if (DEBUG) {
+        long atNanos = System.nanoTime() - connection.startTimeNanos();
+        long atSeconds = TimeUnit.NANOSECONDS.toSeconds(atNanos);
+        long nanoFraction = atNanos - TimeUnit.SECONDS.toNanos(atSeconds);
+        System.out.println(
+            String.format(
+                "%s[%3s.%9d] %s", connection, Long.valueOf(atSeconds), Long.valueOf(nanoFraction), text));
+      }
+    }
+  }
+
+  private final class ServerSocketHandler implements EventHandler, Runnable {
     private final ServerSocketChannel serverChannel;
     private final SelectionKey key;
     private final boolean ssl;
@@ -527,9 +564,6 @@ final class NioEngine {
         socketChannel.configureBlocking(false);
         socketChannel.socket().setTcpNoDelay(true);
         socketChannel.socket().setKeepAlive(true);
-        if (DEBUG) {
-          System.out.println("New connection: " + connection);
-        }
         attachConnection(connection, socketChannel, ssl);
       }
     }
@@ -545,9 +579,9 @@ final class NioEngine {
     }
   }
 
-  class SelectorQueue implements Runnable {
+  private final class SelectorQueue implements Runnable {
     private final Selector selector;
-    private final BlockingQueue<Runnable> eventQueue = new ArrayBlockingQueue<>(100);
+    private final BlockingQueue<Runnable> eventQueue = new LinkedBlockingQueue<>();
     private final BlockingQueue<Runnable> shutdownQueue = new LinkedBlockingQueue<>();
     private boolean shutdown;
     private final AtomicBoolean shutdownInitiated = new AtomicBoolean();
@@ -559,7 +593,7 @@ final class NioEngine {
     }
 
     private void start(final InetAddress address, final int port, final boolean ssl) throws IOException, InterruptedException {
-      if (!shutdownInitiated.get()) {
+      if (shutdownInitiated.get()) {
         throw new IllegalStateException();
       }
       final CountDownLatch latch = new CountDownLatch(1);
@@ -572,6 +606,7 @@ final class NioEngine {
               return;
             }
             serverListener.portOpened(port, ssl);
+            @SuppressWarnings("resource")
             ServerSocketChannel serverChannel = ServerSocketChannel.open();
             serverChannel.configureBlocking(false);
             serverChannel.socket().setReuseAddress(true);
@@ -619,15 +654,10 @@ final class NioEngine {
         public void run() {
           try {
             SelectionKey socketKey = socketChannel.register(selector, SelectionKey.OP_READ);
-            NioConnectionHandler nioConnection;
-            if (!ssl) {
-              nioConnection =
-                  new NetConnection(SelectorQueue.this, connection, socketChannel, socketKey);
-            } else {
-              nioConnection =
-                  new SSLConnection(SelectorQueue.this, connection, socketChannel, socketKey);
-            }
-            socketKey.attach(nioConnection);
+            SocketHandler socketHandler =
+                new SocketHandler(SelectorQueue.this, connection, socketChannel, socketKey, ssl);
+            socketHandler.log("New");
+            socketKey.attach(socketHandler);
           } catch (ClosedChannelException e) {
             throw new RuntimeException(e);
           }
@@ -644,12 +674,11 @@ final class NioEngine {
     public void run() {
       try {
         while (!shutdown) {
-          if (DEBUG) {
-            System.out.println("PENDING: " + (openCounter.get() - closedCounter.get())
-                + " REJECTED " + rejectedCounter.get());
-          }
+//          if (DEBUG) {
+//            System.out.println(
+//                "PENDING: " + (openCounter.get() - closedCounter.get()) + " REJECTED " + rejectedCounter.get());
+//          }
           selector.select();
-          if (DEBUG) System.out.println("EVENT");
           Runnable runnable;
           while ((runnable = eventQueue.poll()) != null) {
             runnable.run();

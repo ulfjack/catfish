@@ -21,7 +21,7 @@ import de.ofahrt.catfish.TestHelper;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.SimpleHttpRequest;
-import de.ofahrt.catfish.utils.HttpFieldName;
+import de.ofahrt.catfish.utils.HttpHeaderName;
 import de.ofahrt.catfish.utils.HttpMethodName;
 
 public abstract class CatfishHttpClient {
@@ -51,7 +51,7 @@ public abstract class CatfishHttpClient {
         .setVersion(HttpVersion.HTTP_1_1)
         .setMethod(HttpMethodName.GET)
         .setUri(uri.getRawPath())
-        .addHeader(HttpFieldName.HOST, uri.getHost())
+        .addHeader(HttpHeaderName.HOST, uri.getHost())
         .build();
     return send(uri.getScheme() + "//" + uri.getHost() + ":" + uri.getPort(), request);
   }
