@@ -2,30 +2,22 @@ package de.ofahrt.catfish;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.Iterator;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import de.ofahrt.catfish.api.HttpHeaders;
-import de.ofahrt.catfish.api.HttpResponse;
-
-final class StreamingResponseGenerator implements AsyncInputStream {
-  private static final String CRLF = "\r\n";
+final class AsyncBuffer implements AsyncInputStream {
   private static final boolean DEBUG = false;
 
-  private final HttpResponse response;
   private final Runnable dataAvailableCallback;
   private final AtomicBoolean outputStreamAcquired = new AtomicBoolean();
 
-  private byte[] buffer = new byte[2048];
+  private final byte[] buffer;
   private int readPosition;
   private int writePosition;
   private boolean isFull;
   private boolean isDone;
 
-  StreamingResponseGenerator(HttpResponse response, Runnable dataAvailableCallback) {
-    this.response = response;
+  AsyncBuffer(int size, Runnable dataAvailableCallback) {
+    this.buffer = new byte[size];
     this.dataAvailableCallback = dataAvailableCallback;
   }
 
@@ -92,8 +84,6 @@ final class StreamingResponseGenerator implements AsyncInputStream {
     if (!outputStreamAcquired.compareAndSet(false, true)) {
       throw new IllegalStateException();
     }
-    buffer(statusLineToByteArray(response));
-    buffer(headersToByteArray(response.getHeaders()));
     return new OutputStream() {
       @Override
       public void write(int b) throws IOException {
@@ -107,12 +97,12 @@ final class StreamingResponseGenerator implements AsyncInputStream {
 
       @Override
       public void flush() {
-        StreamingResponseGenerator.this.flush();
+        AsyncBuffer.this.flush();
       }
 
       @Override
       public void close() {
-        StreamingResponseGenerator.this.close();
+        AsyncBuffer.this.close();
       }
     };
   }
@@ -143,28 +133,5 @@ final class StreamingResponseGenerator implements AsyncInputStream {
     }
     notify();
     return totalBytesCopied;
-  }
-
-  private static byte[] statusLineToByteArray(HttpResponse response) {
-    StringBuilder buffer = new StringBuilder(200);
-    buffer.append(response.getProtocolVersion());
-    buffer.append(" ");
-    buffer.append(response.getStatusLine());
-    buffer.append(CRLF);
-    return buffer.toString().getBytes(StandardCharsets.UTF_8);
-  }
-
-  private static byte[] headersToByteArray(HttpHeaders headers) {
-    StringBuilder buffer = new StringBuilder(200);
-    Iterator<Map.Entry<String, String>> it = headers.iterator();
-    while (it.hasNext()) {
-      Map.Entry<String, String> entry = it.next();
-      buffer.append(entry.getKey());
-      buffer.append(": ");
-      buffer.append(entry.getValue());
-      buffer.append(CRLF);
-    }
-    buffer.append(CRLF);
-    return buffer.toString().getBytes(StandardCharsets.UTF_8);
   }
 }

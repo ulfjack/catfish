@@ -12,18 +12,18 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
-
 import de.ofahrt.catfish.CatfishHttpServer.RequestCallback;
 import de.ofahrt.catfish.api.HttpHeaders;
 import de.ofahrt.catfish.api.HttpRequest;
@@ -41,6 +41,13 @@ final class NioEngine {
   private interface EventHandler {
     void handleEvent() throws IOException;
   }
+
+  // Incoming data:
+  // Socket -> SSL Engine -> HTTP Parser -> Request Queue
+  // Flow control: request queue -> socket read
+  //
+  // Socket <- SSL Engine <- AsyncBuffer <- Servlet
+  //
 
   private abstract class NioConnectionHandler implements EventHandler {
     private final SelectorQueue queue;
@@ -540,9 +547,10 @@ final class NioEngine {
 
   class SelectorQueue implements Runnable {
     private final Selector selector;
-    private final BlockingQueue<Runnable> eventQueue = new LinkedBlockingQueue<>();
+    private final BlockingQueue<Runnable> eventQueue = new ArrayBlockingQueue<>(100);
     private final BlockingQueue<Runnable> shutdownQueue = new LinkedBlockingQueue<>();
-    private boolean shutdown = false;
+    private boolean shutdown;
+    private final AtomicBoolean shutdownInitiated = new AtomicBoolean();
 
     public SelectorQueue(int i) throws IOException {
       selector = Selector.open();
@@ -551,14 +559,19 @@ final class NioEngine {
     }
 
     private void start(final InetAddress address, final int port, final boolean ssl) throws IOException, InterruptedException {
+      if (!shutdownInitiated.get()) {
+        throw new IllegalStateException();
+      }
       final CountDownLatch latch = new CountDownLatch(1);
       final AtomicReference<IOException> thrownException = new AtomicReference<>();
       queue(new Runnable() {
         @Override
         public void run() {
           try {
+            if (shutdown) {
+              return;
+            }
             serverListener.portOpened(port, ssl);
-            @SuppressWarnings("resource")
             ServerSocketChannel serverChannel = ServerSocketChannel.open();
             serverChannel.configureBlocking(false);
             serverChannel.socket().setReuseAddress(true);
@@ -581,6 +594,9 @@ final class NioEngine {
     }
 
     private void stop() throws InterruptedException {
+      if (!shutdownInitiated.getAndSet(true)) {
+        throw new IllegalStateException();
+      }
       final CountDownLatch latch = new CountDownLatch(1);
       shutdownQueue.add(new Runnable() {
         @Override
@@ -634,16 +650,13 @@ final class NioEngine {
           }
           selector.select();
           if (DEBUG) System.out.println("EVENT");
-          while (!eventQueue.isEmpty()) {
-            eventQueue.remove().run();
+          Runnable runnable;
+          while ((runnable = eventQueue.poll()) != null) {
+            runnable.run();
           }
           for (SelectionKey key : selector.selectedKeys()) {
-            if (key.attachment() instanceof EventHandler) {
-              EventHandler handler = (EventHandler) key.attachment();
-              handler.handleEvent();
-            } else {
-              throw new RuntimeException("Ugh!");
-            }
+            EventHandler handler = (EventHandler) key.attachment();
+            handler.handleEvent();
           }
           selector.selectedKeys().clear();
         }
