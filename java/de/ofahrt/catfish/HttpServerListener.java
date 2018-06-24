@@ -1,5 +1,6 @@
 package de.ofahrt.catfish;
 
+import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 

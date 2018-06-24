@@ -5,10 +5,10 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-import de.ofahrt.catfish.Connection;
+import de.ofahrt.catfish.api.Connection;
+import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
-import de.ofahrt.catfish.utils.HttpHeaderName;
 
 public final class WebalizerFormatter {
 

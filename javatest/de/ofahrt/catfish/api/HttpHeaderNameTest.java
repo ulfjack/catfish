@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.utils;
+package de.ofahrt.catfish.api;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -6,7 +6,9 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
-public class HttpFieldNameTest {
+import de.ofahrt.catfish.api.HttpHeaderName;
+
+public class HttpHeaderNameTest {
   @Test
   public void returnIdentical() {
     assertEquals(HttpHeaderName.ACCEPT, HttpHeaderName.canonicalize(HttpHeaderName.ACCEPT));

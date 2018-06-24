@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.utils;
+package de.ofahrt.catfish.validator;
 
 import org.junit.Test;
 import org.xml.sax.SAXParseException;

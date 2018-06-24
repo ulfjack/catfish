@@ -8,6 +8,8 @@ import org.junit.runners.Suite.SuiteClasses;
 @SuiteClasses({
   ServletHelperTest.class,
   XsrfTokenTest.class,
+  RequestImplTest.class,
+  SessionManagerTest.class,
 })
 public class CatfishBridgeTestSuite {
 }

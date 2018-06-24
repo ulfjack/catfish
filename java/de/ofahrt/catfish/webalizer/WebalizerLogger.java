@@ -7,8 +7,8 @@ import java.io.PrintStream;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import de.ofahrt.catfish.Connection;
 import de.ofahrt.catfish.RequestListener;
+import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 

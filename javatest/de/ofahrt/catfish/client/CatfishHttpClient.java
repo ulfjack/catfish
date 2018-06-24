@@ -1,7 +1,9 @@
 package de.ofahrt.catfish.client;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -13,16 +15,18 @@ import javax.net.ssl.SSLSession;
 import javax.servlet.Servlet;
 import javax.servlet.ServletException;
 
-import de.ofahrt.catfish.Connection;
 import de.ofahrt.catfish.InputStreams;
-import de.ofahrt.catfish.RequestImpl;
-import de.ofahrt.catfish.ResponseImpl;
-import de.ofahrt.catfish.TestHelper;
+import de.ofahrt.catfish.api.Connection;
+import de.ofahrt.catfish.api.HttpHeaderName;
+import de.ofahrt.catfish.api.HttpMethodName;
 import de.ofahrt.catfish.api.HttpRequest;
+import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.SimpleHttpRequest;
-import de.ofahrt.catfish.utils.HttpHeaderName;
-import de.ofahrt.catfish.utils.HttpMethodName;
+import de.ofahrt.catfish.bridge.RequestImpl;
+import de.ofahrt.catfish.bridge.ResponseImpl;
+import de.ofahrt.catfish.bridge.ResponsePolicy;
+import de.ofahrt.catfish.bridge.TestHelper;
 
 public abstract class CatfishHttpClient {
 
@@ -57,6 +61,39 @@ public abstract class CatfishHttpClient {
   }
 
   private static final class ServletHttpClient extends CatfishHttpClient {
+    private final class BufferedHttpResponseWriter implements HttpResponseWriter {
+      private de.ofahrt.catfish.api.HttpResponse response;
+      private ByteArrayOutputStream buffer;
+
+      public de.ofahrt.catfish.api.HttpResponse getResponse() {
+        return buffer != null ? response.withBody(buffer.toByteArray()) : response;
+      }
+
+      @Override
+      public void commitBuffered(@SuppressWarnings("hiding") de.ofahrt.catfish.api.HttpResponse response) {
+        if (this.response != null) {
+          throw new IllegalStateException();
+        }
+        if (response == null) {
+          throw new NullPointerException();
+        }
+        this.response = response;
+      }
+
+      @Override
+      public OutputStream commitStreamed(@SuppressWarnings("hiding") de.ofahrt.catfish.api.HttpResponse response) {
+        if (this.response != null) {
+          throw new IllegalStateException();
+        }
+        if (response == null) {
+          throw new NullPointerException();
+        }
+        this.response = response;
+        this.buffer = new ByteArrayOutputStream();
+        return buffer;
+      }
+    }
+
     private final Servlet servlet;
 
     private ServletHttpClient(Servlet servlet) {
@@ -65,14 +102,20 @@ public abstract class CatfishHttpClient {
 
     @Override
     public HttpResponse send(String schemaHostPort, HttpRequest request) throws IOException {
-      RequestImpl servletRequest = new RequestImpl(request, new Connection(null, null, false));
+      BufferedHttpResponseWriter writer = new BufferedHttpResponseWriter();
+      RequestImpl servletRequest = new RequestImpl(
+          request, new Connection(null, null, false), null, ResponsePolicy.EMPTY, writer);
       ResponseImpl servletResponse = servletRequest.getResponse();
       try {
         servlet.service(servletRequest, servletResponse);
       } catch (ServletException e) {
         throw new IOException(e);
       }
-      return new HttpResponse(servletResponse.getStatusCode(), servletResponse.getBody());
+      servletResponse.close();
+      
+      return new HttpResponse(
+          writer.getResponse().getStatusCode(),
+          writer.getResponse().getBody());
     }
   }
 

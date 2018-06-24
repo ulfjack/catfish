@@ -14,13 +14,16 @@ import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLContext;
 import javax.servlet.http.HttpServletResponse;
 
+import de.ofahrt.catfish.api.Connection;
+import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpResponseWriter;
-import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.MalformedRequestException;
-import de.ofahrt.catfish.utils.HttpHeaderName;
-import de.ofahrt.catfish.utils.HttpMethodName;
+import de.ofahrt.catfish.bridge.RequestImpl;
+import de.ofahrt.catfish.bridge.ResponseImpl;
+import de.ofahrt.catfish.bridge.ResponsePolicy;
+import de.ofahrt.catfish.bridge.SessionManager;
 
 /**
  * A <code>CatfishHttpServer</code> manages a HTTP-Server.
@@ -158,20 +161,18 @@ public final class CatfishHttpServer {
   private void evaluateServletRequest(Connection connection, HttpRequest request, HttpResponseWriter writer) {
     RequestImpl servletRequest;
     try {
-      servletRequest = new RequestImpl(request, connection);
+      servletRequest = new RequestImpl(request, connection, sessionManager, new ResponsePolicy() {
+        @Override
+        public boolean shouldCompress(String mimeType) {
+          return mayCompress && CoreHelper.shouldCompress(mimeType);
+        }
+      }, writer);
     } catch (MalformedRequestException e) {
       writer.commitBuffered(e.getErrorResponse());
       return;
     }
     ResponseImpl response = servletRequest.getResponse();
-    if (mayCompress) {
-      response.setCompressionAllowed(servletRequest.supportGzipCompression());
-    }
-    servletRequest.supportGzipCompression();
-    servletRequest.setSessionManager(sessionManager);
     FilterDispatcher dispatcher = determineDispatcher(servletRequest);
-    response.setHeadRequest(HttpMethodName.HEAD.equals(request.getMethod()));
-    response.setVersion(HttpVersion.HTTP_1_1);
     try {
       dispatcher.dispatch(servletRequest, response);
     } catch (FileNotFoundException e) {
@@ -180,16 +181,8 @@ public final class CatfishHttpServer {
       e.printStackTrace();
       response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
     }
-    response.close();
     try {
-      boolean streamResponse = false;
-      if (streamResponse) {
-        try (OutputStream out = writer.commitStreamed(response)) {
-          out.write(response.getBody());
-        }
-      } else {
-        writer.commitBuffered(response);
-      }
+      response.close();
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

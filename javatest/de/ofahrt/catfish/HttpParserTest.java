@@ -11,6 +11,7 @@ import javax.servlet.http.HttpServletRequest;
 import org.junit.Test;
 
 import de.ofahrt.catfish.api.MalformedRequestException;
+import de.ofahrt.catfish.bridge.RequestImpl;
 
 /**
  * Tests a parser for compliance with RFC 2616: http://www.ietf.org/rfc/rfc2616.txt

@@ -4,7 +4,7 @@ java_library(
   name = "fastcgi",
   srcs = glob(["*.java"]),
   deps = [
-    "//java/de/ofahrt/catfish/utils",
+    "//java/de/ofahrt/catfish/api",
     "//third_party/servlet-api",
   ],
 )

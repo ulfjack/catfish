@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.bridge;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -13,17 +13,27 @@ import java.util.Locale;
 
 import org.junit.Test;
 
+import de.ofahrt.catfish.CollectionsUtils;
+import de.ofahrt.catfish.HashConflictGenerator;
+import de.ofahrt.catfish.InputStreams;
+import de.ofahrt.catfish.api.Connection;
+import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.api.SimpleHttpRequest;
+import de.ofahrt.catfish.bridge.RequestImpl;
 import de.ofahrt.catfish.bridge.ServletHelper;
-import de.ofahrt.catfish.utils.HttpHeaderName;
 
 /**
  * Tests for {@link RequestImpl}.
  */
 public class RequestImplTest {
   private RequestImpl toRequestImpl(SimpleHttpRequest.Builder builder) throws Exception {
-    return new RequestImpl(builder.build(), new Connection(null, null, false));
+    return new RequestImpl(
+        builder.build(),
+        new Connection(null, null, false),
+        null,
+        ResponsePolicy.EMPTY,
+        null);
   }
 
   @Test(expected = IllegalStateException.class)
@@ -135,7 +145,10 @@ public class RequestImplTest {
             .setBody(new byte[] { -1, -1 })
             .setUri("*")
             .build(),
-        new Connection(new InetSocketAddress(80), null, false));
+        new Connection(new InetSocketAddress(80), null, false),
+        null,
+        ResponsePolicy.EMPTY,
+        null);
     ServletHelper.getCompleteUrl(request);
   }
 
@@ -176,7 +189,10 @@ public class RequestImplTest {
         new SimpleHttpRequest.Builder()
             .setUri("/")
             .addHeader("Host", "host:80").build(),
-        new Connection(null, null, true));
+        new Connection(null, null, true),
+        null,
+        ResponsePolicy.EMPTY,
+        null);
     assertEquals("https://host:80/", request.getRequestURL().toString());
   }
 
@@ -187,7 +203,10 @@ public class RequestImplTest {
             .setUri("/")
             .addHeader("Host", "host:443")
             .build(),
-        new Connection(null, null, true));
+        new Connection(null, null, true),
+        null,
+        ResponsePolicy.EMPTY,
+        null);
     assertEquals("https://host/", request.getRequestURL().toString());
   }
 

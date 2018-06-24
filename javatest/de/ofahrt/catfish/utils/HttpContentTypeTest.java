@@ -6,6 +6,8 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
+import de.ofahrt.catfish.utils.HttpContentType;
+
 public class HttpContentTypeTest {
 
   public static boolean isTokenCharacter(char c) {

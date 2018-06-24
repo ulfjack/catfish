@@ -2,7 +2,7 @@ package de.ofahrt.catfish.client;
 
 import java.util.Arrays;
 
-import de.ofahrt.catfish.utils.HttpHeaderName;
+import de.ofahrt.catfish.api.HttpHeaderName;
 
 final class IncrementalHttpResponseParser {
 

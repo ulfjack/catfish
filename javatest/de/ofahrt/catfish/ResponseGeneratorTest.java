@@ -8,8 +8,8 @@ import java.io.UnsupportedEncodingException;
 import org.junit.Test;
 
 import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.api.HttpResponseCode;
 import de.ofahrt.catfish.api.HttpVersion;
-import de.ofahrt.catfish.utils.HttpResponseCode;
 
 public class ResponseGeneratorTest {
 
@@ -17,7 +17,7 @@ public class ResponseGeneratorTest {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     byte[] buffer = new byte[39];
     int len;
-    while ((len = generator.readAsync(buffer, 0, buffer.length)) != 0) {
+    while ((len = generator.readAsync(buffer, 0, buffer.length)) > 0) {
       out.write(buffer, 0, len);
     }
     return out.toByteArray();
@@ -29,12 +29,24 @@ public class ResponseGeneratorTest {
 
   @Test
   public void simple() throws Exception {
-    ResponseImpl response = new ResponseImpl();
-    response.setVersion(HttpVersion.HTTP_0_9);
-    response.setStatus(200);
-    response.close();
+    HttpResponse response = new HttpResponse() {
+      @Override
+      public HttpVersion getProtocolVersion() {
+        return HttpVersion.HTTP_0_9;
+      }
+
+      @Override
+      public int getStatusCode() {
+        return HttpResponseCode.OK.getCode();
+      }
+
+      @Override
+      public byte[] getBody() {
+        return new byte[0];
+      }
+    };
     ResponseGenerator generator = ResponseGenerator.buffered(response, /*includeBody=*/true);
-    assertEquals("HTTP/0.9 200 OK\r\nContent-Length: 0\r\n\r\n", toString(generator));
+    assertEquals("HTTP/0.9 200 OK\r\n\r\n", toString(generator));
   }
 
   @Test
@@ -56,6 +68,6 @@ public class ResponseGeneratorTest {
       }
     };
     ResponseGenerator generator = ResponseGenerator.buffered(response, /*includeBody=*/true);
-    assertEquals("HTTP/0.9 200 OK\r\nContent-Length: 2\r\n\r\nxy", toString(generator));
+    assertEquals("HTTP/0.9 200 OK\r\n\r\nxy", toString(generator));
   }
 }

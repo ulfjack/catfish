@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.bridge;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -13,7 +13,7 @@ import java.util.UUID;
 
 import javax.servlet.http.HttpSession;
 
-final class SessionManager {
+public final class SessionManager {
 
 	// package private for testing
 	static class SessionEntry implements Comparable<SessionEntry> {

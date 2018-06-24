@@ -6,7 +6,7 @@ import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
 
-import de.ofahrt.catfish.utils.HttpHeaderName;
+import de.ofahrt.catfish.api.HttpHeaderName;
 
 public final class HttpResponse {
   private final int majorVersion;

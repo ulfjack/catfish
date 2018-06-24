@@ -2,6 +2,7 @@ package de.ofahrt.catfish.servlets;
 
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 
 import javax.servlet.http.HttpServlet;
@@ -35,6 +36,8 @@ public final class CheckCompression extends HttpServlet {
 
     buffer.append(ServletHelper.getRequestText(request));
     buffer.append("</body>\n</html>\n");
-    new OutputStreamWriter(response.getOutputStream(), StandardCharsets.UTF_8).write(buffer.toString());
+    Writer out = new OutputStreamWriter(response.getOutputStream(), StandardCharsets.UTF_8);
+    out.write(buffer.toString());
+    out.close();
   }
 }

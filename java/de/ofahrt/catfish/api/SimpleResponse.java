@@ -1,7 +1,5 @@
 package de.ofahrt.catfish.api;
 
-import de.ofahrt.catfish.utils.HttpResponseCode;
-
 final class SimpleResponse implements HttpResponse {
   private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 

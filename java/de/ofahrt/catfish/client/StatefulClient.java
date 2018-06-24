@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
 
 import javax.net.ssl.SSLContext;
 
-import de.ofahrt.catfish.utils.HttpHeaderName;
+import de.ofahrt.catfish.api.HttpHeaderName;
 
 public final class StatefulClient {
 

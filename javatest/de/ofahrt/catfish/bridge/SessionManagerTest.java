@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.bridge;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -18,7 +18,11 @@ import javax.servlet.http.HttpSession;
 
 import org.junit.Test;
 
-import de.ofahrt.catfish.SessionManager.SessionEntry;
+import de.ofahrt.catfish.CollectionsUtils;
+import de.ofahrt.catfish.bridge.Clock;
+import de.ofahrt.catfish.bridge.SessionImpl;
+import de.ofahrt.catfish.bridge.SessionManager;
+import de.ofahrt.catfish.bridge.SessionManager.SessionEntry;
 
 public class SessionManagerTest {
 

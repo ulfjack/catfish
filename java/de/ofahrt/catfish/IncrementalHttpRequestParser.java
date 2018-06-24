@@ -2,11 +2,11 @@ package de.ofahrt.catfish;
 
 import javax.servlet.http.HttpServletResponse;
 
+import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.api.SimpleHttpRequest;
-import de.ofahrt.catfish.utils.HttpHeaderName;
 
 final class IncrementalHttpRequestParser {
 

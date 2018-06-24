@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.bridge;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -28,13 +28,15 @@ import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 
+import de.ofahrt.catfish.api.Connection;
+import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.MalformedRequestException;
-import de.ofahrt.catfish.bridge.Enumerations;
+import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import de.ofahrt.catfish.utils.HttpDate;
-import de.ofahrt.catfish.utils.HttpHeaderName;
 
 public final class RequestImpl implements HttpServletRequest {
   private static final String DEFAULT_CHARSET = "UTF-8";
@@ -67,24 +69,31 @@ public final class RequestImpl implements HttpServletRequest {
   private Map<String, String> parameters;
   private final HashMap<String, Object> attributes = new HashMap<>();
 
-  public RequestImpl(HttpRequest request, Connection connection) throws MalformedRequestException {
+  public RequestImpl(
+      HttpRequest request, Connection connection, SessionManager sessionManager,
+      ResponsePolicy policy, HttpResponseWriter writer)
+          throws MalformedRequestException {
     this.request = request;
-    this.response = new ResponseImpl();
     this.unparsedUri = request.getUri();
     this.headers = new TreeMap<>();
     for (Map.Entry<String, String> e : request.getHeaders()) {
       this.headers.put(e.getKey(), e.getValue());
+    }
+    try {
+      this.uri = new URI(unparsedUri);
+    } catch (URISyntaxException e) {
+      throw new MalformedRequestException(HttpResponse.BAD_REQUEST);
     }
     this.body = request.getBody();
 
     this.localAddress = connection.getLocalAddress();
     this.clientAddress = connection.getRemoteAddress();
     this.ssl = connection.isSsl();
-    try {
-      this.uri = new URI(unparsedUri);
-    } catch (URISyntaxException e) {
-      throw new MalformedRequestException(HttpResponse.BAD_REQUEST);
-    }
+    this.sessionManager = sessionManager;
+
+    this.response = new ResponseImpl(writer, policy);
+    this.response.setVersion(HttpVersion.HTTP_1_1);
+    this.response.setCompressionAllowed(supportGzipCompression());
   }
 
   private static Map<String, String> parseQuery(String query, String charset) {
@@ -149,7 +158,7 @@ public final class RequestImpl implements HttpServletRequest {
   }
 
   public boolean mayKeepAlive() {
-    return ConnectionHeader.mayKeepAlive(request);
+    return HttpConnectionHeader.mayKeepAlive(request);
   }
 
 

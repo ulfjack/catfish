@@ -5,9 +5,6 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 
-import de.ofahrt.catfish.utils.HttpHeaderName;
-import de.ofahrt.catfish.utils.HttpResponseCode;
-
 public final class RedirectResponse {
   private static final String TEXT_HTML_UTF_8 = "text/html; charset=UTF-8";
 

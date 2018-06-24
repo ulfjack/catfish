@@ -7,14 +7,14 @@ import java.io.InputStream;
 import javax.net.ssl.SSLContext;
 
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.Connection;
 import de.ofahrt.catfish.HttpServerListener;
 import de.ofahrt.catfish.HttpVirtualHost;
+import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.fastcgi.FcgiServlet;
 import de.ofahrt.catfish.servlets.CheckCompression;
 import de.ofahrt.catfish.servlets.CheckPost;
-import de.ofahrt.catfish.utils.SSLContextFactory;
-import de.ofahrt.catfish.utils.SSLContextFactory.SSLInfo;
+import de.ofahrt.catfish.ssl.SSLContextFactory;
+import de.ofahrt.catfish.ssl.SSLContextFactory.SSLInfo;
 
 public class ExampleMain {
 

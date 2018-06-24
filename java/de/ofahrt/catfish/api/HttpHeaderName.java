@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.utils;
+package de.ofahrt.catfish.api;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 public final class HttpHeaderName {
-
   public static final String ACCEPT              = "Accept";
   public static final String ACCEPT_CHARSET      = "Accept-Charset";
   public static final String ACCEPT_ENCODING     = "Accept-Encoding";

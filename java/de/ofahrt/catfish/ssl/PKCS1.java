@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.utils;
+package de.ofahrt.catfish.ssl;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

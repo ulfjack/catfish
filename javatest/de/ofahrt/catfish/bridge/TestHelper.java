@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.bridge;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -7,7 +7,8 @@ import java.security.GeneralSecurityException;
 import javax.net.ssl.SSLContext;
 import javax.servlet.http.HttpSession;
 
-import de.ofahrt.catfish.utils.SSLContextFactory;
+import de.ofahrt.catfish.bridge.SessionImpl;
+import de.ofahrt.catfish.ssl.SSLContextFactory;
 
 public class TestHelper {
 

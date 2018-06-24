@@ -6,7 +6,9 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
 @SuiteClasses({
+  HttpHeaderNameTest.class,
   HttpHeadersTest.class,
+  HttpResponseCodeTest.class,
   HttpVersionTest.class,
   SimpleHttpRequestTest.class,
 })

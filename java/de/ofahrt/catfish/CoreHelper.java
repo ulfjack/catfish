@@ -18,8 +18,8 @@ final class CoreHelper {
 
   private static final String MIME_TEXT_CSS = "text/css";
   private static final String MIME_TEXT_CSV = "text/csv";
-  static final String MIME_TEXT_HTML  = "text/html";
-  static final String MIME_TEXT_PLAIN = "text/plain";
+  private static final String MIME_TEXT_HTML  = "text/html";
+  private static final String MIME_TEXT_PLAIN = "text/plain";
   private static final String MIME_TEXT_RICHTEXT = "text/richtext";
   private static final String MIME_TEXT_RTF = "text/rtf";
   private static final String MIME_TEXT_XML = "text/xml";
@@ -45,10 +45,6 @@ final class CoreHelper {
 
   public static boolean shouldCompress(String mimeType) {
     return COMPRESSION_WHITELIST.contains(mimeType);
-  }
-
-  public static boolean isTextMimeType(String name) {
-    return name.startsWith("text/");
   }
 
   // Response text output for debugging:

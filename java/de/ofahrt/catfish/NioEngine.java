@@ -31,17 +31,19 @@ import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.Status;
 
 import de.ofahrt.catfish.CatfishHttpServer.RequestCallback;
+import de.ofahrt.catfish.api.Connection;
+import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpHeaders;
+import de.ofahrt.catfish.api.HttpMethodName;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.MalformedRequestException;
-import de.ofahrt.catfish.utils.HttpHeaderName;
-import de.ofahrt.catfish.utils.HttpMethodName;
+import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
 final class NioEngine {
   private static final boolean STATS = false;
-  private static final boolean DEBUG = false;
+  private static final boolean DEBUG = true;
   private static final boolean VERBOSE = false;
 
   private interface EventHandler {
@@ -281,7 +283,7 @@ final class NioEngine {
     }
 
     public boolean keepAlive() {
-      return ConnectionHeader.isKeepAlive(response.getHeaders());
+      return HttpConnectionHeader.isKeepAlive(response.getHeaders());
     }
   }
 
@@ -366,7 +368,7 @@ final class NioEngine {
         queueRequest(request);
       } catch (MalformedRequestException e) {
         HttpResponse responseToWrite = e.getErrorResponse()
-            .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONNECTION, ConnectionHeader.CLOSE));
+            .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE));
         ResponseGenerator gen = ResponseGenerator.buffered(responseToWrite, true);
         startOutput(responseToWrite, gen);
       }
@@ -380,11 +382,14 @@ final class NioEngine {
             @Override
             public void commitBuffered(HttpResponse responseToWrite) {
               byte[] body = responseToWrite.getBody();
-              boolean keepAlive = ConnectionHeader.mayKeepAlive(request) && server.isKeepAliveAllowed();
+              if (body == null) {
+                throw new IllegalArgumentException();
+              }
+              boolean keepAlive = HttpConnectionHeader.mayKeepAlive(request) && server.isKeepAliveAllowed();
               responseToWrite = responseToWrite.withHeaderOverrides(
                   HttpHeaders.of(
                       HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length),
-                      HttpHeaderName.CONNECTION, ConnectionHeader.keepAliveToValue(keepAlive)));
+                      HttpHeaderName.CONNECTION, HttpConnectionHeader.keepAliveToValue(keepAlive)));
               boolean includeBody = !HttpMethodName.HEAD.equals(request.getMethod());
               HttpResponse actualResponse = responseToWrite;
               // We want to create the ResponseGenerator on the current thread.
@@ -394,7 +399,7 @@ final class NioEngine {
             }
 
             @Override
-            public OutputStream commitStreamed(HttpResponse responseToWrite) throws IOException {
+            public OutputStream commitStreamed(HttpResponse responseToWrite) {
               StreamingResponseGenerator gen = new StreamingResponseGenerator(
                   responseToWrite,
                   () -> { parent.queue(parent::writeAvailable); });

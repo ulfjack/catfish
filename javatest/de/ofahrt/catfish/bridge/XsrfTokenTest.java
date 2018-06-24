@@ -8,7 +8,6 @@ import javax.servlet.http.HttpSession;
 
 import org.junit.Test;
 
-import de.ofahrt.catfish.TestHelper;
 import de.ofahrt.catfish.bridge.XsrfToken;
 
 public class XsrfTokenTest {

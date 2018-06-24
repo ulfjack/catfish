@@ -1,11 +1,11 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.utils;
 
+import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpHeaders;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpVersion;
-import de.ofahrt.catfish.utils.HttpHeaderName;
 
-final class ConnectionHeader {
+public final class HttpConnectionHeader {
   public static final String CLOSE = "close";
   public static final String KEEP_ALIVE = "keep-alive";
 
@@ -26,7 +26,7 @@ final class ConnectionHeader {
     return keepAlive ? KEEP_ALIVE : CLOSE;
   }
 
-  private ConnectionHeader() {
+  private HttpConnectionHeader() {
     // Not instantiable.
   }
 }

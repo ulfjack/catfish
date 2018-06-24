@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.utils;
+package de.ofahrt.catfish.api;
 
 public enum HttpResponseCode {
   CONTINUE               (100, "Continue"),

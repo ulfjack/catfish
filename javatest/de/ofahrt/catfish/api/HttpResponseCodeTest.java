@@ -1,8 +1,10 @@
-package de.ofahrt.catfish.utils;
+package de.ofahrt.catfish.api;
 
 import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
+
+import de.ofahrt.catfish.api.HttpResponseCode;
 
 public class HttpResponseCodeTest {
   @Test

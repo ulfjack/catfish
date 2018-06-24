@@ -4,7 +4,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
@@ -14,6 +13,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.junit.Test;
 
+import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpResponseWriter;
@@ -47,7 +47,7 @@ public class CatfishHttpServerTest {
       }
 
       @Override
-      public OutputStream commitStreamed(HttpResponse response) throws IOException {
+      public OutputStream commitStreamed(HttpResponse response) {
         if (!writtenResponse.compareAndSet(null, response)) {
           throw new IllegalStateException("Already set!");
         }

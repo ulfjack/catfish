@@ -7,7 +7,7 @@ import org.junit.Test;
 
 import de.ofahrt.catfish.client.CatfishHttpClient;
 import de.ofahrt.catfish.client.HttpResponse;
-import de.ofahrt.catfish.utils.HtmlValidator;
+import de.ofahrt.catfish.validator.HtmlValidator;
 
 public class CheckCompressionTest {
 

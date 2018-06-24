@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.bridge;
 
 interface Clock {
   public static final class SystemClock implements Clock {

@@ -1,9 +1,6 @@
 package de.ofahrt.catfish.api;
 
 import java.io.IOException;
-import java.io.OutputStream;
-
-import de.ofahrt.catfish.utils.HttpResponseCode;
 
 public interface HttpResponse {
   // 200
@@ -62,14 +59,6 @@ public interface HttpResponse {
     return null;
   }
 
-  /**
-   * @param out the target output stream
-   * @throws IOException if something goes wrong 
-   */
-  default void writeBodyTo(OutputStream out) throws IOException {
-    // Do nothing.
-  }
-
   default HttpResponse withHeaderOverrides(HttpHeaders overrides) {
     return new HttpResponse() {
       @Override
@@ -95,11 +84,6 @@ public interface HttpResponse {
       @Override
       public byte[] getBody() {
         return HttpResponse.this.getBody();
-      }
-
-      @Override
-      public void writeBodyTo(OutputStream out) throws IOException {
-        HttpResponse.this.writeBodyTo(out);
       }
     };
   }
@@ -129,11 +113,6 @@ public interface HttpResponse {
       @Override
       public byte[] getBody() {
         return body;
-      }
-
-      @Override
-      public void writeBodyTo(OutputStream out) throws IOException {
-        throw new UnsupportedOperationException();
       }
     };
   }

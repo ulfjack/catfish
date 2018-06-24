@@ -10,9 +10,9 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.fastcgi.IncrementalFcgiResponseParser.Callback;
 import de.ofahrt.catfish.fastcgi.IncrementalFcgiResponseParser.MalformedResponseException;
-import de.ofahrt.catfish.utils.HttpHeaderName;
 
 public class FcgiServlet extends HttpServlet {
   private static final long serialVersionUID = 1L;

@@ -8,6 +8,9 @@ import java.util.Collection;
 
 import org.junit.runner.RunWith;
 
+import de.ofahrt.catfish.api.Connection;
+import de.ofahrt.catfish.bridge.RequestImpl;
+import de.ofahrt.catfish.bridge.ResponsePolicy;
 import info.adams.junit.NamedParameterized;
 import info.adams.junit.NamedParameterized.Parameters;
 
@@ -75,6 +78,9 @@ public class IncrementalHttpParserIncrementalTest extends HttpParserTest {
   	    new Connection(
   	        new InetSocketAddress("127.0.0.1", 8080),
   	        new InetSocketAddress("127.0.0.1", 1234),
-  	        false));
+  	        false),
+  	    null,
+  	    ResponsePolicy.EMPTY,
+  	    null);
   }
 }

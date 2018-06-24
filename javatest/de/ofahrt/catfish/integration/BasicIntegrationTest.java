@@ -11,9 +11,9 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.client.HttpConnection;
 import de.ofahrt.catfish.client.HttpResponse;
-import de.ofahrt.catfish.utils.HttpHeaderName;
 
 public class BasicIntegrationTest {
   private static LocalCatfishServer localServer;

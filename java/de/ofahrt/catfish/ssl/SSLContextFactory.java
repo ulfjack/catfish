@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.utils;
+package de.ofahrt.catfish.ssl;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -111,6 +111,7 @@ public final class SSLContextFactory {
   public static class SSLInfo {
     private final SSLContext sslContext;
     private final String certificateCommonName;
+
     public SSLInfo(SSLContext sslContext, String certificateCommonName) {
       this.sslContext = sslContext;
       this.certificateCommonName = certificateCommonName;

@@ -1,12 +1,12 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.bridge;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.io.Writer;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.zip.GZIPOutputStream;
@@ -15,41 +15,39 @@ import javax.servlet.ServletOutputStream;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletResponse;
 
+import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpHeaders;
 import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.api.HttpResponseCode;
+import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.utils.HttpContentType;
 import de.ofahrt.catfish.utils.HttpDate;
-import de.ofahrt.catfish.utils.HttpHeaderName;
-import de.ofahrt.catfish.utils.HttpResponseCode;
+import de.ofahrt.catfish.utils.MimeType;
 
-public final class ResponseImpl implements HttpServletResponse, HttpResponse {
+public final class ResponseImpl implements HttpServletResponse {
+  private final HttpResponseWriter responseWriter;
+  private final ResponsePolicy policy;
+
   private boolean isCommitted;
   private boolean isCompleted;
 
-  private boolean isHeadRequest;
-
   private HttpVersion version = HttpVersion.HTTP_1_1;
   private String charset = "UTF-8";
+  private String contentType;
   private int status = HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
   private Locale defaultLocale = Locale.US;
   private Locale locale;
 
-  private byte[] bodyData;
-
   private boolean compressable;
 
-  private OutputStream internalStream;
   private OutputStream keepStream;
-  private Writer keepWriter;
 
   private HashMap<String, String> header = new HashMap<>();
 
-  ResponseImpl() {
-  }
-
-  void setHeadRequest(boolean isHeadRequest) {
-    this.isHeadRequest = isHeadRequest;
+  ResponseImpl(HttpResponseWriter responseWriter, ResponsePolicy policy) {
+    this.responseWriter = responseWriter;
+    this.policy = policy;
   }
 
   void setVersion(HttpVersion version) {
@@ -59,22 +57,12 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
     this.version = version;
   }
 
-  @Override
-  public HttpVersion getProtocolVersion() {
-    return version;
-  }
-
-  @Override
-  public int getStatusCode() {
-    return status;
-  }
-
   private String canonicalize(String key) {
     return HttpHeaderName.canonicalize(key);
   }
 
   private void setHeaderInternal(String key, String value) {
-    if (isCompleted) {
+    if (isCommitted) {
       throw new IllegalStateException();
     }
     header.put(canonicalize(key), value);
@@ -91,14 +79,6 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
     compressable = how;
   }
 
-  void disableCompression() {
-    setCompressionAllowed(false);
-  }
-
-  void enableCompression() {
-    setCompressionAllowed(true);
-  }
-
   void setCookie(String cookie) {
     if (isCommitted) {
       throw new IllegalStateException();
@@ -106,79 +86,134 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
     setHeader(HttpHeaderName.SET_COOKIE, cookie);
   }
 
-  private OutputStream internalOutputStream(boolean shouldCompress) throws IOException {
-    internalStream = new ByteArrayOutputStream(5000) {
+  private OutputStream internalOutputStream() {
+    if (isCommitted) {
+      throw new IllegalStateException();
+    }
+    if (keepStream != null) {
+      throw new IllegalStateException();
+    }
+
+    // TODO: The charset may not be set yet. Store the content type as a field and only set the
+    // header when finalizing the response.
+    String mimeType = MimeType.APPLICATION_OCTET_STREAM.toString();
+    if (contentType != null) {
+      mimeType = HttpContentType.getMimeTypeFromContentType(contentType);
+      String type = contentType;
+      if (isTextMimeType(type) && (charset != null)) {
+        type += "; charset=" + charset;
+      }
+      setHeaderInternal(HttpHeaderName.CONTENT_TYPE, type);
+    }
+
+    final int bufferSize = 512;
+    OutputStream internalStream = new OutputStream() {
+      private OutputStream bufferOrForward = new ByteArrayOutputStream(bufferSize);
+
       @Override
       public void close() throws IOException {
-        if (internalStream != this) {
-          throw new IOException("Cannot close stream twice!");
+        if (bufferOrForward == null) {
+          return;
         }
-        internalStream = null;
-        keepStream = null;
-        bodyData = toByteArray();
+        flush();
+        bufferOrForward.close();
+        bufferOrForward = null;
+      }
+
+      @Override
+      public void flush() throws IOException {
+        if (bufferOrForward == null) {
+          throw new IOException("Output stream already closed");
+        }
+        if (isCommitted) {
+          bufferOrForward.flush();
+          return;
+        }
+        OutputStream forward = responseWriter.commitStreamed(commitResponse());
+        forward.write(((ByteArrayOutputStream) bufferOrForward).toByteArray());
+        bufferOrForward = forward;
+      }
+
+      @Override
+      public void write(int b) throws IOException {
+        if (bufferOrForward == null) {
+          throw new IOException("Output stream already closed");
+        }
+        bufferOrForward.write(b);
+      }
+
+      @Override
+      public void write(byte[] b, int off, int len) throws IOException {
+        if (bufferOrForward == null) {
+          throw new IOException("Output stream already closed");
+        }
+        if (bufferOrForward instanceof ByteArrayOutputStream) {
+          ByteArrayOutputStream buffer = (ByteArrayOutputStream) bufferOrForward;
+          if (buffer.size() + len > bufferSize) {
+            flush();
+          }
+        }
+        bufferOrForward.write(b, off, len);
       }
     };
-    bodyData = null;
 
-    if (shouldCompress) {
+    if (compressable && policy.shouldCompress(mimeType)) {
       setHeaderInternal(HttpHeaderName.CONTENT_ENCODING, "gzip");
-      keepStream = new GZIPOutputStream(internalStream);
-      return keepStream;
+      try {
+        keepStream = new GZIPOutputStream(internalStream);
+      } catch (IOException e) {
+        throw new IllegalStateException(e);
+      }
     } else {
       keepStream = internalStream;
-      return keepStream;
     }
+    return keepStream;
   }
 
-  private Writer internalWriter() {
-    keepWriter = new StringWriter(5000) {
-      @Override
-      public void close() throws IOException {
-        if (keepWriter != this) {
-          throw new IOException("Cannot close stream twice!");
-        }
-        keepWriter = null;
-        OutputStream out = internalOutputStream(compressable);
-        OutputStreamWriter writer = new OutputStreamWriter(out, charset);
-        writer.write(toString());
-        writer.flush();
-        writer.close();
-      }
-    };
-    return keepWriter;
+  private static boolean isTextMimeType(String name) {
+    return name.startsWith("text/");
   }
 
-  void setBodyString(String s) {
-    bodyData = s.getBytes();
-  }
-
-  void commit() {
+  private HttpResponse commitResponse() {
+    if (isCommitted) {
+      throw new IllegalStateException();
+    }
     isCommitted = true;
-  }
-
-  void close() {
-    if (isCompleted) {
-      return;
-    }
-    if (!isCommitted) {
-      commit();
-    }
-    try {
-      if (keepWriter != null) {
-        keepWriter.close();
-      }
-      if (keepStream != null) {
-        keepStream.close();
-      }
-    } catch (IOException e) {
-      // cannot happen
-      throw new RuntimeException(e);
-    }
-
     // The servlet specification requires writing out the content-language.
     // But locale.toString is clearly not correct.
     // if ((locale != null) && containsHeader(HttpFieldName.CONTENT_TYPE))
-    // setHeader(HttpFieldName.CONTENT_LANGUAGE, locale.toString());
+    // setHeaderInternal(HttpFieldName.CONTENT_LANGUAGE, locale.toString());
+    final HttpVersion committedVersion = version;
+    final int committedStatus = status;
+    final HttpHeaders committedHeaders = HttpHeaders.of(header);
+    return new HttpResponse() {
+      @Override
+      public HttpVersion getProtocolVersion() {
+        return committedVersion;
+      }
+
+      @Override
+      public int getStatusCode() {
+        return committedStatus;
+      }
+
+      @Override
+      public HttpHeaders getHeaders() {
+        return committedHeaders;
+      }
+    };
+  }
+
+  public void close() throws IOException {
+    if (isCompleted) {
+      return;
+    }
+    if (keepStream != null) {
+      keepStream.close();
+    }
+    if (!isCommitted) {
+      getOutputStream().close();
+    }
     isCompleted = true;
   }
 
@@ -211,28 +246,29 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
   @SuppressWarnings("resource")
   @Override
   public ServletOutputStream getOutputStream() throws IOException {
-    final OutputStream out = internalOutputStream(compressable);
+    final OutputStream forwardOut = internalOutputStream();
     return new ServletOutputStream() {
       @Override
       public void write(int b) throws IOException {
-        out.write(b);
+        forwardOut.write(b);
       }
 
       @Override
       public void write(byte[] b, int off, int len) throws IOException {
-        out.write(b, off, len);
+        forwardOut.write(b, off, len);
       }
 
       @Override
-      public void flush() {
-        commit();
+      public void flush() throws IOException {
+        forwardOut.flush();
       }
     };
   }
 
   @Override
   public PrintWriter getWriter() {
-    return new PrintWriter(internalWriter());
+    Charset javaCharset = StandardCharsets.UTF_8;
+    return new PrintWriter(new OutputStreamWriter(internalOutputStream(), javaCharset));
   }
 
   @Override
@@ -266,7 +302,7 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
   @Override
   public void setContentLength(int len) {
     // Ignore servlet-provided setting. It might be wrong, and we're going to override it anyway
-    // (or used chunked encoding). We allow this to go through even when the response is already
+    // (or use chunked encoding). We allow this to go through even when the response is already
     // committed.
   }
 
@@ -278,15 +314,7 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
     if (type == null) {
       throw new NullPointerException();
     }
-    if (!CoreHelper.shouldCompress(HttpContentType.getMimeTypeFromContentType(type))) {
-      disableCompression();
-    }
-    // TODO: The charset may not be set yet. Store the content type as a field and only set the
-    // header when finalizing the response.
-    if (CoreHelper.isTextMimeType(type) && (charset != null)) {
-      type += "; charset=" + charset;
-    }
-    setHeader(HttpHeaderName.CONTENT_TYPE, type);
+    this.contentType = type;
   }
 
   @Override
@@ -371,9 +399,10 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
     if (msg == null) {
       msg = HttpResponseCode.getStatusText(statusCode);
     }
-    setContentType(CoreHelper.MIME_TEXT_PLAIN);
-    setBodyString(msg);
-    commit();
+    // TODO: This should be text/html according to the spec.
+    setContentType(MimeType.TEXT_PLAIN.toString());
+    HttpResponse response = commitResponse().withBody(msg.getBytes(StandardCharsets.UTF_8));
+    responseWriter.commitBuffered(response);
   }
 
   @Override
@@ -381,37 +410,30 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
     if (isCommitted) {
       throw new IllegalStateException();
     }
+    // TODO: Location needs to be resolved relative to the request URI.
     setStatus(HttpServletResponse.SC_FOUND);
     setHeader(HttpHeaderName.LOCATION, location);
-    setContentType(CoreHelper.MIME_TEXT_HTML);
-    setBodyString(
+    setContentType(MimeType.TEXT_HTML.toString());
+    String msg =
         "<html><head><meta http-equiv=\"refresh\" content=\"1; URL="
         + location
-        + "\"></head><body>REDIRECT</body></html>");
-    commit();
+        + "\"></head><body>REDIRECT</body></html>";
+    HttpResponse response = commitResponse().withBody(msg.getBytes(StandardCharsets.UTF_8));
+    responseWriter.commitBuffered(response);
   }
 
   @Override
   public void setDateHeader(String name, long date) {
-    if (isCommitted) {
-      throw new IllegalStateException();
-    }
     setHeaderInternal(name, HttpDate.formatDate(date));
   }
 
   @Override
   public void setHeader(String name, String value) {
-    if (isCommitted) {
-      throw new IllegalStateException();
-    }
     setHeaderInternal(name, value);
   }
 
   @Override
   public void setIntHeader(String name, int value) {
-    if (isCommitted) {
-      throw new IllegalStateException();
-    }
     setHeaderInternal(name, Integer.toString(value));
   }
 
@@ -432,21 +454,6 @@ public final class ResponseImpl implements HttpServletResponse, HttpResponse {
     if (isCommitted) {
       throw new IllegalStateException();
     }
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public HttpHeaders getHeaders() {
-    return HttpHeaders.of(header);
-  }
-
-  @Override
-  public byte[] getBody() {
-    return isHeadRequest || bodyData == null ? new byte[0] : bodyData;
-  }
-
-  @Override
-  public void writeBodyTo(OutputStream out) throws IOException {
     throw new UnsupportedOperationException();
   }
 }

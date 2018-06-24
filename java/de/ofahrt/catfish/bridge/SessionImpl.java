@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.bridge;
 
 import java.io.Serializable;
 import java.util.Enumeration;
@@ -7,8 +7,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpSession;
 import javax.servlet.http.HttpSessionContext;
-
-import de.ofahrt.catfish.bridge.Enumerations;
 
 @SuppressWarnings("deprecation")
 final class SessionImpl implements HttpSession, Serializable {

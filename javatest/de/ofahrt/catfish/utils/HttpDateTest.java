@@ -4,6 +4,8 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
+import de.ofahrt.catfish.utils.HttpDate;
+
 public class HttpDateTest {
   private static void assertSameResult(String date) {
     long oldcorehelpertime = OldCoreHelper.unformatDate(date);

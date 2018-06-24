@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.utils;
+package de.ofahrt.catfish.validator;
 
 import java.io.IOException;
 import java.io.StringReader;

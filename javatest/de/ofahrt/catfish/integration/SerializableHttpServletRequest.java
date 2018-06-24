@@ -23,8 +23,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 
 import de.ofahrt.catfish.InputStreams;
+import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.bridge.Enumerations;
-import de.ofahrt.catfish.utils.HttpHeaderName;
 
 @SuppressWarnings("rawtypes")
 public final class SerializableHttpServletRequest implements HttpServletRequest, Serializable {
