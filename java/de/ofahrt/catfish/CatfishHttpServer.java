@@ -5,8 +5,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -47,7 +47,7 @@ public final class CatfishHttpServer {
   private final SessionManager sessionManager = new SessionManager();
 
   private final ThreadPoolExecutor executor =
-      new ThreadPoolExecutor(4, 4, 1L, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(50));
+      new ThreadPoolExecutor(4, 4, 1L, TimeUnit.SECONDS, new LinkedBlockingQueue<>());
 
   public CatfishHttpServer(HttpServerListener serverListener) throws IOException {
     this.serverListener = serverListener;

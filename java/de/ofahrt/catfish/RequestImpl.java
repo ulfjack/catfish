@@ -149,7 +149,7 @@ public final class RequestImpl implements HttpServletRequest {
   }
 
   public boolean mayKeepAlive() {
-    return HttpConnection.mayKeepAlive(request);
+    return ConnectionHeader.mayKeepAlive(request);
   }
 
 

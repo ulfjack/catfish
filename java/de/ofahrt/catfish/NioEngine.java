@@ -2,6 +2,7 @@ package de.ofahrt.catfish;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -10,6 +11,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -34,6 +36,7 @@ import de.ofahrt.catfish.utils.HttpMethodName;
 
 final class NioEngine {
   private static final boolean DEBUG = true;
+  private static final boolean VERBOSE = false;
 
   private interface EventHandler {
     void handleEvent() throws IOException;
@@ -58,7 +61,7 @@ final class NioEngine {
     void encourageReads();
     void close();
     void queue(Runnable runnable);
-    void log(String text);
+    void log(String text, Object... params);
   }
 
   private final class SslStage implements Stage {
@@ -105,9 +108,9 @@ final class NioEngine {
             parent.writeAvailable();
             return;
           case NEED_TASK :
-            if (DEBUG) parent.log("SSLEngine delegated task");
+            parent.log("SSLEngine delegated task");
             sslEngine.getDelegatedTask().run();
-            if (DEBUG) parent.log("Done: "+sslEngine.getHandshakeStatus());
+            parent.log("Done -> %s", sslEngine.getHandshakeStatus());
             break;
           case FINISHED :
           case NOT_HANDSHAKING :
@@ -157,7 +160,7 @@ final class NioEngine {
       if (!lookingForSni) {
         // TODO: This could end up an infinite loop if the SSL engine ever returns NEED_WRAP.
         while (netInputBuffer.remaining() > 0) {
-          if (DEBUG) parent.log("Still stuff left: " + netInputBuffer.remaining());
+          parent.log("Bytes left %d", Integer.valueOf(netInputBuffer.remaining()));
           SSLEngineResult result = sslEngine.unwrap(netInputBuffer, inputBuffer);
           if (result.getStatus() == Status.CLOSED) {
             parent.close();
@@ -165,7 +168,7 @@ final class NioEngine {
           } else if (result.getStatus() != Status.OK) {
             throw new IOException(result.toString());
           }
-          if (DEBUG) parent.log("STATUS = " + result.toString());
+          parent.log("STATUS=%s", result);
           checkStatus();
           if (inputBuffer.hasRemaining()) {
             next.read();
@@ -180,14 +183,14 @@ final class NioEngine {
       // invariant: both netOutputBuffer and outputBuffer are readable
       if (netOutputBuffer.remaining() == 0) {
         netOutputBuffer.clear(); // prepare for writing
-        if (DEBUG) parent.log("Wrapping: " + outputBuffer.remaining());
+        parent.log("Wrapping: %d", Integer.valueOf(outputBuffer.remaining()));
         SSLEngineResult result = sslEngine.wrap(outputBuffer, netOutputBuffer);
-        if (DEBUG) parent.log("After Wrapping: " + outputBuffer.remaining());
+        parent.log("After Wrapping: %d", Integer.valueOf(outputBuffer.remaining()));
         netOutputBuffer.flip(); // prepare for reading
         Preconditions.checkState(result.getStatus() == Status.OK);
         checkStatus();
         if (netOutputBuffer.remaining() == 0) {
-          if (DEBUG) parent.log("Nothing to do.");
+          parent.log("Nothing to do.");
           return;
         }
       }
@@ -220,7 +223,7 @@ final class NioEngine {
     }
 
     public boolean keepAlive() {
-      return HttpConnection.isKeepAlive(response.getHeaders());
+      return ConnectionHeader.isKeepAlive(response.getHeaders());
     }
   }
 
@@ -245,7 +248,7 @@ final class NioEngine {
     public void read() {
       // invariant: inputBuffer is readable
       if (inputBuffer.remaining() == 0) {
-        if (DEBUG) parent.log("NO INPUT!");
+        parent.log("NO INPUT!");
         return;
       }
       int consumed = parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.limit());
@@ -255,35 +258,35 @@ final class NioEngine {
       }
     }
 
-//    private final void printRequest(HttpRequest request, PrintStream out) {
-//      out.println(request.getVersion() + " " + request.getMethod() + " " + request.getUri());
-//      for (Map.Entry<String, String> e : request.getHeaders()) {
-//        out.println(e.getKey() + ": " + e.getValue());
-//      }
-////        out.println("Query Parameters:");
-////        Map<String, String> queries = parseQuery(request);
-////        for (Map.Entry<String, String> e : queries.entrySet()) {
-////          out.println("  " + e.getKey() + ": " + e.getValue());
-////        }
-////        try {
-////          FormData formData = parseFormData(request);
-////          out.println("Post Parameters:");
-////          for (Map.Entry<String, String> e : formData.data.entrySet()) {
-////            out.println("  " + e.getKey() + ": " + e.getValue());
-////          }
-////        } catch (IllegalArgumentException e) {
-////          out.println("Exception trying to parse post parameters:");
-////          e.printStackTrace(out);
-////        } catch (IOException e) {
-////          out.println("Exception trying to parse post parameters:");
-////          e.printStackTrace(out);
-////        }
-//      out.flush();
-//    }
+    private final void printRequest(HttpRequest request, PrintStream out) {
+      out.println(request.getVersion() + " " + request.getMethod() + " " + request.getUri());
+      for (Map.Entry<String, String> e : request.getHeaders()) {
+        out.println(e.getKey() + ": " + e.getValue());
+      }
+//        out.println("Query Parameters:");
+//        Map<String, String> queries = parseQuery(request);
+//        for (Map.Entry<String, String> e : queries.entrySet()) {
+//          out.println("  " + e.getKey() + ": " + e.getValue());
+//        }
+//        try {
+//          FormData formData = parseFormData(request);
+//          out.println("Post Parameters:");
+//          for (Map.Entry<String, String> e : formData.data.entrySet()) {
+//            out.println("  " + e.getKey() + ": " + e.getValue());
+//          }
+//        } catch (IllegalArgumentException e) {
+//          out.println("Exception trying to parse post parameters:");
+//          e.printStackTrace(out);
+//        } catch (IOException e) {
+//          out.println("Exception trying to parse post parameters:");
+//          e.printStackTrace(out);
+//        }
+      out.flush();
+    }
 
     private final void startOutput(HttpResponse responseToWrite, AsyncInputStream gen) {
       this.response = new CurrentResponseStage(outputBuffer, responseToWrite, gen);
-      if (DEBUG) parent.log(responseToWrite.getProtocolVersion() + " " + responseToWrite.getStatusLine());
+      parent.log("%s %s", responseToWrite.getProtocolVersion(), responseToWrite.getStatusLine());
       parent.writeAvailable();
     }
 
@@ -295,11 +298,14 @@ final class NioEngine {
       try {
         HttpRequest request = parser.getRequest();
         parser.reset();
-        if (DEBUG) parent.log(request.getVersion() + " " + request.getMethod() + " " + request.getUri());
+        parent.log("%s %s %s", request.getVersion(), request.getMethod(), request.getUri());
+        if (VERBOSE) {
+          printRequest(request, System.out);
+        }
         queueRequest(request);
       } catch (MalformedRequestException e) {
         HttpResponse responseToWrite = e.getErrorResponse()
-            .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONNECTION, HttpConnection.CLOSE));
+            .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONNECTION, ConnectionHeader.CLOSE));
         ResponseGenerator gen = ResponseGenerator.buffered(responseToWrite, true);
         startOutput(responseToWrite, gen);
       }
@@ -313,11 +319,11 @@ final class NioEngine {
             @Override
             public void commitBuffered(HttpResponse responseToWrite) {
               byte[] body = responseToWrite.getBody();
-              boolean keepAlive = HttpConnection.mayKeepAlive(request) && server.isKeepAliveAllowed();
+              boolean keepAlive = ConnectionHeader.mayKeepAlive(request) && server.isKeepAliveAllowed();
               responseToWrite = responseToWrite.withHeaderOverrides(
                   HttpHeaders.of(
                       HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length),
-                      HttpHeaderName.CONNECTION, HttpConnection.keepAliveToValue(keepAlive)));
+                      HttpHeaderName.CONNECTION, ConnectionHeader.keepAliveToValue(keepAlive)));
               boolean includeBody = !HttpMethodName.HEAD.equals(request.getMethod());
               HttpResponse actualResponse = responseToWrite;
               // We want to create the ResponseGenerator on the current thread.
@@ -366,9 +372,7 @@ final class NioEngine {
       if (response != null) {
         boolean closed = response.write();
         if (closed) {
-          if (DEBUG) {
-            parent.log("Completed. keepAlive=" + response.keepAlive());
-          }
+          parent.log("Completed. keepAlive=%s", Boolean.valueOf(response.keepAlive()));
           if (response.keepAlive()) {
             parent.encourageReads();
           } else {
@@ -475,7 +479,8 @@ final class NioEngine {
           if (readCount == -1) {
             close();
           } else {
-            if (DEBUG) log("Read " + readCount + " bytes (" + inputBuffer.remaining() + " buffered)");
+            log("Read %d bytes (%d buffered)",
+                Integer.valueOf(readCount), Integer.valueOf(inputBuffer.remaining()));
             first.read();
           }
         } catch (IOException e) {
@@ -490,7 +495,7 @@ final class NioEngine {
           if (outputBuffer.hasRemaining()) {
             int before = outputBuffer.remaining();
             socketChannel.write(outputBuffer);
-            if (DEBUG) log("Wrote " + (before - outputBuffer.remaining()) + " bytes");
+            log("Wrote %d bytes", Integer.valueOf(before - outputBuffer.remaining()));
             if (outputBuffer.remaining() > 0) {
               outputBuffer.compact(); // prepare for writing
               outputBuffer.flip(); // prepare for reading
@@ -506,7 +511,7 @@ final class NioEngine {
       }
       if (closed) {
         closedCounter.incrementAndGet();
-        if (DEBUG) log("Close");
+        log("Close");
         key.cancel();
         try {
           socketChannel.close();
@@ -528,14 +533,15 @@ final class NioEngine {
     }
 
     @Override
-    public void log(String text) {
+    public void log(String text, Object... params) {
       if (DEBUG) {
         long atNanos = System.nanoTime() - connection.startTimeNanos();
         long atSeconds = TimeUnit.NANOSECONDS.toSeconds(atNanos);
         long nanoFraction = atNanos - TimeUnit.SECONDS.toNanos(atSeconds);
+        String printedText = String.format(text, params);
         System.out.println(
             String.format(
-                "%s[%3s.%9d] %s", connection, Long.valueOf(atSeconds), Long.valueOf(nanoFraction), text));
+                "%s[%3s.%9d] %s", connection, Long.valueOf(atSeconds), Long.valueOf(nanoFraction), printedText));
       }
     }
   }
@@ -711,7 +717,7 @@ final class NioEngine {
   public NioEngine(CatfishHttpServer server) throws IOException {
     this.server = server;
     this.serverListener = server.getServerListener();
-    this.queues = new SelectorQueue[1];
+    this.queues = new SelectorQueue[4];
     for (int i = 0; i < queues.length; i++) {
       queues[i] = new SelectorQueue(i);
     }
