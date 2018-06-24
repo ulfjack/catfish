@@ -44,10 +44,17 @@ final class NioEngine {
 
   // Incoming data:
   // Socket -> SSL Stage -> HTTP Stage -> Request Queue
-  // Flow control: request queue -> socket read
+  // Flow control:
+  // - Drop entire connection early if system overloaded
+  // - Otherwise start in readable state
+  // - Read data into parser, until request complete
+  // - Queue full? -> Need to start dropping requests
   //
+  // Outgoing data:
   // Socket <- SSL Stage <- HTTP Stage <- Response Stage <- AsyncBuffer <- Servlet
-  // Flow control: 
+  // Flow control:
+  // - Data available -> select on write
+  // - AsyncBuffer blocks when the buffer is full
 
   private interface Stage {
     void read() throws IOException;
