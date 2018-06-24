@@ -1,14 +1,14 @@
 package de.ofahrt.catfish.bridge;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.PrintStream;
+import java.io.PrintWriter;
 import java.io.Reader;
+import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.net.URI;
@@ -38,8 +38,9 @@ public class ServletHelper {
 
   public static final String formatText(String what, boolean fixed) {
     StringBuffer result = new StringBuffer();
-    if (fixed)
+    if (fixed) {
       result.append("<pre>");
+    }
     for (int i = 0; i < what.length(); i++) {
       char c = what.charAt(i);
       switch (c) {
@@ -65,8 +66,9 @@ public class ServletHelper {
         break;
       }
     }
-    if (fixed)
+    if (fixed) {
       result.append("</pre>");
+    }
     return result.toString();
   }
 
@@ -342,38 +344,52 @@ public class ServletHelper {
     return result.toString();
   }
 
-  public static final void printRequest(PrintStream out, HttpServletRequest request) {
-    out.println(request.getMethod() + " " + getCompleteUrl(request) + " " + request.getProtocol());
+  public static final String requestToString(HttpServletRequest request) {
+    StringBuffer out = new StringBuffer();
+    out.append(request.getMethod())
+        .append(" ")
+        .append(getCompleteUrl(request))
+        .append(" ")
+        .append(request.getProtocol())
+        .append("\n");
     Enumeration<?> it = request.getHeaderNames();
     while (it.hasMoreElements()) {
       String key = (String) it.nextElement();
-      out.println(key + ": " + request.getHeader(key));
+      out.append(key).append(": ").append(request.getHeader(key)).append("\n");
     }
-    out.println("Query Parameters:");
+    out.append("Query Parameters:\n");
     Map<String, String> queries = parseQuery(request);
     for (Map.Entry<String, String> e : queries.entrySet()) {
-      out.println("  " + e.getKey() + ": " + e.getValue());
+      out.append("  ")
+          .append(e.getKey())
+          .append(": ")
+          .append(e.getValue())
+          .append("\n");
     }
     try {
       FormData formData = parseFormData(request);
-      out.println("Post Parameters:");
+      out.append("Post Parameters:\n");
       for (Map.Entry<String, String> e : formData.data.entrySet()) {
-        out.println("  " + e.getKey() + ": " + e.getValue());
+        out.append("  ")
+            .append(e.getKey())
+            .append(": ")
+            .append(e.getValue())
+            .append("\n");
       }
-    } catch (IllegalArgumentException e) {
-      out.println("Exception trying to parse post parameters:");
-      e.printStackTrace(out);
     } catch (IOException e) {
-      out.println("Exception trying to parse post parameters:");
-      e.printStackTrace(out);
+      out.append("Exception trying to parse post parameters:\n");
+      out.append(throwableToString(e));
     }
-    out.flush();
+    return out.toString();
+  }
+
+  public static final String throwableToString(Throwable e) {
+    StringWriter buffer = new StringWriter();
+    e.printStackTrace(new PrintWriter(buffer));
+    return buffer.toString();
   }
 
   public static final String getRequestText(HttpServletRequest req) {
-    ByteArrayOutputStream ba = new ByteArrayOutputStream();
-    PrintStream out = new PrintStream(ba);
-    printRequest(out, req);
-    return formatText(ba.toString(), true);
+    return formatText(requestToString(req), true);
   }
 }

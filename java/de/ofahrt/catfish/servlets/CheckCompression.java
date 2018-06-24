@@ -1,7 +1,8 @@
 package de.ofahrt.catfish.servlets;
 
 import java.io.IOException;
-import java.io.Writer;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -16,24 +17,24 @@ public final class CheckCompression extends HttpServlet {
 
   @Override
   public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
-  	response.setStatus(HttpServletResponse.SC_OK);
-  	response.setContentType(MimeType.TEXT_HTML.toString());
-  	Writer out = response.getWriter();
-  	out.write("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
-  			+"\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n");
-  	out.write("<html xmlns=\"http://www.w3.org/1999/xhtml\">\n");
-  	out.write("<head><title>Check Compression</title></head>\n");
-  	out.write("<body>\n");
+    response.setStatus(HttpServletResponse.SC_OK);
+    response.setContentType(MimeType.TEXT_HTML.toString());
+    StringBuilder buffer = new StringBuilder();
+    buffer.append("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
+        +"\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n");
+    buffer.append("<html xmlns=\"http://www.w3.org/1999/xhtml\">\n");
+    buffer.append("<head><title>Check Compression</title></head>\n");
+    buffer.append("<body>\n");
 
-  	if (ServletHelper.supportCompression(request)) {
-  		out.write("Your browser supports compression!");
-  	} else {
-  		out.write("Your browser does not support compression!");
-  	}
-  	out.write("<br/>\n<br/>\n<br/>\n");
+    if (ServletHelper.supportCompression(request)) {
+      buffer.append("Your browser supports compression!");
+    } else {
+      buffer.append("Your browser does not support compression!");
+    }
+    buffer.append("<br/>\n<br/>\n<br/>\n");
 
-  	out.write(ServletHelper.getRequestText(request));
-  	out.write("</body>\n</html>\n");
-  	out.close();
+    buffer.append(ServletHelper.getRequestText(request));
+    buffer.append("</body>\n</html>\n");
+    new OutputStreamWriter(response.getOutputStream(), StandardCharsets.UTF_8).write(buffer.toString());
   }
 }
