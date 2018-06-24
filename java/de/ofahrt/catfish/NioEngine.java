@@ -1,8 +1,12 @@
 package de.ofahrt.catfish;
 
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -12,6 +16,7 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -35,7 +40,8 @@ import de.ofahrt.catfish.utils.HttpHeaderName;
 import de.ofahrt.catfish.utils.HttpMethodName;
 
 final class NioEngine {
-  private static final boolean DEBUG = true;
+  private static final boolean STATS = false;
+  private static final boolean DEBUG = false;
   private static final boolean VERBOSE = false;
 
   private interface EventHandler {
@@ -69,6 +75,51 @@ final class NioEngine {
     void close();
     void queue(Runnable runnable);
     void log(String text, Object... params);
+  }
+
+  private interface LogHandler {
+    void log(String text);
+  }
+
+  private final static class FileLogHandler implements LogHandler {
+    private static final String POISON_PILL = "poison pill";
+
+    private final BlockingQueue<String> queue = new ArrayBlockingQueue<>(100);
+    private final PrintWriter out;
+
+    FileLogHandler(File f) throws IOException {
+      out = new PrintWriter(new BufferedOutputStream(new FileOutputStream(f), 10000));
+      new Thread(this::run, "log-writer").start();
+    }
+
+    @Override
+    public void log(String text) {
+      try {
+        queue.put(text);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }
+
+    private void run() {
+      try {
+        String line;
+        while ((line = queue.take()) != POISON_PILL) {
+          out.println(line);
+        }
+        out.close();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        out.close();
+      }
+    }
+  }
+
+  private final static class ConsoleLogHandler implements LogHandler {
+    @Override
+    public void log(String text) {
+      System.out.println(text);
+    }
   }
 
   private final class SslStage implements Stage {
@@ -218,15 +269,15 @@ final class NioEngine {
       this.outputBuffer = outputBuffer;
     }
 
-    public boolean write() {
+    public int write() {
       outputBuffer.clear();
       int available = body.readAsync(outputBuffer.array(), outputBuffer.position(), outputBuffer.limit());
       if (available < 0) {
         outputBuffer.limit(0);
-        return true;
+        return -1;
       }
       outputBuffer.limit(outputBuffer.position() + available);
-      return false;
+      return available;
     }
 
     public boolean keepAlive() {
@@ -293,6 +344,9 @@ final class NioEngine {
 
     private final void startOutput(HttpResponse responseToWrite, AsyncInputStream gen) {
       this.response = new CurrentResponseStage(outputBuffer, responseToWrite, gen);
+      if (STATS) {
+        System.out.printf("%s\n", responseToWrite.getStatusLine());
+      }
       parent.log("%s %s", responseToWrite.getProtocolVersion(), responseToWrite.getStatusLine());
       parent.writeAvailable();
     }
@@ -377,8 +431,8 @@ final class NioEngine {
     @Override
     public void write() throws IOException {
       if (response != null) {
-        boolean closed = response.write();
-        if (closed) {
+        int written = response.write();
+        if (written < 0) {
           parent.log("Completed. keepAlive=%s", Boolean.valueOf(response.keepAlive()));
           if (response.keepAlive()) {
             parent.encourageReads();
@@ -401,6 +455,7 @@ final class NioEngine {
     private final SelectionKey key;
     private final ByteBuffer inputBuffer;
     private final ByteBuffer outputBuffer;
+    private final LogHandler logHandler;
 
     private final Stage first;
     private boolean reading = true;
@@ -412,11 +467,13 @@ final class NioEngine {
         Connection connection,
         SocketChannel socketChannel,
         SelectionKey key,
-        boolean ssl) {
+        boolean ssl,
+        LogHandler logHandler) {
       this.queue = queue;
       this.connection = connection;
       this.socketChannel = socketChannel;
       this.key = key;
+      this.logHandler = logHandler;
       this.inputBuffer = ByteBuffer.allocate(4096);
       this.outputBuffer = ByteBuffer.allocate(4096);
       inputBuffer.clear();
@@ -463,6 +520,7 @@ final class NioEngine {
 
     @Override
     public void suppressReads() {
+      log("Supress reads");
       reading = false;
       updateSelector();
     }
@@ -484,6 +542,7 @@ final class NioEngine {
           int readCount = socketChannel.read(inputBuffer);
           inputBuffer.flip(); // prepare buffer for reading
           if (readCount == -1) {
+            log("Input closed");
             close();
           } else {
             log("Read %d bytes (%d buffered)",
@@ -546,9 +605,13 @@ final class NioEngine {
         long atSeconds = TimeUnit.NANOSECONDS.toSeconds(atNanos);
         long nanoFraction = atNanos - TimeUnit.SECONDS.toNanos(atSeconds);
         String printedText = String.format(text, params);
-        System.out.println(
+        logHandler.log(
             String.format(
-                "%s[%3s.%9d] %s", connection, Long.valueOf(atSeconds), Long.valueOf(nanoFraction), printedText));
+                "%s[%3s.%9d] %s",
+                connection,
+                Long.valueOf(atSeconds),
+                Long.valueOf(nanoFraction),
+                printedText));
       }
     }
   }
@@ -577,6 +640,7 @@ final class NioEngine {
         socketChannel.configureBlocking(false);
         socketChannel.socket().setTcpNoDelay(true);
         socketChannel.socket().setKeepAlive(true);
+        socketChannel.socket().setSoLinger(false, 0);
         attachConnection(connection, socketChannel, ssl);
       }
     }
@@ -593,15 +657,19 @@ final class NioEngine {
   }
 
   private final class SelectorQueue implements Runnable {
+    private final int id;
     private final Selector selector;
     private final BlockingQueue<Runnable> eventQueue = new LinkedBlockingQueue<>();
     private final BlockingQueue<Runnable> shutdownQueue = new LinkedBlockingQueue<>();
+    private final LogHandler logHandler;
     private boolean shutdown;
     private final AtomicBoolean shutdownInitiated = new AtomicBoolean();
 
-    public SelectorQueue(int i) throws IOException {
-      selector = Selector.open();
-      Thread t = new Thread(this, "select-" + i);
+    public SelectorQueue(int id, LogHandler logHandler) throws IOException {
+      this.id = id;
+      this.logHandler = logHandler;
+      this.selector = Selector.open();
+      Thread t = new Thread(this, "select-" + id);
       t.start();
     }
 
@@ -668,7 +736,7 @@ final class NioEngine {
           try {
             SelectionKey socketKey = socketChannel.register(selector, SelectionKey.OP_READ);
             SocketHandler socketHandler =
-                new SocketHandler(SelectorQueue.this, connection, socketChannel, socketKey, ssl);
+                new SocketHandler(SelectorQueue.this, connection, socketChannel, socketKey, ssl, logHandler);
             socketHandler.log("New");
             socketKey.attach(socketHandler);
           } catch (ClosedChannelException e) {
@@ -692,6 +760,10 @@ final class NioEngine {
 //                "PENDING: " + (openCounter.get() - closedCounter.get()) + " REJECTED " + rejectedCounter.get());
 //          }
           selector.select();
+//          if (DEBUG) {
+//            System.out.printf(
+//                "Queue=%d, Keys=%d\n", Integer.valueOf(id), Integer.valueOf(selector.keys().size()));
+//          }
           Runnable runnable;
           while ((runnable = eventQueue.poll()) != null) {
             runnable.run();
@@ -724,9 +796,10 @@ final class NioEngine {
   public NioEngine(CatfishHttpServer server) throws IOException {
     this.server = server;
     this.serverListener = server.getServerListener();
-    this.queues = new SelectorQueue[4];
+    this.queues = new SelectorQueue[8];
+    LogHandler logHandler = new ConsoleLogHandler(); //new FileLogHandler(new File("/tmp/catfish.log"));
     for (int i = 0; i < queues.length; i++) {
-      queues[i] = new SelectorQueue(i);
+      queues[i] = new SelectorQueue(i, logHandler);
     }
   }
 

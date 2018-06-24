@@ -47,7 +47,7 @@ public final class CatfishHttpServer {
   private final SessionManager sessionManager = new SessionManager();
 
   private final ThreadPoolExecutor executor =
-      new ThreadPoolExecutor(4, 4, 1L, TimeUnit.SECONDS, new LinkedBlockingQueue<>());
+      new ThreadPoolExecutor(8, 8, 1L, TimeUnit.SECONDS, new LinkedBlockingQueue<>());
 
   public CatfishHttpServer(HttpServerListener serverListener) throws IOException {
     this.serverListener = serverListener;
