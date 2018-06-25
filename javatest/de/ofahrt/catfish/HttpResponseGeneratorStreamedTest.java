@@ -132,6 +132,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void blocksIfBufferIsFull() throws Exception {
     Semaphore called = new Semaphore(0);
     AtomicInteger stage = new AtomicInteger();
+    CountDownLatch done = new CountDownLatch(1);
     CountDownLatch released = new CountDownLatch(1);
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
         called::release, HttpResponse.OK, true, 2);
@@ -140,6 +141,7 @@ public class HttpResponseGeneratorStreamedTest {
       public void run() {
         try (OutputStream out = gen.getOutputStream()) {
           out.write(new byte[] { 'x', 'y', 'z' });
+          done.countDown();
           stage.incrementAndGet();
           released.await();
         } catch (Exception e) {
@@ -153,6 +155,7 @@ public class HttpResponseGeneratorStreamedTest {
     assertEquals(0, stage.get());
     String response = new String(readUntilPause(gen), StandardCharsets.UTF_8);
     assertTrue(response.startsWith("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"));
+    done.await();
     released.countDown();
     assertEquals(1, stage.get());
     called.acquire();
