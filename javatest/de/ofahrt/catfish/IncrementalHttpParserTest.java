@@ -5,7 +5,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import org.junit.Test;
-import de.ofahrt.catfish.api.HttpResponseCode;
+import de.ofahrt.catfish.api.HttpStatusCode;
 import de.ofahrt.catfish.api.MalformedRequestException;
 
 public class IncrementalHttpParserTest {
@@ -63,7 +63,7 @@ public class IncrementalHttpParserTest {
       parser.getRequest();
       fail();
     } catch (MalformedRequestException e) {
-      assertEquals(HttpResponseCode.BAD_REQUEST.getCode(), e.getErrorResponse().getStatusCode());
+      assertEquals(HttpStatusCode.BAD_REQUEST.getCode(), e.getErrorResponse().getStatusCode());
     }
   }
 }

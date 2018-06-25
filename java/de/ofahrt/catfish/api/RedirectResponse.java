@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 public final class RedirectResponse {
   private static final String TEXT_HTML_UTF_8 = "text/html; charset=UTF-8";
 
-  static HttpResponse create(HttpResponseCode statusCode, String destinationUrl) {
+  static HttpResponse create(HttpStatusCode statusCode, String destinationUrl) {
     HttpHeaders headers = HttpHeaders.of(
         HttpHeaderName.LOCATION, destinationUrl,
         HttpHeaderName.CONTENT_TYPE, TEXT_HTML_UTF_8);

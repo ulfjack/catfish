@@ -4,24 +4,24 @@ import java.io.IOException;
 
 public interface HttpResponse {
   // 200
-  public static final HttpResponse OK = new SimpleResponse(HttpResponseCode.OK);
-  public static final HttpResponse NO_CONTENT = new SimpleResponse(HttpResponseCode.NO_CONTENT);
+  public static final HttpResponse OK = new SimpleResponse(HttpStatusCode.OK);
+  public static final HttpResponse NO_CONTENT = new SimpleResponse(HttpStatusCode.NO_CONTENT);
 
   // 300
-  public static final HttpResponse NOT_MODIFIED = new SimpleResponse(HttpResponseCode.NOT_MODIFIED); // 304
+  public static final HttpResponse NOT_MODIFIED = new SimpleResponse(HttpStatusCode.NOT_MODIFIED); // 304
 
   // 400
-  public static final HttpResponse BAD_REQUEST = new SimpleResponse(HttpResponseCode.BAD_REQUEST);
-  public static final HttpResponse NOT_FOUND = new SimpleResponse(HttpResponseCode.NOT_FOUND);
+  public static final HttpResponse BAD_REQUEST = new SimpleResponse(HttpStatusCode.BAD_REQUEST);
+  public static final HttpResponse NOT_FOUND = new SimpleResponse(HttpStatusCode.NOT_FOUND);
   // TODO: According to the spec, a list of allowed methods must be provided.
-  public static final HttpResponse METHOD_NOT_ALLOWED = new SimpleResponse(HttpResponseCode.METHOD_NOT_ALLOWED); // 405
-  public static final HttpResponse UNSUPPORTED_MEDIA_TYPE = new SimpleResponse(HttpResponseCode.UNSUPPORTED_MEDIA_TYPE); // 415
-  public static final HttpResponse EXPECTATION_FAILED = new SimpleResponse(HttpResponseCode.EXPECTATION_FAILED); // 417
+  public static final HttpResponse METHOD_NOT_ALLOWED = new SimpleResponse(HttpStatusCode.METHOD_NOT_ALLOWED); // 405
+  public static final HttpResponse UNSUPPORTED_MEDIA_TYPE = new SimpleResponse(HttpStatusCode.UNSUPPORTED_MEDIA_TYPE); // 415
+  public static final HttpResponse EXPECTATION_FAILED = new SimpleResponse(HttpStatusCode.EXPECTATION_FAILED); // 417
 
   // 500
-  public static final HttpResponse INTERNAL_SERVER_ERROR = new SimpleResponse(HttpResponseCode.INTERNAL_SERVER_ERROR); // 500
-  public static final HttpResponse NOT_IMPLEMENTED = new SimpleResponse(HttpResponseCode.NOT_IMPLEMENTED); // 501
-  public static final HttpResponse SERVICE_UNAVAILABLE = new SimpleResponse(HttpResponseCode.SERVICE_UNAVAILABLE); // 503
+  public static final HttpResponse INTERNAL_SERVER_ERROR = new SimpleResponse(HttpStatusCode.INTERNAL_SERVER_ERROR); // 500
+  public static final HttpResponse NOT_IMPLEMENTED = new SimpleResponse(HttpStatusCode.NOT_IMPLEMENTED); // 501
+  public static final HttpResponse SERVICE_UNAVAILABLE = new SimpleResponse(HttpStatusCode.SERVICE_UNAVAILABLE); // 503
 
   public static HttpResponse forInternalServerError(Throwable throwable) {
     return throwable == null
@@ -30,15 +30,15 @@ public interface HttpResponse {
   }
 
   public static HttpResponse movedPermanentlyTo(String destinationUrl) {
-    return RedirectResponse.create(HttpResponseCode.MOVED_PERMANENTLY, destinationUrl); // 301
+    return RedirectResponse.create(HttpStatusCode.MOVED_PERMANENTLY, destinationUrl); // 301
   }
 
   public static HttpResponse foundAt(String destinationUrl) {
-    return RedirectResponse.create(HttpResponseCode.FOUND, destinationUrl); // 302
+    return RedirectResponse.create(HttpStatusCode.FOUND, destinationUrl); // 302
   }
 
   public static HttpResponse temporaryRedirectTo(String destinationUrl) {
-    return RedirectResponse.create(HttpResponseCode.TEMPORARY_REDIRECT, destinationUrl); // 307
+    return RedirectResponse.create(HttpStatusCode.TEMPORARY_REDIRECT, destinationUrl); // 307
   }
 
   default HttpVersion getProtocolVersion() {
@@ -48,7 +48,7 @@ public interface HttpResponse {
   int getStatusCode();
 
   default String getStatusLine() {
-    return HttpResponseCode.getStatusText(getStatusCode());
+    return HttpStatusCode.getStatusText(getStatusCode());
   }
 
   default HttpHeaders getHeaders() {

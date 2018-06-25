@@ -2,7 +2,7 @@ package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpRequest;
-import de.ofahrt.catfish.api.HttpResponseCode;
+import de.ofahrt.catfish.api.HttpStatusCode;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.api.SimpleHttpRequest;
@@ -187,7 +187,7 @@ final class IncrementalHttpRequestParser {
             }
             String majorVersionString = elementBuffer.toString();
             if (!"0".equals(majorVersionString) && !"1".equals(majorVersionString)) {
-              return setError(HttpResponseCode.VERSION_NOT_SUPPORTED, "Http version not supported");
+              return setError(HttpStatusCode.VERSION_NOT_SUPPORTED, "Http version not supported");
             }
             majorVersion = Integer.parseInt(majorVersionString);
             counter = 0;
@@ -289,7 +289,7 @@ final class IncrementalHttpRequestParser {
             }
             if (transferEncodingValue != null) {
               // TODO: Implement chunked transfer encoding.
-              return setError(HttpResponseCode.NOT_IMPLEMENTED, "Not implemented");
+              return setError(HttpStatusCode.NOT_IMPLEMENTED, "Not implemented");
             }
             if (contentLengthValue != null) {
               long contentLength;
@@ -340,7 +340,7 @@ final class IncrementalHttpRequestParser {
   }
 
   private int setError(String error) {
-    return setError(HttpResponseCode.BAD_REQUEST, error);
+    return setError(HttpStatusCode.BAD_REQUEST, error);
   }
 
   private int setError(int errorCode, String error) {
@@ -349,7 +349,7 @@ final class IncrementalHttpRequestParser {
     return 1;
   }
 
-  private int setError(HttpResponseCode errorCode, String error) {
+  private int setError(HttpStatusCode errorCode, String error) {
     return setError(errorCode.getCode(), error);
   }
 

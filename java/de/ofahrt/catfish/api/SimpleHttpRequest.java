@@ -68,7 +68,7 @@ public final class SimpleHttpRequest implements HttpRequest {
     public HttpRequest build() throws MalformedRequestException {
       if ((errorResponse == null) && (version.compareTo(HttpVersion.HTTP_1_1) >= 0)
           && !headers.containsKey(HttpHeaderName.HOST)) {
-        setError(HttpResponseCode.BAD_REQUEST.getCode(), "Missing 'Host' field");
+        setError(HttpStatusCode.BAD_REQUEST.getCode(), "Missing 'Host' field");
       }
       if ((unparsedUri == null) && (errorResponse == null)) {
         throw new IllegalStateException("Missing URI!");
@@ -100,14 +100,14 @@ public final class SimpleHttpRequest implements HttpRequest {
       key = HttpHeaderName.canonicalize(key);
       if (headers.get(key) != null) {
         if (!HttpHeaderName.mayOccurMultipleTimes(key)) {
-          setError(HttpResponseCode.BAD_REQUEST.getCode(), "Illegal message headers: multiple occurrance for non-list field");
+          setError(HttpStatusCode.BAD_REQUEST.getCode(), "Illegal message headers: multiple occurrance for non-list field");
           return this;
         }
         value = headers.get(key) + ", " + value;
       }
       if (HttpHeaderName.HOST.equals(key)) {
         if (!HttpHeaderName.validHostPort(value)) {
-          setError(HttpResponseCode.BAD_REQUEST.getCode(), "Illegal 'Host' header");
+          setError(HttpStatusCode.BAD_REQUEST.getCode(), "Illegal 'Host' header");
           return this;
         }
       }

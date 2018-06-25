@@ -13,7 +13,7 @@ import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
-import de.ofahrt.catfish.api.HttpResponseCode;
+import de.ofahrt.catfish.api.HttpStatusCode;
 import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.SimpleHttpRequest;
@@ -72,25 +72,25 @@ public class CatfishHttpServerTest {
   @Test
   public void headRequestToExistingUrl() throws Exception {
     HttpResponse response = createResponse("HEAD /index HTTP/1.1\nHost: localhost\n\n");
-    assertEquals(HttpResponseCode.OK.getCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.OK.getCode(), response.getStatusCode());
   }
 
   @Test
   public void headRequestToNonExistentUrl() throws Exception {
     HttpResponse response = createResponse("HEAD /nowhere HTTP/1.1\nHost: localhost\n\n");
-    assertEquals(HttpResponseCode.NOT_FOUND.getCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.NOT_FOUND.getCode(), response.getStatusCode());
   }
 
   @Test
   public void nonClosingServletWorksWithCompression() throws Exception {
     HttpResponse response = createResponse("GET /index HTTP/1.1\nHost: localhost\nAccept-Encoding: gzip\n\n");
-    assertEquals(HttpResponseCode.OK.getCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.OK.getCode(), response.getStatusCode());
   }
 
   @Test
   public void emptyPost() throws Exception {
     HttpResponse response = createResponse("POST /index HTTP/1.1\nHost: localhost\n\n");
-    assertEquals(HttpResponseCode.OK.getCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.OK.getCode(), response.getStatusCode());
   }
 
   @Test
@@ -109,25 +109,25 @@ public class CatfishHttpServerTest {
         + "Content-Length: 164\n"
         + "\n"
         + content);
-    assertEquals(HttpResponseCode.OK.getCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.OK.getCode(), response.getStatusCode());
   }
 
   @Test
   public void expect() throws Exception {
     HttpResponse response = createResponse("GET / HTTP/1.1\nHost: localhost\nExpect: 100-continue\n\n");
-    assertEquals(HttpResponseCode.EXPECTATION_FAILED.getCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.EXPECTATION_FAILED.getCode(), response.getStatusCode());
   }
 
   @Test
   public void contentEncoding() throws Exception {
     HttpResponse response = createResponse("GET / HTTP/1.1\nHost: localhost\nContent-Encoding: gzip\n\n");
-    assertEquals(HttpResponseCode.UNSUPPORTED_MEDIA_TYPE.getCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.UNSUPPORTED_MEDIA_TYPE.getCode(), response.getStatusCode());
   }
 
   @Test
   public void notModifiedContainsNoBody() throws Exception {
     HttpResponse response = createResponse("GET /index HTTP/1.1\nHost: localhost\nX-Reply-With: 304\n\n");
-    assertEquals(HttpResponseCode.NOT_MODIFIED.getCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.NOT_MODIFIED.getCode(), response.getStatusCode());
     assertNull(response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
     assertNull(response.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING));
   }
@@ -135,7 +135,7 @@ public class CatfishHttpServerTest {
   @Test
   public void noContentContainsNoBody() throws Exception {
     HttpResponse response = createResponse("GET /index HTTP/1.1\nHost: localhost\nX-Reply-With: 204\n\n");
-    assertEquals(HttpResponseCode.NO_CONTENT.getCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.NO_CONTENT.getCode(), response.getStatusCode());
     assertNull(response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
     assertNull(response.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING));
   }
@@ -143,7 +143,7 @@ public class CatfishHttpServerTest {
   @Test
   public void continueContainsNoBody() throws Exception {
     HttpResponse response = createResponse("GET /index HTTP/1.1\nHost: localhost\nX-Reply-With: 100\n\n");
-    assertEquals(HttpResponseCode.CONTINUE.getCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.CONTINUE.getCode(), response.getStatusCode());
     assertNull(response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
     assertNull(response.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING));
   }
@@ -158,6 +158,6 @@ public class CatfishHttpServerTest {
         .addHeader(HttpHeaderName.TRANSFER_ENCODING, "unknown")
         .build();
     HttpResponse response = createResponse(request);
-    assertEquals(HttpResponseCode.NOT_IMPLEMENTED.getCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.NOT_IMPLEMENTED.getCode(), response.getStatusCode());
   }
 }

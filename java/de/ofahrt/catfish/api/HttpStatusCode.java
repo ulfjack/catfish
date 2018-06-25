@@ -1,6 +1,6 @@
 package de.ofahrt.catfish.api;
 
-public enum HttpResponseCode {
+public enum HttpStatusCode {
   CONTINUE               (100, "Continue"),
   SWITCHING_PROTOCOLS    (101, "Switching Protocols"),
 
@@ -49,7 +49,7 @@ public enum HttpResponseCode {
   private final int code;
   private final String text;
 
-  private HttpResponseCode(int code, String desc) {
+  private HttpStatusCode(int code, String desc) {
     this.code = code;
     this.text = code + " " + desc;
   }
@@ -66,7 +66,7 @@ public enum HttpResponseCode {
 
   private static String[] getStatusTextMap() {
     String[] result = new String[506];
-    for (HttpResponseCode r : HttpResponseCode.values()) {
+    for (HttpStatusCode r : HttpStatusCode.values()) {
       result[r.code] = r.text;
     }
     return result;

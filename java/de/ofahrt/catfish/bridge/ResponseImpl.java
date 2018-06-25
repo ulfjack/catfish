@@ -18,7 +18,7 @@ import javax.servlet.http.HttpServletResponse;
 import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpHeaders;
 import de.ofahrt.catfish.api.HttpResponse;
-import de.ofahrt.catfish.api.HttpResponseCode;
+import de.ofahrt.catfish.api.HttpStatusCode;
 import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.utils.HttpContentType;
@@ -402,7 +402,7 @@ public final class ResponseImpl implements HttpServletResponse {
     }
     setStatus(statusCode);
     if (msg == null) {
-      msg = HttpResponseCode.getStatusText(statusCode);
+      msg = HttpStatusCode.getStatusText(statusCode);
     }
     // TODO: This should be text/html according to the spec.
     setContentType(MimeType.TEXT_PLAIN.toString());

@@ -17,7 +17,7 @@ public class SimpleHttpRequestTest {
           .build();
       fail();
     } catch (MalformedRequestException e) {
-      assertEquals(HttpResponseCode.BAD_REQUEST.getCode(), e.getErrorResponse().getStatusCode());
+      assertEquals(HttpStatusCode.BAD_REQUEST.getCode(), e.getErrorResponse().getStatusCode());
     }
   }
 }

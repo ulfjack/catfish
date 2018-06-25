@@ -11,7 +11,7 @@ final class InternalServerErrorResponse {
 
   static HttpResponse create(Throwable exception) {
     return new SimpleResponse(
-        HttpResponseCode.INTERNAL_SERVER_ERROR,
+        HttpStatusCode.INTERNAL_SERVER_ERROR,
         InternalServerErrorResponse.HEADERS,
         InternalServerErrorResponse.toByteArray(exception));
   }
@@ -19,7 +19,7 @@ final class InternalServerErrorResponse {
   private static byte[] toByteArray(Throwable exception) {
     ByteArrayOutputStream out = new ByteArrayOutputStream(1000);
     try (PrintWriter writer = new PrintWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
-      writer.append(HttpResponseCode.INTERNAL_SERVER_ERROR.getStatusText());
+      writer.append(HttpStatusCode.INTERNAL_SERVER_ERROR.getStatusText());
       writer.append("\n");
       exception.printStackTrace(writer);
     }
