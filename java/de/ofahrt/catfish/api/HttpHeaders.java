@@ -49,6 +49,10 @@ public final class HttpHeaders implements Iterable<Map.Entry<String, String>> {
     return entries.get(key);
   }
 
+  public boolean containsKey(String key) {
+    return entries.containsKey(key);
+  }
+
   @Override
   public Iterator<Map.Entry<String, String>> iterator() {
     return entries.entrySet().iterator();

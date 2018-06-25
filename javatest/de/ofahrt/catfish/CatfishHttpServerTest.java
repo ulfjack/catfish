@@ -1,6 +1,7 @@
 package de.ofahrt.catfish;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
@@ -9,6 +10,7 @@ import java.nio.charset.Charset;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Test;
 import de.ofahrt.catfish.api.Connection;
+import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpResponseCode;
@@ -118,5 +120,29 @@ public class CatfishHttpServerTest {
   public void contentEncoding() throws Exception {
     HttpResponse response = createResponse("GET / HTTP/1.1\nHost: localhost\nContent-Encoding: gzip\n\n");
     assertEquals(HttpResponseCode.UNSUPPORTED_MEDIA_TYPE.getCode(), response.getStatusCode());
+  }
+
+  @Test
+  public void notModifiedContainsNoBody() throws Exception {
+    HttpResponse response = createResponse("GET /index HTTP/1.1\nHost: localhost\nX-Reply-With: 304\n\n");
+    assertEquals(HttpResponseCode.NOT_MODIFIED.getCode(), response.getStatusCode());
+    assertNull(response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
+    assertNull(response.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING));
+  }
+
+  @Test
+  public void noContentContainsNoBody() throws Exception {
+    HttpResponse response = createResponse("GET /index HTTP/1.1\nHost: localhost\nX-Reply-With: 204\n\n");
+    assertEquals(HttpResponseCode.NO_CONTENT.getCode(), response.getStatusCode());
+    assertNull(response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
+    assertNull(response.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING));
+  }
+
+  @Test
+  public void continueContainsNoBody() throws Exception {
+    HttpResponse response = createResponse("GET /index HTTP/1.1\nHost: localhost\nX-Reply-With: 100\n\n");
+    assertEquals(HttpResponseCode.CONTINUE.getCode(), response.getStatusCode());
+    assertNull(response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
+    assertNull(response.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING));
   }
 }

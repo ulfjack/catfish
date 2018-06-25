@@ -3,6 +3,8 @@ package de.ofahrt.catfish;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
@@ -42,18 +44,24 @@ final class HttpStage implements Stage {
       if (body == null) {
         throw new IllegalArgumentException();
       }
+      boolean noBodyAllowed =
+          ((responseToWrite.getStatusCode() / 100) == 1)
+          || (responseToWrite.getStatusCode() == 204)
+          || (responseToWrite.getStatusCode() == 304);
       boolean keepAlive = HttpConnectionHeader.mayKeepAlive(request); // && server.isKeepAliveAllowed();
+      Map<String, String> overrides = new HashMap<>();
       if (!keepAlive) {
-        responseToWrite = responseToWrite
-            .withHeaderOverrides(
-                HttpHeaders.of(
-                    HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length),
-                    HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE));
-      } else {
-        responseToWrite = responseToWrite
-            .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length)));
+        overrides.put(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE);
       }
-      boolean includeBody = !HttpMethodName.HEAD.equals(request.getMethod());
+      if (!noBodyAllowed) {
+        overrides.put(HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length));
+      } else {
+        // TODO: Tombstone CONTENT_LENGTH in some way?
+      }
+      if (!overrides.isEmpty()) {
+        responseToWrite = responseToWrite.withHeaderOverrides(HttpHeaders.of(overrides));
+      }
+      boolean includeBody = !HttpMethodName.HEAD.equals(request.getMethod()) && !noBodyAllowed;
       HttpResponse actualResponse = responseToWrite;
       // We want to create the ResponseGenerator on the current thread.
       HttpResponseGeneratorBuffered gen = HttpResponseGeneratorBuffered.create(actualResponse, includeBody);
