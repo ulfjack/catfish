@@ -8,6 +8,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -131,17 +132,16 @@ public class HttpResponseGeneratorStreamedTest {
   public void blocksIfBufferIsFull() throws Exception {
     Semaphore called = new Semaphore(0);
     AtomicInteger stage = new AtomicInteger();
+    CountDownLatch released = new CountDownLatch(1);
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
         called::release, HttpResponse.OK, true, 2);
     Thread t = new Thread(new Runnable() {
       @Override
       public void run() {
-        try {
-          @SuppressWarnings("resource")
-          OutputStream out = gen.getOutputStream();
+        try (OutputStream out = gen.getOutputStream()) {
           out.write(new byte[] { 'x', 'y', 'z' });
           stage.incrementAndGet();
-          out.flush();
+          released.await();
         } catch (Exception e) {
           e.printStackTrace();
           fail();
@@ -151,10 +151,12 @@ public class HttpResponseGeneratorStreamedTest {
     t.start();
     called.acquire();
     assertEquals(0, stage.get());
-    String response = new String(readUntil(gen, null), StandardCharsets.UTF_8);
+    String response = new String(readUntilPause(gen), StandardCharsets.UTF_8);
     assertTrue(response.startsWith("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"));
-    called.acquire();
+    released.countDown();
     assertEquals(1, stage.get());
+    called.acquire();
+    response = new String(readUntilStop(gen), StandardCharsets.UTF_8);
   }
 
   @Test
@@ -197,5 +199,40 @@ public class HttpResponseGeneratorStreamedTest {
     t.start();
     String response = new String(readUntilStop(gen, 100, called), StandardCharsets.UTF_8);
     assertEquals("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n10\r\n0123456789abcdef\r\n1\r\ng\r\n0\r\n\r\n", response);
+  }
+
+  @Test
+  public void chunkedTooSmallForNonZeroSizedChunk() throws Exception {
+    Semaphore called = new Semaphore(0);
+    Semaphore released = new Semaphore(0);
+    HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
+        called::release, HttpResponse.OK, true, 4);
+    Thread t = new Thread(new Runnable() {
+      @Override
+      public void run() {
+        try (OutputStream out = gen.getOutputStream()) {
+          out.flush();
+          released.acquire();
+          out.write(new byte[] { '0' });
+        } catch (Exception e) {
+          e.printStackTrace();
+          fail();
+        }
+      }
+    });
+    t.start();
+    called.acquire();
+    String response = new String(readUntilPause(gen), StandardCharsets.UTF_8);
+    assertEquals("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n", response);
+    released.release();
+    called.acquire();
+    ByteBuffer buffer = ByteBuffer.allocate(6);
+    buffer.clear();
+    buffer.position(1);
+    // The buffer is too small for another non-0-sized chunk, so there should be none.
+    gen.generate(buffer);
+    buffer.flip();
+    response = new String(buffer.array(), 1, buffer.limit() - 1);
+    assertEquals("", response);
   }
 }

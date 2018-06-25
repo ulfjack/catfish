@@ -177,7 +177,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
       int hexDigits = (32 - Integer.numberOfLeadingZeros(bytesAvailable) + 3) / 4;
       int overhead = hexDigits + 4;
       bytesToCopy = Math.min(bytesAvailable, outputBuffer.remaining() - overhead);
-      if (bytesToCopy < 0) {
+      if (bytesToCopy <= 0) {
         return 0;
       }
       byte[] chunkHeader = new byte[6];
