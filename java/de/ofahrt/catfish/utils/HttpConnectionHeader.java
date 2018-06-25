@@ -10,7 +10,7 @@ public final class HttpConnectionHeader {
   public static final String KEEP_ALIVE = "keep-alive";
 
   public static boolean isKeepAlive(HttpHeaders headers) {
-    return "keep-alive".equals(headers.get(HttpHeaderName.CONNECTION));
+    return !CLOSE.equals(headers.get(HttpHeaderName.CONNECTION));
   }
 
   public static boolean mayKeepAlive(HttpRequest request) {
@@ -20,10 +20,6 @@ public final class HttpConnectionHeader {
     } else {
       return false;
     }
-  }
-
-  public static String keepAliveToValue(boolean keepAlive) {
-    return keepAlive ? KEEP_ALIVE : CLOSE;
   }
 
   private HttpConnectionHeader() {
