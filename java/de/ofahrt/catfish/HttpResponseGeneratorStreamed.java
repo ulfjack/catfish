@@ -11,9 +11,16 @@ import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
 final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
-  public static HttpResponseGeneratorStreamed create(Runnable dataAvailableCallback, HttpResponse response,
-      boolean includeBody) {
-    return new HttpResponseGeneratorStreamed(dataAvailableCallback, response, includeBody);
+  private static final int DEFAULT_BUFFER_SIZE = 2048;
+
+  public static HttpResponseGeneratorStreamed create(
+      Runnable dataAvailableCallback, HttpResponse response, boolean includeBody) {
+    return new HttpResponseGeneratorStreamed(dataAvailableCallback, response, includeBody, DEFAULT_BUFFER_SIZE);
+  }
+
+  public static HttpResponseGeneratorStreamed create(
+      Runnable dataAvailableCallback, HttpResponse response, boolean includeBody, int bufferSize) {
+    return new HttpResponseGeneratorStreamed(dataAvailableCallback, response, includeBody, bufferSize);
   }
 
   private enum WriteState {
@@ -42,15 +49,17 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private int currentBlock;
   private int currentIndex;
 
-  private byte[] buffer = new byte[2048];
+  private byte[] buffer;
   private int readPosition;
   private int writePosition;
   private boolean isFull;
 
-  public HttpResponseGeneratorStreamed(Runnable dataAvailableCallback, HttpResponse response, boolean includeBody) {
+  private HttpResponseGeneratorStreamed(
+      Runnable dataAvailableCallback, HttpResponse response, boolean includeBody, int bufferSize) {
     this.response = response;
     this.includeBody = includeBody;
     this.dataAvailableCallback = dataAvailableCallback;
+    this.buffer = new byte[bufferSize];
   }
 
   @Override
