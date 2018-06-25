@@ -3,17 +3,17 @@ package de.ofahrt.catfish;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpHeaders;
 import de.ofahrt.catfish.api.HttpResponse;
-import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
 final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private static final boolean DEBUG = false;
 
   private static final int DEFAULT_BUFFER_SIZE = 2048;
+  private static final byte[] HEX_DIGITS = "0123456789abcdef".getBytes(StandardCharsets.UTF_8);
 
   public static HttpResponseGeneratorStreamed create(
       Runnable dataAvailableCallback, HttpResponse response, boolean includeBody) {
@@ -41,6 +41,8 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private WriteState writeState = WriteState.UNCOMMITTED;
   private ReadState readState = ReadState.UNCOMMITTED;
   private boolean requireCallback = true;
+  private boolean useChunking;
+
   private HttpResponse response;
   private final boolean includeBody;
 
@@ -75,7 +77,8 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
       System.out.println("generate(" + outputBuffer.remaining() + ")");
     }
     if (readState == ReadState.UNCOMMITTED) {
-      throw new IllegalStateException();
+      requireCallback = true;
+      return ContinuationToken.PAUSE;
     }
     if (readState == ReadState.CLOSED) {
       return ContinuationToken.STOP;
@@ -145,14 +148,53 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   }
 
   private int generateBody(ByteBuffer outputBuffer) {
-    int bytesAvailable = (writePosition >= readPosition) && !isFull
-        ? writePosition - readPosition
-        : buffer.length - readPosition;
+    boolean wrapAround;
+    int bytesAvailable;
+    if ((writePosition >= readPosition) && !isFull) {
+      bytesAvailable = writePosition - readPosition;
+      wrapAround = false;
+    } else {
+      bytesAvailable = buffer.length - readPosition + writePosition;
+      wrapAround = true;
+    }
     if (bytesAvailable == 0) {
       return writeState == WriteState.CLOSED ? -1 : 0;
     }
-    int bytesToCopy = Math.min(bytesAvailable, outputBuffer.remaining());
-    outputBuffer.put(buffer, readPosition, bytesToCopy);
+    int bytesToCopy;
+    if (useChunking) {
+      if (outputBuffer.capacity() < 6) {
+        throw new IllegalArgumentException();
+      }
+      int hexDigits = (32 - Integer.numberOfLeadingZeros(bytesAvailable) + 3) / 4;
+      int overhead = hexDigits + 4;
+      bytesToCopy = Math.min(bytesAvailable, outputBuffer.remaining() - overhead);
+      if (bytesToCopy < 0) {
+        return 0;
+      }
+      byte[] chunkHeader = new byte[6];
+      int bytesToCopyRemainder = bytesToCopy;
+      for (int i = hexDigits - 1; i >= 0; i--) {
+        int c = bytesToCopyRemainder % 16;
+        bytesToCopyRemainder /= 16;
+        chunkHeader[i] = HEX_DIGITS[c];
+      }
+      chunkHeader[hexDigits] = '\r';
+      chunkHeader[hexDigits + 1] = '\n';
+      outputBuffer.put(chunkHeader, 0, hexDigits + 2);
+    } else {
+      bytesToCopy = Math.min(bytesAvailable, outputBuffer.remaining());
+    }
+    if (wrapAround) {
+      int firstCopy = Math.min(buffer.length - readPosition, bytesToCopy);
+      outputBuffer.put(buffer, readPosition, firstCopy);
+      int secondCopy = Math.min(writePosition, bytesToCopy - firstCopy);
+      outputBuffer.put(buffer, 0, secondCopy);
+    } else {
+      outputBuffer.put(buffer, readPosition, bytesToCopy);
+    }
+    if (useChunking) {
+      outputBuffer.put(CRLF_BYTES);
+    }
     readPosition = (readPosition + bytesToCopy) % buffer.length;
     isFull = false;
     if (DEBUG) {
@@ -236,9 +278,9 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
       response = response.withHeaderOverrides(
           HttpHeaders.of(HttpHeaderName.CONTENT_LENGTH, Integer.toString(contentLength)));
     } else {
-      // TODO: Use chunking.
       response = response.withHeaderOverrides(
-          HttpHeaders.of(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE));
+          HttpHeaders.of(HttpHeaderName.TRANSFER_ENCODING, "chunked"));
+      useChunking = true;
     }
     HttpHeaders headers = response.getHeaders();
     data = new byte[][] {

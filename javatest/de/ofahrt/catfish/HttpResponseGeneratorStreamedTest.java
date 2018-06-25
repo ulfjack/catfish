@@ -20,7 +20,7 @@ public class HttpResponseGeneratorStreamedTest {
 
   private byte[] readUntil(HttpResponseGeneratorStreamed generator, ContinuationToken expected) {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
-    ByteBuffer buffer = ByteBuffer.allocate(3);
+    ByteBuffer buffer = ByteBuffer.allocate(7);
     buffer.clear();
     ContinuationToken token;
     do {
@@ -44,6 +44,23 @@ public class HttpResponseGeneratorStreamedTest {
 
   private byte[] readUntilPause(HttpResponseGeneratorStreamed generator) {
     return readUntil(generator, ContinuationToken.PAUSE);
+  }
+
+  private byte[] readUntilStop(HttpResponseGeneratorStreamed generator, int bufferSize, Semaphore semaphore) throws InterruptedException {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+    buffer.clear();
+    ContinuationToken token;
+    do {
+      buffer.clear();
+      token = generator.generate(buffer);
+      buffer.flip();
+      out.write(buffer.array(), buffer.position(), buffer.remaining());
+      if (token == ContinuationToken.PAUSE) {
+        semaphore.acquire();
+      }
+    } while (token != ContinuationToken.STOP);
+    return out.toByteArray();
   }
 
   @Test
@@ -87,7 +104,7 @@ public class HttpResponseGeneratorStreamedTest {
     assertEquals(1, called.get());
     String response = new String(readUntilPause(gen), StandardCharsets.UTF_8);
     assertEquals(1, called.get());
-    assertEquals("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nxy", response);
+    assertEquals("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nxy\r\n", response);
   }
 
   @Test
@@ -102,12 +119,12 @@ public class HttpResponseGeneratorStreamedTest {
     assertEquals(1, called.get());
     String response = new String(readUntilPause(gen), StandardCharsets.UTF_8);
     assertEquals(1, called.get());
-    assertEquals("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nxy", response);
+    assertEquals("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nxy\r\n", response);
     out.write(new byte[] { 'z', 'w' });
     out.close();
     response = new String(readUntilStop(gen), StandardCharsets.UTF_8);
     assertEquals(2, called.get());
-    assertEquals("zw", response);
+    assertEquals("2\r\nzw\r\n", response);
   }
 
   @Test
@@ -135,43 +152,50 @@ public class HttpResponseGeneratorStreamedTest {
     called.acquire();
     assertEquals(0, stage.get());
     String response = new String(readUntil(gen, null), StandardCharsets.UTF_8);
-    assertTrue(response.startsWith("HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nxy"));
+    assertTrue(response.startsWith("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"));
     called.acquire();
     assertEquals(1, stage.get());
   }
 
-//  @Test
-//  public void writeALot() throws Exception {
-//    Semaphore called = new Semaphore(0);
-//    AsyncBuffer gen = new AsyncBuffer(5, called::release);
-//    Thread t = new Thread(new Runnable() {
-//      @Override
-//      public void run() {
-//        try {
-//          OutputStream out = gen.getOutputStream();
-//          for (int i = 0; i < 100; i++) {
-//            out.write(new byte[] { 'x', 'y', 'z' });
-//          }
-//          out.close();
-//        } catch (Exception e) {
-//          e.printStackTrace();
-//          fail();
-//        }
-//      }
-//    });
-//    t.start();
-//    int totalBytes = 0;
-//    byte[] buffer = new byte[2];
-//    while (totalBytes < 300) {
-//      called.acquire();
-//      int read;
-//      do {
-//        read = gen.readAsync(buffer, 0, buffer.length);
-//        totalBytes += read;
-//      } while (read != 0);
-//    }
-//    called.acquire();
-//    int read = gen.readAsync(buffer, 0, buffer.length);
-//    assertEquals(-1, read);
-//  }
+  @Test
+  public void chunked() throws Exception {
+    Semaphore called = new Semaphore(0);
+    HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
+        called::release, HttpResponse.OK, true, 2);
+    Thread t = new Thread(new Runnable() {
+      @Override
+      public void run() {
+        try (OutputStream out = gen.getOutputStream()) {
+          out.write(new byte[] { 'x', 'y', 'z' });
+        } catch (Exception e) {
+          e.printStackTrace();
+          fail();
+        }
+      }
+    });
+    t.start();
+    String response = new String(readUntilStop(gen, 10, called), StandardCharsets.UTF_8);
+    assertEquals("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nxy\r\n1\r\nz\r\n", response);
+  }
+
+  @Test
+  public void chunkedExactly16Bytes() throws Exception {
+    Semaphore called = new Semaphore(0);
+    HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
+        called::release, HttpResponse.OK, true, 16);
+    Thread t = new Thread(new Runnable() {
+      @Override
+      public void run() {
+        try (OutputStream out = gen.getOutputStream()) {
+          out.write(new byte[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g' });
+        } catch (Exception e) {
+          e.printStackTrace();
+          fail();
+        }
+      }
+    });
+    t.start();
+    String response = new String(readUntilStop(gen, 100, called), StandardCharsets.UTF_8);
+    assertEquals("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n10\r\n0123456789abcdef\r\n1\r\ng\r\n", response);
+  }
 }
