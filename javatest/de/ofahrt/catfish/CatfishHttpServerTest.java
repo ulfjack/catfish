@@ -16,6 +16,7 @@ import org.junit.Test;
 import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.api.HttpResponseCode;
 import de.ofahrt.catfish.api.HttpResponseWriter;
 
 public class CatfishHttpServerTest {
@@ -110,5 +111,11 @@ public class CatfishHttpServerTest {
   			+ "\n"
   			+ content);
   	assertEquals(HttpServletResponse.SC_OK, response.getStatusCode());
+  }
+
+  @Test
+  public void expect() throws Exception {
+    HttpResponse response = createResponse("GET / HTTP/1.1\nHost: localhost\nExpect: 100-continue\n\n");
+    assertEquals(HttpResponseCode.EXPECTATION_FAILED.getCode(), response.getStatusCode());
   }
 }
