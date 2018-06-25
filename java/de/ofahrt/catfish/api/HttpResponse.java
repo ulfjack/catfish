@@ -14,8 +14,9 @@ public interface HttpResponse {
   public static final HttpResponse BAD_REQUEST = new SimpleResponse(HttpResponseCode.BAD_REQUEST);
   public static final HttpResponse NOT_FOUND = new SimpleResponse(HttpResponseCode.NOT_FOUND);
   // TODO: According to the spec, a list of allowed methods must be provided.
-  public static final HttpResponse METHOD_NOT_ALLOWED = new SimpleResponse(HttpResponseCode.METHOD_NOT_ALLOWED);
-  public static final HttpResponse EXPECTATION_FAILED = new SimpleResponse(HttpResponseCode.EXPECTATION_FAILED);
+  public static final HttpResponse METHOD_NOT_ALLOWED = new SimpleResponse(HttpResponseCode.METHOD_NOT_ALLOWED); // 405
+  public static final HttpResponse UNSUPPORTED_MEDIA_TYPE = new SimpleResponse(HttpResponseCode.UNSUPPORTED_MEDIA_TYPE); // 415
+  public static final HttpResponse EXPECTATION_FAILED = new SimpleResponse(HttpResponseCode.EXPECTATION_FAILED); // 417
 
   // 500
   public static final HttpResponse INTERNAL_SERVER_ERROR = new SimpleResponse(HttpResponseCode.INTERNAL_SERVER_ERROR);

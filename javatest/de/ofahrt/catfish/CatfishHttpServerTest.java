@@ -118,4 +118,10 @@ public class CatfishHttpServerTest {
     HttpResponse response = createResponse("GET / HTTP/1.1\nHost: localhost\nExpect: 100-continue\n\n");
     assertEquals(HttpResponseCode.EXPECTATION_FAILED.getCode(), response.getStatusCode());
   }
+
+  @Test
+  public void contentEncoding() throws Exception {
+    HttpResponse response = createResponse("GET / HTTP/1.1\nHost: localhost\nContent-Encoding: gzip\n\n");
+    assertEquals(HttpResponseCode.UNSUPPORTED_MEDIA_TYPE.getCode(), response.getStatusCode());
+  }
 }

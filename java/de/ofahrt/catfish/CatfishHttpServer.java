@@ -167,6 +167,8 @@ public final class CatfishHttpServer {
   void createResponse(Connection connection, HttpRequest request, HttpResponseWriter writer) {
     if (request.getHeaders().get(HttpHeaderName.EXPECT) != null) {
       writer.commitBuffered(HttpResponse.EXPECTATION_FAILED);
+    } else if (request.getHeaders().get(HttpHeaderName.CONTENT_ENCODING) != null) {
+      writer.commitBuffered(HttpResponse.UNSUPPORTED_MEDIA_TYPE);
     } else if ("*".equals(request.getUri())) {
       writer.commitBuffered(HttpResponse.BAD_REQUEST);
     } else {
