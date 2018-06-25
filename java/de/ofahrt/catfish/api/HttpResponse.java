@@ -19,8 +19,9 @@ public interface HttpResponse {
   public static final HttpResponse EXPECTATION_FAILED = new SimpleResponse(HttpResponseCode.EXPECTATION_FAILED); // 417
 
   // 500
-  public static final HttpResponse INTERNAL_SERVER_ERROR = new SimpleResponse(HttpResponseCode.INTERNAL_SERVER_ERROR);
-  public static final HttpResponse SERVICE_UNAVAILABLE = new SimpleResponse(HttpResponseCode.SERVICE_UNAVAILABLE);
+  public static final HttpResponse INTERNAL_SERVER_ERROR = new SimpleResponse(HttpResponseCode.INTERNAL_SERVER_ERROR); // 500
+  public static final HttpResponse NOT_IMPLEMENTED = new SimpleResponse(HttpResponseCode.NOT_IMPLEMENTED); // 501
+  public static final HttpResponse SERVICE_UNAVAILABLE = new SimpleResponse(HttpResponseCode.SERVICE_UNAVAILABLE); // 503
 
   public static HttpResponse forInternalServerError(Throwable throwable) {
     return throwable == null

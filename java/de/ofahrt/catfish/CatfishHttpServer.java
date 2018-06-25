@@ -169,6 +169,9 @@ public final class CatfishHttpServer {
       writer.commitBuffered(HttpResponse.EXPECTATION_FAILED);
     } else if (request.getHeaders().get(HttpHeaderName.CONTENT_ENCODING) != null) {
       writer.commitBuffered(HttpResponse.UNSUPPORTED_MEDIA_TYPE);
+    } else if (request.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING) != null) {
+      // TODO: Implement Transfer-Encoding support.
+      writer.commitBuffered(HttpResponse.NOT_IMPLEMENTED);
     } else if ("*".equals(request.getUri())) {
       writer.commitBuffered(HttpResponse.BAD_REQUEST);
     } else {

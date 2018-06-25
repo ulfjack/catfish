@@ -145,4 +145,11 @@ public class CatfishHttpServerTest {
     assertNull(response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
     assertNull(response.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING));
   }
+
+  @Test
+  public void unknownTransferEncoding() throws Exception {
+    // TODO: Can GET requests contain a body?
+    HttpResponse response = createResponse("GET /index HTTP/1.1\nHost: localhost\nTransfer-Encoding: unknown\n\n");
+    assertEquals(HttpResponseCode.NOT_IMPLEMENTED.getCode(), response.getStatusCode());
+  }
 }
