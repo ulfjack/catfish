@@ -2,17 +2,12 @@ package de.ofahrt.catfish;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import java.util.concurrent.atomic.AtomicReference;
-
-import javax.servlet.http.HttpServletResponse;
-
 import org.junit.Test;
-
 import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
@@ -22,12 +17,12 @@ import de.ofahrt.catfish.api.HttpResponseWriter;
 public class CatfishHttpServerTest {
 
   private static HttpRequest parse(String text) throws Exception {
-  	byte[] data = text.getBytes("ISO-8859-1");
-  	IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
-  	int consumed = parser.parse(data);
-  	assertEquals(data.length, consumed);
-  	assertTrue("parser not done at end of input", parser.isDone());
-  	return parser.getRequest();
+    byte[] data = text.getBytes("ISO-8859-1");
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    int consumed = parser.parse(data);
+    assertEquals(data.length, consumed);
+    assertTrue("parser not done at end of input", parser.isDone());
+    return parser.getRequest();
   }
 
   private static HttpResponse createResponse(HttpRequest request) throws Exception {
@@ -67,31 +62,31 @@ public class CatfishHttpServerTest {
   }
 
   private static HttpResponse createResponse(String text) throws Exception {
-  	return createResponse(parse(text));
+    return createResponse(parse(text));
   }
 
   @Test
   public void headRequestToExistingUrl() throws Exception {
     HttpResponse response = createResponse("HEAD /index HTTP/1.1\nHost: localhost\n\n");
-  	assertEquals(HttpServletResponse.SC_OK, response.getStatusCode());
+    assertEquals(HttpResponseCode.OK.getCode(), response.getStatusCode());
   }
 
   @Test
   public void headRequestToNonExistentUrl() throws Exception {
     HttpResponse response = createResponse("HEAD /nowhere HTTP/1.1\nHost: localhost\n\n");
-  	assertEquals(HttpServletResponse.SC_NOT_FOUND, response.getStatusCode());
+    assertEquals(HttpResponseCode.NOT_FOUND.getCode(), response.getStatusCode());
   }
 
   @Test
   public void nonClosingServletWorksWithCompression() throws Exception {
     HttpResponse response = createResponse("GET /index HTTP/1.1\nHost: localhost\nAccept-Encoding: gzip\n\n");
-  	assertEquals(HttpServletResponse.SC_OK, response.getStatusCode());
+    assertEquals(HttpResponseCode.OK.getCode(), response.getStatusCode());
   }
 
   @Test
   public void emptyPost() throws Exception {
     HttpResponse response = createResponse("POST /index HTTP/1.1\nHost: localhost\n\n");
-  	assertEquals(HttpServletResponse.SC_OK, response.getStatusCode());
+    assertEquals(HttpResponseCode.OK.getCode(), response.getStatusCode());
   }
 
   @Test
@@ -105,12 +100,12 @@ public class CatfishHttpServerTest {
         + "";
     assertEquals(164, content.getBytes(Charset.forName("ISO-8859-1")).length);
     HttpResponse response = createResponse(
-  			"POST /index HTTP/1.1\nHost: localhost\n"
-  			+ "Content-Type: multipart/form-data; boundary=---------------------------13751323931886145875850488035\n"
-  			+ "Content-Length: 164\n"
-  			+ "\n"
-  			+ content);
-  	assertEquals(HttpServletResponse.SC_OK, response.getStatusCode());
+        "POST /index HTTP/1.1\nHost: localhost\n"
+        + "Content-Type: multipart/form-data; boundary=---------------------------13751323931886145875850488035\n"
+        + "Content-Length: 164\n"
+        + "\n"
+        + content);
+    assertEquals(HttpResponseCode.OK.getCode(), response.getStatusCode());
   }
 
   @Test
