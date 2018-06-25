@@ -124,7 +124,7 @@ public class HttpResponseGeneratorStreamedTest {
     out.close();
     response = new String(readUntilStop(gen), StandardCharsets.UTF_8);
     assertEquals(2, called.get());
-    assertEquals("2\r\nzw\r\n", response);
+    assertEquals("2\r\nzw\r\n0\r\n\r\n", response);
   }
 
   @Test
@@ -175,7 +175,7 @@ public class HttpResponseGeneratorStreamedTest {
     });
     t.start();
     String response = new String(readUntilStop(gen, 10, called), StandardCharsets.UTF_8);
-    assertEquals("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nxy\r\n1\r\nz\r\n", response);
+    assertEquals("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nxy\r\n1\r\nz\r\n0\r\n\r\n", response);
   }
 
   @Test
@@ -196,6 +196,6 @@ public class HttpResponseGeneratorStreamedTest {
     });
     t.start();
     String response = new String(readUntilStop(gen, 100, called), StandardCharsets.UTF_8);
-    assertEquals("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n10\r\n0123456789abcdef\r\n1\r\ng\r\n", response);
+    assertEquals("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n10\r\n0123456789abcdef\r\n1\r\ng\r\n0\r\n\r\n", response);
   }
 }

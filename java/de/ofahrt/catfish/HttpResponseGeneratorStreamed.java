@@ -14,6 +14,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
 
   private static final int DEFAULT_BUFFER_SIZE = 2048;
   private static final byte[] HEX_DIGITS = "0123456789abcdef".getBytes(StandardCharsets.UTF_8);
+  private static final byte[] LAST_CHUNK = "0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
   public static HttpResponseGeneratorStreamed create(
       Runnable dataAvailableCallback, HttpResponse response, boolean includeBody) {
@@ -158,6 +159,14 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
       wrapAround = true;
     }
     if (bytesAvailable == 0) {
+      if (useChunking && writeState == WriteState.CLOSED) {
+        if (outputBuffer.remaining() >= LAST_CHUNK.length) {
+          outputBuffer.put(LAST_CHUNK);
+          useChunking = false;
+        } else {
+          return 0;
+        }
+      }
       return writeState == WriteState.CLOSED ? -1 : 0;
     }
     int bytesToCopy;

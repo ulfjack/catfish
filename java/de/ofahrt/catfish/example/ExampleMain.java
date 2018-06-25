@@ -63,10 +63,12 @@ public class ExampleMain {
     HttpVirtualHost.Builder dir = new HttpVirtualHost.Builder()
        .exact("/hello.php", new FcgiServlet())
        .exact("/post", new CheckPost())
-       .exact("/", new CheckCompression());
+       .exact("/", new CheckCompression())
+       .exact("/large", new LargeResponseServlet(16536));
 
     server.addHttpHost("localhost", dir.build());
     server.setKeepAliveAllowed(true);
+    server.setCompressionAllowed(false);
     server.listenHttp(8080);
     if (sslContext != null) {
       // TODO: This doesn't work for wildcard certificates.

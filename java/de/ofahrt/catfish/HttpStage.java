@@ -44,8 +44,10 @@ final class HttpStage implements Stage {
       }
       boolean keepAlive = HttpConnectionHeader.mayKeepAlive(request); // && server.isKeepAliveAllowed();
       responseToWrite = responseToWrite
-          .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length),
-              HttpHeaderName.CONNECTION, HttpConnectionHeader.keepAliveToValue(keepAlive)));
+          .withHeaderOverrides(
+              HttpHeaders.of(
+                  HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length),
+                  HttpHeaderName.CONNECTION, HttpConnectionHeader.keepAliveToValue(keepAlive)));
       boolean includeBody = !HttpMethodName.HEAD.equals(request.getMethod());
       HttpResponse actualResponse = responseToWrite;
       // We want to create the ResponseGenerator on the current thread.
@@ -58,6 +60,11 @@ final class HttpStage implements Stage {
       if (!committed.compareAndSet(false, true)) {
         throw new IllegalStateException();
       }
+      boolean keepAlive = HttpConnectionHeader.mayKeepAlive(request); // && server.isKeepAliveAllowed();
+      responseToWrite = responseToWrite
+          .withHeaderOverrides(
+              HttpHeaders.of(
+                  HttpHeaderName.CONNECTION, HttpConnectionHeader.keepAliveToValue(keepAlive)));
       boolean includeBody = !HttpMethodName.HEAD.equals(request.getMethod());
       HttpResponseGeneratorStreamed gen =
           HttpResponseGeneratorStreamed.create(() -> parent.queue(parent::encourageWrites), responseToWrite, includeBody);
