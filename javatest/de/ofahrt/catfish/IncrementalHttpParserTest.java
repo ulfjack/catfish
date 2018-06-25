@@ -5,7 +5,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import org.junit.Test;
-
+import de.ofahrt.catfish.api.HttpResponseCode;
 import de.ofahrt.catfish.api.MalformedRequestException;
 
 public class IncrementalHttpParserTest {
@@ -51,5 +51,19 @@ public class IncrementalHttpParserTest {
     byte[] data = "GET / HTTP/1.1\r\nContent-Length: 4\r\n\r\n0123TRAILING_DATA".getBytes();
     assertEquals(data.length - 13, parser.parse(data));
     assertTrue(parser.isDone());
+  }
+
+  @Test
+  public void disallowBothContentLengthAndTransferEncoding() {
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    byte[] data = "GET / HTTP/1.1\r\nContent-Length: 4\r\nTransfer-Encoding: unknown\r\n\r\nfoobar".getBytes();
+    parser.parse(data);
+    assertTrue(parser.isDone());
+    try {
+      parser.getRequest();
+      fail();
+    } catch (MalformedRequestException e) {
+      assertEquals(HttpResponseCode.BAD_REQUEST.getCode(), e.getErrorResponse().getStatusCode());
+    }
   }
 }

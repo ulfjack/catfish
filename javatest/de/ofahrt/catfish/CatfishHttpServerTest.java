@@ -15,6 +15,8 @@ import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpResponseCode;
 import de.ofahrt.catfish.api.HttpResponseWriter;
+import de.ofahrt.catfish.api.HttpVersion;
+import de.ofahrt.catfish.api.SimpleHttpRequest;
 
 public class CatfishHttpServerTest {
 
@@ -149,7 +151,13 @@ public class CatfishHttpServerTest {
   @Test
   public void unknownTransferEncoding() throws Exception {
     // TODO: Can GET requests contain a body?
-    HttpResponse response = createResponse("GET /index HTTP/1.1\nHost: localhost\nTransfer-Encoding: unknown\n\n");
+    HttpRequest request = new SimpleHttpRequest.Builder()
+        .setVersion(HttpVersion.HTTP_1_1)
+        .setUri("/index")
+        .addHeader(HttpHeaderName.HOST, "localhost")
+        .addHeader(HttpHeaderName.TRANSFER_ENCODING, "unknown")
+        .build();
+    HttpResponse response = createResponse(request);
     assertEquals(HttpResponseCode.NOT_IMPLEMENTED.getCode(), response.getStatusCode());
   }
 }

@@ -1,9 +1,8 @@
 package de.ofahrt.catfish;
 
-import javax.servlet.http.HttpServletResponse;
-
 import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpRequest;
+import de.ofahrt.catfish.api.HttpResponseCode;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.api.SimpleHttpRequest;
@@ -188,7 +187,7 @@ final class IncrementalHttpRequestParser {
             }
             String majorVersionString = elementBuffer.toString();
             if (!"0".equals(majorVersionString) && !"1".equals(majorVersionString)) {
-              return setError(HttpServletResponse.SC_HTTP_VERSION_NOT_SUPPORTED, "Http version not supported");
+              return setError(HttpResponseCode.VERSION_NOT_SUPPORTED, "Http version not supported");
             }
             majorVersion = Integer.parseInt(majorVersionString);
             counter = 0;
@@ -283,7 +282,15 @@ final class IncrementalHttpRequestParser {
           messageHeaderValue = null;
 
           if (c == '\n') {
+            String transferEncodingValue = builder.getHeader(HttpHeaderName.TRANSFER_ENCODING);
             String contentLengthValue = builder.getHeader(HttpHeaderName.CONTENT_LENGTH);
+            if (transferEncodingValue != null && contentLengthValue != null) {
+              return setError("Must not set both Content-Length and Transfer-Encoding");
+            }
+            if (transferEncodingValue != null) {
+              // TODO: Implement chunked transfer encoding.
+              return setError(HttpResponseCode.NOT_IMPLEMENTED, "Not implemented");
+            }
             if (contentLengthValue != null) {
               long contentLength;
               try {
@@ -333,13 +340,17 @@ final class IncrementalHttpRequestParser {
   }
 
   private int setError(String error) {
-    return setError(HttpServletResponse.SC_BAD_REQUEST, error);
+    return setError(HttpResponseCode.BAD_REQUEST, error);
   }
 
   private int setError(int errorCode, String error) {
     builder.setError(errorCode, error);
     done = true;
     return 1;
+  }
+
+  private int setError(HttpResponseCode errorCode, String error) {
+    return setError(errorCode.getCode(), error);
   }
 
   public boolean isDone() {
