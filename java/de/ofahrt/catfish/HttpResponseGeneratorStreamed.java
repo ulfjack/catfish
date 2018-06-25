@@ -11,6 +11,8 @@ import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
 final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
+  private static final boolean DEBUG = false;
+
   private static final int DEFAULT_BUFFER_SIZE = 2048;
 
   public static HttpResponseGeneratorStreamed create(
@@ -69,6 +71,9 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
 
   @Override
   public synchronized ContinuationToken generate(ByteBuffer outputBuffer) {
+    if (DEBUG) {
+      System.out.println("generate(" + outputBuffer.remaining() + ")");
+    }
     if (readState == ReadState.UNCOMMITTED) {
       throw new IllegalStateException();
     }
@@ -140,7 +145,8 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   }
 
   private int generateBody(ByteBuffer outputBuffer) {
-    int bytesAvailable = (writePosition >= readPosition) && !isFull ? writePosition - readPosition
+    int bytesAvailable = (writePosition >= readPosition) && !isFull
+        ? writePosition - readPosition
         : buffer.length - readPosition;
     if (bytesAvailable == 0) {
       return writeState == WriteState.CLOSED ? -1 : 0;
@@ -149,7 +155,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     outputBuffer.put(buffer, readPosition, bytesToCopy);
     readPosition = (readPosition + bytesToCopy) % buffer.length;
     isFull = false;
-    if (HttpStage.VERBOSE) {
+    if (DEBUG) {
       System.out.println("READ " + bytesToCopy + " -> " + readPosition + " " + writePosition);
     }
     if (bytesToCopy == 0 && writeState == WriteState.CLOSED) {
@@ -185,9 +191,9 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
       len -= bytesToCopy;
       writePosition = (writePosition + bytesToCopy) % buffer.length;
       isFull = writePosition == readPosition;
-      if (HttpStage.VERBOSE) {
-        System.out
-            .println("WROTE " + bytesToCopy + " -> " + readPosition + " " + writePosition + (isFull ? " FULL" : ""));
+      if (DEBUG) {
+        System.out.println(
+            "WROTE " + bytesToCopy + " -> " + readPosition + " " + writePosition + (isFull ? " FULL" : ""));
       }
       if (isFull) {
         flush(false);
@@ -200,6 +206,9 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   }
 
   private synchronized void flush(boolean close) {
+    if (DEBUG) {
+      System.out.println("flush(close=" + close + ") state=" + writeState + " callback=" + requireCallback);
+    }
     switch (writeState) {
       case UNCOMMITTED:
         finalizeResponse(close);

@@ -141,6 +141,10 @@ final class NioEngine {
       if (ssl) {
         ByteBuffer decryptedInputBuffer = ByteBuffer.allocate(4096);
         ByteBuffer decryptedOutputBuffer = ByteBuffer.allocate(4096);
+        decryptedInputBuffer.clear();
+        decryptedInputBuffer.flip(); // prepare for reading
+        decryptedOutputBuffer.clear();
+        decryptedOutputBuffer.flip(); // prepare for reading
         HttpStage httpStage = new HttpStage(this, server::queueRequest, decryptedInputBuffer, decryptedOutputBuffer);
         this.first = new SslStage(
             this,
@@ -165,8 +169,7 @@ final class NioEngine {
         return;
       }
       key.interestOps(
-          (reading ? SelectionKey.OP_READ : 0)
-          | (writing ? SelectionKey.OP_WRITE : 0));
+          (reading ? SelectionKey.OP_READ : 0) | (writing ? SelectionKey.OP_WRITE : 0));
     }
 
     @Override
@@ -183,6 +186,7 @@ final class NioEngine {
       if (writing) {
         return;
       }
+//      log("Writing");
       writing = true;
       updateSelector();
     }
@@ -201,6 +205,7 @@ final class NioEngine {
       if (reading) {
         return;
       }
+//      log("Reading");
       reading = true;
       updateSelector();
     }

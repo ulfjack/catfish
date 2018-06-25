@@ -19,7 +19,7 @@ import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
 final class HttpStage implements Stage {
-  static final boolean VERBOSE = false;
+  private static final boolean VERBOSE = false;
 
   public interface RequestQueue {
     void queueRequest(Connection connection, HttpRequest request, HttpResponseWriter responseWriter);
@@ -42,8 +42,7 @@ final class HttpStage implements Stage {
       if (body == null) {
         throw new IllegalArgumentException();
       }
-      boolean keepAlive = HttpConnectionHeader.mayKeepAlive(request); // &&
-                                                                      // server.isKeepAliveAllowed();
+      boolean keepAlive = HttpConnectionHeader.mayKeepAlive(request); // && server.isKeepAliveAllowed();
       responseToWrite = responseToWrite
           .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length),
               HttpHeaderName.CONNECTION, HttpConnectionHeader.keepAliveToValue(keepAlive)));
@@ -61,7 +60,7 @@ final class HttpStage implements Stage {
       }
       boolean includeBody = !HttpMethodName.HEAD.equals(request.getMethod());
       HttpResponseGeneratorStreamed gen =
-          HttpResponseGeneratorStreamed.create(parent::encourageWrites, responseToWrite, includeBody);
+          HttpResponseGeneratorStreamed.create(() -> parent.queue(parent::encourageWrites), responseToWrite, includeBody);
       parent.queue(() -> startStreamed(gen));
       return gen.getOutputStream();
     }
@@ -74,7 +73,10 @@ final class HttpStage implements Stage {
   private final IncrementalHttpRequestParser parser;
   private HttpResponseGenerator responseGenerator;
 
-  public HttpStage(Pipeline parent, HttpStage.RequestQueue requestHandler, ByteBuffer inputBuffer,
+  public HttpStage(
+      Pipeline parent,
+      HttpStage.RequestQueue requestHandler,
+      ByteBuffer inputBuffer,
       ByteBuffer outputBuffer) {
     this.parent = parent;
     this.requestHandler = requestHandler;
@@ -99,6 +101,9 @@ final class HttpStage implements Stage {
 
   @Override
   public void write() throws IOException {
+    if (VERBOSE) {
+      parent.log("write");
+    }
     if (responseGenerator != null) {
       outputBuffer.compact(); // prepare buffer for writing
       ContinuationToken token = responseGenerator.generate(outputBuffer);
