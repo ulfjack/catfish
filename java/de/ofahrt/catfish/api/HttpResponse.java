@@ -13,6 +13,7 @@ public interface HttpResponse {
   // 400
   public static final HttpResponse BAD_REQUEST = new SimpleResponse(HttpResponseCode.BAD_REQUEST);
   public static final HttpResponse NOT_FOUND = new SimpleResponse(HttpResponseCode.NOT_FOUND);
+  // TODO: According to the spec, a list of allowed methods must be provided.
   public static final HttpResponse METHOD_NOT_ALLOWED = new SimpleResponse(HttpResponseCode.METHOD_NOT_ALLOWED);
   public static final HttpResponse EXPECTATION_FAILED = new SimpleResponse(HttpResponseCode.EXPECTATION_FAILED);
 
