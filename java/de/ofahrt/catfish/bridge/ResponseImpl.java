@@ -262,6 +262,11 @@ public final class ResponseImpl implements HttpServletResponse {
       public void flush() throws IOException {
         forwardOut.flush();
       }
+
+      @Override
+      public void close() throws IOException {
+        forwardOut.close();
+      }
     };
   }
 

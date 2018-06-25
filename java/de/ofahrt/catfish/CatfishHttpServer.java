@@ -5,8 +5,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -50,10 +50,11 @@ public final class CatfishHttpServer {
   private final SessionManager sessionManager = new SessionManager();
 
   private final ThreadPoolExecutor executor =
-      new ThreadPoolExecutor(8, 8, 1L, TimeUnit.SECONDS, new LinkedBlockingQueue<>());
+      new ThreadPoolExecutor(8, 8, 1L, TimeUnit.SECONDS, new ArrayBlockingQueue<>(100));
 
   public CatfishHttpServer(HttpServerListener serverListener) throws IOException {
     this.serverListener = serverListener;
+    // TODO: This implements tail drop.
     executor.setRejectedExecutionHandler(new RejectedExecutionHandler() {
       @Override
       public void rejectedExecution(Runnable task, ThreadPoolExecutor actualExecutor) {
@@ -148,6 +149,21 @@ public final class CatfishHttpServer {
     return domain == null ? defaultDomain.getSSLContext() : domain.getSSLContext();
   }
 
+  void queueRequest(Connection connection, HttpRequest request, HttpResponseWriter responseWriter) {
+    executor.execute(new RequestCallback() {
+      @Override
+      public void run() {
+        createResponse(connection, request, responseWriter);
+      }
+
+      @Override
+      public void reject() {
+        HttpResponse responseToWrite = HttpResponse.SERVICE_UNAVAILABLE;
+        responseWriter.commitBuffered(responseToWrite);
+      }
+    });
+  }
+
   void createResponse(Connection connection, HttpRequest request, HttpResponseWriter writer) {
     if (request.getHeaders().get(HttpHeaderName.EXPECT) != null) {
       writer.commitBuffered(HttpResponse.EXPECTATION_FAILED);
@@ -197,10 +213,6 @@ public final class CatfishHttpServer {
     }
     InternalVirtualHost virtualHost = findVirtualHost(host);
     return virtualHost.determineDispatcher(request.getPath());
-  }
-
-  void queueRequest(Runnable runnable) {
-    executor.execute(runnable);
   }
 
   private InternalVirtualHost findVirtualHost(String hostName) {
