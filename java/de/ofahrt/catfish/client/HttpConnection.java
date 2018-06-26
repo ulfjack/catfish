@@ -19,15 +19,6 @@ import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 
 public final class HttpConnection implements Closeable {
-
-  public static class ConnectionClosedException extends IOException {
-    private static final long serialVersionUID = 1L;
-
-    public ConnectionClosedException(String msg) {
-      super(msg);
-    }
-  }
-
   public static HttpConnection connect(String server, int port) throws IOException {
     return connect(server, port, null);
   }
@@ -65,15 +56,16 @@ public final class HttpConnection implements Closeable {
     this.socket = socket;
   }
 
+  public HttpResponse send(HttpRequest request) throws IOException {
+    write(requestToBytes(request));
+    return readResponse();
+  }
+
   public void write(byte[] content) throws IOException {
     @SuppressWarnings("resource")
     OutputStream out = socket.getOutputStream();
     out.write(content);
     out.flush();
-  }
-
-  public void write(HttpRequest request) throws IOException {
-    write(requestToBytes(request));
   }
 
   private static byte[] requestToBytes(HttpRequest request) {

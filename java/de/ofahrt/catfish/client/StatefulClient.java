@@ -3,16 +3,19 @@ package de.ofahrt.catfish.client;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import javax.net.ssl.SSLContext;
 import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpMethodName;
+import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.SimpleHttpRequest;
+import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
 public final class StatefulClient {
-
   private static final boolean DEBUG = false;
   private static final Pattern COOKIE_PATTERN = Pattern.compile("(.*);");
 
@@ -20,30 +23,17 @@ public final class StatefulClient {
   private final int port;
   private final SSLContext sslContext;
 
-  private String hostOverride;
   private String cookie;
 
   public StatefulClient(String hostname, int port) {
     this.hostname = hostname;
     this.port = port;
     this.sslContext = null;
-    this.hostOverride = hostname;
   }
 
-  public StatefulClient setHostOverride(String hostOverride) {
-    this.hostOverride = hostOverride;
-    return this;
-  }
-
-  private byte[] toBytes(String data) throws UnsupportedEncodingException {
-    return data.replace("\n", "\r\n").getBytes("ISO-8859-1");
-  }
-
-  private HttpResponse send(byte[] request, byte[] content) throws IOException {
+  private HttpResponse send(HttpRequest request) throws IOException {
     HttpConnection connection = HttpConnection.connect(hostname, port, sslContext);
-    connection.write(request);
-    connection.write(content);
-    HttpResponse response = connection.readResponse();
+    HttpResponse response = connection.send(request);
     String setCookie = response.getHeaders().get(HttpHeaderName.SET_COOKIE);
     if (setCookie != null) {
       Matcher m = COOKIE_PATTERN.matcher(setCookie);
@@ -59,31 +49,31 @@ public final class StatefulClient {
   }
 
   public HttpResponse get(String url) throws IOException {
-    StringBuilder request = new StringBuilder();
-    request.append("GET " + url + " HTTP/1.1\n");
-    request.append("Host: " + hostOverride + "\n");
+    SimpleHttpRequest.Builder requestBuilder = new SimpleHttpRequest.Builder();
+    requestBuilder.setMethod(HttpMethodName.GET);
+    requestBuilder.setUri(url);
+    requestBuilder.addHeader(HttpHeaderName.HOST, hostname);
     if (cookie != null) {
-      request.append("Cookie: " + cookie + "\n");
+      requestBuilder.addHeader(HttpHeaderName.COOKIE, cookie);
     }
-    request.append("Connection: close\n");
-    request.append("\n");
-    return send(toBytes(request.toString()), new byte[0]);
+    requestBuilder.addHeader(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE);
+    return send(requestBuilder.build());
   }
 
   public HttpResponse post(String url, Map<String, String> postData) throws IOException {
-    byte[] content = urlEncode(postData).getBytes("UTF-8");
-
-    StringBuilder request = new StringBuilder();
-    request.append("POST " + url + " HTTP/1.1\n");
-    request.append("Host: " + hostOverride + "\n");
+    SimpleHttpRequest.Builder requestBuilder = new SimpleHttpRequest.Builder();
+    requestBuilder.setMethod(HttpMethodName.POST);
+    requestBuilder.setUri(url);
+    requestBuilder.addHeader(HttpHeaderName.HOST, hostname);
     if (cookie != null) {
-      request.append("Cookie: " + cookie + "\n");
+      requestBuilder.addHeader(HttpHeaderName.COOKIE, cookie);
     }
-    request.append("Connection: close\n");
-    request.append("Content-Type: application/x-www-form-urlencoded\n");
-    request.append("Content-Length: " + content.length + "\n");
-    request.append("\n");
-    return send(toBytes(request.toString()), content);
+    requestBuilder.addHeader(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE);
+    requestBuilder.addHeader(HttpHeaderName.CONTENT_TYPE, "application/x-www-form-urlencoded");
+    byte[] body = urlEncode(postData).getBytes(StandardCharsets.UTF_8);
+    requestBuilder.addHeader(HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length));
+    requestBuilder.setBody(body);
+    return send(requestBuilder.build());
   }
 
   private String urlEncode(Map<String, String> data) throws UnsupportedEncodingException {

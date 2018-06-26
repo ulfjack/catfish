@@ -51,8 +51,7 @@ public final class Spider {
     HttpConnection connection = HttpConnection.connect(host, port);
     HttpRequest request = StandardRequests.get(new URL("http://" + host + ":" + port + page))
         .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONNECTION, "close"));
-    connection.write(request);
-    HttpResponse response = connection.readResponse();
+    HttpResponse response = connection.send(request);
 //    System.out.println(response.getStatusCode());
 //    System.out.println(response.getContentAsString());
     connection.close();
