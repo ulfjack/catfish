@@ -3,6 +3,7 @@ package de.ofahrt.catfish;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -10,9 +11,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.Test;
+
 import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
-import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.api.StandardResponses;
 
 public class HttpResponseGeneratorStreamedTest {
 
@@ -65,7 +68,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void smoke() throws Exception {
     AtomicInteger called = new AtomicInteger();
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::incrementAndGet, HttpResponse.OK, true);
+        called::incrementAndGet, StandardResponses.OK, true);
     OutputStream out = gen.getOutputStream();
     out.write(new byte[] { 'x', 'y' });
     out.close();
@@ -79,7 +82,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void noBody() throws Exception {
     AtomicInteger called = new AtomicInteger();
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::incrementAndGet, HttpResponse.OK, /*includeBody=*/false);
+        called::incrementAndGet, StandardResponses.OK, /*includeBody=*/false);
     OutputStream out = gen.getOutputStream();
     out.write(new byte[] { 'x', 'y' });
     out.close();
@@ -93,7 +96,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void callbackOnFlush() throws Exception {
     AtomicInteger called = new AtomicInteger();
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::incrementAndGet, HttpResponse.OK, true);
+        called::incrementAndGet, StandardResponses.OK, true);
 
     @SuppressWarnings("resource")
     OutputStream out = gen.getOutputStream();
@@ -109,7 +112,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void secondCallbackOnSecondFlush() throws Exception {
     AtomicInteger called = new AtomicInteger();
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::incrementAndGet, HttpResponse.OK, true);
+        called::incrementAndGet, StandardResponses.OK, true);
 
     OutputStream out = gen.getOutputStream();
     out.write(new byte[] { 'x', 'y' });
@@ -130,7 +133,7 @@ public class HttpResponseGeneratorStreamedTest {
     Semaphore called = new Semaphore(0);
     Phaser done = new Phaser(2);
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::release, HttpResponse.OK, true, 2);
+        called::release, StandardResponses.OK, true, 2);
     Thread t = new Thread(new Runnable() {
       @Override
       public void run() {
@@ -156,7 +159,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void chunked() throws Exception {
     Semaphore called = new Semaphore(0);
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::release, HttpResponse.OK, true, 2);
+        called::release, StandardResponses.OK, true, 2);
     Thread t = new Thread(new Runnable() {
       @Override
       public void run() {
@@ -177,7 +180,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void chunkedExactly16Bytes() throws Exception {
     Semaphore called = new Semaphore(0);
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::release, HttpResponse.OK, true, 16);
+        called::release, StandardResponses.OK, true, 16);
     Thread t = new Thread(new Runnable() {
       @Override
       public void run() {
@@ -199,7 +202,7 @@ public class HttpResponseGeneratorStreamedTest {
     Semaphore called = new Semaphore(0);
     Semaphore released = new Semaphore(0);
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::release, HttpResponse.OK, true, 4);
+        called::release, StandardResponses.OK, true, 4);
     Thread t = new Thread(new Runnable() {
       @Override
       public void run() {

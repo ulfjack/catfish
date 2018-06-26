@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import de.ofahrt.catfish.api.Connection;
 
 final class NioEngine {
-  private static final boolean DEBUG = true;
+  private static final boolean DEBUG = false;
   private static final boolean LOG_TO_FILE = false;
 
   private interface EventHandler {

@@ -11,6 +11,7 @@ import org.junit.Test;
 import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpVersion;
+import de.ofahrt.catfish.api.StandardResponses;
 
 public class HttpResponseGeneratorBufferedTest {
 
@@ -37,21 +38,21 @@ public class HttpResponseGeneratorBufferedTest {
 
   @Test
   public void simple() throws Exception {
-    HttpResponse response = HttpResponse.OK.withVersion(HttpVersion.HTTP_0_9).withBody(new byte[0]);
+    HttpResponse response = StandardResponses.OK.withVersion(HttpVersion.HTTP_0_9).withBody(new byte[0]);
     HttpResponseGeneratorBuffered generator = HttpResponseGeneratorBuffered.create(response, true);
     assertEquals("HTTP/0.9 200 OK\r\n\r\n", toString(generator));
   }
 
   @Test
   public void simpleWithBody() throws Exception {
-    HttpResponse response = HttpResponse.OK.withVersion(HttpVersion.HTTP_1_0).withBody(new byte[] { 'x', 'y' });
+    HttpResponse response = StandardResponses.OK.withVersion(HttpVersion.HTTP_1_0).withBody(new byte[] { 'x', 'y' });
     HttpResponseGeneratorBuffered generator = HttpResponseGeneratorBuffered.create(response, true);
     assertEquals("HTTP/1.0 200 OK\r\n\r\nxy", toString(generator));
   }
 
   @Test
   public void simpleWithBodyButSkipBody() throws Exception {
-    HttpResponse response = HttpResponse.OK.withVersion(HttpVersion.HTTP_1_1).withBody(new byte[] { 'x', 'y' });
+    HttpResponse response = StandardResponses.OK.withVersion(HttpVersion.HTTP_1_1).withBody(new byte[] { 'x', 'y' });
     HttpResponseGeneratorBuffered generator = HttpResponseGeneratorBuffered.create(response, false);
     assertEquals("HTTP/1.1 200 OK\r\n\r\n", toString(generator));
   }

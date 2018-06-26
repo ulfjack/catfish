@@ -110,14 +110,14 @@ final class IncrementalHttpRequestParser {
       if (expectLineFeed) {
         expectLineFeed = false;
         if (c != '\n') {
-          return setError("Expected <lf> following <cr>");
+          return setBadRequest("Expected <lf> following <cr>");
         }
       }
       switch (state) {
         case REQUEST_METHOD :
           if (c == ' ') {
             if (elementBuffer.length() == 0) {
-              return setError("Expected request method, but <space> found");
+              return setBadRequest("Expected request method, but <space> found");
             }
             builder.setMethod(elementBuffer.toString());
             counter = 0;
@@ -126,7 +126,7 @@ final class IncrementalHttpRequestParser {
           } else if (isTokenCharacter(c)) {
             elementBuffer.append(c);
           } else {
-            return setError("Illegal character in request method");
+            return setBadRequest("Illegal character in request method");
           }
           break;
         case REQUEST_URI : // "*" | absoluteURI | abs_path | authority
@@ -138,7 +138,7 @@ final class IncrementalHttpRequestParser {
             state = State.REQUEST_VERSION_HTTP;
           } else if ((c == '\r') || (c == '\n')) {
             // TODO: This probably shouldn't allow any control characters.
-            return setError("Unexpected end of line in request uri");
+            return setBadRequest("Unexpected end of line in request uri");
           } else if (c == '|') {
             elementBuffer.append(CoreHelper.encode('|'));
           } else if (c == '^') {
@@ -152,15 +152,15 @@ final class IncrementalHttpRequestParser {
         // HTTP-Version   = "HTTP" "/" 1*DIGIT "." 1*DIGIT
         case REQUEST_VERSION_HTTP :
           if ((counter == 0) && (c != 'H')) {
-            return setError("Expected 'H' of request version string");
+            return setBadRequest("Expected 'H' of request version string");
           } else if ((counter == 1) && (c != 'T')) {
-            return setError("Expected 'T' of request version string");
+            return setBadRequest("Expected 'T' of request version string");
           } else if ((counter == 2) && (c != 'T')) {
-            return setError("Expected 'T' of request version string");
+            return setBadRequest("Expected 'T' of request version string");
           } else if ((counter == 3) && (c != 'P')) {
-            return setError("Expected 'P' of request version string");
+            return setBadRequest("Expected 'P' of request version string");
           } else if ((counter == 4) && (c != '/')) {
-            return setError("Expected '/' of request version string");
+            return setBadRequest("Expected '/' of request version string");
           }
           if (counter < 4) {
             counter++;
@@ -180,10 +180,10 @@ final class IncrementalHttpRequestParser {
           }
           else if (c == '.') {
             if (elementBuffer.length() == 0) {
-              return setError("Http major version number expected");
+              return setBadRequest("Http major version number expected");
             }
             if (elementBuffer.length() > 7) {
-              return setError("Http major version is too long");
+              return setBadRequest("Http major version is too long");
             }
             String majorVersionString = elementBuffer.toString();
             if (!"0".equals(majorVersionString) && !"1".equals(majorVersionString)) {
@@ -194,7 +194,7 @@ final class IncrementalHttpRequestParser {
             elementBuffer.setLength(0);
             state = State.REQUEST_VERSION_MINOR;
           } else {
-            return setError("Expected '.' of request version string");
+            return setBadRequest("Expected '.' of request version string");
           }
           break;
         case REQUEST_VERSION_MINOR :
@@ -208,10 +208,10 @@ final class IncrementalHttpRequestParser {
             expectLineFeed = true;
           } else if (c == '\n') {
             if (elementBuffer.length() == 0) {
-              return setError("Http minor version number expected");
+              return setBadRequest("Http minor version number expected");
             }
             if (elementBuffer.length() > 7) {
-              return setError("Http minor version is too long");
+              return setBadRequest("Http minor version is too long");
             }
             int minorVersion = Integer.parseInt(elementBuffer.toString());
             builder.setVersion(HttpVersion.of(majorVersion, minorVersion));
@@ -219,13 +219,13 @@ final class IncrementalHttpRequestParser {
             elementBuffer.setLength(0);
             state = State.MESSAGE_HEADER_NAME;
           } else {
-            return setError("Expected end of request version string");
+            return setBadRequest("Expected end of request version string");
           }
           break;
         case MESSAGE_HEADER_NAME :
           if (c == ':') {
             if (elementBuffer.length() == 0) {
-              return setError("Expected header field name, but ':' found");
+              return setBadRequest("Expected header field name, but ':' found");
             }
             messageHeaderName = elementBuffer.toString();
             counter = 0;
@@ -235,14 +235,14 @@ final class IncrementalHttpRequestParser {
             expectLineFeed = true;
           } else if (c == '\n') {
             if (elementBuffer.length() != 0) {
-              return setError("Unexpected end of line in header field name");
+              return setBadRequest("Unexpected end of line in header field name");
             }
             done = true;
             return i + 1;
           } else if (isTokenCharacter(c)) {
             elementBuffer.append(c);
           } else {
-            return setError("Illegal character in header field name");
+            return setBadRequest("Illegal character in header field name");
           }
           break;
         case MESSAGE_HEADER_VALUE :
@@ -285,7 +285,7 @@ final class IncrementalHttpRequestParser {
             String transferEncodingValue = builder.getHeader(HttpHeaderName.TRANSFER_ENCODING);
             String contentLengthValue = builder.getHeader(HttpHeaderName.CONTENT_LENGTH);
             if (transferEncodingValue != null && contentLengthValue != null) {
-              return setError("Must not set both Content-Length and Transfer-Encoding");
+              return setBadRequest("Must not set both Content-Length and Transfer-Encoding");
             }
             if (transferEncodingValue != null) {
               // TODO: Implement chunked transfer encoding.
@@ -296,10 +296,10 @@ final class IncrementalHttpRequestParser {
               try {
                 contentLength = Long.parseLong(contentLengthValue);
               } catch (NumberFormatException e) {
-                return setError("Illegal content length value");
+                return setBadRequest("Illegal content length value");
               }
               if (contentLength > maxContentLength) {
-                return setError("Content length larger than allowed");
+                return setBadRequest("Content length larger than allowed");
               }
               if (contentLength == 0) {
                 done = true;
@@ -318,7 +318,7 @@ final class IncrementalHttpRequestParser {
             state = State.MESSAGE_HEADER_NAME;
             elementBuffer.append(c);
           } else {
-            return setError("Illegal character in header field name");
+            return setBadRequest("Illegal character in header field name");
           }
           break;
         case CONTENT :
@@ -339,18 +339,14 @@ final class IncrementalHttpRequestParser {
     return length;
   }
 
-  private int setError(String error) {
-    return setError(HttpStatusCode.BAD_REQUEST, error);
+  private int setBadRequest(String statusMessage) {
+    return setError(HttpStatusCode.BAD_REQUEST, statusMessage);
   }
 
-  private int setError(int errorCode, String error) {
-    builder.setError(errorCode, error);
+  private int setError(HttpStatusCode statusCode, String statusMessage) {
+    builder.setError(statusCode, statusMessage);
     done = true;
     return 1;
-  }
-
-  private int setError(HttpStatusCode errorCode, String error) {
-    return setError(errorCode.getCode(), error);
   }
 
   public boolean isDone() {

@@ -20,6 +20,7 @@ import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpStatusCode;
 import de.ofahrt.catfish.api.MalformedRequestException;
+import de.ofahrt.catfish.api.StandardResponses;
 import de.ofahrt.catfish.bridge.RequestImpl;
 import de.ofahrt.catfish.bridge.ResponseImpl;
 import de.ofahrt.catfish.bridge.ResponsePolicy;
@@ -155,7 +156,7 @@ public final class CatfishHttpServer {
 
       @Override
       public void reject() {
-        HttpResponse responseToWrite = HttpResponse.SERVICE_UNAVAILABLE;
+        HttpResponse responseToWrite = StandardResponses.SERVICE_UNAVAILABLE;
         responseWriter.commitBuffered(responseToWrite);
       }
     });
@@ -163,11 +164,11 @@ public final class CatfishHttpServer {
 
   void createResponse(Connection connection, HttpRequest request, HttpResponseWriter writer) {
     if (request.getHeaders().get(HttpHeaderName.EXPECT) != null) {
-      writer.commitBuffered(HttpResponse.EXPECTATION_FAILED);
+      writer.commitBuffered(StandardResponses.EXPECTATION_FAILED);
     } else if (request.getHeaders().get(HttpHeaderName.CONTENT_ENCODING) != null) {
-      writer.commitBuffered(HttpResponse.UNSUPPORTED_MEDIA_TYPE);
+      writer.commitBuffered(StandardResponses.UNSUPPORTED_MEDIA_TYPE);
     } else if ("*".equals(request.getUri())) {
-      writer.commitBuffered(HttpResponse.BAD_REQUEST);
+      writer.commitBuffered(StandardResponses.BAD_REQUEST);
     } else {
       evaluateServletRequest(connection, request, writer);
     }

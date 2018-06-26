@@ -31,10 +31,10 @@ import javax.servlet.http.HttpSession;
 import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpRequest;
-import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.MalformedRequestException;
+import de.ofahrt.catfish.api.StandardResponses;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import de.ofahrt.catfish.utils.HttpDate;
 
@@ -82,7 +82,7 @@ public final class RequestImpl implements HttpServletRequest {
     try {
       this.uri = new URI(unparsedUri);
     } catch (URISyntaxException e) {
-      throw new MalformedRequestException(HttpResponse.BAD_REQUEST);
+      throw new MalformedRequestException(StandardResponses.BAD_REQUEST);
     }
     this.body = request.getBody();
 
