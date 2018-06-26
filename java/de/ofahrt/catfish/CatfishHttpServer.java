@@ -8,8 +8,10 @@ import java.util.ArrayList;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionHandler;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.net.ssl.SSLContext;
 import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpHeaderName;
@@ -48,7 +50,16 @@ public final class CatfishHttpServer {
   private final SessionManager sessionManager = new SessionManager();
 
   private final ThreadPoolExecutor executor =
-      new ThreadPoolExecutor(8, 8, 1L, TimeUnit.SECONDS, new ArrayBlockingQueue<>(100));
+      new ThreadPoolExecutor(
+          8, 8, 1L, TimeUnit.SECONDS, new ArrayBlockingQueue<>(100),
+          new ThreadFactory() {
+            private final AtomicInteger threadNumber = new AtomicInteger(0);
+
+            @Override
+            public Thread newThread(Runnable r) {
+              return new Thread(r, "catfish-worker-" + threadNumber.getAndIncrement());
+            }
+          });
 
   public CatfishHttpServer(HttpServerListener serverListener) throws IOException {
     this.serverListener = serverListener;
