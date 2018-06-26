@@ -1,7 +1,5 @@
 package de.ofahrt.catfish.api;
 
-import java.io.IOException;
-
 public interface HttpResponse {
   default HttpVersion getProtocolVersion() {
     return HttpVersion.HTTP_1_1;
@@ -17,9 +15,6 @@ public interface HttpResponse {
     return HttpHeaders.NONE;
   }
 
-  /**
-   * @throws IOException if something goes wrong 
-   */
   default byte[] getBody() {
     return null;
   }
