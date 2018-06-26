@@ -312,7 +312,9 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
 //  }
 
   private synchronized void close() {
-    checkActive();
+    if (writeState == WriteState.CLOSED) {
+      return;
+    }
     flush(true);
   }
 
