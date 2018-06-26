@@ -10,7 +10,6 @@ import org.junit.runner.RunWith;
 
 import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.bridge.RequestImpl;
-import de.ofahrt.catfish.model.server.ResponsePolicy;
 import info.adams.junit.NamedParameterized;
 import info.adams.junit.NamedParameterized.Parameters;
 
@@ -80,7 +79,6 @@ public class IncrementalHttpParserIncrementalTest extends HttpParserTest {
   	        new InetSocketAddress("127.0.0.1", 1234),
   	        false),
   	    null,
-  	    ResponsePolicy.ALLOW_NOTHING,
   	    null);
   }
 }

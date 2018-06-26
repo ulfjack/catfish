@@ -8,11 +8,13 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSession;
 import javax.servlet.Servlet;
 import javax.servlet.ServletException;
+
 import de.ofahrt.catfish.InputStreams;
 import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpHeaderName;
@@ -109,7 +111,7 @@ public abstract class CatfishHttpClient {
     public HttpResponse send(String schemaHostPort, HttpRequest request) throws IOException {
       BufferedHttpResponseWriter writer = new BufferedHttpResponseWriter();
       RequestImpl servletRequest = new RequestImpl(
-          request, new Connection(null, null, false), null, ResponsePolicy.ALLOW_NOTHING, writer);
+          request, new Connection(null, null, false), null, writer);
       ResponseImpl servletResponse = servletRequest.getResponse();
       try {
         servlet.service(servletRequest, servletResponse);

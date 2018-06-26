@@ -20,9 +20,6 @@ import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.api.SimpleHttpRequest;
-import de.ofahrt.catfish.bridge.RequestImpl;
-import de.ofahrt.catfish.bridge.ServletHelper;
-import de.ofahrt.catfish.model.server.ResponsePolicy;
 
 /**
  * Tests for {@link RequestImpl}.
@@ -33,7 +30,6 @@ public class RequestImplTest {
         builder.build(),
         new Connection(null, null, false),
         null,
-        ResponsePolicy.ALLOW_NOTHING,
         null);
   }
 
@@ -148,7 +144,6 @@ public class RequestImplTest {
             .build(),
         new Connection(new InetSocketAddress(80), null, false),
         null,
-        ResponsePolicy.ALLOW_NOTHING,
         null);
     ServletHelper.getCompleteUrl(request);
   }
@@ -192,7 +187,6 @@ public class RequestImplTest {
             .addHeader("Host", "host:80").build(),
         new Connection(null, null, true),
         null,
-        ResponsePolicy.ALLOW_NOTHING,
         null);
     assertEquals("https://host:80/", request.getRequestURL().toString());
   }
@@ -206,7 +200,6 @@ public class RequestImplTest {
             .build(),
         new Connection(null, null, true),
         null,
-        ResponsePolicy.ALLOW_NOTHING,
         null);
     assertEquals("https://host/", request.getRequestURL().toString());
   }

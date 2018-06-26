@@ -49,7 +49,7 @@ public final class ResponseImpl implements HttpServletResponse {
   ResponseImpl(HttpRequest request, HttpResponseWriter responseWriter) {
     this.request = request;
     this.responseWriter = responseWriter;
-    this.policy = responseWriter.getResponsePolicy();
+    this.policy = responseWriter == null ? null : responseWriter.getResponsePolicy();
   }
 
   void setVersion(HttpVersion version) {
