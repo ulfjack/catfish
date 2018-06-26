@@ -21,7 +21,7 @@ public final class Spider {
   private final int port = 80;
   private final String entryPoint = "/";
 
-  private final Set<String> visitedPages = new ConcurrentSkipListSet<String>();
+  private final Set<String> visitedPages = new ConcurrentSkipListSet<>();
 
   private final ThreadPoolExecutor executor =
       new ThreadPoolExecutor(1, 1, 1L, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
