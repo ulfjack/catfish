@@ -10,15 +10,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-
 import javax.net.ssl.SSLContext;
-import javax.servlet.http.HttpServletResponse;
-
 import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpResponseWriter;
+import de.ofahrt.catfish.api.HttpStatusCode;
 import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.bridge.RequestImpl;
 import de.ofahrt.catfish.bridge.ResponseImpl;
@@ -36,9 +34,9 @@ public final class CatfishHttpServer {
 
   private final HttpServerListener serverListener;
 
-  private volatile InternalVirtualHost defaultDomain;
+  private volatile HttpVirtualHost defaultDomain;
 
-  private final ConcurrentHashMap<String, InternalVirtualHost> hosts = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, HttpVirtualHost> hosts = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, String> aliases = new ConcurrentHashMap<>();
 
   private volatile boolean mayCompress = true;
@@ -68,18 +66,6 @@ public final class CatfishHttpServer {
 
   HttpServerListener getServerListener() {
     return serverListener;
-  }
-
-  public void addHead(String name, Directory dir) {
-    addHead(name, dir, null);
-  }
-
-  public void addHead(String name, Directory dir, SSLContext sslContext) {
-    InternalVirtualHost domain = new DirectoryVirtualHost(dir, sslContext);
-    if (defaultDomain == null) {
-      defaultDomain = domain;
-    }
-    hosts.put(name, domain);
   }
 
   public void addHttpHost(String name, HttpVirtualHost virtualHost) {
@@ -145,7 +131,7 @@ public final class CatfishHttpServer {
   }
 
   SSLContext getSSLContext(String host) {
-    InternalVirtualHost domain = findVirtualHost(host);
+    HttpVirtualHost domain = findVirtualHost(host);
     return domain == null ? defaultDomain.getSSLContext() : domain.getSSLContext();
   }
 
@@ -194,10 +180,10 @@ public final class CatfishHttpServer {
     try {
       dispatcher.dispatch(servletRequest, response);
     } catch (FileNotFoundException e) {
-      response.sendError(HttpServletResponse.SC_NOT_FOUND);
+      response.sendError(HttpStatusCode.NOT_FOUND.getCode());
     } catch (Exception e) {
       e.printStackTrace();
-      response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+      response.sendError(HttpStatusCode.INTERNAL_SERVER_ERROR.getCode());
     }
     try {
       response.close();
@@ -213,18 +199,18 @@ public final class CatfishHttpServer {
         host = host.substring(0, host.indexOf(':'));
       }
     }
-    InternalVirtualHost virtualHost = findVirtualHost(host);
+    HttpVirtualHost virtualHost = findVirtualHost(host);
     return virtualHost.determineDispatcher(request.getPath());
   }
 
-  private InternalVirtualHost findVirtualHost(String hostName) {
+  private HttpVirtualHost findVirtualHost(String hostName) {
     if (hostName == null) {
       return defaultDomain;
     }
     if (aliases.containsKey(hostName)) {
       hostName = aliases.get(hostName);
     }
-    InternalVirtualHost virtualHost = hosts.get(hostName);
+    HttpVirtualHost virtualHost = hosts.get(hostName);
     return virtualHost == null ? defaultDomain : virtualHost;
   }
 

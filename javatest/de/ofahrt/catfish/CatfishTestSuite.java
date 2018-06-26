@@ -14,7 +14,6 @@ import de.ofahrt.catfish.utils.CatfishUtilsTestSuite;
 @SuiteClasses({
   CatfishHttpServerTest.class,
   CoreHelperTest.class,
-  DirectoryTest.class,
   HashConflictGeneratorTest.class,
   IncrementalHttpParserIncrementalTest.class,
   IncrementalHttpParserTest.class,
