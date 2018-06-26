@@ -26,6 +26,7 @@ import de.ofahrt.catfish.api.Connection;
 
 final class NioEngine {
   private static final boolean DEBUG = true;
+  private static final boolean LOG_TO_FILE = false;
 
   private interface EventHandler {
     void handleEvent() throws IOException;
@@ -345,7 +346,7 @@ final class NioEngine {
       this.id = id;
       this.logHandler = logHandler;
       this.selector = Selector.open();
-      Thread t = new Thread(this, "select-" + id);
+      Thread t = new Thread(this, "catfish-select-" + this.id);
       t.start();
     }
 
@@ -472,7 +473,12 @@ final class NioEngine {
     this.server = server;
     this.serverListener = server.getServerListener();
     this.queues = new SelectorQueue[8];
-    LogHandler logHandler = new ConsoleLogHandler(); //new FileLogHandler(new File("/tmp/catfish.log"));
+    LogHandler logHandler;
+    if (LOG_TO_FILE) {
+      logHandler = new FileLogHandler(new File("/tmp/catfish.log"));
+    } else {
+      logHandler = new ConsoleLogHandler();
+    }
     for (int i = 0; i < queues.length; i++) {
       queues[i] = new SelectorQueue(i, logHandler);
     }
