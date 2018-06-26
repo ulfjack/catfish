@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.api;
+package de.ofahrt.catfish.model;
 
 public interface HttpResponse {
   default HttpVersion getProtocolVersion() {

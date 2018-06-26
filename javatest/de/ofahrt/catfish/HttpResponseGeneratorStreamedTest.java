@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Test;
 
 import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
-import de.ofahrt.catfish.api.StandardResponses;
+import de.ofahrt.catfish.model.StandardResponses;
 
 public class HttpResponseGeneratorStreamedTest {
 

@@ -5,6 +5,11 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 import org.junit.Test;
+import de.ofahrt.catfish.model.HttpMethodName;
+import de.ofahrt.catfish.model.HttpStatusCode;
+import de.ofahrt.catfish.model.HttpVersion;
+import de.ofahrt.catfish.model.MalformedRequestException;
+import de.ofahrt.catfish.model.SimpleHttpRequest;
 
 public class SimpleHttpRequestTest {
 

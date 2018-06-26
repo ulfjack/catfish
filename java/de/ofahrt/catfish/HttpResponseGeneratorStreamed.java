@@ -5,9 +5,9 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
-import de.ofahrt.catfish.api.HttpHeaderName;
-import de.ofahrt.catfish.api.HttpHeaders;
-import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpHeaders;
+import de.ofahrt.catfish.model.HttpResponse;
 
 final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private static final boolean DEBUG = false;

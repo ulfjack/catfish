@@ -3,6 +3,7 @@ package de.ofahrt.catfish.api;
 import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
+import de.ofahrt.catfish.model.HttpStatusCode;
 
 public class HttpResponseCodeTest {
   @Test

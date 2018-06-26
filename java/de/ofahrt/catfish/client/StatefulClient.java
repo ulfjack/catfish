@@ -8,9 +8,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.net.ssl.SSLContext;
-
-import de.ofahrt.catfish.api.HttpHeaderName;
-import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpResponse;
 
 public final class StatefulClient {
 

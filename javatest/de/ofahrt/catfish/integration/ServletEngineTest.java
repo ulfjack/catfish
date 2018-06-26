@@ -10,8 +10,8 @@ import javax.servlet.http.HttpServletRequest;
 import org.junit.Test;
 
 import de.ofahrt.catfish.HttpParserTest;
-import de.ofahrt.catfish.api.HttpRequest;
-import de.ofahrt.catfish.api.SimpleHttpRequest;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.SimpleHttpRequest;
 
 /**
  * Tests a parser for compliance with RFC 2616: http://www.ietf.org/rfc/rfc2616.txt

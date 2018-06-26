@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.api;
+package de.ofahrt.catfish.model;
 
 public enum HttpStatusCode {
   CONTINUE               (100, "Continue"),

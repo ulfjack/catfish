@@ -1,9 +1,8 @@
 package de.ofahrt.catfish;
 
 import java.util.Map;
-
-import de.ofahrt.catfish.api.HttpRequest;
-import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpResponse;
 
 final class CoreHelper {
   // Response text output for debugging:

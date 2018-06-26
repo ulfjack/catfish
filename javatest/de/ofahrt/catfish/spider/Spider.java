@@ -13,12 +13,11 @@ import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
-
-import de.ofahrt.catfish.api.HttpHeaderName;
-import de.ofahrt.catfish.api.HttpHeaders;
-import de.ofahrt.catfish.api.HttpRequest;
-import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.client.HttpConnection;
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpHeaders;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpResponse;
 
 public final class Spider {
   private final String host;

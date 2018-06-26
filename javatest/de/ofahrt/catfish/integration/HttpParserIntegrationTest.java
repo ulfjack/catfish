@@ -13,10 +13,9 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-
-import de.ofahrt.catfish.api.HttpResponse;
-import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.client.HttpConnection;
+import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.MalformedRequestException;
 
 public class HttpParserIntegrationTest extends ServletEngineTest {
   private static Server server;

@@ -1,9 +1,8 @@
 package de.ofahrt.catfish;
 
 import java.nio.ByteBuffer;
-
-import de.ofahrt.catfish.api.HttpHeaders;
-import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.model.HttpHeaders;
+import de.ofahrt.catfish.model.HttpResponse;
 
 final class HttpResponseGeneratorBuffered extends HttpResponseGenerator {
   public static HttpResponseGeneratorBuffered create(HttpResponse response, boolean includeBody) {

@@ -5,8 +5,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
-
-import de.ofahrt.catfish.api.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpHeaderName;
 
 public class HttpHeaderNameTest {
   @Test

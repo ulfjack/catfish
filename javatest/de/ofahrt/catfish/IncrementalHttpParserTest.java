@@ -5,8 +5,8 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import org.junit.Test;
-import de.ofahrt.catfish.api.HttpStatusCode;
-import de.ofahrt.catfish.api.MalformedRequestException;
+import de.ofahrt.catfish.model.HttpStatusCode;
+import de.ofahrt.catfish.model.MalformedRequestException;
 
 public class IncrementalHttpParserTest {
 

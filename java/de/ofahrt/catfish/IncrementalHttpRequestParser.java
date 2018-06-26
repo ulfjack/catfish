@@ -1,11 +1,11 @@
 package de.ofahrt.catfish;
 
-import de.ofahrt.catfish.api.HttpHeaderName;
-import de.ofahrt.catfish.api.HttpRequest;
-import de.ofahrt.catfish.api.HttpStatusCode;
-import de.ofahrt.catfish.api.HttpVersion;
-import de.ofahrt.catfish.api.MalformedRequestException;
-import de.ofahrt.catfish.api.SimpleHttpRequest;
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpStatusCode;
+import de.ofahrt.catfish.model.HttpVersion;
+import de.ofahrt.catfish.model.MalformedRequestException;
+import de.ofahrt.catfish.model.SimpleHttpRequest;
 
 final class IncrementalHttpRequestParser {
 

@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.api;
+package de.ofahrt.catfish.model;
 
 final class PreconstructedResponse implements HttpResponse {
   private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];

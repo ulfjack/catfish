@@ -16,17 +16,17 @@ import javax.servlet.Servlet;
 import javax.servlet.ServletException;
 
 import de.ofahrt.catfish.InputStreams;
-import de.ofahrt.catfish.api.Connection;
-import de.ofahrt.catfish.api.HttpHeaderName;
-import de.ofahrt.catfish.api.HttpMethodName;
-import de.ofahrt.catfish.api.HttpRequest;
-import de.ofahrt.catfish.api.HttpResponse;
-import de.ofahrt.catfish.api.HttpVersion;
-import de.ofahrt.catfish.api.SimpleHttpRequest;
-import de.ofahrt.catfish.api.SimpleHttpResponse;
 import de.ofahrt.catfish.bridge.RequestImpl;
 import de.ofahrt.catfish.bridge.ResponseImpl;
 import de.ofahrt.catfish.bridge.TestHelper;
+import de.ofahrt.catfish.model.Connection;
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpMethodName;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.HttpVersion;
+import de.ofahrt.catfish.model.SimpleHttpRequest;
+import de.ofahrt.catfish.model.SimpleHttpResponse;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 

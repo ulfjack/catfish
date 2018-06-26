@@ -4,9 +4,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
-
-import de.ofahrt.catfish.api.HttpHeaders;
-import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.model.HttpHeaders;
+import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
 abstract class HttpResponseGenerator {

@@ -8,12 +8,12 @@ import javax.net.ssl.SSLContext;
 
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpServerListener;
-import de.ofahrt.catfish.api.Connection;
-import de.ofahrt.catfish.api.HttpRequest;
-import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.bridge.ServletVirtualHostBuilder;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.fastcgi.FcgiServlet;
+import de.ofahrt.catfish.model.Connection;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.servlets.CheckPost;
 import de.ofahrt.catfish.ssl.SSLContextFactory;
 import de.ofahrt.catfish.ssl.SSLContextFactory.SSLInfo;

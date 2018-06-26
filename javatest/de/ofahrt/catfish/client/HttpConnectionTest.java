@@ -7,7 +7,7 @@ import java.net.Socket;
 import java.nio.charset.Charset;
 import java.util.concurrent.CountDownLatch;
 import org.junit.Test;
-import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.model.HttpResponse;
 
 public class HttpConnectionTest {
 

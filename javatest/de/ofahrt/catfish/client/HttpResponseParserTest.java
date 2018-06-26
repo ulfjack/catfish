@@ -5,8 +5,8 @@ import static org.junit.Assert.assertEquals;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import org.junit.Test;
-import de.ofahrt.catfish.api.HttpResponse;
-import de.ofahrt.catfish.api.HttpVersion;
+import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.HttpVersion;
 
 public abstract class HttpResponseParserTest {
 

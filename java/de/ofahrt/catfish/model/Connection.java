@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.api;
+package de.ofahrt.catfish.model;
 
 import java.net.InetSocketAddress;
 import java.util.UUID;

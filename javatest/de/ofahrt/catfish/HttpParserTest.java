@@ -7,10 +7,9 @@ import static org.junit.Assert.fail;
 import java.nio.charset.Charset;
 
 import org.junit.Test;
-
-import de.ofahrt.catfish.api.HttpRequest;
-import de.ofahrt.catfish.api.HttpVersion;
-import de.ofahrt.catfish.api.MalformedRequestException;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpVersion;
+import de.ofahrt.catfish.model.MalformedRequestException;
 
 /**
  * Tests a parser for compliance with RFC 2616: http://www.ietf.org/rfc/rfc2616.txt

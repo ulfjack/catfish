@@ -5,10 +5,9 @@ import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
-
-import de.ofahrt.catfish.api.HttpHeaders;
-import de.ofahrt.catfish.api.HttpRequest;
-import de.ofahrt.catfish.api.HttpVersion;
+import de.ofahrt.catfish.model.HttpHeaders;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpVersion;
 
 public final class SerializableHttpRequest implements HttpRequest, Serializable {
   private static final long serialVersionUID = 1L;

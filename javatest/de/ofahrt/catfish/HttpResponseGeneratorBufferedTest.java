@@ -9,9 +9,9 @@ import java.nio.ByteBuffer;
 import org.junit.Test;
 
 import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
-import de.ofahrt.catfish.api.HttpResponse;
-import de.ofahrt.catfish.api.HttpVersion;
-import de.ofahrt.catfish.api.StandardResponses;
+import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.HttpVersion;
+import de.ofahrt.catfish.model.StandardResponses;
 
 public class HttpResponseGeneratorBufferedTest {
 

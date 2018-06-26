@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.junit.Test;
+import de.ofahrt.catfish.model.HttpHeaders;
 
 public class HttpHeadersTest {
   @Test

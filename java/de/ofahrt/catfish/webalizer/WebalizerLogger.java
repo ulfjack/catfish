@@ -8,9 +8,9 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import de.ofahrt.catfish.RequestListener;
-import de.ofahrt.catfish.api.Connection;
-import de.ofahrt.catfish.api.HttpRequest;
-import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.model.Connection;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpResponse;
 
 public final class WebalizerLogger implements RequestListener {
 

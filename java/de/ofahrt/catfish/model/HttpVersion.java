@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.api;
+package de.ofahrt.catfish.model;
 
 public final class HttpVersion implements Comparable<HttpVersion> {
   public static final HttpVersion HTTP_0_9 = new HttpVersion(0, 9);

@@ -6,7 +6,7 @@ import static org.junit.Assert.assertTrue;
 import java.util.ArrayList;
 import java.util.Collection;
 import org.junit.runner.RunWith;
-import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.model.HttpResponse;
 import info.adams.junit.NamedParameterized;
 import info.adams.junit.NamedParameterized.Parameters;
 

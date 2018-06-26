@@ -16,10 +16,10 @@ import org.junit.Test;
 import de.ofahrt.catfish.CollectionsUtils;
 import de.ofahrt.catfish.HashConflictGenerator;
 import de.ofahrt.catfish.InputStreams;
-import de.ofahrt.catfish.api.Connection;
-import de.ofahrt.catfish.api.HttpHeaderName;
-import de.ofahrt.catfish.api.MalformedRequestException;
-import de.ofahrt.catfish.api.SimpleHttpRequest;
+import de.ofahrt.catfish.model.Connection;
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.MalformedRequestException;
+import de.ofahrt.catfish.model.SimpleHttpRequest;
 
 /**
  * Tests for {@link RequestImpl}.

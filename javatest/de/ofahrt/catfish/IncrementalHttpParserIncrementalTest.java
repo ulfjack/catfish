@@ -6,8 +6,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 import org.junit.runner.RunWith;
-
-import de.ofahrt.catfish.api.HttpRequest;
+import de.ofahrt.catfish.model.HttpRequest;
 import info.adams.junit.NamedParameterized;
 import info.adams.junit.NamedParameterized.Parameters;
 

@@ -23,8 +23,7 @@ import java.util.regex.Pattern;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-
-import de.ofahrt.catfish.api.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.utils.MimeType;
 
 public class ServletHelper {

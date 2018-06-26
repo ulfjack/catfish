@@ -17,13 +17,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.net.ssl.SSLContext;
-
-import de.ofahrt.catfish.api.Connection;
-import de.ofahrt.catfish.api.HttpHeaderName;
-import de.ofahrt.catfish.api.HttpRequest;
-import de.ofahrt.catfish.api.HttpResponse;
-import de.ofahrt.catfish.api.MalformedRequestException;
-import de.ofahrt.catfish.api.StandardResponses;
+import de.ofahrt.catfish.model.Connection;
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.MalformedRequestException;
+import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
