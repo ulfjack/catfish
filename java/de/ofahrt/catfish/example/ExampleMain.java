@@ -10,6 +10,8 @@ import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpServerListener;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.api.Connection;
+import de.ofahrt.catfish.api.HttpRequest;
+import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.fastcgi.FcgiServlet;
 import de.ofahrt.catfish.servlets.CheckCompression;
 import de.ofahrt.catfish.servlets.CheckPost;
@@ -57,6 +59,14 @@ public class ExampleMain {
       @Override
       public void notifyInternalError(Connection id, Throwable throwable) {
         throwable.printStackTrace();
+      }
+
+      @Override
+      public void notifyRequest(Connection connection, HttpRequest request, HttpResponse response) {
+        if (response.getStatusCode() / 100 == 5) {
+          System.out.printf("[CATFISH] %s %s\n",
+              Integer.valueOf(response.getStatusCode()), response.getStatusLine());
+        }
       }
     });
 
