@@ -23,6 +23,7 @@ import de.ofahrt.catfish.utils.CatfishUtilsTestSuite;
   MimeMultipartParserTest.class,
   PathFragmentIteratorTest.class,
   PathTrackerTest.class,
+  SiteLayoutTest.class,
   SNIParserTest.class,
   VirtualHostTest.class,
 
