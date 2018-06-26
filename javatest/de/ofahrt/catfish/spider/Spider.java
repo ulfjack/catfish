@@ -8,15 +8,19 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+
 import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+
+import de.ofahrt.catfish.api.HttpHeaderName;
+import de.ofahrt.catfish.api.HttpHeaders;
+import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.client.HttpConnection;
 
 public final class Spider {
-
   private final String host;
   private final int port = 80;
   private final String entryPoint = "/";
@@ -46,8 +50,9 @@ public final class Spider {
 
   private void retrieve(String page) throws IOException {
     HttpConnection connection = HttpConnection.connect(host, port);
-    HttpRequest request = HttpRequest.forGet(new URL("http://" + host + ":" + port + page));
-    connection.write(request.toByteArray());
+    HttpRequest request = StandardRequests.get(new URL("http://" + host + ":" + port + page))
+        .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONNECTION, "close"));
+    connection.write(request);
     HttpResponse response = connection.readResponse();
 //    System.out.println(response.getStatusCode());
 //    System.out.println(response.getContentAsString());

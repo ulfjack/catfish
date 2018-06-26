@@ -6,12 +6,17 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Map;
+
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SNIServerName;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
+
+import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 
 public final class HttpConnection implements Closeable {
@@ -66,6 +71,20 @@ public final class HttpConnection implements Closeable {
     OutputStream out = socket.getOutputStream();
     out.write(content);
     out.flush();
+  }
+
+  public void write(HttpRequest request) throws IOException {
+    write(requestToBytes(request));
+  }
+
+  private static byte[] requestToBytes(HttpRequest request) {
+    StringBuilder buffer = new StringBuilder();
+    buffer.append(request.getMethod() + " " + request.getUri() + " " + request.getVersion()).append("\r\n");
+    for (Map.Entry<String, String> e : request.getHeaders()) {
+      buffer.append(e.getKey()).append(": ").append(e.getValue()).append("\r\n");
+    }
+    buffer.append("\r\n");
+    return buffer.toString().getBytes(StandardCharsets.UTF_8);
   }
 
   public HttpResponse readResponse() throws IOException {
