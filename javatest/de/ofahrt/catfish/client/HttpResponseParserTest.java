@@ -29,7 +29,7 @@ public abstract class HttpResponseParserTest {
     HttpResponse response = parse("HTTP/1.1 200 OK\n\n");
     assertEquals(HttpVersion.HTTP_1_1, response.getProtocolVersion());
     assertEquals(200, response.getStatusCode());
-    assertEquals("OK", response.getStatusLine());
+    assertEquals("OK", response.getStatusMessage());
   }
 
   @Test

@@ -24,7 +24,9 @@ abstract class HttpResponseGenerator {
     StringBuilder buffer = new StringBuilder(200);
     buffer.append(response.getProtocolVersion());
     buffer.append(" ");
-    buffer.append(response.getStatusLine());
+    buffer.append(response.getStatusCode());
+    buffer.append(" ");
+    buffer.append(response.getStatusMessage());
     buffer.append(CRLF);
     return buffer.toString().getBytes(StandardCharsets.UTF_8);
   }

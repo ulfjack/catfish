@@ -6,8 +6,8 @@ public class HttpResponseValidator {
         && response.getHeaders().containsKey(HttpHeaderName.CONTENT_LENGTH)) {
       throw new MalformedResponseException("Response must not contain both Transfer-Encoding and Content-Length");
     }
-    if (response.getStatusCode() == HttpStatusCode.NO_CONTENT.getCode()
-        || response.getStatusCode() == HttpStatusCode.NOT_MODIFIED.getCode()) {
+    if (response.getStatusCode() == HttpStatusCode.NO_CONTENT.getStatusCode()
+        || response.getStatusCode() == HttpStatusCode.NOT_MODIFIED.getStatusCode()) {
       if (response.getHeaders().containsKey(HttpHeaderName.TRANSFER_ENCODING)
           || response.getHeaders().containsKey(HttpHeaderName.CONTENT_LENGTH)) {
         throw new MalformedResponseException(

@@ -137,6 +137,7 @@ final class HttpStage implements Stage {
         } else {
           parent.close();
         }
+        parent.notifySent(null, responseGenerator.getResponse());
         responseGenerator = null;
         if (parser.isDone()) {
           processRequest();
@@ -148,7 +149,8 @@ final class HttpStage implements Stage {
   private final void startStreamed(HttpResponseGeneratorStreamed gen) {
     this.responseGenerator = gen;
     HttpResponse response = responseGenerator.getResponse();
-    parent.log("%s %s", response.getProtocolVersion(), response.getStatusLine());
+    parent.log("%s %d %s",
+        response.getProtocolVersion(), Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
     if (HttpStage.VERBOSE) {
       System.out.println(CoreHelper.responseToString(response));
     }
@@ -158,7 +160,8 @@ final class HttpStage implements Stage {
     this.responseGenerator = gen;
     parent.encourageWrites();
     HttpResponse response = responseGenerator.getResponse();
-    parent.log("%s %s", response.getProtocolVersion(), response.getStatusLine());
+    parent.log("%s %d %s",
+        response.getProtocolVersion(), Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
     if (HttpStage.VERBOSE) {
       System.out.println(CoreHelper.responseToString(response));
     }

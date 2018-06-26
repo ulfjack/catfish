@@ -8,7 +8,7 @@ public final class MalformedRequestException extends IOException {
   private final HttpResponse errorResponse;
 
   public MalformedRequestException(HttpResponse errorResponse) {
-    super(errorResponse.getStatusLine());
+    super(errorResponse.getStatusCode() + " " + errorResponse.getStatusMessage());
     this.errorResponse = errorResponse;
   }
 

@@ -7,8 +7,8 @@ public interface HttpResponse {
 
   int getStatusCode();
 
-  default String getStatusLine() {
-    return HttpStatusCode.getStatusText(getStatusCode());
+  default String getStatusMessage() {
+    return HttpStatusCode.getStatusMessage(getStatusCode());
   }
 
   default HttpHeaders getHeaders() {
@@ -32,8 +32,8 @@ public interface HttpResponse {
       }
 
       @Override
-      public String getStatusLine() {
-        return HttpResponse.this.getStatusLine();
+      public String getStatusMessage() {
+        return HttpResponse.this.getStatusMessage();
       }
 
       @Override
@@ -61,8 +61,8 @@ public interface HttpResponse {
       }
 
       @Override
-      public String getStatusLine() {
-        return HttpResponse.this.getStatusLine();
+      public String getStatusMessage() {
+        return HttpResponse.this.getStatusMessage();
       }
 
       @Override
@@ -90,8 +90,8 @@ public interface HttpResponse {
       }
 
       @Override
-      public String getStatusLine() {
-        return HttpResponse.this.getStatusLine();
+      public String getStatusMessage() {
+        return HttpResponse.this.getStatusMessage();
       }
 
       @Override

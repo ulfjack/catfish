@@ -23,6 +23,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import de.ofahrt.catfish.api.Connection;
+import de.ofahrt.catfish.api.HttpRequest;
+import de.ofahrt.catfish.api.HttpResponse;
 
 final class NioEngine {
   private static final boolean DEBUG = false;
@@ -60,6 +62,7 @@ final class NioEngine {
     void close();
     void queue(Runnable runnable);
     void log(String text, Object... params);
+    void notifySent(HttpRequest request, HttpResponse response);
   }
 
   private interface LogHandler {
@@ -290,6 +293,11 @@ final class NioEngine {
                 Long.valueOf(nanoFraction),
                 printedText));
       }
+    }
+
+    @Override
+    public void notifySent(HttpRequest request, HttpResponse response) {
+      server.notifySent(connection, request, response, 0);
     }
   }
 

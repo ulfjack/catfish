@@ -402,7 +402,7 @@ public final class ResponseImpl implements HttpServletResponse {
     }
     setStatus(statusCode);
     if (msg == null) {
-      msg = HttpStatusCode.getStatusText(statusCode);
+      msg = HttpStatusCode.getStatusMessage(statusCode);
     }
     // TODO: This should be text/html according to the spec.
     setContentType(MimeType.TEXT_PLAIN.toString());

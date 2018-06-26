@@ -50,10 +50,12 @@ final class CoreHelper {
   // Response text output for debugging:
   public static String responseToString(HttpResponse response) {
     StringBuffer out = new StringBuffer();
-    out.append(response.getProtocolVersion() + " " + response.getStatusLine());
+    out.append(response.getProtocolVersion())
+        .append(" ").append(response.getStatusCode())
+        .append(" ").append(response.getStatusMessage());
     for (Map.Entry<String, String> e : response.getHeaders()) {
       out.append("\n");
-      out.append(e.getKey() + ": " + e.getValue());
+      out.append(e.getKey()).append(": ").append(e.getValue());
     }
     return out.toString();
   }

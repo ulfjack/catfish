@@ -52,7 +52,7 @@ public final class CatfishHttpServer {
 
   private final ThreadPoolExecutor executor =
       new ThreadPoolExecutor(
-          8, 8, 1L, TimeUnit.SECONDS, new ArrayBlockingQueue<>(100),
+          8, 8, 1L, TimeUnit.SECONDS, new ArrayBlockingQueue<>(128),
           new ThreadFactory() {
             private final AtomicInteger threadNumber = new AtomicInteger(0);
 
@@ -120,6 +120,7 @@ public final class CatfishHttpServer {
   }
 
   void notifySent(Connection connection, HttpRequest request, HttpResponse response, int amount) {
+    serverListener.notifyRequest(connection, request, response);
     for (int i = 0; i < listeners.size(); i++) {
       RequestListener l = listeners.get(i);
       try {
@@ -192,10 +193,10 @@ public final class CatfishHttpServer {
     try {
       dispatcher.dispatch(servletRequest, response);
     } catch (FileNotFoundException e) {
-      response.sendError(HttpStatusCode.NOT_FOUND.getCode());
+      response.sendError(HttpStatusCode.NOT_FOUND.getStatusCode());
     } catch (Exception e) {
       e.printStackTrace();
-      response.sendError(HttpStatusCode.INTERNAL_SERVER_ERROR.getCode());
+      response.sendError(HttpStatusCode.INTERNAL_SERVER_ERROR.getStatusCode());
     }
     try {
       response.close();

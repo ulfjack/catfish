@@ -63,9 +63,9 @@ public class ExampleMain {
 
       @Override
       public void notifyRequest(Connection connection, HttpRequest request, HttpResponse response) {
-        if (response.getStatusCode() / 100 == 5) {
-          System.out.printf("[CATFISH] %s %s\n",
-              Integer.valueOf(response.getStatusCode()), response.getStatusLine());
+        if ((response.getStatusCode() / 100) == 5) {
+          System.out.printf("[CATFISH] %d %s\n",
+              Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
         }
       }
     });

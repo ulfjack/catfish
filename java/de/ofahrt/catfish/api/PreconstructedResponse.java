@@ -9,14 +9,14 @@ final class PreconstructedResponse implements HttpResponse {
   private final byte[] body;
 
   public PreconstructedResponse(HttpStatusCode statusCode, String statusMessage, HttpHeaders headers, byte[] body) {
-    this.statusCode = statusCode.getCode();
+    this.statusCode = statusCode.getStatusCode();
     this.statusMessage = Preconditions.checkNotNull(statusMessage);
     this.headers = Preconditions.checkNotNull(headers);
     this.body = Preconditions.checkNotNull(body);
   }
 
   public PreconstructedResponse(HttpStatusCode statusCode, HttpHeaders headers, byte[] body) {
-    this(statusCode, statusCode.getStatusText(), headers, body);
+    this(statusCode, statusCode.getStatusMessage(), headers, body);
   }
 
   public PreconstructedResponse(HttpStatusCode statusCode, HttpHeaders headers) {
@@ -28,7 +28,7 @@ final class PreconstructedResponse implements HttpResponse {
   }
 
   public PreconstructedResponse(HttpStatusCode statusCode) {
-    this(statusCode, statusCode.getStatusText(), HttpHeaders.NONE, EMPTY_BYTE_ARRAY);
+    this(statusCode, statusCode.getStatusMessage(), HttpHeaders.NONE, EMPTY_BYTE_ARRAY);
   }
 
   @Override
@@ -37,7 +37,7 @@ final class PreconstructedResponse implements HttpResponse {
   }
 
   @Override
-  public String getStatusLine() {
+  public String getStatusMessage() {
     return statusMessage;
   }
 

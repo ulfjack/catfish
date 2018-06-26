@@ -46,28 +46,32 @@ public enum HttpStatusCode {
   GATEWAY_TIMEOUT        (504, "Gateway Timeout"),
   VERSION_NOT_SUPPORTED  (505, "HTTP Version Not Supported");
 
-  private final int code;
-  private final String text;
+  private final int statusCode;
+  private final String statusMessage;
 
-  private HttpStatusCode(int code, String desc) {
-    this.code = code;
-    this.text = code + " " + desc;
+  private HttpStatusCode(int statusCode, String statusMessage) {
+    this.statusCode = statusCode;
+    this.statusMessage = statusMessage;
   }
 
-  public int getCode() {
-    return code;
+  public int getStatusCode() {
+    return statusCode;
+  }
+
+  public String getStatusMessage() {
+    return statusMessage;
   }
 
   public String getStatusText() {
-    return text;
+    return statusCode + " " + statusMessage;
   }
 
-  private static final String[] STATUS_TEXT_MAP = getStatusTextMap();
+  private static final String[] STATUS_MESSAGE_MAP = constructStatusMessageMap();
 
-  private static String[] getStatusTextMap() {
+  private static String[] constructStatusMessageMap() {
     String[] result = new String[506];
     for (HttpStatusCode r : HttpStatusCode.values()) {
-      result[r.code] = r.text;
+      result[r.getStatusCode()] = r.getStatusMessage();
     }
     return result;
   }
@@ -80,32 +84,28 @@ public enum HttpStatusCode {
    *
    * @throws IllegalArgumentException if the given code is not a three-digit integer
    */
-  public static String getStatusText(int code) {
+  public static String getStatusMessage(int code) {
     if ((code < 100) || (code >= 1000)) {
       throw new IllegalArgumentException("the http status code must be a three-digit number");
     }
-    String result = null;
-    if ((code >= 0) && (code < STATUS_TEXT_MAP.length)) {
-      result = STATUS_TEXT_MAP[code];
-    }
-    if (result != null) {
-      return result;
+    if ((code >= 0) && (code < STATUS_MESSAGE_MAP.length) && (STATUS_MESSAGE_MAP[code] != null)) {
+      return STATUS_MESSAGE_MAP[code];
     }
     if ((code >= 100) && (code < 200)) {
-      return code + " Informational";
+      return "Informational";
     }
     if ((code >= 200) && (code < 300)) {
-      return code + " Success";
+      return "Success";
     }
     if ((code >= 300) && (code < 400)) {
-      return code + " Redirection";
+      return "Redirection";
     }
     if ((code >= 400) && (code < 500)) {
-      return code + " Client Error";
+      return "Client Error";
     }
     if ((code >= 500) && (code < 600)) {
-      return code + " Server Error";
+      return "Server Error";
     }
-    return code + " None";
+    return "None";
   }
 }

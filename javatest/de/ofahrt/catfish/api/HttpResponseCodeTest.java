@@ -4,51 +4,49 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
-import de.ofahrt.catfish.api.HttpStatusCode;
-
 public class HttpResponseCodeTest {
   @Test
   public void getStatusTextReturnsCorrect100() {
-    assertEquals("100 Continue", HttpStatusCode.getStatusText(100));
+    assertEquals("Continue", HttpStatusCode.getStatusMessage(100));
   }
 
   @Test
   public void getStatusTextReturnsCorrect1XX() {
-    assertEquals("199 Informational", HttpStatusCode.getStatusText(199));
+    assertEquals("Informational", HttpStatusCode.getStatusMessage(199));
   }
 
   @Test
   public void getStatusTextReturnsCorrect2XX() {
-    assertEquals("299 Success", HttpStatusCode.getStatusText(299));
+    assertEquals("Success", HttpStatusCode.getStatusMessage(299));
   }
 
   @Test
   public void getStatusTextReturnsCorrect3XX() {
-    assertEquals("399 Redirection", HttpStatusCode.getStatusText(399));
+    assertEquals("Redirection", HttpStatusCode.getStatusMessage(399));
   }
 
   @Test
   public void getStatusTextReturnsCorrect4XX() {
-    assertEquals("499 Client Error", HttpStatusCode.getStatusText(499));
+    assertEquals("Client Error", HttpStatusCode.getStatusMessage(499));
   }
 
   @Test
   public void getStatusTextReturnsCorrect5XX() {
-    assertEquals("599 Server Error", HttpStatusCode.getStatusText(599));
+    assertEquals("Server Error", HttpStatusCode.getStatusMessage(599));
   }
 
   @Test
   public void getStatusTextReturnsCorrect999() {
-    assertEquals("999 None", HttpStatusCode.getStatusText(999));
+    assertEquals("None", HttpStatusCode.getStatusMessage(999));
   }
 
   @Test(expected=IllegalArgumentException.class)
   public void lowCodeThrowsIllegalArgumentException() {
-    HttpStatusCode.getStatusText(99);
+    HttpStatusCode.getStatusMessage(99);
   }
 
   @Test(expected=IllegalArgumentException.class)
   public void highCodeThrowsIllegalArgumentException() {
-    HttpStatusCode.getStatusText(1000);
+    HttpStatusCode.getStatusMessage(1000);
   }
 }

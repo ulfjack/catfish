@@ -244,20 +244,20 @@ public abstract class HttpParserTest {
   // Tests for error conditions:
   @Test
   public void badLineBreak() throws Exception {
-    checkError("Expected <lf> following <cr>",
+    checkError("400 Expected <lf> following <cr>",
         "GET / HTTP/1.0\r\r".getBytes(Charset.forName("ISO-8859-1")));
   }
 
   @Test
   public void badRequestLine() throws Exception {
-    checkError("Illegal character in request method", "GET\n\n");
-    checkError("Expected request method, but <space> found", " \n\nGET\n\n");
-    checkError("Unexpected end of line in request uri", "GET /\n\n");
-    checkError("Expected 'H' of request version string", "GET / x\n\n");
-    checkError("Expected 'T' of request version string", "GET / H\n\n");
-    checkError("Expected 'T' of request version string", "GET / HT\n\n");
-    checkError("Expected 'P' of request version string", "GET / HTT\n\n");
-    checkError("Expected '/' of request version string", "GET / HTTP\n\n");
+    checkError("400 Illegal character in request method", "GET\n\n");
+    checkError("400 Expected request method, but <space> found", " \n\nGET\n\n");
+    checkError("400 Unexpected end of line in request uri", "GET /\n\n");
+    checkError("400 Expected 'H' of request version string", "GET / x\n\n");
+    checkError("400 Expected 'T' of request version string", "GET / H\n\n");
+    checkError("400 Expected 'T' of request version string", "GET / HT\n\n");
+    checkError("400 Expected 'P' of request version string", "GET / HTT\n\n");
+    checkError("400 Expected '/' of request version string", "GET / HTTP\n\n");
   }
 
   @Test
@@ -267,31 +267,31 @@ public abstract class HttpParserTest {
 
   @Test
   public void badVersion() throws Exception {
-    checkError("Http major version number expected", "GET / HTTP/.1\n\n");
-    checkError("Http minor version number expected", "GET / HTTP/1.\n\n");
-    checkError("Expected '.' of request version string", "GET / HTTP/a.1\n\n");
-    checkError("Expected end of request version string", "GET / HTTP/1.f\n\n");
-    checkError("Http version not supported", "GET / HTTP/2.0\n\n");
-    checkError("Http major version is too long", "GET / HTTP/12345678.1\n\n");
-    checkError("Http minor version is too long", "GET / HTTP/1.12345678\n\n");
+    checkError("400 Http major version number expected", "GET / HTTP/.1\n\n");
+    checkError("400 Http minor version number expected", "GET / HTTP/1.\n\n");
+    checkError("400 Expected '.' of request version string", "GET / HTTP/a.1\n\n");
+    checkError("400 Expected end of request version string", "GET / HTTP/1.f\n\n");
+    checkError("400 Http major version is too long", "GET / HTTP/12345678.1\n\n");
+    checkError("400 Http minor version is too long", "GET / HTTP/1.12345678\n\n");
+    checkError("505 Http version not supported", "GET / HTTP/2.0\n\n");
   }
 
   @Test
   public void badHeader() throws Exception {
-    checkError("Expected header field name, but ':' found", "GET / HTTP/1.0\n: value\n\n");
-    checkError("Unexpected end of line in header field name", "GET / HTTP/1.0\nUser-Agent\n\n");
-    checkError("Illegal character in header field name", "GET / HTTP/1.0\nUser-Agent :\n\n");
-    checkError("Illegal character in header field name", "GET / HTTP/1.0\nUser-Agent: A\n{\n\n");
+    checkError("400 Expected header field name, but ':' found", "GET / HTTP/1.0\n: value\n\n");
+    checkError("400 Unexpected end of line in header field name", "GET / HTTP/1.0\nUser-Agent\n\n");
+    checkError("400 Illegal character in header field name", "GET / HTTP/1.0\nUser-Agent :\n\n");
+    checkError("400 Illegal character in header field name", "GET / HTTP/1.0\nUser-Agent: A\n{\n\n");
   }
 
   @Test
   public void badContentLength() throws Exception {
-    checkError("Illegal content length value", "GET / HTTP/1.0\nContent-Length: notanumber\n\n");
-    checkError("Content length larger than allowed", "GET / HTTP/1.0\nContent-Length: 123456789\n\n");
+    checkError("400 Illegal content length value", "GET / HTTP/1.0\nContent-Length: notanumber\n\n");
+    checkError("400 Content length larger than allowed", "GET / HTTP/1.0\nContent-Length: 123456789\n\n");
   }
 
   @Test
   public void missingHost() throws Exception {
-    checkError("Missing 'Host' field", "GET / HTTP/1.1\n\n");
+    checkError("400 Missing 'Host' field", "GET / HTTP/1.1\n\n");
   }
 }

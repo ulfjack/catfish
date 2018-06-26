@@ -6,15 +6,15 @@ import java.util.Map;
 public final class SimpleHttpResponse implements HttpResponse {
   private final HttpVersion version;
   private final int statusCode;
-  private final String reasonPhrase;
+  private final String statusMessage;
   private final Map<String, String> headers;
   private final byte[] content;
 
   SimpleHttpResponse(Builder builder) {
     this.version = HttpVersion.of(builder.majorVersion, builder.minorVersion);
     this.statusCode = builder.statusCode;
-    this.reasonPhrase =
-        builder.reasonPhrase != null ? builder.reasonPhrase : HttpStatusCode.getStatusText(statusCode);
+    this.statusMessage =
+        builder.reasonPhrase != null ? builder.reasonPhrase : HttpStatusCode.getStatusMessage(statusCode);
     this.headers = new HashMap<>(builder.headers);
     this.content = builder.content;
   }
@@ -30,8 +30,8 @@ public final class SimpleHttpResponse implements HttpResponse {
   }
 
   @Override
-  public String getStatusLine() {
-    return reasonPhrase;
+  public String getStatusMessage() {
+    return statusMessage;
   }
 
   @Override
