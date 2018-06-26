@@ -7,12 +7,12 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.Arrays;
-
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SNIServerName;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
+import de.ofahrt.catfish.api.HttpResponse;
 
 public final class HttpConnection implements Closeable {
 

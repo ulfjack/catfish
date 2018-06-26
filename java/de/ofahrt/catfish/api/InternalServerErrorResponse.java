@@ -10,7 +10,7 @@ final class InternalServerErrorResponse {
   private static final HttpHeaders HEADERS = HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, TEXT_PLAIN_UTF_8);
 
   static HttpResponse create(Throwable exception) {
-    return new SimpleResponse(
+    return new PreconstructedResponse(
         HttpStatusCode.INTERNAL_SERVER_ERROR,
         InternalServerErrorResponse.HEADERS,
         InternalServerErrorResponse.toByteArray(exception));

@@ -1,14 +1,13 @@
 package de.ofahrt.catfish.client;
 
 import static org.junit.Assert.assertEquals;
-
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.Charset;
 import java.util.concurrent.CountDownLatch;
-
 import org.junit.Test;
+import de.ofahrt.catfish.api.HttpResponse;
 
 public class HttpConnectionTest {
 

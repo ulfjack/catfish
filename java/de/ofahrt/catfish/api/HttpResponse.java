@@ -4,24 +4,24 @@ import java.io.IOException;
 
 public interface HttpResponse {
   // 200
-  public static final HttpResponse OK = new SimpleResponse(HttpStatusCode.OK);
-  public static final HttpResponse NO_CONTENT = new SimpleResponse(HttpStatusCode.NO_CONTENT);
+  public static final HttpResponse OK = new PreconstructedResponse(HttpStatusCode.OK);
+  public static final HttpResponse NO_CONTENT = new PreconstructedResponse(HttpStatusCode.NO_CONTENT);
 
   // 300
-  public static final HttpResponse NOT_MODIFIED = new SimpleResponse(HttpStatusCode.NOT_MODIFIED); // 304
+  public static final HttpResponse NOT_MODIFIED = new PreconstructedResponse(HttpStatusCode.NOT_MODIFIED); // 304
 
   // 400
-  public static final HttpResponse BAD_REQUEST = new SimpleResponse(HttpStatusCode.BAD_REQUEST);
-  public static final HttpResponse NOT_FOUND = new SimpleResponse(HttpStatusCode.NOT_FOUND);
+  public static final HttpResponse BAD_REQUEST = new PreconstructedResponse(HttpStatusCode.BAD_REQUEST);
+  public static final HttpResponse NOT_FOUND = new PreconstructedResponse(HttpStatusCode.NOT_FOUND);
   // TODO: According to the spec, a list of allowed methods must be provided.
-  public static final HttpResponse METHOD_NOT_ALLOWED = new SimpleResponse(HttpStatusCode.METHOD_NOT_ALLOWED); // 405
-  public static final HttpResponse UNSUPPORTED_MEDIA_TYPE = new SimpleResponse(HttpStatusCode.UNSUPPORTED_MEDIA_TYPE); // 415
-  public static final HttpResponse EXPECTATION_FAILED = new SimpleResponse(HttpStatusCode.EXPECTATION_FAILED); // 417
+  public static final HttpResponse METHOD_NOT_ALLOWED = new PreconstructedResponse(HttpStatusCode.METHOD_NOT_ALLOWED); // 405
+  public static final HttpResponse UNSUPPORTED_MEDIA_TYPE = new PreconstructedResponse(HttpStatusCode.UNSUPPORTED_MEDIA_TYPE); // 415
+  public static final HttpResponse EXPECTATION_FAILED = new PreconstructedResponse(HttpStatusCode.EXPECTATION_FAILED); // 417
 
   // 500
-  public static final HttpResponse INTERNAL_SERVER_ERROR = new SimpleResponse(HttpStatusCode.INTERNAL_SERVER_ERROR); // 500
-  public static final HttpResponse NOT_IMPLEMENTED = new SimpleResponse(HttpStatusCode.NOT_IMPLEMENTED); // 501
-  public static final HttpResponse SERVICE_UNAVAILABLE = new SimpleResponse(HttpStatusCode.SERVICE_UNAVAILABLE); // 503
+  public static final HttpResponse INTERNAL_SERVER_ERROR = new PreconstructedResponse(HttpStatusCode.INTERNAL_SERVER_ERROR); // 500
+  public static final HttpResponse NOT_IMPLEMENTED = new PreconstructedResponse(HttpStatusCode.NOT_IMPLEMENTED); // 501
+  public static final HttpResponse SERVICE_UNAVAILABLE = new PreconstructedResponse(HttpStatusCode.SERVICE_UNAVAILABLE); // 503
 
   public static HttpResponse forInternalServerError(Throwable throwable) {
     return throwable == null

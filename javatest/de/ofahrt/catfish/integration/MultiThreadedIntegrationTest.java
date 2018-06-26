@@ -1,14 +1,11 @@
 package de.ofahrt.catfish.integration;
 
 import static org.junit.Assert.assertEquals;
-
-
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-
-import de.ofahrt.catfish.client.HttpResponse;
+import de.ofahrt.catfish.api.HttpResponse;
 
 public class MultiThreadedIntegrationTest {
 

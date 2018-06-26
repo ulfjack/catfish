@@ -12,7 +12,7 @@ public final class RedirectResponse {
     HttpHeaders headers = HttpHeaders.of(
         HttpHeaderName.LOCATION, destinationUrl,
         HttpHeaderName.CONTENT_TYPE, TEXT_HTML_UTF_8);
-    return new SimpleResponse(statusCode, headers, toByteArray(destinationUrl));
+    return new PreconstructedResponse(statusCode, headers, toByteArray(destinationUrl));
   }
 
   private static byte[] toByteArray(String destinationUrl) {

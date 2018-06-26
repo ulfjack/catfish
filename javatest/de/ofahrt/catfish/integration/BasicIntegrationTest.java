@@ -2,18 +2,15 @@ package de.ofahrt.catfish.integration;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
-
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-
 import de.ofahrt.catfish.api.HttpHeaderName;
+import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.client.HttpConnection;
-import de.ofahrt.catfish.client.HttpResponse;
 
 public class BasicIntegrationTest {
   private static LocalCatfishServer localServer;
@@ -62,7 +59,7 @@ public class BasicIntegrationTest {
   public void optionsStar() throws IOException {
     HttpResponse response = localServer.send("OPTIONS * HTTP/1.0\n\n");
     assertEquals(200, response.getStatusCode());
-    assertEquals("0", response.getHeader(HttpHeaderName.CONTENT_LENGTH));
+    assertEquals("0", response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
   }
 
   @Test

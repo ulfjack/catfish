@@ -66,7 +66,8 @@ public final class SimpleHttpRequest implements HttpRequest {
     }
 
     public HttpRequest build() throws MalformedRequestException {
-      if ((errorResponse == null) && (version.compareTo(HttpVersion.HTTP_1_1) >= 0)
+      if ((errorResponse == null)
+          && (version.compareTo(HttpVersion.HTTP_1_1) >= 0)
           && !headers.containsKey(HttpHeaderName.HOST)) {
         setError(HttpStatusCode.BAD_REQUEST.getCode(), "Missing 'Host' field");
       }

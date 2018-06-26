@@ -3,17 +3,14 @@ package de.ofahrt.catfish;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Phaser;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.junit.Test;
-
 import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
 import de.ofahrt.catfish.api.HttpResponse;
 
@@ -131,9 +128,7 @@ public class HttpResponseGeneratorStreamedTest {
   @Test
   public void blocksIfBufferIsFull() throws Exception {
     Semaphore called = new Semaphore(0);
-    AtomicInteger stage = new AtomicInteger();
-    CountDownLatch done = new CountDownLatch(1);
-    CountDownLatch released = new CountDownLatch(1);
+    Phaser done = new Phaser(2);
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
         called::release, HttpResponse.OK, true, 2);
     Thread t = new Thread(new Runnable() {
@@ -141,9 +136,7 @@ public class HttpResponseGeneratorStreamedTest {
       public void run() {
         try (OutputStream out = gen.getOutputStream()) {
           out.write(new byte[] { 'x', 'y', 'z' });
-          done.countDown();
-          stage.incrementAndGet();
-          released.await();
+          done.arriveAndAwaitAdvance();
         } catch (Exception e) {
           e.printStackTrace();
           fail();
@@ -152,12 +145,9 @@ public class HttpResponseGeneratorStreamedTest {
     });
     t.start();
     called.acquire();
-    assertEquals(0, stage.get());
     String response = new String(readUntilPause(gen), StandardCharsets.UTF_8);
     assertTrue(response.startsWith("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"));
-    done.await();
-    released.countDown();
-    assertEquals(1, stage.get());
+    done.arriveAndAwaitAdvance();
     called.acquire();
     response = new String(readUntilStop(gen), StandardCharsets.UTF_8);
   }

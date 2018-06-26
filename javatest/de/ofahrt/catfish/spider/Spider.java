@@ -2,19 +2,18 @@ package de.ofahrt.catfish.spider;
 
 import java.io.IOException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-
 import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
-
+import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.client.HttpConnection;
-import de.ofahrt.catfish.client.HttpResponse;
 
 public final class Spider {
 
@@ -53,7 +52,8 @@ public final class Spider {
 //    System.out.println(response.getStatusCode());
 //    System.out.println(response.getContentAsString());
     connection.close();
-    Document document = new HtmlParser().parse(response.getContentAsString());
+    String htmlContent = new String(response.getBody(), StandardCharsets.UTF_8);
+    Document document = new HtmlParser().parse(htmlContent);
     NodeList nodes = document.getElementsByTagName("a");
     for (int i = 0; i < nodes.getLength(); i++) {
       Node node = nodes.item(i);

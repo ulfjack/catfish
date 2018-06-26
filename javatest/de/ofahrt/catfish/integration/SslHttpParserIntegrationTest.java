@@ -3,20 +3,17 @@ package de.ofahrt.catfish.integration;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-
 import javax.servlet.http.HttpServletRequest;
-
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-
 import de.ofahrt.catfish.HttpParserTest;
+import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.client.HttpConnection;
-import de.ofahrt.catfish.client.HttpResponse;
 
 public class SslHttpParserIntegrationTest extends HttpParserTest {
 
@@ -49,7 +46,7 @@ public class SslHttpParserIntegrationTest extends HttpParserTest {
     if (response.getStatusCode() != 200) {
       throw new MalformedRequestException(null); //response.getReasonPhrase());
     }
-    try (InputStream in = response.getInputStream()) {
+    try (InputStream in = new ByteArrayInputStream(response.getBody())) {
       if (in.available() == 0) {
         return null;
       }

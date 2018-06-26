@@ -8,21 +8,21 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSession;
 import javax.servlet.Servlet;
 import javax.servlet.ServletException;
-
 import de.ofahrt.catfish.InputStreams;
 import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpMethodName;
 import de.ofahrt.catfish.api.HttpRequest;
+import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.SimpleHttpRequest;
+import de.ofahrt.catfish.api.SimpleHttpResponse;
 import de.ofahrt.catfish.bridge.RequestImpl;
 import de.ofahrt.catfish.bridge.ResponseImpl;
 import de.ofahrt.catfish.bridge.ResponsePolicy;
@@ -62,15 +62,15 @@ public abstract class CatfishHttpClient {
 
   private static final class ServletHttpClient extends CatfishHttpClient {
     private final class BufferedHttpResponseWriter implements HttpResponseWriter {
-      private de.ofahrt.catfish.api.HttpResponse response;
+      private HttpResponse response;
       private ByteArrayOutputStream buffer;
 
-      public de.ofahrt.catfish.api.HttpResponse getResponse() {
+      public HttpResponse getResponse() {
         return buffer != null ? response.withBody(buffer.toByteArray()) : response;
       }
 
       @Override
-      public void commitBuffered(@SuppressWarnings("hiding") de.ofahrt.catfish.api.HttpResponse response) {
+      public void commitBuffered(@SuppressWarnings("hiding") HttpResponse response) {
         if (this.response != null) {
           throw new IllegalStateException();
         }
@@ -81,7 +81,7 @@ public abstract class CatfishHttpClient {
       }
 
       @Override
-      public OutputStream commitStreamed(@SuppressWarnings("hiding") de.ofahrt.catfish.api.HttpResponse response) {
+      public OutputStream commitStreamed(@SuppressWarnings("hiding") HttpResponse response) {
         if (this.response != null) {
           throw new IllegalStateException();
         }
@@ -112,10 +112,8 @@ public abstract class CatfishHttpClient {
         throw new IOException(e);
       }
       servletResponse.close();
-      
-      return new HttpResponse(
-          writer.getResponse().getStatusCode(),
-          writer.getResponse().getBody());
+
+      return writer.getResponse();
     }
   }
 
@@ -157,7 +155,7 @@ public abstract class CatfishHttpClient {
         content = InputStreams.toByteArray(in);
       }
       connection.disconnect();
-      return new HttpResponse(code, content);
+      return new SimpleHttpResponse.Builder().setStatusCode(code).setBody(content).build();
     }
   }
 }

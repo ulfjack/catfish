@@ -3,8 +3,10 @@ package de.ofahrt.catfish.client;
 import static org.junit.Assert.assertEquals;
 
 import java.nio.charset.Charset;
-
+import java.nio.charset.StandardCharsets;
 import org.junit.Test;
+import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.api.HttpVersion;
 
 public abstract class HttpResponseParserTest {
 
@@ -18,25 +20,28 @@ public abstract class HttpResponseParserTest {
     return data.replace("\n", "\r\n").getBytes(Charset.forName("ISO-8859-1"));
   }
 
+  private String bodyAsString(HttpResponse response) {
+    return new String(response.getBody(), StandardCharsets.UTF_8);
+  }
+
   @Test
   public void simple() throws Exception {
     HttpResponse response = parse("HTTP/1.1 200 OK\n\n");
-    assertEquals(1, response.getMajorVersion());
-    assertEquals(1, response.getMinorVersion());
+    assertEquals(HttpVersion.HTTP_1_1, response.getProtocolVersion());
     assertEquals(200, response.getStatusCode());
-    assertEquals("OK", response.getReasonPhrase());
+    assertEquals("OK", response.getStatusLine());
   }
 
   @Test
   public void simpleWithHeader() throws Exception {
     HttpResponse response = parse("HTTP/1.1 200 OK\nConnection: close\n\n");
-    assertEquals("close", response.getHeader("Connection"));
+    assertEquals("close", response.getHeaders().get("Connection"));
   }
 
   @Test
   public void simpleWithBody() throws Exception {
     HttpResponse response = parse("HTTP/1.1 200 OK\nContent-Length: 4\n\n0123");
-    assertEquals("0123", response.getContentAsString());
+    assertEquals("0123", bodyAsString(response));
   }
 
   @Test
@@ -46,8 +51,9 @@ public abstract class HttpResponseParserTest {
         + "23\nThis is the data in the first chunk\n"
         + "1B\n and this is the second one\n"
         + "0\n");
-    assertEquals("This is the data in the first chunk and this is the second one",
-        response.getContentAsString());
+    assertEquals(
+        "This is the data in the first chunk and this is the second one",
+        bodyAsString(response));
   }
 
   @Test
@@ -56,6 +62,6 @@ public abstract class HttpResponseParserTest {
         "HTTP/1.1 200 OK\nTransfer-Encoding: chunked\n\n"
         + "a\n123456789a\n"
         + "0\n");
-    assertEquals("123456789a", response.getContentAsString());
+    assertEquals("123456789a", bodyAsString(response));
   }
 }

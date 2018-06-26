@@ -3,12 +3,10 @@ package de.ofahrt.catfish.client;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-
 import java.util.ArrayList;
 import java.util.Collection;
-
 import org.junit.runner.RunWith;
-
+import de.ofahrt.catfish.api.HttpResponse;
 import info.adams.junit.NamedParameterized;
 import info.adams.junit.NamedParameterized.Parameters;
 

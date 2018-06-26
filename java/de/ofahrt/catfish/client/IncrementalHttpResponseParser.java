@@ -1,8 +1,9 @@
 package de.ofahrt.catfish.client;
 
 import java.util.Arrays;
-
 import de.ofahrt.catfish.api.HttpHeaderName;
+import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.api.SimpleHttpResponse;
 
 final class IncrementalHttpResponseParser {
 
@@ -19,7 +20,7 @@ final class IncrementalHttpResponseParser {
 
   private final int maxContentLength = 1000000;
 
-  private HttpResponse.Builder response = new HttpResponse.Builder();
+  private SimpleHttpResponse.Builder response = new SimpleHttpResponse.Builder();
   private StringBuilder elementBuffer = new StringBuilder();
   private State state = State.RESPONSE_VERSION_HTTP;
   private int counter = 0;

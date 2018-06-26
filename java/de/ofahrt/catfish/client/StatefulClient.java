@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 import javax.net.ssl.SSLContext;
 
 import de.ofahrt.catfish.api.HttpHeaderName;
+import de.ofahrt.catfish.api.HttpResponse;
 
 public final class StatefulClient {
 
@@ -44,7 +45,7 @@ public final class StatefulClient {
     connection.write(request);
     connection.write(content);
     HttpResponse response = connection.readResponse();
-    String setCookie = response.getHeader(HttpHeaderName.SET_COOKIE);
+    String setCookie = response.getHeaders().get(HttpHeaderName.SET_COOKIE);
     if (setCookie != null) {
       Matcher m = COOKIE_PATTERN.matcher(setCookie);
       if (m.lookingAt()) {

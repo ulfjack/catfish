@@ -1,81 +1,59 @@
-package de.ofahrt.catfish.client;
+package de.ofahrt.catfish.api;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
 
-import de.ofahrt.catfish.api.HttpHeaderName;
-
-public final class HttpResponse {
-  private final int majorVersion;
-  private final int minorVersion;
+public final class SimpleHttpResponse implements HttpResponse {
+  private final HttpVersion version;
   private final int statusCode;
   private final String reasonPhrase;
   private final Map<String, String> headers;
   private final byte[] content;
 
-  HttpResponse(int statusCode, byte[] content) {
-    this.majorVersion = 0;
-    this.minorVersion = 0;
-  	this.statusCode = statusCode;
-  	this.reasonPhrase = null;
-  	this.headers = new HashMap<>();
-  	this.content = content;
-  }
-
-  private HttpResponse(Builder builder) {
-    this.majorVersion = builder.majorVersion;
-    this.minorVersion = builder.minorVersion;
+  SimpleHttpResponse(Builder builder) {
+    this.version = HttpVersion.of(builder.majorVersion, builder.minorVersion);
     this.statusCode = builder.statusCode;
-    this.reasonPhrase = builder.reasonPhrase;
+    this.reasonPhrase =
+        builder.reasonPhrase != null ? builder.reasonPhrase : HttpStatusCode.getStatusText(statusCode);
     this.headers = new HashMap<>(builder.headers);
     this.content = builder.content;
   }
 
-  public int getMajorVersion() {
-    return majorVersion;
+  @Override
+  public HttpVersion getProtocolVersion() {
+    return version;
   }
 
-  public int getMinorVersion() {
-    return minorVersion;
-  }
-
+  @Override
   public int getStatusCode() {
     return statusCode;
   }
 
-  public String getReasonPhrase() {
+  @Override
+  public String getStatusLine() {
     return reasonPhrase;
   }
 
-  public InputStream getInputStream() {
-    return new ByteArrayInputStream(content);
+  @Override
+  public HttpHeaders getHeaders() {
+    return HttpHeaders.of(headers);
   }
 
-  public String getContentAsString() {
-    return new String(content, Charset.forName("UTF-8"));
-  }
-
-  public String getHeader(String key) {
-    return headers.get(key);
-  }
-
-  public Iterable<String> getHeaderNames() {
-    return headers.keySet();
+  @Override
+  public byte[] getBody() {
+    return content;
   }
 
   public static final class Builder {
-    private int majorVersion;
-    private int minorVersion;
+    private int majorVersion = 1;
+    private int minorVersion = 1;
     private int statusCode;
     private String reasonPhrase;
     private final Map<String, String> headers = new HashMap<>();
     private byte[] content = new byte[0];
 
-    public HttpResponse build() {
-      return new HttpResponse(this);
+    public SimpleHttpResponse build() {
+      return new SimpleHttpResponse(this);
     }
 
     public Builder setMajorVersion(int majorVersion) {

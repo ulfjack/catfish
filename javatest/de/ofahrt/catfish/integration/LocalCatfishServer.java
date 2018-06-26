@@ -2,15 +2,14 @@ package de.ofahrt.catfish.integration;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.HttpServerListener;
+import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.TestServlet;
 import de.ofahrt.catfish.api.Connection;
+import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.client.HttpConnection;
-import de.ofahrt.catfish.client.HttpResponse;
 
 final class LocalCatfishServer implements Server {
 
