@@ -82,15 +82,19 @@ public final class SimpleHttpResponse implements HttpResponse {
     }
 
     public Builder addHeader(String key, String value) {
-      if (key == null) {
-        throw new NullPointerException();
-      }
-      if (value == null) {
-        throw new NullPointerException();
-      }
+      Preconditions.checkNotNull(key);
+      Preconditions.checkNotNull(value);
       key = HttpHeaderName.canonicalize(key);
       if (headers.get(key) != null) {
-        value = headers.get(key)+", "+value;
+        if (!HttpHeaderName.mayOccurMultipleTimes(key)) {
+          throw new IllegalArgumentException("Illegal message headers: multiple occurrance for non-list field");
+        }
+        value = headers.get(key) + ", " + value;
+      }
+      if (HttpHeaderName.HOST.equals(key)) {
+        if (!HttpHeaderName.validHostPort(value)) {
+          throw new IllegalArgumentException("Illegal 'Host' header");
+        }
       }
       headers.put(key, value);
       return this;
