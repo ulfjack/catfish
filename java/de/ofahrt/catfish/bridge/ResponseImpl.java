@@ -17,15 +17,18 @@ import javax.servlet.http.HttpServletResponse;
 
 import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpHeaders;
+import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpStatusCode;
 import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpVersion;
+import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.utils.HttpContentType;
 import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.MimeType;
 
 public final class ResponseImpl implements HttpServletResponse {
+  private final HttpRequest request;
   private final HttpResponseWriter responseWriter;
   private final ResponsePolicy policy;
 
@@ -39,13 +42,12 @@ public final class ResponseImpl implements HttpServletResponse {
   private Locale defaultLocale = Locale.US;
   private Locale locale;
 
-  private boolean compressable;
-
   private OutputStream keepStream;
 
   private HashMap<String, String> header = new HashMap<>();
 
-  ResponseImpl(HttpResponseWriter responseWriter, ResponsePolicy policy) {
+  ResponseImpl(HttpRequest request, HttpResponseWriter responseWriter, ResponsePolicy policy) {
+    this.request = request;
     this.responseWriter = responseWriter;
     this.policy = policy;
   }
@@ -70,13 +72,6 @@ public final class ResponseImpl implements HttpServletResponse {
 
   private String getHeader(String key) {
     return header.get(canonicalize(key));
-  }
-
-  void setCompressionAllowed(boolean how) {
-    if (isCommitted) {
-      throw new IllegalStateException();
-    }
-    compressable = how;
   }
 
   void setCookie(String cookie) {
@@ -157,7 +152,7 @@ public final class ResponseImpl implements HttpServletResponse {
       }
     };
 
-    if (compressable && policy.shouldCompress(mimeType)) {
+    if (policy.shouldCompress(request, mimeType)) {
       setHeaderInternal(HttpHeaderName.CONTENT_ENCODING, "gzip");
       try {
         keepStream = new GZIPOutputStream(internalStream);

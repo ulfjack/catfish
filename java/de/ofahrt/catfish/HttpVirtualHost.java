@@ -10,8 +10,12 @@ import javax.net.ssl.SSLContext;
 import javax.servlet.Filter;
 import javax.servlet.Servlet;
 
+import de.ofahrt.catfish.bridge.ServletHttpHandler;
+import de.ofahrt.catfish.bridge.SessionManager;
+import de.ofahrt.catfish.model.server.HttpHandler;
+
 public final class HttpVirtualHost {
-  private final Servlet notFoundServlet = new DefaultNotFoundServlet();
+  private final HttpHandler notFoundHandler = new DefaultNotFoundHandler();
   private final SSLContext sslContext;
   private final Directory root;
 
@@ -20,22 +24,22 @@ public final class HttpVirtualHost {
     this.root = builder.root.createDirectory();
   }
 
-  public SSLContext getSSLContext() {
+  SSLContext getSSLContext() {
     return sslContext;
   }
 
-  public FilterDispatcher determineDispatcher(String path) {
+  HttpHandler determineHttpHandler(String path) {
     Entry entry = findEntry(path);
     if (entry != null) {
-      return new FilterDispatcher(Collections.<Filter>emptyList(), entry.servlet);
+      return entry.handler;
     } else {
-      return new FilterDispatcher(Collections.<Filter>emptyList(), notFoundServlet);
+      return notFoundHandler;
     }
   }
 
-  Servlet find(String path) {
+  HttpHandler find(String path) {
     Entry e = findEntry(path);
-    return e == null ? null : e.servlet;
+    return e == null ? null : e.handler;
   }
 
   private Entry findEntry(String path) {
@@ -69,18 +73,18 @@ public final class HttpVirtualHost {
   }
 
   private static abstract class Entry {
-    private final Servlet servlet;
+    private final HttpHandler handler;
 
-    Entry(Servlet servlet) {
-      this.servlet = servlet;
+    Entry(HttpHandler handler) {
+      this.handler = handler;
     }
 
     abstract boolean matches(String filename);
   }
 
   private static class DirectoryEntry extends Entry {
-    DirectoryEntry(Servlet servlet) {
-      super(servlet);
+    DirectoryEntry(HttpHandler handler) {
+      super(handler);
     }
 
     @Override
@@ -90,16 +94,16 @@ public final class HttpVirtualHost {
   }
 
   private static class RecursiveEntry extends DirectoryEntry {
-    RecursiveEntry(Servlet servlet) {
-      super(servlet);
+    RecursiveEntry(HttpHandler handler) {
+      super(handler);
     }
   }
 
   private static class ExactEntry extends Entry {
     private final String exactName;
 
-    ExactEntry(Servlet servlet, String exactName) {
-      super(servlet);
+    ExactEntry(HttpHandler handler, String exactName) {
+      super(handler);
       this.exactName = exactName;
     }
 
@@ -148,8 +152,9 @@ public final class HttpVirtualHost {
   }
 
   public static final class Builder {
-    private SSLContext sslContext;
     private final DirectoryBuilder root = new DirectoryBuilder();
+    private SSLContext sslContext;
+    private SessionManager sessionManager;
 
     public HttpVirtualHost build() {
       return new HttpVirtualHost(this);
@@ -157,6 +162,11 @@ public final class HttpVirtualHost {
 
     public Builder withSSLContext(@SuppressWarnings("hiding") SSLContext sslContext) {
       this.sslContext = sslContext;
+      return this;
+    }
+
+    public Builder withSessionManager(@SuppressWarnings("hiding") SessionManager sessionManager) {
+      this.sessionManager = sessionManager;
       return this;
     }
 
@@ -168,31 +178,43 @@ public final class HttpVirtualHost {
       return current;
     }
 
-    public Builder directory(String prefix, Servlet servlet) {
+    public Builder directory(String prefix, HttpHandler handler) {
       Preconditions.checkArgument(prefix.startsWith("/"));
       Preconditions.checkArgument(prefix.endsWith("/"));
-      Preconditions.checkNotNull(servlet);
+      Preconditions.checkNotNull(handler);
       DirectoryBuilder dir = walk(new PathFragmentIterator(prefix));
-      dir.servlets.add(new DirectoryEntry(servlet));
+      dir.servlets.add(new DirectoryEntry(handler));
       return this;
+    }
+
+    public Builder recursive(String prefix, HttpHandler handler) {
+      Preconditions.checkArgument(prefix.startsWith("/"));
+      Preconditions.checkArgument(prefix.endsWith("/"));
+      Preconditions.checkNotNull(handler);
+      DirectoryBuilder dir = walk(new PathFragmentIterator(prefix));
+      dir.servlets.add(new RecursiveEntry(handler));
+      return this;
+    }
+
+    public Builder exact(String path, HttpHandler handler) {
+      Preconditions.checkArgument(path.startsWith("/"));
+      Preconditions.checkNotNull(handler);
+      PathFragmentIterator it = new PathFragmentIterator(path);
+      DirectoryBuilder dir = walk(it);
+      dir.servlets.add(new ExactEntry(handler, it.getFilename()));
+      return this;
+    }
+
+    public Builder directory(String prefix, Servlet servlet) {
+      return directory(prefix, new ServletHttpHandler(sessionManager, servlet));
     }
 
     public Builder recursive(String prefix, Servlet servlet) {
-      Preconditions.checkArgument(prefix.startsWith("/"));
-      Preconditions.checkArgument(prefix.endsWith("/"));
-      Preconditions.checkNotNull(servlet);
-      DirectoryBuilder dir = walk(new PathFragmentIterator(prefix));
-      dir.servlets.add(new RecursiveEntry(servlet));
-      return this;
+      return recursive(prefix, new ServletHttpHandler(sessionManager, servlet));
     }
 
     public Builder exact(String path, Servlet servlet) {
-      Preconditions.checkArgument(path.startsWith("/"));
-      Preconditions.checkNotNull(servlet);
-      PathFragmentIterator it = new PathFragmentIterator(path);
-      DirectoryBuilder dir = walk(it);
-      dir.servlets.add(new ExactEntry(servlet, it.getFilename()));
-      return this;
+      return exact(path, new ServletHttpHandler(sessionManager, servlet));
     }
   }
 }

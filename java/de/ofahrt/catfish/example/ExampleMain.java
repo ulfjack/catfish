@@ -12,6 +12,7 @@ import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.fastcgi.FcgiServlet;
 import de.ofahrt.catfish.servlets.CheckCompression;
 import de.ofahrt.catfish.servlets.CheckPost;
@@ -71,10 +72,11 @@ public class ExampleMain {
     });
 
     HttpVirtualHost.Builder dir = new HttpVirtualHost.Builder()
-       .exact("/hello.php", new FcgiServlet())
-       .exact("/post", new CheckPost())
-       .exact("/", new CheckCompression())
-       .exact("/large", new LargeResponseServlet(16536));
+        .withSessionManager(new SessionManager())
+        .exact("/hello.php", new FcgiServlet())
+        .exact("/post", new CheckPost())
+        .exact("/", new CheckCompression())
+        .exact("/large", new LargeResponseServlet(16536));
 
     server.addHttpHost("localhost", dir.build());
     server.setKeepAliveAllowed(true);

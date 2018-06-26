@@ -22,6 +22,7 @@ import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.api.SimpleHttpRequest;
 import de.ofahrt.catfish.bridge.RequestImpl;
 import de.ofahrt.catfish.bridge.ServletHelper;
+import de.ofahrt.catfish.model.server.ResponsePolicy;
 
 /**
  * Tests for {@link RequestImpl}.

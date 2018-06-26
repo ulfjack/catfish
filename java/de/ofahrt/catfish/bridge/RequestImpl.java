@@ -35,6 +35,7 @@ import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.api.StandardResponses;
+import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import de.ofahrt.catfish.utils.HttpDate;
 
@@ -91,9 +92,8 @@ public final class RequestImpl implements HttpServletRequest {
     this.ssl = connection.isSsl();
     this.sessionManager = sessionManager;
 
-    this.response = new ResponseImpl(writer, policy);
+    this.response = new ResponseImpl(request, writer, policy);
     this.response.setVersion(HttpVersion.HTTP_1_1);
-    this.response.setCompressionAllowed(supportGzipCompression());
   }
 
   private static Map<String, String> parseQuery(String query, String charset) {

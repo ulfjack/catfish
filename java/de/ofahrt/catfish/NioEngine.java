@@ -149,7 +149,8 @@ final class NioEngine {
         decryptedInputBuffer.flip(); // prepare for reading
         decryptedOutputBuffer.clear();
         decryptedOutputBuffer.flip(); // prepare for reading
-        HttpStage httpStage = new HttpStage(this, server::queueRequest, decryptedInputBuffer, decryptedOutputBuffer);
+        HttpStage httpStage = new HttpStage(
+            this, server::queueRequest, server::getResponsePolicy, decryptedInputBuffer, decryptedOutputBuffer);
         this.first = new SslStage(
             this,
             httpStage,
@@ -159,7 +160,8 @@ final class NioEngine {
             decryptedInputBuffer,
             decryptedOutputBuffer);
       } else {
-        this.first = new HttpStage(this, server::queueRequest, inputBuffer, outputBuffer);
+        this.first = new HttpStage(
+            this, server::queueRequest, server::getResponsePolicy, inputBuffer, outputBuffer);
       }
     }
 

@@ -25,8 +25,8 @@ import de.ofahrt.catfish.api.SimpleHttpRequest;
 import de.ofahrt.catfish.api.SimpleHttpResponse;
 import de.ofahrt.catfish.bridge.RequestImpl;
 import de.ofahrt.catfish.bridge.ResponseImpl;
-import de.ofahrt.catfish.bridge.ResponsePolicy;
 import de.ofahrt.catfish.bridge.TestHelper;
+import de.ofahrt.catfish.model.server.ResponsePolicy;
 
 public abstract class CatfishHttpClient {
 

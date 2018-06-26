@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.bridge;
 
 import java.io.IOException;
 import java.util.List;
@@ -13,7 +13,6 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 final class FilterDispatcher implements FilterChain {
-
   private int nextIndex = -1;
   private final List<Filter> filters;
   private final Servlet servlet;

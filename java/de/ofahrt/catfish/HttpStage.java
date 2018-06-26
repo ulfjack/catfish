@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
 import de.ofahrt.catfish.NioEngine.Pipeline;
@@ -18,6 +19,7 @@ import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.MalformedRequestException;
+import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
 final class HttpStage implements Stage {
@@ -29,10 +31,12 @@ final class HttpStage implements Stage {
 
   private final class HttpResponseWriterImpl implements HttpResponseWriter {
     private final HttpRequest request;
+    private final ResponsePolicy responsePolicy;
     private final AtomicBoolean committed = new AtomicBoolean();
 
-    HttpResponseWriterImpl(HttpRequest request) {
+    HttpResponseWriterImpl(HttpRequest request, ResponsePolicy responsePolicy) {
       this.request = request;
+      this.responsePolicy = responsePolicy;
     }
 
     @Override
@@ -48,7 +52,7 @@ final class HttpStage implements Stage {
           ((responseToWrite.getStatusCode() / 100) == 1)
           || (responseToWrite.getStatusCode() == 204)
           || (responseToWrite.getStatusCode() == 304);
-      boolean keepAlive = HttpConnectionHeader.mayKeepAlive(request); // && server.isKeepAliveAllowed();
+      boolean keepAlive = responsePolicy.shouldKeepAlive(request);
       Map<String, String> overrides = new HashMap<>();
       if (!keepAlive) {
         overrides.put(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE);
@@ -88,6 +92,7 @@ final class HttpStage implements Stage {
 
   private final Pipeline parent;
   private final HttpStage.RequestQueue requestHandler;
+  private final Supplier<ResponsePolicy> responsePolicySupplier;
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
   private final IncrementalHttpRequestParser parser;
@@ -96,10 +101,12 @@ final class HttpStage implements Stage {
   public HttpStage(
       Pipeline parent,
       HttpStage.RequestQueue requestHandler,
+      Supplier<ResponsePolicy> responsePolicySupplier,
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer) {
     this.parent = parent;
     this.requestHandler = requestHandler;
+    this.responsePolicySupplier = responsePolicySupplier;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
     this.parser = new IncrementalHttpRequestParser();
@@ -188,7 +195,7 @@ final class HttpStage implements Stage {
   }
 
   private final void queueRequest(HttpRequest request) {
-    HttpResponseWriter writer = new HttpResponseWriterImpl(request);
+    HttpResponseWriter writer = new HttpResponseWriterImpl(request, responsePolicySupplier.get());
     requestHandler.queueRequest(parent.getConnection(), request, writer);
   }
 }
