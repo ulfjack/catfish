@@ -16,6 +16,8 @@ import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpStatusCode;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.SimpleHttpRequest;
+import de.ofahrt.catfish.bridge.ServletVirtualHostBuilder;
+import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 
@@ -32,7 +34,8 @@ public class CatfishHttpServerTest {
 
   private static HttpResponse createResponse(HttpRequest request) throws Exception {
     CatfishHttpServer server = new CatfishHttpServer(HttpServerListener.NULL);
-    HttpVirtualHost host = new HttpVirtualHost.Builder()
+    HttpVirtualHost host = new ServletVirtualHostBuilder()
+        .withSessionManager(new SessionManager())
         .exact("/index", new TestServlet())
         .build();
     server.addHttpHost("localhost", host);

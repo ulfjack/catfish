@@ -4,6 +4,7 @@ java_library(
   name = "bridge",
   srcs = glob(["*.java"]),
   deps = [
+    "//java/de/ofahrt/catfish",
     "//java/de/ofahrt/catfish/api",
     "//java/de/ofahrt/catfish/model/server",
     "//java/de/ofahrt/catfish/utils",

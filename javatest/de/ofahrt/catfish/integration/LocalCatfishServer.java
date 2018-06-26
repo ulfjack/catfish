@@ -8,6 +8,7 @@ import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.TestServlet;
 import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpResponse;
+import de.ofahrt.catfish.bridge.ServletVirtualHostBuilder;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.client.HttpConnection;
@@ -62,15 +63,14 @@ final class LocalCatfishServer implements Server {
 
   @Override
   public void start() throws Exception {
-    HttpVirtualHost.Builder builder = new HttpVirtualHost.Builder()
+    HttpVirtualHost host = new ServletVirtualHostBuilder()
         .withSessionManager(new SessionManager())
         .exact("/compression.html", new TestServlet())
-        .directory("/", new HttpRequestTestServlet());
+        .directory("/", new HttpRequestTestServlet())
+        .withSSLContext(startSsl ? TestHelper.getSSLContext() : null)
+        .build();
 
-    if (startSsl) {
-      builder.withSSLContext(TestHelper.getSSLContext());
-    }
-    server.addHttpHost("localhost", builder.build());
+    server.addHttpHost("localhost", host);
     server.setKeepAliveAllowed(true);
     server.listenHttp(HTTP_PORT);
     if (startSsl) {
