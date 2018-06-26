@@ -20,8 +20,8 @@ import de.ofahrt.catfish.api.HttpHeaders;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpStatusCode;
-import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpVersion;
+import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.utils.HttpContentType;
 import de.ofahrt.catfish.utils.HttpDate;
@@ -46,10 +46,10 @@ public final class ResponseImpl implements HttpServletResponse {
 
   private HashMap<String, String> header = new HashMap<>();
 
-  ResponseImpl(HttpRequest request, HttpResponseWriter responseWriter, ResponsePolicy policy) {
+  ResponseImpl(HttpRequest request, HttpResponseWriter responseWriter) {
     this.request = request;
     this.responseWriter = responseWriter;
-    this.policy = policy;
+    this.policy = responseWriter.getResponsePolicy();
   }
 
   void setVersion(HttpVersion version) {

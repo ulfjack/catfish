@@ -80,7 +80,7 @@ public class IncrementalHttpParserIncrementalTest extends HttpParserTest {
   	        new InetSocketAddress("127.0.0.1", 1234),
   	        false),
   	    null,
-  	    ResponsePolicy.EMPTY,
+  	    ResponsePolicy.ALLOW_NOTHING,
   	    null);
   }
 }

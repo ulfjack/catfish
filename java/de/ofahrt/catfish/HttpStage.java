@@ -17,8 +17,8 @@ import de.ofahrt.catfish.api.HttpHeaders;
 import de.ofahrt.catfish.api.HttpMethodName;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
-import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.MalformedRequestException;
+import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
@@ -37,6 +37,11 @@ final class HttpStage implements Stage {
     HttpResponseWriterImpl(HttpRequest request, ResponsePolicy responsePolicy) {
       this.request = request;
       this.responsePolicy = responsePolicy;
+    }
+
+    @Override
+    public ResponsePolicy getResponsePolicy() {
+      return responsePolicy;
     }
 
     @Override

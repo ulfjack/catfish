@@ -49,6 +49,7 @@ public interface HttpResponse {
   }
 
   default HttpResponse withHeaderOverrides(HttpHeaders overrides) {
+    HttpHeaders combined = HttpResponse.this.getHeaders().withOverrides(overrides);
     return new HttpResponse() {
       @Override
       public HttpVersion getProtocolVersion() {
@@ -67,7 +68,7 @@ public interface HttpResponse {
 
       @Override
       public HttpHeaders getHeaders() {
-        return HttpResponse.this.getHeaders().withOverrides(overrides);
+        return combined;
       }
 
       @Override

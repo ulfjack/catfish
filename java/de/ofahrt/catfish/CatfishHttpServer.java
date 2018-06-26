@@ -22,10 +22,10 @@ import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
-import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.api.StandardResponses;
 import de.ofahrt.catfish.model.server.HttpHandler;
+import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
@@ -241,7 +241,7 @@ public final class CatfishHttpServer {
         return;
       }
       try {
-        handler.handle(connection, request, writer, getResponsePolicy());
+        handler.handle(connection, request, writer);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }

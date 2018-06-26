@@ -31,11 +31,10 @@ import javax.servlet.http.HttpSession;
 import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpRequest;
-import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.api.StandardResponses;
-import de.ofahrt.catfish.model.server.ResponsePolicy;
+import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import de.ofahrt.catfish.utils.HttpDate;
 
@@ -71,8 +70,10 @@ public final class RequestImpl implements HttpServletRequest {
   private final HashMap<String, Object> attributes = new HashMap<>();
 
   public RequestImpl(
-      HttpRequest request, Connection connection, SessionManager sessionManager,
-      ResponsePolicy policy, HttpResponseWriter writer)
+      HttpRequest request,
+      Connection connection,
+      SessionManager sessionManager,
+      HttpResponseWriter writer)
           throws MalformedRequestException {
     this.request = request;
     this.unparsedUri = request.getUri();
@@ -92,7 +93,7 @@ public final class RequestImpl implements HttpServletRequest {
     this.ssl = connection.isSsl();
     this.sessionManager = sessionManager;
 
-    this.response = new ResponseImpl(request, writer, policy);
+    this.response = new ResponseImpl(request, writer);
     this.response.setVersion(HttpVersion.HTTP_1_1);
   }
 

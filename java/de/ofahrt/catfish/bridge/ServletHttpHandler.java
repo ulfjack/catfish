@@ -8,11 +8,10 @@ import javax.servlet.Servlet;
 
 import de.ofahrt.catfish.api.Connection;
 import de.ofahrt.catfish.api.HttpRequest;
-import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpStatusCode;
 import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.model.server.HttpHandler;
-import de.ofahrt.catfish.model.server.ResponsePolicy;
+import de.ofahrt.catfish.model.server.HttpResponseWriter;
 
 public final class ServletHttpHandler implements HttpHandler {
   private final SessionManager sessionManager;
@@ -28,10 +27,10 @@ public final class ServletHttpHandler implements HttpHandler {
   }
 
   @Override
-  public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter, ResponsePolicy responsePolicy) throws IOException {
+  public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter) throws IOException {
     RequestImpl servletRequest;
     try {
-      servletRequest = new RequestImpl(request, connection, sessionManager, responsePolicy, responseWriter);
+      servletRequest = new RequestImpl(request, connection, sessionManager, responseWriter);
     } catch (MalformedRequestException e) {
       responseWriter.commitBuffered(e.getErrorResponse());
       return;

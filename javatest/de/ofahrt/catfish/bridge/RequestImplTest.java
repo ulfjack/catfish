@@ -33,7 +33,7 @@ public class RequestImplTest {
         builder.build(),
         new Connection(null, null, false),
         null,
-        ResponsePolicy.EMPTY,
+        ResponsePolicy.ALLOW_NOTHING,
         null);
   }
 
@@ -148,7 +148,7 @@ public class RequestImplTest {
             .build(),
         new Connection(new InetSocketAddress(80), null, false),
         null,
-        ResponsePolicy.EMPTY,
+        ResponsePolicy.ALLOW_NOTHING,
         null);
     ServletHelper.getCompleteUrl(request);
   }
@@ -192,7 +192,7 @@ public class RequestImplTest {
             .addHeader("Host", "host:80").build(),
         new Connection(null, null, true),
         null,
-        ResponsePolicy.EMPTY,
+        ResponsePolicy.ALLOW_NOTHING,
         null);
     assertEquals("https://host:80/", request.getRequestURL().toString());
   }
@@ -206,7 +206,7 @@ public class RequestImplTest {
             .build(),
         new Connection(null, null, true),
         null,
-        ResponsePolicy.EMPTY,
+        ResponsePolicy.ALLOW_NOTHING,
         null);
     assertEquals("https://host/", request.getRequestURL().toString());
   }

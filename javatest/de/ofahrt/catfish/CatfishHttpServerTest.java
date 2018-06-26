@@ -14,9 +14,10 @@ import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.HttpStatusCode;
-import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.SimpleHttpRequest;
+import de.ofahrt.catfish.model.server.HttpResponseWriter;
+import de.ofahrt.catfish.model.server.ResponsePolicy;
 
 public class CatfishHttpServerTest {
 
@@ -39,6 +40,11 @@ public class CatfishHttpServerTest {
     final AtomicReference<HttpResponse> writtenResponse = new AtomicReference<>();
     final AtomicReference<ByteArrayOutputStream> writtenOutput = new AtomicReference<>();
     HttpResponseWriter writer = new HttpResponseWriter() {
+      @Override
+      public ResponsePolicy getResponsePolicy() {
+        return ResponsePolicy.ALLOW_NOTHING;
+      }
+
       @Override
       public void commitBuffered(HttpResponse response) {
         if (!writtenResponse.compareAndSet(null, response)) {

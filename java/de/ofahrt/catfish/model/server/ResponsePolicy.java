@@ -3,7 +3,7 @@ package de.ofahrt.catfish.model.server;
 import de.ofahrt.catfish.api.HttpRequest;
 
 public interface ResponsePolicy {
-  public static final ResponsePolicy EMPTY = new ResponsePolicy() {
+  public static final ResponsePolicy ALLOW_NOTHING = new ResponsePolicy() {
     @Override
     public boolean shouldKeepAlive(HttpRequest request) {
       return false;

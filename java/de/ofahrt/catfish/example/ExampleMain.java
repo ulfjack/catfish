@@ -14,7 +14,6 @@ import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.fastcgi.FcgiServlet;
-import de.ofahrt.catfish.servlets.CheckCompression;
 import de.ofahrt.catfish.servlets.CheckPost;
 import de.ofahrt.catfish.ssl.SSLContextFactory;
 import de.ofahrt.catfish.ssl.SSLContextFactory.SSLInfo;
@@ -75,7 +74,7 @@ public class ExampleMain {
         .withSessionManager(new SessionManager())
         .exact("/hello.php", new FcgiServlet())
         .exact("/post", new CheckPost())
-        .exact("/", new CheckCompression())
+        .exact("/", new TraceHandler())
         .exact("/large", new LargeResponseServlet(16536));
 
     server.addHttpHost("localhost", dir.build());

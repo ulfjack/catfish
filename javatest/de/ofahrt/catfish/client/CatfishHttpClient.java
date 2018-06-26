@@ -19,13 +19,13 @@ import de.ofahrt.catfish.api.HttpHeaderName;
 import de.ofahrt.catfish.api.HttpMethodName;
 import de.ofahrt.catfish.api.HttpRequest;
 import de.ofahrt.catfish.api.HttpResponse;
-import de.ofahrt.catfish.api.HttpResponseWriter;
 import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.SimpleHttpRequest;
 import de.ofahrt.catfish.api.SimpleHttpResponse;
 import de.ofahrt.catfish.bridge.RequestImpl;
 import de.ofahrt.catfish.bridge.ResponseImpl;
 import de.ofahrt.catfish.bridge.TestHelper;
+import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 
 public abstract class CatfishHttpClient {
@@ -70,6 +70,11 @@ public abstract class CatfishHttpClient {
       }
 
       @Override
+      public ResponsePolicy getResponsePolicy() {
+        return ResponsePolicy.ALLOW_NOTHING;
+      }
+
+      @Override
       public void commitBuffered(@SuppressWarnings("hiding") HttpResponse response) {
         if (this.response != null) {
           throw new IllegalStateException();
@@ -104,7 +109,7 @@ public abstract class CatfishHttpClient {
     public HttpResponse send(String schemaHostPort, HttpRequest request) throws IOException {
       BufferedHttpResponseWriter writer = new BufferedHttpResponseWriter();
       RequestImpl servletRequest = new RequestImpl(
-          request, new Connection(null, null, false), null, ResponsePolicy.EMPTY, writer);
+          request, new Connection(null, null, false), null, ResponsePolicy.ALLOW_NOTHING, writer);
       ResponseImpl servletResponse = servletRequest.getResponse();
       try {
         servlet.service(servletRequest, servletResponse);
