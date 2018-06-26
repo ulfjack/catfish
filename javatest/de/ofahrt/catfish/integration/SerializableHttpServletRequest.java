@@ -28,7 +28,6 @@ import de.ofahrt.catfish.bridge.Enumerations;
 
 @SuppressWarnings("rawtypes")
 public final class SerializableHttpServletRequest implements HttpServletRequest, Serializable {
-
   private static final long serialVersionUID = 1L;
 
   public static SerializableHttpServletRequest parse(InputStream in) {

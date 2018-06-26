@@ -3,19 +3,22 @@ package de.ofahrt.catfish.integration;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+
 import javax.servlet.http.HttpServletRequest;
+
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import de.ofahrt.catfish.HttpParserTest;
+
 import de.ofahrt.catfish.api.HttpResponse;
 import de.ofahrt.catfish.api.MalformedRequestException;
 import de.ofahrt.catfish.client.HttpConnection;
 
-public class SslHttpParserIntegrationTest extends HttpParserTest {
+public class SslHttpParserIntegrationTest extends ServletEngineTest {
 
   private static LocalCatfishServer localServer;
 
@@ -37,7 +40,7 @@ public class SslHttpParserIntegrationTest extends HttpParserTest {
   }
 
   @Override
-  public HttpServletRequest parse(byte[] data) throws Exception {
+  public HttpServletRequest parseLegacy(byte[] data) throws Exception {
     HttpConnection connection = localServer.connect(true);
     connection.write(data);
     HttpResponse response = connection.readResponse();
@@ -61,15 +64,15 @@ public class SslHttpParserIntegrationTest extends HttpParserTest {
 
   @Test
   public void isSecure() throws Exception {
-    HttpServletRequest request = parse("GET / HTTP/1.0\n\n");
+    HttpServletRequest request = parseLegacy("GET / HTTP/1.0\n\n");
     assertTrue(request.isSecure());
   }
 
   @Test
   public void getRequestUrlReturnsAbsoluteUrl() throws Exception {
     assertEquals("https://127.0.0.1:" + getPort() + "/",
-        parse("GET / HTTP/1.0\n\n").getRequestURL().toString());
+        parseLegacy("GET / HTTP/1.0\n\n").getRequestURL().toString());
     assertEquals("https://127.0.0.1/",
-        parse("GET http://127.0.0.1/ HTTP/1.0\n\n").getRequestURL().toString());
+        parseLegacy("GET http://127.0.0.1/ HTTP/1.0\n\n").getRequestURL().toString());
   }
 }

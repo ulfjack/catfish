@@ -58,6 +58,11 @@ public final class HttpHeaders implements Iterable<Map.Entry<String, String>> {
     return entries.entrySet().iterator();
   }
 
+  @Override
+  public String toString() {
+    return entries.toString();
+  }
+
   public HttpHeaders withOverrides(HttpHeaders overrides) {
     TreeMap<String, String> mergedMap = new TreeMap<>(entries);
     mergedMap.putAll(overrides.entries);

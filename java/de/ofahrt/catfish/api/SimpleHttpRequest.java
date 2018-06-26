@@ -1,5 +1,7 @@
 package de.ofahrt.catfish.api;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -65,6 +67,7 @@ public final class SimpleHttpRequest implements HttpRequest {
       errorResponse = null;
     }
 
+    @SuppressWarnings("unused")
     public HttpRequest build() throws MalformedRequestException {
       if ((errorResponse == null)
           && (version.compareTo(HttpVersion.HTTP_1_1) >= 0)
@@ -73,6 +76,13 @@ public final class SimpleHttpRequest implements HttpRequest {
       }
       if ((unparsedUri == null) && (errorResponse == null)) {
         throw new IllegalStateException("Missing URI!");
+      }
+      try {
+        if (unparsedUri != null) {
+          new URI(unparsedUri);
+        }
+      } catch (URISyntaxException e) {
+        setError(HttpStatusCode.BAD_REQUEST, "Malformed URI");
       }
       if (errorResponse != null) {
         throw new MalformedRequestException(errorResponse);

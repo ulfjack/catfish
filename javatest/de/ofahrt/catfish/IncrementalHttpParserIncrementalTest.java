@@ -2,14 +2,12 @@ package de.ofahrt.catfish;
 
 import static org.junit.Assert.assertTrue;
 
-import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
 
 import org.junit.runner.RunWith;
 
-import de.ofahrt.catfish.api.Connection;
-import de.ofahrt.catfish.bridge.RequestImpl;
+import de.ofahrt.catfish.api.HttpRequest;
 import info.adams.junit.NamedParameterized;
 import info.adams.junit.NamedParameterized.Parameters;
 
@@ -56,29 +54,22 @@ public class IncrementalHttpParserIncrementalTest extends HttpParserTest {
   }
 
   @Override
-  public RequestImpl parse(byte[] data) throws Exception {
-  	IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
-  	int pos = 0;
-  	for (int i = 0; i < lengths.length; i++) {
-  		int len = Math.min(data.length-pos, lengths[i]);
-  		int consumed = parser.parse(data, pos, len);
-  		assertTrue(consumed != 0);
-  		pos += len;
-  		if (pos == data.length) {
-  		  break;
-  		}
-  		if (parser.isDone()) {
-  		  break;
-  		}
-  	}
-  	assertTrue(parser.isDone());
-  	return new RequestImpl(
-  	    parser.getRequest(),
-  	    new Connection(
-  	        new InetSocketAddress("127.0.0.1", 8080),
-  	        new InetSocketAddress("127.0.0.1", 1234),
-  	        false),
-  	    null,
-  	    null);
+  public HttpRequest parse(byte[] data) throws Exception {
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    int pos = 0;
+    for (int i = 0; i < lengths.length; i++) {
+      int len = Math.min(data.length-pos, lengths[i]);
+      int consumed = parser.parse(data, pos, len);
+      assertTrue(consumed != 0);
+      pos += len;
+      if (pos == data.length) {
+        break;
+      }
+      if (parser.isDone()) {
+        break;
+      }
+    }
+    assertTrue(parser.isDone());
+    return parser.getRequest();
   }
 }

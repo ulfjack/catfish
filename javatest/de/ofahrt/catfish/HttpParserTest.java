@@ -1,24 +1,22 @@
 package de.ofahrt.catfish;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 import java.nio.charset.Charset;
 
-import javax.servlet.http.HttpServletRequest;
-
 import org.junit.Test;
 
+import de.ofahrt.catfish.api.HttpRequest;
+import de.ofahrt.catfish.api.HttpVersion;
 import de.ofahrt.catfish.api.MalformedRequestException;
-import de.ofahrt.catfish.bridge.RequestImpl;
 
 /**
  * Tests a parser for compliance with RFC 2616: http://www.ietf.org/rfc/rfc2616.txt
  */
 public abstract class HttpParserTest {
-
-  public abstract HttpServletRequest parse(byte[] data) throws Exception;
+  public abstract HttpRequest parse(byte[] data) throws Exception;
 
   public int getPort() {
     return 8080;
@@ -28,8 +26,8 @@ public abstract class HttpParserTest {
     return data.replace("\n", "\r\n").getBytes(Charset.forName("ISO-8859-1"));
   }
 
-  public HttpServletRequest parse(String data) throws Exception {
-  	return parse(toBytes(data));
+  public HttpRequest parse(String data) throws Exception {
+    return parse(toBytes(data));
   }
 
   public void checkError(String errorMessage, byte[] bytes) throws Exception {
@@ -47,74 +45,74 @@ public abstract class HttpParserTest {
 
   @Test
   public void parseGetWithoutHeader() throws Exception {
-  	HttpServletRequest request = parse("GET / HTTP/1.0\n\n");
+    HttpRequest request = parse("GET / HTTP/1.0\n\n");
   	assertEquals("GET", request.getMethod());
   }
 
   @Test
   public void zeroMajorVersion() throws Exception {
-  	HttpServletRequest request = parse("GET / HTTP/0.7\n\n");
-  	assertEquals("HTTP/0.7", request.getProtocol());
+    HttpRequest request = parse("GET / HTTP/0.7\n\n");
+  	assertEquals(HttpVersion.of(0, 7), request.getVersion());
   }
 
   @Test // Leading zeros MUST be ignored by recipients.
   public void ignoreLeadingZerosInMajorVersion() throws Exception {
-  	HttpServletRequest request = parse("GET / HTTP/01.0\n\n");
-  	assertEquals("HTTP/1.0", request.getProtocol());
+    HttpRequest request = parse("GET / HTTP/01.0\n\n");
+  	assertEquals(HttpVersion.HTTP_1_0, request.getVersion());
   }
 
   @Test
   public void ignoreLeadingZerosInMinorVersion() throws Exception {
-  	HttpServletRequest request = parse("GET / HTTP/1.08\nHost: \n\n");
-  	assertEquals("HTTP/1.8", request.getProtocol());
+    HttpRequest request = parse("GET / HTTP/1.08\nHost: \n\n");
+  	assertEquals(HttpVersion.of(1, 8), request.getVersion());
   }
 
   @Test
   public void parseGetWithHeader() throws Exception {
-  	HttpServletRequest request = parse("GET / HTTP/1.1\nHost: localhost\n\n");
-  	assertEquals("localhost", request.getHeader("Host"));
+    HttpRequest request = parse("GET / HTTP/1.1\nHost: localhost\n\n");
+  	assertEquals("localhost", request.getHeaders().get("Host"));
   }
 
   @Test
   public void parseGetWithTwoHeaders() throws Exception {
-  	HttpServletRequest request = parse("GET / HTTP/1.1\nHost: localhost\nUser-Agent: A/1\n\n");
-  	assertEquals("localhost", request.getHeader("Host"));
-  	assertEquals("A/1", request.getHeader("User-Agent"));
+    HttpRequest request = parse("GET / HTTP/1.1\nHost: localhost\nUser-Agent: A/1\n\n");
+  	assertEquals("localhost", request.getHeaders().get("Host"));
+  	assertEquals("A/1", request.getHeaders().get("User-Agent"));
   }
 
   @Test
   public void messageHeaderNamesAreCaseInsensitive() throws Exception {
-  	HttpServletRequest request = parse("GET / HTTP/1.1\nhOST: localhost\n\n");
-  	assertEquals("localhost", request.getHeader("Host"));
+    HttpRequest request = parse("GET / HTTP/1.1\nhOST: localhost\n\n");
+  	assertEquals("localhost", request.getHeaders().get("Host"));
   }
 
   @Test
   public void parseGetWithContinuation() throws Exception {
-  	HttpServletRequest request = parse("GET / HTTP/1.0\nUser-Agent: A/1\n B/2\n\n");
-  	assertEquals("A/1 B/2", request.getHeader("User-Agent"));
+    HttpRequest request = parse("GET / HTTP/1.0\nUser-Agent: A/1\n B/2\n\n");
+  	assertEquals("A/1 B/2", request.getHeaders().get("User-Agent"));
   }
 
   @Test
   public void parseGetWithDuplicateHeader() throws Exception {
-  	HttpServletRequest request = parse("GET / HTTP/1.0\nAccept: text/html\nAccept: application/xhtml+xml\n\n");
-  	assertEquals("text/html, application/xhtml+xml", request.getHeader("Accept"));
+    HttpRequest request = parse("GET / HTTP/1.0\nAccept: text/html\nAccept: application/xhtml+xml\n\n");
+  	assertEquals("text/html, application/xhtml+xml", request.getHeaders().get("Accept"));
   }
 
   @Test
   public void headerWithTrailingWhitespace() throws Exception {
-    HttpServletRequest request = parse("GET / HTTP/1.0\nUser-Agent: A/1 \t \n\n");
-    assertEquals("A/1", request.getHeader("User-Agent"));
+    HttpRequest request = parse("GET / HTTP/1.0\nUser-Agent: A/1 \t \n\n");
+    assertEquals("A/1", request.getHeaders().get("User-Agent"));
   }
 
   @Test
   public void headerWithTrailingContinuation() throws Exception {
-    HttpServletRequest request = parse("GET / HTTP/1.0\nUser-Agent: A/1\n  \n\n");
-    assertEquals("A/1", request.getHeader("User-Agent"));
+    HttpRequest request = parse("GET / HTTP/1.0\nUser-Agent: A/1\n  \n\n");
+    assertEquals("A/1", request.getHeaders().get("User-Agent"));
   }
 
   private void checkHeader(String headerName, String expectedValue, String data) throws Exception {
-    HttpServletRequest request = parse(data);
-    assertEquals(expectedValue, request.getHeader(headerName));
+    HttpRequest request = parse(data);
+    assertEquals(expectedValue, request.getHeaders().get(headerName));
   }
 
   @Test
@@ -132,34 +130,32 @@ public abstract class HttpParserTest {
   		text.append("A").append(i).append(": ").append(i).append("\n");
   	}
   	text.append("\n");
-  	HttpServletRequest request = parse(text.toString());
+  	HttpRequest request = parse(text.toString());
   	for (int i = 0; i < count; i++) {
-  		assertEquals(Integer.toString(i), request.getHeader("A" + i));
+  	  // TODO: Should HttpHeaders canonicalize on get?
+  		assertEquals(Integer.toString(i), request.getHeaders().get("a" + i));
   	}
   }
 
   @Test
   public void withContent() throws Exception {
-  	HttpServletRequest request = parse("POST / HTTP/1.0\nContent-Length: 10\n\n1234567890");
-  	byte[] data = InputStreams.toByteArray(request.getInputStream());
+    HttpRequest request = parse("POST / HTTP/1.0\nContent-Length: 10\n\n1234567890");
+  	byte[] data = request.getBody();
   	assertEquals("1234567890", new String(data, "ISO-8859-1"));
   }
 
   @Test
   public void withoutContentButWithContentLength() throws Exception {
-    HttpServletRequest request = parse("POST / HTTP/1.0\nContent-Length: 0\n\n");
-    byte[] data = InputStreams.toByteArray(request.getInputStream());
-    assertEquals(0, data.length);
+    HttpRequest request = parse("POST / HTTP/1.0\nContent-Length: 0\n\n");
+    assertArrayEquals(new byte[0], request.getBody());
   }
 
 
   // Catfish-specific tests:
   @Test
   public void starIsValidUriForOptions() throws Exception {
-    HttpServletRequest request = parse("OPTIONS * HTTP/1.0\n\n");
-    if (request instanceof RequestImpl) {
-      assertEquals("*", ((RequestImpl) request).getUnparsedUri());
-    }
+    HttpRequest request = parse("OPTIONS * HTTP/1.0\n\n");
+    assertEquals("*", request.getUri());
   }
 
   // Allowed characters in absolute paths are:
@@ -188,58 +184,13 @@ public abstract class HttpParserTest {
   //                 "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
   //      digit    = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" |
   //                 "8" | "9"
-  @Test
-  public void oddCharsInUri() throws Exception {
-    // These aren't actually allowed unescaped:
-  	assertEquals("/%7C", parse("GET /| HTTP/1.0\n\n").getRequestURI());
-  	assertEquals("/%60", parse("GET /` HTTP/1.0\n\n").getRequestURI());
-  	assertEquals("/%5E", parse("GET /^ HTTP/1.0\n\n").getRequestURI());
-  }
-
-  @Test
-  public void getWithGetParameters() throws Exception {
-    HttpServletRequest request = parse("GET /?a=b&c=d HTTP/1.0\n\n");
-    assertEquals("b", request.getParameter("a"));
-    assertEquals("d", request.getParameter("c"));
-  }
-
-  @Test
-  public void getWithGetParameterWithoutValue() throws Exception {
-    HttpServletRequest request = parse("GET /?a HTTP/1.0\n\n");
-    assertNull(request.getParameter("a"));
-//    assertEquals("", request.getParameter("a")); // Jetty implements this.
-  }
-
-  @Test
-  public void getWithGetParameterWithEmptyValue() throws Exception {
-    HttpServletRequest request = parse("GET /?a= HTTP/1.0\n\n");
-    assertEquals("", request.getParameter("a"));
-  }
-
-  @Test
-  public void getWithGetParameterWithEmptyKey() throws Exception {
-    HttpServletRequest request = parse("GET /?=a HTTP/1.0\n\n");
-    assertEquals("a", request.getParameter(""));
-  }
-
-  @Test
-  public void getWithGetParameterWithMultiAmp() throws Exception {
-    HttpServletRequest request = parse("GET /?a=b&&c=d HTTP/1.0\n\n");
-    assertEquals("b", request.getParameter("a"));
-    assertEquals("d", request.getParameter("c"));
-  }
-
-  @Test
-  public void getWithGetParameterWithEncodedValue() throws Exception {
-    HttpServletRequest request = parse("GET /?a=%20 HTTP/1.0\n\n");
-    assertEquals(" ", request.getParameter("a"));
-  }
-
-  @Test
-  public void getWithGetParameterWithEncodedKey() throws Exception {
-    HttpServletRequest request = parse("GET /?%20=a HTTP/1.0\n\n");
-    assertEquals("a", request.getParameter(" "));
-  }
+//  @Test
+//  public void oddCharsInUri() throws Exception {
+//    // These aren't actually allowed unescaped:
+//  	assertEquals("/%7C", parseLegacy("GET /| HTTP/1.0\n\n").getRequestURI());
+//  	assertEquals("/%60", parseLegacy("GET /` HTTP/1.0\n\n").getRequestURI());
+//  	assertEquals("/%5E", parseLegacy("GET /^ HTTP/1.0\n\n").getRequestURI());
+//  }
 
   // Tests for error conditions:
   @Test
@@ -262,7 +213,7 @@ public abstract class HttpParserTest {
 
   @Test
   public void badUriSyntax() throws Exception {
-    checkError("400 Bad Request", "GET 12:/path HTTP/1.0\n\n");
+    checkError("400 Malformed URI", "GET 12:/path HTTP/1.0\n\n");
   }
 
   @Test

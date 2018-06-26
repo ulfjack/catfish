@@ -302,6 +302,7 @@ final class IncrementalHttpRequestParser {
                 return setBadRequest("Content length larger than allowed");
               }
               if (contentLength == 0) {
+                builder.setBody(new byte[0]);
                 done = true;
                 return i + 1;
               }
