@@ -13,6 +13,5 @@ java_binary(
     "//java/de/ofahrt/catfish/servlets",
     "//java/de/ofahrt/catfish/ssl",
     "//java/de/ofahrt/catfish/utils",
-    "//third_party/servlet-api",
   ],
 )

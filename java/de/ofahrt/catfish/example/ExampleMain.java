@@ -75,7 +75,7 @@ public class ExampleMain {
         .exact("/hello.php", new FcgiServlet())
         .exact("/post", new CheckPost())
         .exact("/", new TraceHandler())
-        .exact("/large", new LargeResponseServlet(16536));
+        .exact("/large", new LargeResponseHandler(16536));
 
     server.addHttpHost("localhost", dir.build());
     server.setKeepAliveAllowed(true);
