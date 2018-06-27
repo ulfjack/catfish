@@ -6,6 +6,7 @@ java_library(
   deps = [
     "//java/de/ofahrt/catfish",
     "//java/de/ofahrt/catfish/model",
+    "//java/de/ofahrt/catfish/model/layout",
     "//java/de/ofahrt/catfish/model/server",
     "//java/de/ofahrt/catfish/utils",
     "//third_party/servlet-api",
