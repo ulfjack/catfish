@@ -73,8 +73,9 @@ final class SslStage implements NioEngine.Stage {
     }
     SSLContext sslContext = contextProvider.getSSLContext(result.getName());
     if (sslContext == null) {
-      // TODO: Return an error in this case.
-      throw new RuntimeException();
+      // TODO: Is there any way we can return an error to the client?
+      parent.close();
+      return;
     }
     this.sslEngine = sslContext.createSSLEngine();
     this.sslEngine.setUseClientMode(false);
@@ -136,7 +137,9 @@ final class SslStage implements NioEngine.Stage {
       SSLEngineResult result = sslEngine.wrap(outputBuffer, netOutputBuffer);
       parent.log("After Wrapping: %d", Integer.valueOf(outputBuffer.remaining()));
       netOutputBuffer.flip(); // prepare for reading
-      Preconditions.checkState(result.getStatus() == Status.OK);
+      if (result.getStatus() != Status.OK) {
+        throw new IOException(result.toString());
+      }
       checkStatus();
       if (netOutputBuffer.remaining() == 0) {
         parent.log("Nothing to do.");

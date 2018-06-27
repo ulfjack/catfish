@@ -6,7 +6,7 @@ import de.ofahrt.catfish.model.HttpResponse;
 
 final class CoreHelper {
   // Response text output for debugging:
-  public static String responseToString(HttpResponse response) {
+  static String responseToString(HttpResponse response) {
     StringBuffer out = new StringBuffer();
     out.append(response.getProtocolVersion())
         .append(" ").append(response.getStatusCode())
@@ -18,7 +18,7 @@ final class CoreHelper {
     return out.toString();
   }
 
-  public static String requestToString(HttpRequest request) {
+  static String requestToString(HttpRequest request) {
     StringBuffer out = new StringBuffer();
     out.append(request.getVersion() + " " + request.getMethod() + " " + request.getUri());
     for (Map.Entry<String, String> e : request.getHeaders()) {
@@ -53,7 +53,7 @@ final class CoreHelper {
     return "" + HEX_CODES.charAt((i >> 4) & 0xf) + HEX_CODES.charAt(i & 0xf);
   }
 
-  public static final String encode(char c) {
+  static final String encode(char c) {
     if (c <= 0x007F) {
       return "%"+toHex(c);
     }

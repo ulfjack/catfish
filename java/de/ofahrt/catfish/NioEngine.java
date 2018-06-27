@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import de.ofahrt.catfish.model.Connection;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.server.HttpServerListener;
 
 final class NioEngine {
   private static final boolean DEBUG = false;
@@ -149,7 +150,7 @@ final class NioEngine {
         decryptedOutputBuffer.clear();
         decryptedOutputBuffer.flip(); // prepare for reading
         HttpStage httpStage = new HttpStage(
-            this, server::queueRequest, server::getResponsePolicy, decryptedInputBuffer, decryptedOutputBuffer);
+            this, server::queueRequest, server::determineHttpVirtualHost, decryptedInputBuffer, decryptedOutputBuffer);
         this.first = new SslStage(
             this,
             httpStage,
@@ -160,7 +161,7 @@ final class NioEngine {
             decryptedOutputBuffer);
       } else {
         this.first = new HttpStage(
-            this, server::queueRequest, server::getResponsePolicy, inputBuffer, outputBuffer);
+            this, server::queueRequest, server::determineHttpVirtualHost, inputBuffer, outputBuffer);
       }
     }
 

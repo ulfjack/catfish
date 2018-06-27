@@ -3,17 +3,15 @@ package de.ofahrt.catfish.example;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
-
 import javax.net.ssl.SSLContext;
-
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.HttpServerListener;
-import de.ofahrt.catfish.bridge.ServletVirtualHostBuilder;
+import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.fastcgi.FcgiServlet;
 import de.ofahrt.catfish.model.Connection;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.servlets.CheckPost;
 import de.ofahrt.catfish.ssl.SSLContextFactory;
 import de.ofahrt.catfish.ssl.SSLContextFactory.SSLInfo;
@@ -70,21 +68,22 @@ public class ExampleMain {
       }
     });
 
-    ServletVirtualHostBuilder dir = new ServletVirtualHostBuilder()
+    ServletHttpHandler handler = new ServletHttpHandler.Builder()
         .withSessionManager(new SessionManager())
         .exact("/hello.php", new FcgiServlet())
         .exact("/post", new CheckPost())
         .exact("/", new TraceHandler())
         .exact("/large", new LargeResponseHandler(16536))
-        .directory("/public/", new DirectoryHandler("/tmp/public/"));
+        .directory("/public/", new DirectoryHandler("/tmp/public/"))
+        .build();
 
-    server.addHttpHost("localhost", dir.build());
+    server.addHttpHost("localhost", handler, null);
     server.setKeepAliveAllowed(true);
     server.setCompressionAllowed(false);
     server.listenHttp(8080);
     if (sslContext != null) {
       // TODO: This doesn't work for wildcard certificates.
-      server.addHttpHost(domainName, dir.withSSLContext(sslContext).build());
+      server.addHttpHost(domainName, handler, sslContext);
       server.listenHttps(8081);
     }
   }

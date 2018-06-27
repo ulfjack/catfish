@@ -3,15 +3,14 @@ package de.ofahrt.catfish.integration;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.HttpServerListener;
-import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.TestServlet;
-import de.ofahrt.catfish.bridge.ServletVirtualHostBuilder;
+import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.client.HttpConnection;
 import de.ofahrt.catfish.model.Connection;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.server.HttpServerListener;
 
 final class LocalCatfishServer implements Server {
 
@@ -63,14 +62,13 @@ final class LocalCatfishServer implements Server {
 
   @Override
   public void start() throws Exception {
-    HttpVirtualHost host = new ServletVirtualHostBuilder()
+    ServletHttpHandler handler = new ServletHttpHandler.Builder()
         .withSessionManager(new SessionManager())
         .exact("/compression.html", new TestServlet())
         .directory("/", new HttpRequestTestServlet())
-        .withSSLContext(startSsl ? TestHelper.getSSLContext() : null)
         .build();
 
-    server.addHttpHost("localhost", host);
+    server.addHttpHost("localhost", handler, startSsl ? TestHelper.getSSLContext() : null);
     server.setKeepAliveAllowed(true);
     server.listenHttp(HTTP_PORT);
     if (startSsl) {

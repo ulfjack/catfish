@@ -19,6 +19,10 @@ final class HttpResponseGeneratorBuffered extends HttpResponseGenerator {
     return new HttpResponseGeneratorBuffered(response, data);
   }
 
+  public static HttpResponseGeneratorBuffered createWithBody(HttpResponse response) {
+    return create(response, true);
+  }
+
   private final HttpResponse response;
 
   private final byte[][] data;

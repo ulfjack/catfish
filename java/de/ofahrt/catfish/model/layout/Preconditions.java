@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.model.layout;
 
 final class Preconditions {
 

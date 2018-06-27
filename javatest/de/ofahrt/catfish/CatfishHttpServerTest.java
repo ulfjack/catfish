@@ -9,7 +9,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Test;
-import de.ofahrt.catfish.bridge.ServletVirtualHostBuilder;
+import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.model.Connection;
 import de.ofahrt.catfish.model.HttpHeaderName;
@@ -18,6 +18,8 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
+import de.ofahrt.catfish.model.server.BasicHttpHandler;
+import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 
@@ -33,13 +35,11 @@ public class CatfishHttpServerTest {
   }
 
   private static HttpResponse createResponse(HttpRequest request) throws Exception {
-    CatfishHttpServer server = new CatfishHttpServer(HttpServerListener.NULL);
-    HttpVirtualHost host = new ServletVirtualHostBuilder()
+    HttpHandler handler = new ServletHttpHandler.Builder()
         .withSessionManager(new SessionManager())
         .exact("/index", new TestServlet())
         .build();
-    server.addHttpHost("localhost", host);
-    server.setCompressionAllowed(true);
+    handler = new BasicHttpHandler(handler);
     final AtomicReference<HttpResponse> writtenResponse = new AtomicReference<>();
     final AtomicReference<ByteArrayOutputStream> writtenOutput = new AtomicReference<>();
     HttpResponseWriter writer = new HttpResponseWriter() {
@@ -69,7 +69,7 @@ public class CatfishHttpServerTest {
     };
     Connection connection = new Connection(
         new InetSocketAddress("127.0.0.1", 80), new InetSocketAddress("127.0.0.1", 1234), false);
-    server.createResponse(connection, request, writer);
+    handler.handle(connection, request, writer);
     ByteArrayOutputStream out = writtenOutput.get();
     return out == null ? writtenResponse.get() : writtenResponse.get().withBody(out.toByteArray());
   }

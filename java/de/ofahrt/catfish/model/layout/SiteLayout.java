@@ -1,23 +1,21 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.model.layout;
 
 import java.util.Map;
 import java.util.TreeMap;
 
-import de.ofahrt.catfish.model.server.HttpHandler;
+public final class SiteLayout<T> {
+  private final Map<String, T> exact;
+  private final Map<String, T> directory;
+  private final Map<String, T> recursive;
 
-final class SiteLayout {
-  private final Map<String, HttpHandler> exact;
-  private final Map<String, HttpHandler> directory;
-  private final Map<String, HttpHandler> recursive;
-
-  private SiteLayout(Builder builder) {
+  private SiteLayout(Builder<T> builder) {
     this.exact = new TreeMap<>(builder.exact);
     this.directory = new TreeMap<>(builder.directory);
     this.recursive = new TreeMap<>(builder.recursive);
   }
 
-  public HttpHandler findHandler(String path) {
-    HttpHandler page = exact.get(path);
+  public T resolve(String path) {
+    T page = exact.get(path);
     if (page != null) {
       return page;
     }
@@ -41,16 +39,16 @@ final class SiteLayout {
     return null;
   }
 
-  public static final class Builder {
-    private final Map<String, HttpHandler> exact = new TreeMap<>();
-    private final Map<String, HttpHandler> directory = new TreeMap<>();
-    private final Map<String, HttpHandler> recursive = new TreeMap<>();
+  public static final class Builder<T> {
+    private final Map<String, T> exact = new TreeMap<>();
+    private final Map<String, T> directory = new TreeMap<>();
+    private final Map<String, T> recursive = new TreeMap<>();
 
-    public SiteLayout build() {
-      return new SiteLayout(this);
+    public SiteLayout<T> build() {
+      return new SiteLayout<>(this);
     }
 
-    public Builder exact(String path, HttpHandler handler) {
+    public Builder<T> exact(String path, T handler) {
       Preconditions.checkArgument(path.startsWith("/"));
       Preconditions.checkNotNull(handler);
       Preconditions.checkState(!exact.containsKey(path));
@@ -58,7 +56,7 @@ final class SiteLayout {
       return this;
     }
 
-    public Builder directory(String prefix, HttpHandler handler) {
+    public Builder<T> directory(String prefix, T handler) {
       Preconditions.checkArgument(prefix.startsWith("/"));
       Preconditions.checkArgument(prefix.endsWith("/"));
       Preconditions.checkNotNull(handler);
@@ -67,7 +65,7 @@ final class SiteLayout {
       return this;
     }
 
-    public Builder recursive(String prefix, HttpHandler handler) {
+    public Builder<T> recursive(String prefix, T handler) {
       Preconditions.checkArgument(prefix.startsWith("/"));
       Preconditions.checkArgument(prefix.endsWith("/"));
       Preconditions.checkNotNull(handler);

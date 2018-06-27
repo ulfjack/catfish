@@ -6,8 +6,7 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
-
+import java.util.function.Function;
 import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
 import de.ofahrt.catfish.NioEngine.Pipeline;
 import de.ofahrt.catfish.NioEngine.Stage;
@@ -18,6 +17,8 @@ import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.MalformedRequestException;
+import de.ofahrt.catfish.model.StandardResponses;
+import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
@@ -26,7 +27,7 @@ final class HttpStage implements Stage {
   private static final boolean VERBOSE = false;
 
   public interface RequestQueue {
-    void queueRequest(Connection connection, HttpRequest request, HttpResponseWriter responseWriter);
+    void queueRequest(HttpHandler httpHandler, Connection connection, HttpRequest request, HttpResponseWriter responseWriter);
   }
 
   private final class HttpResponseWriterImpl implements HttpResponseWriter {
@@ -97,21 +98,21 @@ final class HttpStage implements Stage {
 
   private final Pipeline parent;
   private final HttpStage.RequestQueue requestHandler;
-  private final Supplier<ResponsePolicy> responsePolicySupplier;
+  private final Function<String, HttpVirtualHost> virtualHostLookup;
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
   private final IncrementalHttpRequestParser parser;
   private HttpResponseGenerator responseGenerator;
 
-  public HttpStage(
+  HttpStage(
       Pipeline parent,
       HttpStage.RequestQueue requestHandler,
-      Supplier<ResponsePolicy> responsePolicySupplier,
+      Function<String, HttpVirtualHost> virtualHostLookup,
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer) {
     this.parent = parent;
     this.requestHandler = requestHandler;
-    this.responsePolicySupplier = responsePolicySupplier;
+    this.virtualHostLookup = virtualHostLookup;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
     this.parser = new IncrementalHttpRequestParser();
@@ -179,28 +180,40 @@ final class HttpStage implements Stage {
     }
   }
 
+  private void startBuffered(HttpResponse response) {
+    startBuffered(HttpResponseGeneratorBuffered.createWithBody(response));
+  }
+
   private final void processRequest() {
     if (responseGenerator != null) {
       parent.suppressReads();
       return;
     }
+    HttpRequest request;
     try {
-      HttpRequest request = parser.getRequest();
-      parser.reset();
-      parent.log("%s %s %s", request.getVersion(), request.getMethod(), request.getUri());
-      if (VERBOSE) {
-        System.out.println(CoreHelper.requestToString(request));
-      }
-      queueRequest(request);
+      request = parser.getRequest();
     } catch (MalformedRequestException e) {
       HttpResponse responseToWrite = e.getErrorResponse()
           .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE));
-      startBuffered(HttpResponseGeneratorBuffered.create(responseToWrite, true));
+      startBuffered(responseToWrite);
+      return;
+    } finally {
+      parser.reset();
     }
-  }
-
-  private final void queueRequest(HttpRequest request) {
-    HttpResponseWriter writer = new HttpResponseWriterImpl(request, responsePolicySupplier.get());
-    requestHandler.queueRequest(parent.getConnection(), request, writer);
+    parent.log("%s %s %s", request.getVersion(), request.getMethod(), request.getUri());
+    if (VERBOSE) {
+      System.out.println(CoreHelper.requestToString(request));
+    }
+    if ("*".equals(request.getUri())) {
+      startBuffered(StandardResponses.BAD_REQUEST);
+    } else {
+      HttpVirtualHost host = virtualHostLookup.apply(request.getHeaders().get(HttpHeaderName.HOST));
+      if (host == null) {
+        startBuffered(StandardResponses.NOT_FOUND);
+      } else {
+        HttpResponseWriter writer = new HttpResponseWriterImpl(request, host.getResponsePolicy());
+        requestHandler.queueRequest(host.getHttpHandler(), parent.getConnection(), request, writer);
+      }
+    }
   }
 }
