@@ -11,6 +11,8 @@ import de.ofahrt.catfish.fastcgi.FcgiServlet;
 import de.ofahrt.catfish.model.Connection;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.server.BasicHttpHandler;
+import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.servlets.CheckPost;
 import de.ofahrt.catfish.ssl.SSLContextFactory;
@@ -68,7 +70,7 @@ public class ExampleMain {
       }
     });
 
-    ServletHttpHandler handler = new ServletHttpHandler.Builder()
+    HttpHandler handler = new ServletHttpHandler.Builder()
         .withSessionManager(new SessionManager())
         .exact("/hello.php", new FcgiServlet())
         .exact("/post", new CheckPost())
@@ -76,6 +78,7 @@ public class ExampleMain {
         .exact("/large", new LargeResponseHandler(16536))
         .directory("/public/", new DirectoryHandler("/tmp/public/"))
         .build();
+    handler = new BasicHttpHandler(handler);
 
     server.addHttpHost("localhost", handler, null);
     server.setKeepAliveAllowed(true);
