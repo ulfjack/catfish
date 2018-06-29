@@ -151,7 +151,7 @@ final class HttpStage implements Stage {
         } else {
           parent.close();
         }
-        parent.notifySent(null, responseGenerator.getResponse());
+        parent.notifySent(responseGenerator.getRequest(), responseGenerator.getResponse());
         responseGenerator = null;
         if (parser.isDone()) {
           processRequest();
