@@ -147,6 +147,9 @@ public final class CatfishHttpServer {
     if (hostHeader.indexOf(':') >= 0) {
       hostHeader = hostHeader.substring(0, hostHeader.indexOf(':'));
     }
+    if (hostHeader.endsWith(".localhost")) {
+      hostHeader = hostHeader.substring(0, hostHeader.length() - ".localhost".length());
+    }
     return hosts.get(hostHeader);
   }
 
