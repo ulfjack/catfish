@@ -39,21 +39,21 @@ public class HttpResponseGeneratorBufferedTest {
   @Test
   public void simple() throws Exception {
     HttpResponse response = StandardResponses.OK.withVersion(HttpVersion.HTTP_0_9).withBody(new byte[0]);
-    HttpResponseGeneratorBuffered generator = HttpResponseGeneratorBuffered.create(response, true);
+    HttpResponseGeneratorBuffered generator = HttpResponseGeneratorBuffered.create(null, response, true);
     assertEquals("HTTP/0.9 200 OK\r\n\r\n", toString(generator));
   }
 
   @Test
   public void simpleWithBody() throws Exception {
     HttpResponse response = StandardResponses.OK.withVersion(HttpVersion.HTTP_1_0).withBody(new byte[] { 'x', 'y' });
-    HttpResponseGeneratorBuffered generator = HttpResponseGeneratorBuffered.create(response, true);
+    HttpResponseGeneratorBuffered generator = HttpResponseGeneratorBuffered.create(null, response, true);
     assertEquals("HTTP/1.0 200 OK\r\n\r\nxy", toString(generator));
   }
 
   @Test
   public void simpleWithBodyButSkipBody() throws Exception {
     HttpResponse response = StandardResponses.OK.withVersion(HttpVersion.HTTP_1_1).withBody(new byte[] { 'x', 'y' });
-    HttpResponseGeneratorBuffered generator = HttpResponseGeneratorBuffered.create(response, false);
+    HttpResponseGeneratorBuffered generator = HttpResponseGeneratorBuffered.create(null, response, false);
     assertEquals("HTTP/1.1 200 OK\r\n\r\n", toString(generator));
   }
 }

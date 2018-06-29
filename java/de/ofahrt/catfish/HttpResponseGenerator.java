@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
 import de.ofahrt.catfish.model.HttpHeaders;
+import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
@@ -43,6 +44,8 @@ abstract class HttpResponseGenerator {
     buffer.append(CRLF);
     return buffer.toString().getBytes(StandardCharsets.UTF_8);
   }
+
+  public abstract HttpRequest getRequest();
 
   public abstract HttpResponse getResponse();
 

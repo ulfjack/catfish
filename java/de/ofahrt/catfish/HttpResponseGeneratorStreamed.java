@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
+import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 
 final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
@@ -17,13 +18,13 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private static final byte[] LAST_CHUNK = "0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
   public static HttpResponseGeneratorStreamed create(
-      Runnable dataAvailableCallback, HttpResponse response, boolean includeBody) {
-    return new HttpResponseGeneratorStreamed(dataAvailableCallback, response, includeBody, DEFAULT_BUFFER_SIZE);
+      Runnable dataAvailableCallback, HttpRequest request, HttpResponse response, boolean includeBody) {
+    return new HttpResponseGeneratorStreamed(dataAvailableCallback, request, response, includeBody, DEFAULT_BUFFER_SIZE);
   }
 
   public static HttpResponseGeneratorStreamed create(
-      Runnable dataAvailableCallback, HttpResponse response, boolean includeBody, int bufferSize) {
-    return new HttpResponseGeneratorStreamed(dataAvailableCallback, response, includeBody, bufferSize);
+      Runnable dataAvailableCallback, HttpRequest request, HttpResponse response, boolean includeBody, int bufferSize) {
+    return new HttpResponseGeneratorStreamed(dataAvailableCallback, request, response, includeBody, bufferSize);
   }
 
   private enum WriteState {
@@ -44,6 +45,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private boolean requireCallback = true;
   private boolean useChunking;
 
+  private final HttpRequest request;
   private HttpResponse response;
   private final boolean includeBody;
 
@@ -60,11 +62,17 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private boolean isFull;
 
   private HttpResponseGeneratorStreamed(
-      Runnable dataAvailableCallback, HttpResponse response, boolean includeBody, int bufferSize) {
+      Runnable dataAvailableCallback, HttpRequest request, HttpResponse response, boolean includeBody, int bufferSize) {
+    this.request = request;
     this.response = response;
     this.includeBody = includeBody;
     this.dataAvailableCallback = dataAvailableCallback;
     this.buffer = new byte[bufferSize];
+  }
+
+  @Override
+  public HttpRequest getRequest() {
+    return request;
   }
 
   @Override

@@ -68,7 +68,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void smoke() throws Exception {
     AtomicInteger called = new AtomicInteger();
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::incrementAndGet, StandardResponses.OK, true);
+        called::incrementAndGet, null, StandardResponses.OK, true);
     OutputStream out = gen.getOutputStream();
     out.write(new byte[] { 'x', 'y' });
     out.close();
@@ -82,7 +82,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void noBody() throws Exception {
     AtomicInteger called = new AtomicInteger();
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::incrementAndGet, StandardResponses.OK, /*includeBody=*/false);
+        called::incrementAndGet, null, StandardResponses.OK, /*includeBody=*/false);
     OutputStream out = gen.getOutputStream();
     out.write(new byte[] { 'x', 'y' });
     out.close();
@@ -96,7 +96,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void callbackOnFlush() throws Exception {
     AtomicInteger called = new AtomicInteger();
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::incrementAndGet, StandardResponses.OK, true);
+        called::incrementAndGet, null, StandardResponses.OK, true);
 
     @SuppressWarnings("resource")
     OutputStream out = gen.getOutputStream();
@@ -112,7 +112,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void secondCallbackOnSecondFlush() throws Exception {
     AtomicInteger called = new AtomicInteger();
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::incrementAndGet, StandardResponses.OK, true);
+        called::incrementAndGet, null, StandardResponses.OK, true);
 
     OutputStream out = gen.getOutputStream();
     out.write(new byte[] { 'x', 'y' });
@@ -133,7 +133,7 @@ public class HttpResponseGeneratorStreamedTest {
     Semaphore called = new Semaphore(0);
     Phaser done = new Phaser(2);
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::release, StandardResponses.OK, true, 2);
+        called::release, null, StandardResponses.OK, true, 2);
     Thread t = new Thread(new Runnable() {
       @Override
       public void run() {
@@ -159,7 +159,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void chunked() throws Exception {
     Semaphore called = new Semaphore(0);
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::release, StandardResponses.OK, true, 2);
+        called::release, null, StandardResponses.OK, true, 2);
     Thread t = new Thread(new Runnable() {
       @Override
       public void run() {
@@ -180,7 +180,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void chunkedExactly16Bytes() throws Exception {
     Semaphore called = new Semaphore(0);
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::release, StandardResponses.OK, true, 16);
+        called::release, null, StandardResponses.OK, true, 16);
     Thread t = new Thread(new Runnable() {
       @Override
       public void run() {
@@ -202,7 +202,7 @@ public class HttpResponseGeneratorStreamedTest {
     Semaphore called = new Semaphore(0);
     Semaphore released = new Semaphore(0);
     HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::release, StandardResponses.OK, true, 4);
+        called::release, null, StandardResponses.OK, true, 4);
     Thread t = new Thread(new Runnable() {
       @Override
       public void run() {

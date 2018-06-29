@@ -2,10 +2,11 @@ package de.ofahrt.catfish;
 
 import java.nio.ByteBuffer;
 import de.ofahrt.catfish.model.HttpHeaders;
+import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 
 final class HttpResponseGeneratorBuffered extends HttpResponseGenerator {
-  public static HttpResponseGeneratorBuffered create(HttpResponse response, boolean includeBody) {
+  public static HttpResponseGeneratorBuffered create(HttpRequest request, HttpResponse response, boolean includeBody) {
     if (response.getBody() == null) {
       throw new IllegalArgumentException();
     }
@@ -16,22 +17,29 @@ final class HttpResponseGeneratorBuffered extends HttpResponseGenerator {
       headersToByteArray(headers),
       body
     };
-    return new HttpResponseGeneratorBuffered(response, data);
+    return new HttpResponseGeneratorBuffered(request, response, data);
   }
 
-  public static HttpResponseGeneratorBuffered createWithBody(HttpResponse response) {
-    return create(response, true);
+  public static HttpResponseGeneratorBuffered createWithBody(HttpRequest request, HttpResponse response) {
+    return create(request, response, true);
   }
 
+  private final HttpRequest request;
   private final HttpResponse response;
 
   private final byte[][] data;
   private int currentBlock;
   private int currentIndex;
 
-  HttpResponseGeneratorBuffered(HttpResponse response, byte[][] data) {
+  HttpResponseGeneratorBuffered(HttpRequest request, HttpResponse response, byte[][] data) {
+    this.request = request;
     this.response = response;
     this.data = data;
+  }
+
+  @Override
+  public HttpRequest getRequest() {
+    return request;
   }
 
   @Override

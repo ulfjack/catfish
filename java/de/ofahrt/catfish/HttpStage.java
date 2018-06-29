@@ -74,7 +74,7 @@ final class HttpStage implements Stage {
       boolean includeBody = !HttpMethodName.HEAD.equals(request.getMethod()) && !noBodyAllowed;
       HttpResponse actualResponse = responseToWrite;
       // We want to create the ResponseGenerator on the current thread.
-      HttpResponseGeneratorBuffered gen = HttpResponseGeneratorBuffered.create(actualResponse, includeBody);
+      HttpResponseGeneratorBuffered gen = HttpResponseGeneratorBuffered.create(request, actualResponse, includeBody);
       parent.queue(() -> startBuffered(gen));
     }
 
@@ -90,7 +90,8 @@ final class HttpStage implements Stage {
       }
       boolean includeBody = !HttpMethodName.HEAD.equals(request.getMethod());
       HttpResponseGeneratorStreamed gen =
-          HttpResponseGeneratorStreamed.create(() -> parent.queue(parent::encourageWrites), responseToWrite, includeBody);
+          HttpResponseGeneratorStreamed.create(
+              () -> parent.queue(parent::encourageWrites), request, responseToWrite, includeBody);
       parent.queue(() -> startStreamed(gen));
       return gen.getOutputStream();
     }
@@ -180,8 +181,8 @@ final class HttpStage implements Stage {
     }
   }
 
-  private void startBuffered(HttpResponse response) {
-    startBuffered(HttpResponseGeneratorBuffered.createWithBody(response));
+  private void startBuffered(HttpRequest request, HttpResponse response) {
+    startBuffered(HttpResponseGeneratorBuffered.createWithBody(request, response));
   }
 
   private final void processRequest() {
@@ -195,7 +196,7 @@ final class HttpStage implements Stage {
     } catch (MalformedRequestException e) {
       HttpResponse responseToWrite = e.getErrorResponse()
           .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE));
-      startBuffered(responseToWrite);
+      startBuffered(null, responseToWrite);
       return;
     } finally {
       parser.reset();
@@ -205,11 +206,11 @@ final class HttpStage implements Stage {
       System.out.println(CoreHelper.requestToString(request));
     }
     if ("*".equals(request.getUri())) {
-      startBuffered(StandardResponses.BAD_REQUEST);
+      startBuffered(request, StandardResponses.BAD_REQUEST);
     } else {
       HttpVirtualHost host = virtualHostLookup.apply(request.getHeaders().get(HttpHeaderName.HOST));
       if (host == null) {
-        startBuffered(StandardResponses.NOT_FOUND);
+        startBuffered(request, StandardResponses.NOT_FOUND);
       } else {
         HttpResponseWriter writer = new HttpResponseWriterImpl(request, host.getResponsePolicy());
         requestHandler.queueRequest(host.getHttpHandler(), parent.getConnection(), request, writer);
