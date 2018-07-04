@@ -1,6 +1,6 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.upload;
 
-final class MalformedMultipartException extends Exception {
+public final class MalformedMultipartException extends Exception {
 
   private static final long serialVersionUID = 1L;
 

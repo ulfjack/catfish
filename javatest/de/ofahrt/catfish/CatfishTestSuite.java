@@ -8,6 +8,8 @@ import de.ofahrt.catfish.bridge.CatfishBridgeTestSuite;
 import de.ofahrt.catfish.client.ClientTestSuite;
 import de.ofahrt.catfish.model.layout.ModelLayoutTestSuite;
 import de.ofahrt.catfish.servlets.ServletsTestSuite;
+import de.ofahrt.catfish.upload.MultipartParserTest;
+import de.ofahrt.catfish.upload.CatfishUploadTestSuite;
 import de.ofahrt.catfish.utils.CatfishUtilsTestSuite;
 
 @RunWith(Suite.class)
@@ -19,11 +21,12 @@ import de.ofahrt.catfish.utils.CatfishUtilsTestSuite;
   IncrementalHttpParserTest.class,
   HttpResponseGeneratorBufferedTest.class,
   HttpResponseGeneratorStreamedTest.class,
-  MimeMultipartParserTest.class,
+  MultipartParserTest.class,
   SNIParserTest.class,
 
   CatfishApiTestSuite.class,
   CatfishBridgeTestSuite.class,
+  CatfishUploadTestSuite.class,
   CatfishUtilsTestSuite.class,
   ModelLayoutTestSuite.class,
   ServletsTestSuite.class,

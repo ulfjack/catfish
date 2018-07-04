@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.upload;
 
 import java.io.InputStream;
 import java.util.Iterator;
@@ -6,9 +6,8 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
-final class MimeMultipartContainer implements Iterable<MimeMultipartContainer.Part> {
-
-  public final static class Part {
+public final class MultipartContainer implements Iterable<MultipartContainer.Part> {
+  public static final class Part {
     private final Map<String, String> fields;
 
     public Part(Map<String, String> fields) {
@@ -30,15 +29,15 @@ final class MimeMultipartContainer implements Iterable<MimeMultipartContainer.Pa
 
   private final Part[] parts;
 
-  public MimeMultipartContainer(Part[] parts) {
+  public MultipartContainer(Part[] parts) {
     this.parts = parts;
   }
 
-  public int getPartCount() {
+  public int size() {
     return parts.length;
   }
 
-  public Part getPart(int i) {
+  public Part get(int i) {
     return parts[i];
   }
 
