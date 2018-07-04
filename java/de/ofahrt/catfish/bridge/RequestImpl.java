@@ -9,7 +9,7 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLDecoder;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -21,7 +21,6 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletInputStream;
 import javax.servlet.http.Cookie;
@@ -307,8 +306,9 @@ public final class RequestImpl implements HttpServletRequest {
   @Override
   public BufferedReader getReader() {
     // TODO: Use the correct charset.
-    return new BufferedReader(new InputStreamReader(new ByteArrayInputStream(body),
-      Charset.forName("UTF-8")));
+    return new BufferedReader(
+        new InputStreamReader(
+            new ByteArrayInputStream(body), StandardCharsets.UTF_8));
   }
 
   @Override
