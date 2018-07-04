@@ -13,7 +13,7 @@ import de.ofahrt.catfish.model.server.PayloadParser;
 import de.ofahrt.catfish.utils.HttpContentType;
 
 public final class IncrementalMultipartParser implements PayloadParser {
-  private static final Pattern nameExtractorPattern = Pattern.compile(".* name=\"(.*)\".*");
+  private static final Pattern nameExtractorPattern = Pattern.compile(".* name=\"([^\"]*)\".*");
 
   private static enum State {
     PREAMBLE,
@@ -346,7 +346,14 @@ public final class IncrementalMultipartParser implements PayloadParser {
       String value = new String(content, StandardCharsets.UTF_8);
       return new FormEntry(name, value);
     } else {
-      return new FormEntry("<unknown>", contentType, content);
+      Matcher m = nameExtractorPattern.matcher(contentDisposition);
+      String name;
+      if (m.matches()) {
+        name = m.group(1);
+      } else {
+        name = "<unknown>";
+      }
+      return new FormEntry(name, contentType, content);
     }
   }
 

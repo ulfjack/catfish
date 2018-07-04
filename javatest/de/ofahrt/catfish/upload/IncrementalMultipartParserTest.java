@@ -182,6 +182,19 @@ public class IncrementalMultipartParserTest {
         "--abc\nContent-Disposition: form-data; name=\"file\"\nContent-Type: text/plain\n\nDoh!\n--abc--\n");
     assertEquals(1, container.size());
     FormEntry entry = container.get(0);
+    assertEquals("file", entry.getName());
+    assertEquals("text/plain", entry.getContentType());
+    assertArrayEquals(new byte[] { 'D', 'o', 'h', '!' }, entry.getBody());
+  }
+
+  @Test
+  public void parseContainerWithNameAndFilename() throws Exception {
+    FormDataBody container = parse("multipart/form-data; boundary=abc",
+        "--abc\nContent-Disposition: form-data; name=\"file\", filename=\"bar\"\n"
+        + "Content-Type: text/plain\n\nDoh!\n--abc--\n");
+    assertEquals(1, container.size());
+    FormEntry entry = container.get(0);
+    assertEquals("file", entry.getName());
     assertEquals("text/plain", entry.getContentType());
     assertArrayEquals(new byte[] { 'D', 'o', 'h', '!' }, entry.getBody());
   }
