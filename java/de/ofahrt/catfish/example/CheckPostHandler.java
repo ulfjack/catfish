@@ -16,6 +16,8 @@ import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.upload.FormDataBody;
 import de.ofahrt.catfish.upload.FormEntry;
 import de.ofahrt.catfish.upload.IncrementalMultipartParser;
+import de.ofahrt.catfish.upload.UrlEncodedParser;
+import de.ofahrt.catfish.utils.HttpContentType;
 import de.ofahrt.catfish.utils.MimeType;
 
 public final class CheckPostHandler implements HttpHandler {
@@ -23,11 +25,20 @@ public final class CheckPostHandler implements HttpHandler {
   public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter) throws IOException {
     FormDataBody formData = null;
     if (HttpMethodName.POST.equals(request.getMethod())) {
-      IncrementalMultipartParser parser = new IncrementalMultipartParser(request.getHeaders().get(HttpHeaderName.CONTENT_TYPE));
-      byte[] data = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
-      parser.parse(data);
-      formData = parser.getParsedBody();
+      String ctHeader = request.getHeaders().get(HttpHeaderName.CONTENT_TYPE);
+      String mimeType = HttpContentType.getMimeTypeFromContentType(ctHeader);
+      if (HttpContentType.MULTIPART_FORMDATA.equals(mimeType)) {
+        IncrementalMultipartParser parser = new IncrementalMultipartParser(ctHeader);
+        byte[] data = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
+        parser.parse(data);
+        formData = parser.getParsedBody();
+      } else if (HttpContentType.WWW_FORM_URLENCODED.equals(mimeType)) {
+        UrlEncodedParser parser = new UrlEncodedParser();
+        byte[] data = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
+        formData = parser.parse(data);
+      }
     }
+
     HttpResponse response = StandardResponses.OK
         .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, MimeType.TEXT_HTML.toString()));
     try (Writer out = new OutputStreamWriter(responseWriter.commitStreamed(response), StandardCharsets.UTF_8)) {
