@@ -1,11 +1,14 @@
 package de.ofahrt.catfish;
 
+import java.io.IOException;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
+import de.ofahrt.catfish.model.server.PayloadParser;
+import de.ofahrt.catfish.model.server.UploadPolicy;
 
 final class IncrementalHttpRequestParser {
 
@@ -14,10 +17,10 @@ final class IncrementalHttpRequestParser {
     REQUEST_METHOD, REQUEST_URI, REQUEST_VERSION_HTTP, REQUEST_VERSION_MAJOR, REQUEST_VERSION_MINOR,
     // message-header = field-name ":" [ field-value ]
     MESSAGE_HEADER_NAME, MESSAGE_HEADER_NAME_OR_CONTINUATION, MESSAGE_HEADER_VALUE,
-    CONTENT;
+    PAYLOAD;
   }
 
-  private final int maxContentLength;
+  private final UploadPolicy uploadPolicy;
 
   private final SimpleHttpRequest.Builder builder = new SimpleHttpRequest.Builder();
 
@@ -32,11 +35,10 @@ final class IncrementalHttpRequestParser {
   private String messageHeaderName;
   private String messageHeaderValue;
 
-  private byte[] content;
-  private int contentIndex;
+  private PayloadParser payloadParser;
 
   public IncrementalHttpRequestParser() {
-    this.maxContentLength = 1000000;
+    this.uploadPolicy = new DefaultUploadPolicy();
     reset();
   }
 
@@ -53,8 +55,7 @@ final class IncrementalHttpRequestParser {
     messageHeaderName = null;
     messageHeaderValue = null;
 
-    content = null;
-    contentIndex = 0;
+    payloadParser = null;
   }
 
   //       CTL            = <any US-ASCII control character
@@ -282,33 +283,26 @@ final class IncrementalHttpRequestParser {
           messageHeaderValue = null;
 
           if (c == '\n') {
-            String transferEncodingValue = builder.getHeader(HttpHeaderName.TRANSFER_ENCODING);
             String contentLengthValue = builder.getHeader(HttpHeaderName.CONTENT_LENGTH);
-            if (transferEncodingValue != null && contentLengthValue != null) {
-              return setBadRequest("Must not set both Content-Length and Transfer-Encoding");
-            }
-            if (transferEncodingValue != null) {
-              // TODO: Implement chunked transfer encoding.
-              return setError(HttpStatusCode.NOT_IMPLEMENTED, "Not implemented");
-            }
-            if (contentLengthValue != null) {
-              long contentLength;
-              try {
-                contentLength = Long.parseLong(contentLengthValue);
-              } catch (NumberFormatException e) {
-                return setBadRequest("Illegal content length value");
+            String transferEncodingValue = builder.getHeader(HttpHeaderName.TRANSFER_ENCODING);
+            if (contentLengthValue != null || transferEncodingValue != null) {
+              if (transferEncodingValue != null && contentLengthValue != null) {
+                return setBadRequest("Must not set both Content-Length and Transfer-Encoding");
               }
-              if (contentLength > maxContentLength) {
-                return setBadRequest("Content length larger than allowed");
-              }
-              if (contentLength == 0) {
-                builder.setBody(new byte[0]);
+              if ("0".equals(contentLengthValue)) {
+                builder.setBody(new HttpRequest.InMemoryBody(new byte[0]));
                 done = true;
                 return i + 1;
               }
-              content = new byte[(int) contentLength];
-              contentIndex = 0;
-              state = State.CONTENT;
+              payloadParser = uploadPolicy.accept(builder);
+              if (builder.hasError()) {
+                if (payloadParser != null) {
+                  throw new IllegalStateException("Cannot set error and return non-null parser");
+                }
+                done = true;
+                return 1;
+              }
+              state = State.PAYLOAD;
             } else {
               done = true;
               return i + 1;
@@ -322,15 +316,19 @@ final class IncrementalHttpRequestParser {
             return setBadRequest("Illegal character in header field name");
           }
           break;
-        case CONTENT :
-          int maxCopy = Math.min(length - i, content.length-contentIndex);
-          System.arraycopy(input, offset + i, content, contentIndex, maxCopy);
-          i += maxCopy;
-          contentIndex += maxCopy;
-          if (contentIndex == content.length) {
-            builder.setBody(content);
+        case PAYLOAD :
+          int parsed = payloadParser.parse(input, offset + i, length - i);
+          if (parsed == 0) {
+            throw new IllegalStateException("Parser must process at least one byte");
+          }
+          if (payloadParser.isDone()) {
+            try {
+              builder.setBody(payloadParser.getParsedBody());
+            } catch (IOException e) {
+              return setError(HttpStatusCode.BAD_REQUEST, e.getMessage());
+            }
             done = true;
-            return i;
+            return i + parsed;
           }
           break;
         default :

@@ -5,8 +5,9 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
+import de.ofahrt.catfish.model.HttpRequest;
 
-public final class MultipartContainer implements Iterable<MultipartContainer.Part> {
+public final class MultipartBody implements HttpRequest.Body, Iterable<MultipartBody.Part> {
   public static final class Part {
     private final Map<String, String> fields;
 
@@ -29,7 +30,7 @@ public final class MultipartContainer implements Iterable<MultipartContainer.Par
 
   private final Part[] parts;
 
-  public MultipartContainer(Part[] parts) {
+  public MultipartBody(Part[] parts) {
     this.parts = parts;
   }
 

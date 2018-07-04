@@ -10,7 +10,7 @@ public final class SimpleHttpRequest implements HttpRequest {
   private final String method;
   private final String uri;
   private final HttpHeaders headers;
-  private byte[] body;
+  private final Body body;
 
   SimpleHttpRequest(Builder builder) {
     this.version = builder.version;
@@ -41,7 +41,7 @@ public final class SimpleHttpRequest implements HttpRequest {
   }
 
   @Override
-  public byte[] getBody() {
+  public Body getBody() {
     return body;
   }
 
@@ -50,7 +50,7 @@ public final class SimpleHttpRequest implements HttpRequest {
     private String method;
     private String unparsedUri;
     private Map<String, String> headers;
-    private byte[] body;
+    private Body body;
 
     private HttpResponse errorResponse;
 
@@ -130,7 +130,7 @@ public final class SimpleHttpRequest implements HttpRequest {
       return headers.get(key);
     }
 
-    public Builder setBody(byte[] body) {
+    public Builder setBody(Body body) {
       this.body = body;
       return this;
     }
@@ -138,6 +138,15 @@ public final class SimpleHttpRequest implements HttpRequest {
     public Builder setError(HttpStatusCode statusCode, String error) {
       this.errorResponse = new PreconstructedResponse(statusCode, error);
       return this;
+    }
+
+    public Builder setError(HttpStatusCode statusCode) {
+      this.errorResponse = new PreconstructedResponse(statusCode);
+      return this;
+    }
+
+    public boolean hasError() {
+      return errorResponse != null;
     }
   }
 }

@@ -84,7 +84,12 @@ public final class RequestImpl implements HttpServletRequest {
     } catch (URISyntaxException e) {
       throw new MalformedRequestException(StandardResponses.BAD_REQUEST);
     }
-    this.body = request.getBody();
+    HttpRequest.Body entity = request.getBody();
+    if (entity instanceof HttpRequest.InMemoryBody) {
+      this.body = ((HttpRequest.InMemoryBody) entity).toByteArray();
+    } else {
+      this.body = null;
+    }
 
     this.localAddress = connection.getLocalAddress();
     this.clientAddress = connection.getRemoteAddress();

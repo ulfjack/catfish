@@ -18,6 +18,7 @@ import de.ofahrt.catfish.HashConflictGenerator;
 import de.ofahrt.catfish.InputStreams;
 import de.ofahrt.catfish.model.Connection;
 import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 
@@ -46,7 +47,7 @@ public class RequestImplTest {
   private RequestImpl requestForBody(byte[] data) throws Exception {
     RequestImpl result = toRequestImpl(
         new SimpleHttpRequest.Builder()
-            .setBody(data)
+            .setBody(new HttpRequest.InMemoryBody(data))
             .setUri("*"));
     return result;
   }
@@ -139,7 +140,7 @@ public class RequestImplTest {
   public void regressionTestForGetCompleteUrl() throws Exception {
     RequestImpl request = new RequestImpl(
         new SimpleHttpRequest.Builder()
-            .setBody(new byte[] { -1, -1 })
+            .setBody(new HttpRequest.InMemoryBody(new byte[] { -1, -1 }))
             .setUri("*")
             .build(),
         new Connection(new InetSocketAddress(80), null, false),

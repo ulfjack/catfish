@@ -45,56 +45,56 @@ public abstract class HttpParserTest {
   @Test
   public void parseGetWithoutHeader() throws Exception {
     HttpRequest request = parse("GET / HTTP/1.0\n\n");
-  	assertEquals("GET", request.getMethod());
+    assertEquals("GET", request.getMethod());
   }
 
   @Test
   public void zeroMajorVersion() throws Exception {
     HttpRequest request = parse("GET / HTTP/0.7\n\n");
-  	assertEquals(HttpVersion.of(0, 7), request.getVersion());
+    assertEquals(HttpVersion.of(0, 7), request.getVersion());
   }
 
   @Test // Leading zeros MUST be ignored by recipients.
   public void ignoreLeadingZerosInMajorVersion() throws Exception {
     HttpRequest request = parse("GET / HTTP/01.0\n\n");
-  	assertEquals(HttpVersion.HTTP_1_0, request.getVersion());
+    assertEquals(HttpVersion.HTTP_1_0, request.getVersion());
   }
 
   @Test
   public void ignoreLeadingZerosInMinorVersion() throws Exception {
     HttpRequest request = parse("GET / HTTP/1.08\nHost: \n\n");
-  	assertEquals(HttpVersion.of(1, 8), request.getVersion());
+    assertEquals(HttpVersion.of(1, 8), request.getVersion());
   }
 
   @Test
   public void parseGetWithHeader() throws Exception {
     HttpRequest request = parse("GET / HTTP/1.1\nHost: localhost\n\n");
-  	assertEquals("localhost", request.getHeaders().get("Host"));
+    assertEquals("localhost", request.getHeaders().get("Host"));
   }
 
   @Test
   public void parseGetWithTwoHeaders() throws Exception {
     HttpRequest request = parse("GET / HTTP/1.1\nHost: localhost\nUser-Agent: A/1\n\n");
-  	assertEquals("localhost", request.getHeaders().get("Host"));
-  	assertEquals("A/1", request.getHeaders().get("User-Agent"));
+    assertEquals("localhost", request.getHeaders().get("Host"));
+    assertEquals("A/1", request.getHeaders().get("User-Agent"));
   }
 
   @Test
   public void messageHeaderNamesAreCaseInsensitive() throws Exception {
     HttpRequest request = parse("GET / HTTP/1.1\nhOST: localhost\n\n");
-  	assertEquals("localhost", request.getHeaders().get("Host"));
+    assertEquals("localhost", request.getHeaders().get("Host"));
   }
 
   @Test
   public void parseGetWithContinuation() throws Exception {
     HttpRequest request = parse("GET / HTTP/1.0\nUser-Agent: A/1\n B/2\n\n");
-  	assertEquals("A/1 B/2", request.getHeaders().get("User-Agent"));
+    assertEquals("A/1 B/2", request.getHeaders().get("User-Agent"));
   }
 
   @Test
   public void parseGetWithDuplicateHeader() throws Exception {
     HttpRequest request = parse("GET / HTTP/1.0\nAccept: text/html\nAccept: application/xhtml+xml\n\n");
-  	assertEquals("text/html, application/xhtml+xml", request.getHeaders().get("Accept"));
+    assertEquals("text/html, application/xhtml+xml", request.getHeaders().get("Accept"));
   }
 
   @Test
@@ -122,31 +122,32 @@ public abstract class HttpParserTest {
 
   @Test
   public void requestManyHeaders() throws Exception {
-  	int count = 100;
-  	StringBuffer text = new StringBuffer();
-  	text.append("GET / HTTP/1.0\n");
-  	for (int i = 0; i < count; i++) {
-  		text.append("A").append(i).append(": ").append(i).append("\n");
-  	}
-  	text.append("\n");
-  	HttpRequest request = parse(text.toString());
-  	for (int i = 0; i < count; i++) {
-  	  // TODO: Should HttpHeaders canonicalize on get?
-  		assertEquals(Integer.toString(i), request.getHeaders().get("a" + i));
-  	}
+    int count = 100;
+    StringBuffer text = new StringBuffer();
+    text.append("GET / HTTP/1.0\n");
+    for (int i = 0; i < count; i++) {
+      text.append("A").append(i).append(": ").append(i).append("\n");
+    }
+    text.append("\n");
+    HttpRequest request = parse(text.toString());
+    for (int i = 0; i < count; i++) {
+      // TODO: Should HttpHeaders canonicalize on get?
+      assertEquals(Integer.toString(i), request.getHeaders().get("a" + i));
+    }
   }
 
   @Test
   public void withContent() throws Exception {
     HttpRequest request = parse("POST / HTTP/1.0\nContent-Length: 10\n\n1234567890");
-  	byte[] data = request.getBody();
-  	assertEquals("1234567890", new String(data, "ISO-8859-1"));
+    byte[] data = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
+    assertEquals("1234567890", new String(data, "ISO-8859-1"));
   }
 
   @Test
   public void withoutContentButWithContentLength() throws Exception {
     HttpRequest request = parse("POST / HTTP/1.0\nContent-Length: 0\n\n");
-    assertArrayEquals(new byte[0], request.getBody());
+    byte[] data = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
+    assertArrayEquals(new byte[0], data);
   }
 
 
@@ -186,9 +187,9 @@ public abstract class HttpParserTest {
 //  @Test
 //  public void oddCharsInUri() throws Exception {
 //    // These aren't actually allowed unescaped:
-//  	assertEquals("/%7C", parseLegacy("GET /| HTTP/1.0\n\n").getRequestURI());
-//  	assertEquals("/%60", parseLegacy("GET /` HTTP/1.0\n\n").getRequestURI());
-//  	assertEquals("/%5E", parseLegacy("GET /^ HTTP/1.0\n\n").getRequestURI());
+//    assertEquals("/%7C", parseLegacy("GET /| HTTP/1.0\n\n").getRequestURI());
+//    assertEquals("/%60", parseLegacy("GET /` HTTP/1.0\n\n").getRequestURI());
+//    assertEquals("/%5E", parseLegacy("GET /^ HTTP/1.0\n\n").getRequestURI());
 //  }
 
   // Tests for error conditions:
@@ -237,7 +238,7 @@ public abstract class HttpParserTest {
   @Test
   public void badContentLength() throws Exception {
     checkError("400 Illegal content length value", "GET / HTTP/1.0\nContent-Length: notanumber\n\n");
-    checkError("400 Content length larger than allowed", "GET / HTTP/1.0\nContent-Length: 123456789\n\n");
+    checkError("413 Payload Too Large", "GET / HTTP/1.0\nContent-Length: 123456789\n\n");
   }
 
   @Test

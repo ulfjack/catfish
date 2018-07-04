@@ -32,7 +32,7 @@ public final class SerializableHttpRequest implements HttpRequest, Serializable 
     this.method = request.getMethod();
     this.uri = request.getUri();
     this.headers = request.getHeaders();
-    this.body = request.getBody();
+    this.body = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
   }
 
   public byte[] serialize() {
@@ -68,7 +68,7 @@ public final class SerializableHttpRequest implements HttpRequest, Serializable 
   }
 
   @Override
-  public byte[] getBody() {
-    return body;
+  public HttpRequest.InMemoryBody getBody() {
+    return new HttpRequest.InMemoryBody(body);
   }
 }

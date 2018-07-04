@@ -5,10 +5,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import de.ofahrt.catfish.upload.MultipartContainer.Part;
+import de.ofahrt.catfish.model.server.PayloadParser;
+import de.ofahrt.catfish.upload.MultipartBody.Part;
 import de.ofahrt.catfish.utils.HttpContentType;
 
-public final class IncrementalMultipartParser {
+public final class IncrementalMultipartParser implements PayloadParser {
 
   private static enum State {
     PREAMBLE,
@@ -35,23 +36,38 @@ public final class IncrementalMultipartParser {
 
   private ByteArrayOutputStream bodyPart;
   private List<Part> parts = new ArrayList<>();
+  private MalformedMultipartException error;
 
   public IncrementalMultipartParser(String contentType) {
-    String[] parsedContentType = HttpContentType.parseContentType(contentType);
-    if (!"multipart".equals(parsedContentType[0])) {
-      throw new IllegalArgumentException("content type must be a multipart type");
+    String[] parsedContentType;
+    try {
+      parsedContentType = HttpContentType.parseContentType(contentType);
+    } catch (IllegalArgumentException e) {
+      error = new MalformedMultipartException(e.getMessage());
+      parsedContentType = null;
     }
     char[] foundBoundary = null;
-    for (int i = 2; i < parsedContentType.length; i += 2) {
-      if ("boundary".equals(parsedContentType[i])) {
-        if (foundBoundary != null) {
-          throw new IllegalArgumentException("duplicate boundary specification in content type");
+    if (parsedContentType == null) {
+      // We've already set an error above.
+    } else if (!"multipart".equals(parsedContentType[0])) {
+      error = new MalformedMultipartException("content type must be a multipart type");
+    } else {
+      for (int i = 2; i < parsedContentType.length; i += 2) {
+        if ("boundary".equals(parsedContentType[i])) {
+          if (foundBoundary != null) {
+            error = new MalformedMultipartException("duplicate boundary specification in content type");
+            continue;
+          }
+          try {
+            foundBoundary = validateBoundary(parsedContentType[i + 1]);
+          } catch (IllegalArgumentException e) {
+            error = new MalformedMultipartException(e.getMessage());
+          }
         }
-        foundBoundary = validateBoundary(parsedContentType[i + 1]);
       }
-    }
-    if (foundBoundary == null) {
-      throw new IllegalArgumentException("no boundary specification in content type");
+      if (foundBoundary == null) {
+        error = new MalformedMultipartException("no boundary specification in content type");
+      }
     }
     boundary = foundBoundary;
   }
@@ -120,7 +136,8 @@ public final class IncrementalMultipartParser {
     fields.put(name, value);
   }
 
-  public int parse(byte[] data, int offset, int length) throws MalformedMultipartException {
+  @Override
+  public int parse(byte[] data, int offset, int length) {
     for (int i = 0; i < length; i++) {
       final char c = (char) (data[offset+i] & 0xff);
       if (c == boundary[searchPosition]) {
@@ -144,14 +161,16 @@ public final class IncrementalMultipartParser {
           } else if (c == '\r') {
             state = State.END_BOUNDARY_EXPECT_LF;
           } else {
-            throw new MalformedMultipartException("At end of boundary line: unexpected character.");
+            error = new MalformedMultipartException("At end of boundary line: unexpected character.");
+            return i;
           }
           break;
         case END_BOUNDARY_EXPECT_HYPHEN :
           if (c == '-') {
             state = State.EPILOGUE;
           } else {
-            throw new MalformedMultipartException("At end of boundary line: unexpected character.");
+            error = new MalformedMultipartException("At end of boundary line: unexpected character.");
+            return i;
           }
           break;
         case END_BOUNDARY_EXPECT_CR :
@@ -164,7 +183,8 @@ public final class IncrementalMultipartParser {
             // ; be able to handle padding
             // ; added by message transports.
           } else {
-            throw new MalformedMultipartException("At end of boundary line: unexpected character.");
+            error = new MalformedMultipartException("At end of boundary line: unexpected character.");
+            return i;
           }
           break;
         case END_BOUNDARY_EXPECT_LF :
@@ -172,24 +192,28 @@ public final class IncrementalMultipartParser {
             state = State.FIELD_NAME;
             bodyPart = new ByteArrayOutputStream();
           } else {
-            throw new MalformedMultipartException("At end of boundary line: CR not followed by LF.");
+            error = new MalformedMultipartException("At end of boundary line: CR not followed by LF.");
+            return i;
           }
           break;
         case FIELD_NAME :
           if (c == ':') {
             if (elementBuffer.length() == 0) {
-              throw new MalformedMultipartException("Expected field name, but ':' found.");
+              error = new MalformedMultipartException("Expected field name, but ':' found.");
+              return i;
             }
             fieldName = elementBuffer.toString();
             elementBuffer.setLength(0);
             state = State.FIELD_VALUE;
           } else if (c == '\r')  {
             if (elementBuffer.length() != 0) {
-              throw new MalformedMultipartException("Unexpected end of line in field name.");
+              error = new MalformedMultipartException("Unexpected end of line in field name.");
+              return i;
             }
             state = State.HEADERS_END_EXPECT_LF;
           } else if (!isFieldNameCharacter(c)) {
-            throw new MalformedMultipartException("Illegal character in field name.");
+            error = new MalformedMultipartException("Illegal character in field name.");
+            return i;
           } else {
             elementBuffer.append(c);
           }
@@ -245,7 +269,8 @@ public final class IncrementalMultipartParser {
           if (c == '\r') {
             state = State.HEADERS_END_EXPECT_LF;
           } else if (!isFieldNameCharacter(c)) {
-            throw new MalformedMultipartException("Illegal character in header field");
+            error = new MalformedMultipartException("Illegal character in header field");
+            return i;
           } else {
             elementBuffer.setLength(0);
             state = State.FIELD_NAME;
@@ -256,7 +281,8 @@ public final class IncrementalMultipartParser {
           if (c == '\n') {
             state = State.BODY_PART;
           } else {
-            throw new MalformedMultipartException("At end of field definition: CR not followed by LF.");
+            error = new MalformedMultipartException("At end of field definition: CR not followed by LF.");
+            return i;
           }
           break;
         case BODY_PART :
@@ -276,11 +302,16 @@ public final class IncrementalMultipartParser {
     return length;
   }
 
+  @Override
   public boolean isDone() {
-    return state == State.EPILOGUE;
+    return (state == State.EPILOGUE) || (error != null);
   }
 
-  public MultipartContainer getContainer() {
-    return new MultipartContainer(parts.toArray(new MultipartContainer.Part[0]));
+  @Override
+  public MultipartBody getParsedBody() throws MalformedMultipartException {
+    if (error != null) {
+      throw error;
+    }
+    return new MultipartBody(parts.toArray(new MultipartBody.Part[0]));
   }
 }

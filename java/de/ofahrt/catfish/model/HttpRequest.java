@@ -1,6 +1,21 @@
 package de.ofahrt.catfish.model;
 
 public interface HttpRequest {
+  interface Body {
+  }
+
+  public static final class InMemoryBody implements Body {
+    private final byte[] body;
+
+    public InMemoryBody(byte[] body) {
+      this.body = body;
+    }
+
+    public byte[] toByteArray() {
+      return body;
+    }
+  }
+
   default HttpVersion getVersion() {
     return HttpVersion.HTTP_1_1;
   }
@@ -15,7 +30,7 @@ public interface HttpRequest {
     return HttpHeaders.NONE;
   }
 
-  default byte[] getBody() {
+  default Body getBody() {
     return null;
   }
 
@@ -43,7 +58,7 @@ public interface HttpRequest {
       }
 
       @Override
-      public byte[] getBody() {
+      public Body getBody() {
         return HttpRequest.this.getBody();
       }
     };

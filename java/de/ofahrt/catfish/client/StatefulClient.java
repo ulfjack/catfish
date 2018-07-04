@@ -72,7 +72,7 @@ public final class StatefulClient {
     requestBuilder.addHeader(HttpHeaderName.CONTENT_TYPE, "application/x-www-form-urlencoded");
     byte[] body = urlEncode(postData).getBytes(StandardCharsets.UTF_8);
     requestBuilder.addHeader(HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length));
-    requestBuilder.setBody(body);
+    requestBuilder.setBody(new HttpRequest.InMemoryBody(body));
     return send(requestBuilder.build());
   }
 
