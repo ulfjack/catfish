@@ -2,12 +2,18 @@ package de.ofahrt.catfish.utils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class HttpContentType {
+  public static final String MULTIPART_FORMDATA = "multipart/form-data";
+  public static final String WWW_FORM_URLENCODED = "application/x-www-form-urlencoded";
+
   // token = 1*<any CHAR except CTLs or separators>
   // CTL = <any US-ASCII control character
   // (octets 0 - 31) and DEL (127)>
@@ -21,13 +27,35 @@ public class HttpContentType {
   private static final Pattern CONTENT_TYPE_PATTERN_EXPLICIT_MIME_TYPE = Pattern.compile("(" + TOKEN + "/" + TOKEN + ")"
       + "((?:\\s*;\\s*" + TOKEN + "=(?:" + TOKEN + "|\"(?:\\\\[\\p{ASCII}]|[^\"\\\\])*\"))*)");
 
-  private static final Pattern CONTENT_TYPE_PATTERN = Pattern.compile("(" + TOKEN + ")/(" + TOKEN + ")"
+  private static final Pattern CONTENT_TYPE_PATTERN = Pattern.compile("(" + TOKEN + "/" + TOKEN + ")"
       + "((?:\\s*;\\s*" + TOKEN + "=(?:" + TOKEN + "|\"(?:\\\\[\\p{ASCII}]|[^\"\\\\])*\"))*)");
 
   private static final Pattern PARAMETER_PATTERN = Pattern
       .compile("(?:\\s*;\\s*(" + TOKEN + ")=(?:(" + TOKEN + ")|\"((?:\\\\[\\p{ASCII}]|[^\"\\\\])*)\"))");
 
   private static final Set<String> COMMON_CONTENT_TYPES = new HashSet<>(Arrays.asList("text/html"));
+
+  private static Map<String,String> CANONICALIZATION_MAP = getCanonicalizationMap();
+
+  private static Map<String,String> getCanonicalizationMap() {
+    Map<String,String> result = new HashMap<>();
+    add(result, MULTIPART_FORMDATA);
+    add(result, WWW_FORM_URLENCODED);
+    return result;
+  }
+
+  private static void add(Map<String, String> map, String value) {
+    map.put(value, value);
+    map.put(value.toLowerCase(Locale.US), value);
+  }
+
+  private static String canonicalize(String name) {
+    String result = CANONICALIZATION_MAP.get(name);
+    if (result != null) return result;
+    name = name.toLowerCase(Locale.US);
+    result = CANONICALIZATION_MAP.get(name);
+    return result != null ? result : name;
+  }
 
   static boolean isTokenCharacter(char c) {
     return Pattern.compile(TOKEN_CHARS).matcher("" + c).matches();
@@ -55,7 +83,7 @@ public class HttpContentType {
     if (!m.matches()) {
       throw new IllegalArgumentException();
     }
-    return m.group(1);
+    return canonicalize(m.group(1));
   }
 
   // 14.17
@@ -65,11 +93,10 @@ public class HttpContentType {
       throw new IllegalArgumentException();
     }
     ArrayList<String> result = new ArrayList<>();
-    result.add(m.group(1));
-    result.add(m.group(2));
-    String params = m.group(3);
+    result.add(canonicalize(m.group(1)));
+    String params = m.group(2);
     if (params != null) {
-      m = PARAMETER_PATTERN.matcher(m.group(3));
+      m = PARAMETER_PATTERN.matcher(m.group(2));
       while (m.find()) {
         result.add(m.group(1));
         String value = m.group(2);

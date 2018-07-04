@@ -53,12 +53,10 @@ public final class IncrementalMultipartParser implements PayloadParser {
     char[] foundBoundary = null;
     if (parsedContentType == null) {
       // We've already set an error above.
-    } else if (!"multipart".equals(parsedContentType[0])) {
-      error = new MalformedMultipartException("Content type must be multipart/form-data");
-    } else if (!"form-data".equals(parsedContentType[1])) {
+    } else if (!"multipart/form-data".equals(parsedContentType[0])) {
       error = new MalformedMultipartException("Content type must be multipart/form-data");
     } else {
-      for (int i = 2; i < parsedContentType.length; i += 2) {
+      for (int i = 1; i < parsedContentType.length; i += 2) {
         if ("boundary".equals(parsedContentType[i])) {
           if (foundBoundary != null) {
             error = new MalformedMultipartException("duplicate boundary specification in content type");

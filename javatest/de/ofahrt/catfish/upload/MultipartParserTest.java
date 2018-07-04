@@ -79,6 +79,17 @@ public class MultipartParserTest {
   }
 
   @Test
+  public void parseContainerWithContentDispositionCaseInsensitive() throws Exception {
+    FormDataBody container = parse(
+        "multipart/form-data; boundary=abc",
+        "--abc\ncONteNT-DIsPOSition: form-data; name=\"foo\"\n\n\n--abc--\n");
+    assertEquals(1, container.size());
+    assertNotNull(container.get(0));
+    assertEquals("foo", container.get(0).getName());
+    assertEquals("", container.get(0).getValue());
+  }
+
+  @Test
   public void parseContainerWithContentDispositionAndContentType() throws Exception {
     FormDataBody container = parse(
         "multipart/form-data; boundary=abc",
