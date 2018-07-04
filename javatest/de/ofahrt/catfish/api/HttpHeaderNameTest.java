@@ -24,26 +24,6 @@ public class HttpHeaderNameTest {
   }
 
   @Test
-  public void areEqualSimple() {
-    assertTrue(HttpHeaderName.areEqual(HttpHeaderName.ACCEPT, HttpHeaderName.ACCEPT));
-  }
-
-  @Test
-  public void areEqualCapitalization() {
-    assertTrue(HttpHeaderName.areEqual(HttpHeaderName.ACCEPT, "aCCEpT"));
-  }
-
-  @Test
-  public void areEqualNotEqual() {
-    assertFalse(HttpHeaderName.areEqual(HttpHeaderName.ACCEPT, "aCxEpT"));
-  }
-
-  @Test
-  public void areEqualForUnknown() {
-    assertTrue(HttpHeaderName.areEqual("x-catfish-unknown", "X-CATFISH-UNkNOWN"));
-  }
-
-  @Test
   public void validHost() {
     // Valid for RFC 2396
     assertTrue(HttpHeaderName.validHostPort("abc.com"));

@@ -103,21 +103,21 @@ public final class HttpHeaderName {
   }
 
   private static Map<String,String> getCanonicalizationMap() {
-  	Map<String,String> result = new HashMap<>();
-  	for (Field field : HttpHeaderName.class.getFields()) {
-  		if (Modifier.isPublic(field.getModifiers()) && Modifier.isStatic(field.getModifiers()) &&
-  				Modifier.isFinal(field.getModifiers()) && String.class.equals(field.getType())) {
-  			try {
-  				String value = (String) field.get(null);
-  				result.put(value.toLowerCase(Locale.US), value);
-  				result.put(value, value);
-  			} catch (IllegalAccessException e) {
-  			  // should never happen
-  				throw new RuntimeException(e);
-  			}
-  		}
-  	}
-  	return result;
+    Map<String,String> result = new HashMap<>();
+    for (Field field : HttpHeaderName.class.getFields()) {
+      if (Modifier.isPublic(field.getModifiers()) && Modifier.isStatic(field.getModifiers()) &&
+          Modifier.isFinal(field.getModifiers()) && String.class.equals(field.getType())) {
+        try {
+          String value = (String) field.get(null);
+          result.put(value.toLowerCase(Locale.US), value);
+          result.put(value, value);
+        } catch (IllegalAccessException e) {
+          // should never happen
+          throw new RuntimeException(e);
+        }
+      }
+    }
+    return result;
   }
 
   /**
@@ -126,38 +126,11 @@ public final class HttpHeaderName {
    * Otherwise, it returns an all-lowercase representation.
    */
   public static String canonicalize(String name) {
-  	String result = CANONICALIZATION_MAP.get(name);
-  	if (result != null) return result;
-  	name = name.toLowerCase(Locale.US);
-  	result = CANONICALIZATION_MAP.get(name);
-  	return result != null ? result : name;
-  }
-
-  /**
-   * Returns whether the given two HTTP header field names are equal.
-   */
-  public static boolean areEqual(String expected, String actual) {
-  	return of(expected).matches(actual);
-  }
-
-	public static interface Matcher {
-		/**
-		 * Returns whether the value matches the field name stored in this matcher.
-		 */
-		boolean matches(String value);
-	}
-
-  /**
-   * Returns a matcher for the given http field name.
-   */
-  public static Matcher of(String name) {
-  	final String canonicalName = canonicalize(name);
-  	return new Matcher()
-  		{
-  			@Override
-  			public boolean matches(String value)
-  			{ return canonicalName.equals(canonicalize(value)); }
-  		};
+    String result = CANONICALIZATION_MAP.get(name);
+    if (result != null) return result;
+    name = name.toLowerCase(Locale.US);
+    result = CANONICALIZATION_MAP.get(name);
+    return result != null ? result : name;
   }
 
   /**
