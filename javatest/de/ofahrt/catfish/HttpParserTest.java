@@ -5,7 +5,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import java.nio.charset.Charset;
-
+import java.nio.charset.StandardCharsets;
 import org.junit.Test;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpVersion;
@@ -140,7 +140,7 @@ public abstract class HttpParserTest {
   public void withContent() throws Exception {
     HttpRequest request = parse("POST / HTTP/1.0\nContent-Length: 10\n\n1234567890");
     byte[] data = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
-    assertEquals("1234567890", new String(data, "ISO-8859-1"));
+    assertEquals("1234567890", new String(data, StandardCharsets.UTF_8));
   }
 
   @Test

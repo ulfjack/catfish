@@ -6,7 +6,7 @@ import static org.junit.Assert.assertTrue;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Test;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
@@ -111,7 +111,7 @@ public class CatfishHttpServerTest {
         + "b\n" // 1+1
         + "-----------------------------12184522311670376405338810566--\n" // 60+1
         + "";
-    assertEquals(164, content.getBytes(Charset.forName("ISO-8859-1")).length);
+    assertEquals(164, content.getBytes(StandardCharsets.UTF_8).length);
     HttpResponse response = createResponse(
         "POST /index HTTP/1.1\nHost: localhost\n"
         + "Content-Type: multipart/form-data; boundary=---------------------------13751323931886145875850488035\n"

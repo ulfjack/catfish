@@ -144,8 +144,16 @@ public final class IncrementalMultipartParser implements PayloadParser {
     }
   }
 
+  public int parse(byte[] data) {
+    return parse(data, 0, data.length);
+  }
+
   @Override
   public int parse(byte[] data, int offset, int length) {
+    if (isDone()) {
+      return 0;
+    }
+
     for (int i = 0; i < length; i++) {
       final char c = (char) (data[offset+i] & 0xff);
       if (c == boundary[searchPosition]) {

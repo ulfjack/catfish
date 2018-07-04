@@ -16,7 +16,7 @@ import org.junit.Test;
  * http://www.ietf.org/rfc/rfc2045.txt
  * http://www.ietf.org/rfc/rfc822.txt
  */
-public class MultipartParserTest {
+public class IncrementalMultipartParserTest {
 
   public FormDataBody parse(String contentType, byte[] data) throws MalformedMultipartException {
     IncrementalMultipartParser parser = new IncrementalMultipartParser(contentType);
@@ -287,5 +287,14 @@ public class MultipartParserTest {
   @Test(expected=MalformedMultipartException.class)
   public void containerWithUnexpectedCR() throws Exception {
     parse("multipart/form-data; boundary=abc", "--abc\n\r\n\n--abc--\n");
+  }
+
+  @Test
+  public void parseWithErrorReturnsZero() throws Exception {
+    IncrementalMultipartParser parser = new IncrementalMultipartParser("failure");
+    assertTrue(parser.isDone());
+    int len = parser.parse("foobar".getBytes());
+    assertEquals(0, len);
+    assertTrue(parser.isDone());
   }
 }

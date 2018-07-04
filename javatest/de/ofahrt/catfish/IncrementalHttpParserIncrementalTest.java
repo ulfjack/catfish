@@ -3,6 +3,7 @@ package de.ofahrt.catfish;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 
 import org.junit.runner.RunWith;
@@ -57,8 +58,8 @@ public class IncrementalHttpParserIncrementalTest extends HttpParserTest {
     IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
     int pos = 0;
     for (int i = 0; i < lengths.length; i++) {
-      int len = Math.min(data.length-pos, lengths[i]);
-      int consumed = parser.parse(data, pos, len);
+      int len = Math.min(data.length - pos, lengths[i]);
+      int consumed = parser.parse(Arrays.copyOfRange(data, pos, pos + len));
       assertTrue(consumed != 0);
       pos += len;
       if (pos == data.length) {

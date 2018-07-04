@@ -318,9 +318,10 @@ final class IncrementalHttpRequestParser {
           break;
         case PAYLOAD :
           int parsed = payloadParser.parse(input, offset + i, length - i);
-          if (parsed == 0) {
+          if (parsed <= 0) {
             throw new IllegalStateException("Parser must process at least one byte");
           }
+          i += parsed - 1; // loop increments by one
           if (payloadParser.isDone()) {
             try {
               builder.setBody(payloadParser.getParsedBody());
@@ -328,7 +329,7 @@ final class IncrementalHttpRequestParser {
               return setError(HttpStatusCode.BAD_REQUEST, e.getMessage());
             }
             done = true;
-            return i + parsed;
+            return i + 1; // add the one back since we skip the loop increment
           }
           break;
         default :
