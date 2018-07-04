@@ -12,6 +12,7 @@ java_binary(
     "//java/de/ofahrt/catfish/model/server",
     "//java/de/ofahrt/catfish/servlets",
     "//java/de/ofahrt/catfish/ssl",
+    "//java/de/ofahrt/catfish/upload",
     "//java/de/ofahrt/catfish/utils",
   ],
 )

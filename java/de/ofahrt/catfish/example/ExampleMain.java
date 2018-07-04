@@ -14,7 +14,6 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.server.BasicHttpHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
-import de.ofahrt.catfish.servlets.CheckPost;
 import de.ofahrt.catfish.ssl.SSLContextFactory;
 import de.ofahrt.catfish.ssl.SSLContextFactory.SSLInfo;
 
@@ -73,7 +72,7 @@ public class ExampleMain {
     HttpHandler handler = new ServletHttpHandler.Builder()
         .withSessionManager(new SessionManager())
         .exact("/hello.php", new FcgiServlet())
-        .exact("/post", new CheckPost())
+        .exact("/post", new CheckPostHandler())
         .exact("/", new TraceHandler())
         .exact("/large", new LargeResponseHandler(16536))
         .directory("/public/", new DirectoryHandler("/tmp/public/"))
