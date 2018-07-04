@@ -1,14 +1,12 @@
 package de.ofahrt.catfish.upload;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import java.util.List;
 import java.util.TreeMap;
 import org.junit.Test;
-import de.ofahrt.catfish.HashConflictGenerator;
-import de.ofahrt.catfish.upload.MultipartBody.Part;
 
 /**
  * Tests a parser for compliance with RFC 2046, section 5.1:
@@ -20,7 +18,7 @@ import de.ofahrt.catfish.upload.MultipartBody.Part;
  */
 public class MultipartParserTest {
 
-  public MultipartBody parse(String contentType, byte[] data) throws MalformedMultipartException {
+  public FormDataBody parse(String contentType, byte[] data) throws MalformedMultipartException {
     IncrementalMultipartParser parser = new IncrementalMultipartParser(contentType);
     if (parser.isDone()) {
       parser.getParsedBody();
@@ -29,7 +27,7 @@ public class MultipartParserTest {
     int consumed = parser.parse(data, 0, data.length);
     assertTrue(parser.isDone());
     try {
-      MultipartBody result = parser.getParsedBody();
+      FormDataBody result = parser.getParsedBody();
       assertEquals(data.length, consumed);
       return result;
     } catch (MalformedMultipartException e) {
@@ -37,7 +35,7 @@ public class MultipartParserTest {
     }
   }
 
-  public MultipartBody parse(String contentType, String data) throws Exception {
+  public FormDataBody parse(String contentType, String data) throws Exception {
     byte[] bytes = data.replace("\n", "\r\n").getBytes();
   //  for (int i = 0; i < bytes.length; i++)
   //    System.out.print(" "+bytes[i]);
@@ -45,148 +43,181 @@ public class MultipartParserTest {
     return parse(contentType, bytes);
   }
 
-  @Test
-  public void parseEmptyContainer() throws Exception {
-    MultipartBody container = parse("multipart/form-data; boundary=abc",
-        "--abc\n\n--abc--\n");
-    assertEquals(1, container.size());
-  }
-
-  @Test
-  public void parseEmptyContainerWithTwoParts() throws Exception {
-    MultipartBody container = parse("multipart/form-data; boundary=abc",
-        "--abc\n\n--abc\n\n--abc--\n");
-    assertEquals(2, container.size());
-  }
+//  @Test
+//  public void parseEmptyContainer() throws Exception {
+//    FormDataBody container = parse(
+//        "multipart/form-data; boundary=abc",
+//        "--abc\n\n--abc--\n");
+//    assertEquals(1, container.size());
+//  }
+//
+//  @Test
+//  public void parseEmptyContainerWithTwoParts() throws Exception {
+//    FormDataBody container = parse(
+//        "multipart/form-data; boundary=abc",
+//        "--abc\n\n--abc\n\n--abc--\n");
+//    assertEquals(2, container.size());
+//  }
 
   @Test
   public void parseEmptyContainerWithWeirdBoundary() throws Exception {
-    MultipartBody container = parse(
+    FormDataBody container = parse(
         "multipart/form-data; boundary=\"'()+_,-./:=? 0123456\"",
-        "--'()+_,-./:=? 0123456\n\n--'()+_,-./:=? 0123456--");
+        "--'()+_,-./:=? 0123456\nContent-Disposition: form-data; name=\"foo\"\n\n\n--'()+_,-./:=? 0123456--");
     assertEquals(1, container.size());
   }
 
   @Test
-  public void parseContainerWithHeader() throws Exception {
-    MultipartBody container = parse(
+  public void parseContainerWithContentDisposition() throws Exception {
+    FormDataBody container = parse(
         "multipart/form-data; boundary=abc",
-        "--abc\na: b\n\n--abc--\n");
+        "--abc\nContent-Disposition: form-data; name=\"foo\"\n\n\n--abc--\n");
     assertEquals(1, container.size());
     assertNotNull(container.get(0));
-    assertEquals("b", container.get(0).getField("a"));
+    assertEquals("foo", container.get(0).getName());
+    assertEquals("", container.get(0).getValue());
   }
 
   @Test
-  public void parseContainerWithTwoHeaders() throws Exception {
-    MultipartBody container = parse(
+  public void parseContainerWithContentDispositionAndContentType() throws Exception {
+    FormDataBody container = parse(
         "multipart/form-data; boundary=abc",
-        "--abc\na: b\nc: d\n\n--abc--\n");
+        "--abc\nContent-Disposition: form-data\nContent-Type: text/plain\n\n\n--abc--\n");
     assertEquals(1, container.size());
-    assertNotNull(container.get(0));
-    assertEquals("b", container.get(0).getField("a"));
-    assertEquals("d", container.get(0).getField("c"));
+    FormEntry entry = container.get(0);
+    assertNotNull(entry);
+    assertEquals("text/plain", entry.getContentType());
+    assertArrayEquals(new byte[0], entry.getBody());
   }
 
   @Test
   public void parseContainerWithContinuationField() throws Exception {
-    MultipartBody container = parse(
+    FormDataBody container = parse(
         "multipart/form-data; boundary=abc",
-        "--abc\na: b\n c\n\n--abc--\n");
+        "--abc\nContent-Disposition: form-data;\n name=\"bar\"\n\n\n--abc--\n");
     assertEquals(1, container.size());
-    assertNotNull(container.get(0));
-    assertEquals("b c", container.get(0).getField("a"));
+    FormEntry entry = container.get(0);
+    assertNotNull(entry);
+    assertEquals("bar", entry.getName());
   }
 
   @Test
   public void parseContainerWithStandaloneCR() throws Exception {
     // Standalone CR is allowed in a field value.
-    MultipartBody container = parse(
+    FormDataBody container = parse(
         "multipart/form-data; boundary=abc",
-      "--abc\na: \rb\n\n--abc--\n");
+      "--abc\nContent-Disposition: form-data\nContent-Type: \rb\n\n\n--abc--\n");
     assertEquals(1, container.size());
-    assertNotNull(container.get(0));
-    assertEquals("\rb", container.get(0).getField("a"));
+    FormEntry entry = container.get(0);
+    assertNotNull(entry);
+    assertEquals("\rb", entry.getContentType());
   }
 
   @Test
-  public void parseContainerWithStandaloneCR2() throws Exception {
+  public void parseContainerWithTrailingCR() throws Exception {
     // Standalone CR is allowed in a field value.
-    MultipartBody container = parse(
+    FormDataBody container = parse(
         "multipart/form-data; boundary=abc",
-        "--abc\na: b\r\n\n--abc--\n");
+        "--abc\nContent-Disposition: form-data\nContent-Type: b\r\n\n\n--abc--\n");
     assertEquals(1, container.size());
-    assertNotNull(container.get(0));
-    assertEquals("b\r", container.get(0).getField("a"));
+    FormEntry entry = container.get(0);
+    assertNotNull(entry);
+    assertEquals("b\r", entry.getContentType());
   }
 
   @Test
   public void parseContainerWithStandaloneCR3() throws Exception {
     // Standalone CR is allowed in a field value.
-    MultipartBody container = parse(
+    FormDataBody container = parse(
         "multipart/form-data; boundary=abc",
-        "--abc\na: b\r \n\n--abc--\n");
+        "--abc\nContent-Disposition: form-data\nContent-Type: b\r \n\n\n--abc--\n");
     assertEquals(1, container.size());
     assertNotNull(container.get(0));
-    assertEquals("b\r", container.get(0).getField("a"));
+    assertEquals("b\r", container.get(0).getContentType());
   }
 
   @Test
   public void parseContainerWithStandaloneLF() throws Exception {
     // Standalone LF is allowed in a field value.
-    MultipartBody container = parse(
+    FormDataBody container = parse(
         "multipart/form-data; boundary=abc",
-        "--abc\r\na: \nb\r\n\r\n--abc--\r\n".getBytes());
+        "--abc\r\nContent-Disposition: form-data\r\nContent-Type: \nb\r\n\r\n\r\n--abc--\r\n".getBytes());
     assertEquals(1, container.size());
     assertNotNull(container.get(0));
-    assertEquals("\nb", container.get(0).getField("a"));
+    assertEquals("\nb", container.get(0).getContentType());
   }
 
   @Test
   public void parseFieldWithWhiteSpaceAtEnd() throws Exception {
     // Whitespace at the end of a field value should be ignored.
-    MultipartBody container = parse(
+    FormDataBody container = parse(
         "multipart/form-data; boundary=abc",
-        "--abc\na: b \n\n--abc--\n");
+        "--abc\nContent-Disposition: form-data\nContent-Type: b \n\n\n--abc--\n");
     assertEquals(1, container.size());
     assertNotNull(container.get(0));
-    assertEquals("b", container.get(0).getField("a"));
+    assertEquals("b", container.get(0).getContentType());
   }
 
   @Test
   public void parseEmptyContainerWithTransportPadding() throws Exception {
-    MultipartBody container = parse("multipart/form-data; boundary=abc",
-        "--abc    \n\n--abc--\n");
+    FormDataBody container = parse("multipart/form-data; boundary=abc",
+        "--abc    \nContent-Disposition:form-data; name=\"foo\"\n\n\n--abc--\n");
     assertEquals(1, container.size());
   }
 
+  @Test
+  public void parseContainerWithFileEntry() throws Exception {
+    FormDataBody container = parse("multipart/form-data; boundary=abc",
+        "--abc\nContent-Disposition: form-data; name=\"file\"\nContent-Type: text/plain\n\nDoh!\n--abc--\n");
+    assertEquals(1, container.size());
+    FormEntry entry = container.get(0);
+    assertEquals("text/plain", entry.getContentType());
+    assertArrayEquals(new byte[] { 'D', 'o', 'h', '!' }, entry.getBody());
+  }
+
+  @Test
+  public void asMap() throws Exception {
+    FormDataBody container = parse("multipart/form-data; boundary=abc",
+        "--abc\n"
+        + "Content-Disposition: form-data; name=\"foo\"\n\nDoh!"
+        + "\n--abc\n"
+        + "Content-Disposition: form-data; name=\"bar\"\n\nHo!"
+        + "\n--abc\n"
+        + "Content-Disposition: form-data\nContent-Type: text/plain\n\nMy fancy text!"
+        + "\n--abc--\n");
+    TreeMap<String, String> expected = new TreeMap<>();
+    expected.put("foo", "Doh!");
+    expected.put("bar", "Ho!");
+    assertEquals(expected, container.formDataAsMap());
+  }
+
   @Test(expected=MalformedMultipartException.class)
-  public void illegalContainerWithOddStartBoundary() throws Exception {
+  public void containerWithIllegalStartBoundary() throws Exception {
     parse("multipart/form-data; boundary=abc", "--abc012\n\n--abc--\n");
   }
 
   @Test(expected=MalformedMultipartException.class)
-  public void illegalContainerWithOddBoundary() throws Exception {
+  public void containerWithIllegalBoundary() throws Exception {
     parse("multipart/form-data; boundary=abc", "--abc\n\n--abc0123456\n\n--abc--\n");
   }
 
   @Test(expected=MalformedMultipartException.class)
-  public void illegalContainerWithHyphenAtEnd() throws Exception {
+  public void containerWithIllegalHyphenAtEnd() throws Exception {
     parse("multipart/form-data; boundary=abc", "--abc\n\n--abc-\n\n--abc--\n");
   }
 
   @Test
-  public void validateWeirdBoundary() throws Exception {
+  public void boundaryWithEverySpecialCharacter() throws Exception {
     // A valid boundary containing every special character allowed.
-    MultipartBody container = parse(
+    FormDataBody container = parse(
         "multipart/form-data; boundary=\"'()+_,-./:=? 0123456\"",
-        "--'()+_,-./:=? 0123456\n\n--'()+_,-./:=? 0123456--\n");
+        "--'()+_,-./:=? 0123456\nContent-Disposition: form-data; name=\"baz\"\n\n\n--'()+_,-./:=? 0123456--\n");
     assertEquals(1, container.size());
     assertNotNull(container.get(0));
   }
 
   @Test(expected=MalformedMultipartException.class)
-  public void illegalBoundaryTooLong() throws Exception {
+  public void boundaryTooLong() throws Exception {
     parse("multipart/form-data; boundary=12345678901234567890123456789012345678901234567890123456789012345678901", "");
   }
 
@@ -202,7 +233,8 @@ public class MultipartParserTest {
 
   @Test(expected=MalformedMultipartException.class)
   public void illegalBoundaryWithoutCR() throws Exception {
-    parse("multipart/form-data; boundary=abc",
+    parse(
+        "multipart/form-data; boundary=abc",
         "--abc\r-".getBytes());
   }
 
@@ -244,20 +276,5 @@ public class MultipartParserTest {
   @Test(expected=MalformedMultipartException.class)
   public void containerWithUnexpectedCR() throws Exception {
     parse("multipart/form-data; boundary=abc", "--abc\n\r\n\n--abc--\n");
-  }
-
-  private static final String LOWER_CASE_ALPHA_AND_NUMERIC =
-      "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-  private static final List<String> REALLY_BAD_STRINGS =
-      HashConflictGenerator.using(LOWER_CASE_ALPHA_AND_NUMERIC)
-          .withHashCode(0).withLength(10).generateList(40000);
-
-  @Test(timeout = 1000)
-  public void hashCollision() {
-    TreeMap<String, String> data = new TreeMap<>();
-    for (String s : REALLY_BAD_STRINGS) {
-      data.put(s, "x");
-    }
-    assertNotNull(new Part(data));
   }
 }

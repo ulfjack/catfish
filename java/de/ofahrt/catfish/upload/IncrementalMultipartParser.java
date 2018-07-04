@@ -1,15 +1,19 @@
 package de.ofahrt.catfish.upload;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import de.ofahrt.catfish.model.server.PayloadParser;
-import de.ofahrt.catfish.upload.MultipartBody.Part;
 import de.ofahrt.catfish.utils.HttpContentType;
 
 public final class IncrementalMultipartParser implements PayloadParser {
+  private static final Pattern nameExtractorPattern = Pattern.compile(".* name=\"(.*)\".*");
 
   private static enum State {
     PREAMBLE,
@@ -20,7 +24,7 @@ public final class IncrementalMultipartParser implements PayloadParser {
     FIELD_NAME, FIELD_VALUE, FIELD_VALUE_EXPECT_LF,
     FIELD_NAME_OR_CONTINUATION_OR_END,
     HEADERS_END_EXPECT_LF,
-    BODY_PART,
+    PART_BODY,
     EPILOGUE;
   }
 
@@ -34,8 +38,8 @@ public final class IncrementalMultipartParser implements PayloadParser {
   private String fieldValue;
   private Map<String, String> fields = new TreeMap<>();
 
-  private ByteArrayOutputStream bodyPart;
-  private List<Part> parts = new ArrayList<>();
+  private ByteArrayOutputStream partBody;
+  private List<FormEntry> parts = new ArrayList<>();
   private MalformedMultipartException error;
 
   public IncrementalMultipartParser(String contentType) {
@@ -50,7 +54,9 @@ public final class IncrementalMultipartParser implements PayloadParser {
     if (parsedContentType == null) {
       // We've already set an error above.
     } else if (!"multipart".equals(parsedContentType[0])) {
-      error = new MalformedMultipartException("content type must be a multipart type");
+      error = new MalformedMultipartException("Content type must be multipart/form-data");
+    } else if (!"form-data".equals(parsedContentType[1])) {
+      error = new MalformedMultipartException("Content type must be multipart/form-data");
     } else {
       for (int i = 2; i < parsedContentType.length; i += 2) {
         if ("boundary".equals(parsedContentType[i])) {
@@ -87,7 +93,7 @@ public final class IncrementalMultipartParser implements PayloadParser {
         || (c == ' ');
   }
 
-  static char[] validateBoundary(String boundary) {
+  private static char[] validateBoundary(String boundary) {
     if (boundary.length() > 70) {
       throw new IllegalArgumentException("boundary specification too long");
     }
@@ -133,7 +139,11 @@ public final class IncrementalMultipartParser implements PayloadParser {
   }
 
   private void addField(String name, String value) {
-    fields.put(name, value);
+    String canonicalName = MultipartHeaderName.canonicalize(name);
+    if (canonicalName != null) {
+      // Spec says to ignore all unknown headers.
+      fields.put(canonicalName, value);
+    }
   }
 
   @Override
@@ -190,7 +200,7 @@ public final class IncrementalMultipartParser implements PayloadParser {
         case END_BOUNDARY_EXPECT_LF :
           if (c == '\n') {
             state = State.FIELD_NAME;
-            bodyPart = new ByteArrayOutputStream();
+            partBody = new ByteArrayOutputStream();
           } else {
             error = new MalformedMultipartException("At end of boundary line: CR not followed by LF.");
             return i;
@@ -279,20 +289,23 @@ public final class IncrementalMultipartParser implements PayloadParser {
           break;
         case HEADERS_END_EXPECT_LF :
           if (c == '\n') {
-            state = State.BODY_PART;
+            state = State.PART_BODY;
           } else {
             error = new MalformedMultipartException("At end of field definition: CR not followed by LF.");
             return i;
           }
           break;
-        case BODY_PART :
+        case PART_BODY :
+          partBody.write(c);
           if (isBoundaryMatch) {
-            parts.add(new Part(fields));
+            FormEntry entry = constructEntry();
+            if (entry == null) {
+              return i;
+            }
+            parts.add(entry);
             fields.clear();
-            bodyPart = null;
+            partBody = null;
             state = State.END_BOUNDARY;
-          } else {
-            bodyPart.write(c);
           }
           break;
         case EPILOGUE :
@@ -302,16 +315,45 @@ public final class IncrementalMultipartParser implements PayloadParser {
     return length;
   }
 
+  private FormEntry constructEntry() {
+    String contentDisposition = fields.get(MultipartHeaderName.CONTENT_DISPOSITION);
+    if (contentDisposition == null) {
+      error = new MalformedMultipartException("multipart/form-data requires Content-Disposition for every entry!");
+      return null;
+    }
+    byte[] content = partBody.toByteArray();
+    if (content.length < boundary.length) {
+      error = new MalformedMultipartException("Missing clrf after header!");
+      return null;
+    }
+//      System.out.println(content.length + " " + boundary.length + " X" + new String(content) + "X Y" + new String(boundary) + "Y");
+    content = Arrays.copyOf(content, content.length - boundary.length);
+
+    String contentType = fields.get(MultipartHeaderName.CONTENT_TYPE);
+    if (contentType == null) {
+      Matcher m = nameExtractorPattern.matcher(contentDisposition);
+      if (!m.matches()) {
+        error = new MalformedMultipartException("multipart/form-data requires Content-Disposition with a name for every entry!");
+        return null;
+      }
+      String name = m.group(1);
+      String value = new String(content, StandardCharsets.UTF_8);
+      return new FormEntry(name, value);
+    } else {
+      return new FormEntry("<unknown>", contentType, content);
+    }
+  }
+
   @Override
   public boolean isDone() {
     return (state == State.EPILOGUE) || (error != null);
   }
 
   @Override
-  public MultipartBody getParsedBody() throws MalformedMultipartException {
+  public FormDataBody getParsedBody() throws MalformedMultipartException {
     if (error != null) {
       throw error;
     }
-    return new MultipartBody(parts.toArray(new MultipartBody.Part[0]));
+    return new FormDataBody(parts);
   }
 }
