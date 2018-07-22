@@ -39,7 +39,7 @@ public final class SSLContextFactory {
 		TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance("SunX509");
 		trustManagerFactory.init(keyStore);
 
-		SSLContext context = SSLContext.getInstance("SSLv3");
+		SSLContext context = SSLContext.getInstance("TLSv1.2");
 		context.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
 		return context;
   }
