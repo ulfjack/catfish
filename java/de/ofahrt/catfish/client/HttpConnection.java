@@ -1,9 +1,11 @@
 package de.ofahrt.catfish.client;
 
+import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +19,8 @@ import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.HttpRequest.Body;
+import de.ofahrt.catfish.model.HttpRequest.InMemoryBody;
 
 public final class HttpConnection implements Closeable {
   public static HttpConnection connect(String server, int port) throws IOException {
@@ -41,6 +45,7 @@ public final class HttpConnection implements Closeable {
     } else {
       socket = new Socket();
     }
+    // TODO(ulfjack): Set connect timeout and setSoTimeout() for read timeouts
     socket.connect(new InetSocketAddress(server, port));
     socket.setTcpNoDelay(true);
     return new HttpConnection(socket);
@@ -69,13 +74,31 @@ public final class HttpConnection implements Closeable {
   }
 
   private static byte[] requestToBytes(HttpRequest request) {
-    StringBuilder buffer = new StringBuilder();
-    buffer.append(request.getMethod() + " " + request.getUri() + " " + request.getVersion()).append("\r\n");
-    for (Map.Entry<String, String> e : request.getHeaders()) {
-      buffer.append(e.getKey()).append(": ").append(e.getValue()).append("\r\n");
+    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+    try (OutputStreamWriter out = new OutputStreamWriter(buffer, StandardCharsets.UTF_8)) {
+      out.append(request.getMethod()).append(" ").append(request.getUri()).append(" ").append(request.getVersion().toString()).append("\r\n");
+      for (Map.Entry<String, String> e : request.getHeaders()) {
+        out.append(e.getKey()).append(": ").append(e.getValue()).append("\r\n");
+      }
+      out.append("\r\n");
+    } catch (IOException e) {
+      // This can't happen.
+      throw new RuntimeException(e);
     }
-    buffer.append("\r\n");
-    return buffer.toString().getBytes(StandardCharsets.UTF_8);
+
+    Body body = request.getBody();
+    if (body == null) {
+    } else if (body instanceof InMemoryBody) {
+      try {
+        buffer.write(((InMemoryBody) body).toByteArray());
+      } catch (IOException e) {
+        // This can't happen.
+        throw new RuntimeException(e);
+      }
+    } else {
+      throw new IllegalArgumentException();
+    }
+    return buffer.toByteArray();
   }
 
   public HttpResponse readResponse() throws IOException {
