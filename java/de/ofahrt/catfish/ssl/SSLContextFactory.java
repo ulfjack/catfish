@@ -19,35 +19,32 @@ import java.security.cert.X509Certificate;
 import java.security.spec.RSAPrivateKeySpec;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 
 public final class SSLContextFactory {
 
-  public static SSLContext loadPkcs12(InputStream certificate)
-      throws IOException, GeneralSecurityException {
-	  char[] password = "".toCharArray();
-		KeyStore keyStore = KeyStore.getInstance("PKCS12");
-		keyStore.load(certificate, password);
-		if (keyStore.size() == 0) {
-		  throw new RuntimeException("Could not load key");
-		}
-		KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance("SunX509");
-		keyManagerFactory.init(keyStore, password);
-		TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance("SunX509");
-		trustManagerFactory.init(keyStore);
+  public static SSLContext loadPkcs12(InputStream certificate) throws IOException, GeneralSecurityException {
+    char[] password = "".toCharArray();
+    KeyStore keyStore = KeyStore.getInstance("PKCS12");
+    keyStore.load(certificate, password);
+    if (keyStore.size() == 0) {
+      throw new RuntimeException("Could not load key");
+    }
+    KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance("SunX509");
+    keyManagerFactory.init(keyStore, password);
+    TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance("SunX509");
+    trustManagerFactory.init(keyStore);
 
-		SSLContext context = SSLContext.getInstance("TLSv1.2");
-		context.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
-		return context;
+    SSLContext context = SSLContext.getInstance("TLSv1.2");
+    context.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
+    return context;
   }
 
   private static final Pattern CN_PATTERN = Pattern.compile("CN=([^,]+),");
 
-  public static SSLInfo loadPemKeyAndCrtFiles(File sslKeyFile, File sslCrtFile)
-      throws IOException, GeneralSecurityException {
+  public static SSLInfo loadPemKeyAndCrtFiles(File sslKeyFile, File sslCrtFile) throws IOException, GeneralSecurityException {
     byte[] keyData;
     try (InputStream in = new FileInputStream(sslKeyFile)) {
       keyData = decodePem(in);
@@ -70,7 +67,7 @@ public final class SSLContextFactory {
     }
     KeyStore keyStore = KeyStore.getInstance("PKCS12");
     keyStore.load(null, null);
-    keyStore.setKeyEntry("xyz", privateKey, "no-password".toCharArray(), new Certificate[] { cert });
+    keyStore.setKeyEntry("xyz", privateKey, "no-password".toCharArray(), new Certificate[] {cert});
     KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance("SunX509");
     keyManagerFactory.init(keyStore, "no-password".toCharArray());
     TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance("SunX509");
