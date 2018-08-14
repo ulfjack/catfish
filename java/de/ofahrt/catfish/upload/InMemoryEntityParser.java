@@ -1,14 +1,14 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.upload;
 
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpRequest.Body;
 import de.ofahrt.catfish.model.server.PayloadParser;
 
-final class InMemoryEntityParser implements PayloadParser {
+public final class InMemoryEntityParser implements PayloadParser {
   private final byte[] content;
   private int contentIndex;
 
-  InMemoryEntityParser(int expectedContentLength) {
+  public InMemoryEntityParser(int expectedContentLength) {
     this.content = new byte[expectedContentLength];
   }
 

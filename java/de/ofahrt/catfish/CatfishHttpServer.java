@@ -18,6 +18,8 @@ import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
+import de.ofahrt.catfish.model.server.UploadPolicy;
+import de.ofahrt.catfish.upload.SimpleUploadPolicy;
 
 /**
  * A <code>CatfishHttpServer</code> manages a HTTP-Server.
@@ -69,7 +71,13 @@ public final class CatfishHttpServer {
 
   public void addHttpHost(String name, HttpHandler handler, SSLContext sslContext) {
     ResponsePolicy responsePolicy = new DefaultResponsePolicy(mayKeepAlive, mayCompress);
-    hosts.put(name, new HttpVirtualHost(handler, responsePolicy, sslContext));
+    UploadPolicy uploadPolicy = new SimpleUploadPolicy(1024 * 1024);
+    hosts.put(name, new HttpVirtualHost(handler, responsePolicy, uploadPolicy, sslContext));
+  }
+
+  public void addHttpHost(String name, UploadPolicy uploadPolicy, HttpHandler handler, SSLContext sslContext) {
+    ResponsePolicy responsePolicy = new DefaultResponsePolicy(mayKeepAlive, mayCompress);
+    hosts.put(name, new HttpVirtualHost(handler, responsePolicy, uploadPolicy, sslContext));
   }
 
   public void setCompressionAllowed(boolean compressionAllowed) {

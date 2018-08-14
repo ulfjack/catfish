@@ -37,8 +37,13 @@ final class IncrementalHttpRequestParser {
 
   private PayloadParser payloadParser;
 
+  public IncrementalHttpRequestParser(UploadPolicy uploadPolicy) {
+    this.uploadPolicy = uploadPolicy;
+    reset();
+  }
+
   public IncrementalHttpRequestParser() {
-    this.uploadPolicy = new DefaultUploadPolicy();
+    this.uploadPolicy = new DenyUploadPolicy();
     reset();
   }
 

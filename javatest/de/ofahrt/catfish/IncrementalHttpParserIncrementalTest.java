@@ -1,11 +1,9 @@
 package de.ofahrt.catfish;
 
 import static org.junit.Assert.assertTrue;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-
 import org.junit.runner.RunWith;
 import de.ofahrt.catfish.model.HttpRequest;
 import info.adams.junit.NamedParameterized;

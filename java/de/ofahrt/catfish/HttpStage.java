@@ -116,7 +116,10 @@ final class HttpStage implements Stage {
     this.virtualHostLookup = virtualHostLookup;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
-    this.parser = new IncrementalHttpRequestParser();
+    this.parser = new IncrementalHttpRequestParser((builder) -> {
+      HttpVirtualHost host = virtualHostLookup.apply(builder.getHeader(HttpHeaderName.HOST));
+      return host.getUploadPolicy().accept(builder);
+    });
   }
 
   @Override
