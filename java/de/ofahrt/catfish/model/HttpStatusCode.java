@@ -19,6 +19,7 @@ public enum HttpStatusCode {
   NOT_MODIFIED           (304, "Not Modified"),
   USE_PROXY              (305, "Use Proxy"),
   TEMPORARY_REDIRECT     (307, "Temporary Redirect"),
+  PERMANENT_REDIRECT     (308, "Permanent Redirect"),
 
   BAD_REQUEST            (400, "Bad Request"),
   UNAUTHORIZED           (401, "Unauthorized"),

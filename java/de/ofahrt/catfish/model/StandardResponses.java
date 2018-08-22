@@ -9,7 +9,7 @@ public interface StandardResponses {
   public static final HttpResponse NOT_MODIFIED = new PreconstructedResponse(HttpStatusCode.NOT_MODIFIED); // 304
 
   // 400
-  public static final HttpResponse BAD_REQUEST = new PreconstructedResponse(HttpStatusCode.BAD_REQUEST);
+  public static final HttpResponse BAD_REQUEST = new PreconstructedResponse(HttpStatusCode.BAD_REQUEST); // 400
   public static final HttpResponse UNAUTHORIZED = new PreconstructedResponse(HttpStatusCode.UNAUTHORIZED); // 401
   public static final HttpResponse PAYMENT_REQUIRED = new PreconstructedResponse(HttpStatusCode.PAYMENT_REQUIRED); // 402
   public static final HttpResponse FORBIDDEN = new PreconstructedResponse(HttpStatusCode.FORBIDDEN); // 403
@@ -41,15 +41,44 @@ public interface StandardResponses {
         : InternalServerErrorResponse.create(throwable);
   }
 
+  @Deprecated // Use permanentRedirectAsGetTo instead.
   public static HttpResponse movedPermanentlyTo(String destinationUrl) {
     return RedirectResponse.create(HttpStatusCode.MOVED_PERMANENTLY, destinationUrl); // 301
   }
 
+  @Deprecated // Use temporaryRedirectAsGetTo instead.
   public static HttpResponse foundAt(String destinationUrl) {
     return RedirectResponse.create(HttpStatusCode.FOUND, destinationUrl); // 302
   }
 
+  @Deprecated // Use temporaryRedirectAsGetTo instead.
+  public static HttpResponse seeOther(String destinationUrl) {
+    return RedirectResponse.create(HttpStatusCode.SEE_OTHER, destinationUrl); // 303
+  }
+
+  @Deprecated // Use temporaryRedirectUnmodifiedTo instead.
   public static HttpResponse temporaryRedirectTo(String destinationUrl) {
     return RedirectResponse.create(HttpStatusCode.TEMPORARY_REDIRECT, destinationUrl); // 307
+  }
+
+  @Deprecated // Use permanentRedirectUnmodifiedTo instead.
+  public static HttpResponse permanentRedirectTo(String destinationUrl) {
+    return RedirectResponse.create(HttpStatusCode.PERMANENT_REDIRECT, destinationUrl); // 308
+  }
+
+  public static HttpResponse temporaryRedirectAsGetTo(String destinationUrl) {
+    return RedirectResponse.create(HttpStatusCode.SEE_OTHER, destinationUrl); // 303
+  }
+
+  public static HttpResponse permanentRedirectAsGetTo(String destinationUrl) {
+    return RedirectResponse.create(HttpStatusCode.MOVED_PERMANENTLY, destinationUrl); // 301
+  }
+
+  public static HttpResponse temporaryRedirectUnmodifiedTo(String destinationUrl) {
+    return RedirectResponse.create(HttpStatusCode.TEMPORARY_REDIRECT, destinationUrl); // 307
+  }
+
+  public static HttpResponse permanentRedirectUnmodifiedTo(String destinationUrl) {
+    return RedirectResponse.create(HttpStatusCode.PERMANENT_REDIRECT, destinationUrl); // 308
   }
 }
