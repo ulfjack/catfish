@@ -184,7 +184,15 @@ final class HttpStage implements Stage {
     }
   }
 
-  private void startBuffered(HttpRequest request, HttpResponse response) {
+  private void startBuffered(HttpRequest request, HttpResponse responseToWrite) {
+    byte[] body = responseToWrite.getBody();
+    if (body == null) {
+      throw new IllegalArgumentException();
+    }
+    HttpResponse response = responseToWrite
+        .withHeaderOverrides(HttpHeaders.of(
+            HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE,
+            HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length)));
     startBuffered(HttpResponseGeneratorBuffered.createWithBody(request, response));
   }
 
@@ -197,9 +205,7 @@ final class HttpStage implements Stage {
     try {
       request = parser.getRequest();
     } catch (MalformedRequestException e) {
-      HttpResponse responseToWrite = e.getErrorResponse()
-          .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE));
-      startBuffered(null, responseToWrite);
+      startBuffered(null, e.getErrorResponse());
       return;
     } finally {
       parser.reset();
