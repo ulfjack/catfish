@@ -13,11 +13,11 @@ public final class HttpCacheControl {
   public static final String NO_STORE = "no-store";
   public static final String NO_TRANSFORM = "no-transform";
 
-  public static String maxAgeInSeconds(int seconds) {
+  public static String maxAgeInSeconds(long seconds) {
     return "max-age=" + seconds;
   }
 
-  public static String sharedMaxAgeInSeconds(int seconds) {
+  public static String sharedMaxAgeInSeconds(long seconds) {
     return "s-maxage=" + seconds;
   }
 
