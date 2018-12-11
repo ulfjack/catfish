@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import org.junit.runner.RunWith;
 import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.upload.SimpleUploadPolicy;
 import info.adams.junit.NamedParameterized;
 import info.adams.junit.NamedParameterized.Parameters;
 
@@ -53,7 +54,7 @@ public class IncrementalHttpParserIncrementalTest extends HttpParserTest {
 
   @Override
   public HttpRequest parse(byte[] data) throws Exception {
-    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser(new SimpleUploadPolicy(100));
     int pos = 0;
     for (int i = 0; i < lengths.length; i++) {
       int len = Math.min(data.length - pos, lengths[i]);

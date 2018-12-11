@@ -22,13 +22,16 @@ import de.ofahrt.catfish.model.server.BasicHttpHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
+import de.ofahrt.catfish.upload.SimpleUploadPolicy;
 
 public class CatfishHttpServerTest {
 
   private static HttpRequest parse(String text) throws Exception {
     byte[] data = text.getBytes("ISO-8859-1");
-    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser(new SimpleUploadPolicy(200));
     int consumed = parser.parse(data);
+    // getRequest can throw if the request is malformed.
+    parser.getRequest();
     assertEquals(data.length, consumed);
     assertTrue("parser not done at end of input", parser.isDone());
     return parser.getRequest();

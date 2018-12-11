@@ -7,6 +7,7 @@ import static org.junit.Assert.fail;
 import org.junit.Test;
 import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.MalformedRequestException;
+import de.ofahrt.catfish.upload.SimpleUploadPolicy;
 
 public class IncrementalHttpParserTest {
 
@@ -47,7 +48,7 @@ public class IncrementalHttpParserTest {
 
   @Test
   public void ignoreTrailingContentAfterBody() {
-    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser(new SimpleUploadPolicy(100));
     byte[] data = "GET / HTTP/1.1\r\nContent-Length: 4\r\n\r\n0123TRAILING_DATA".getBytes();
     assertEquals(data.length - 13, parser.parse(data));
     assertTrue(parser.isDone());
