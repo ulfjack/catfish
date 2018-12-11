@@ -142,17 +142,17 @@ final class HttpStage implements Stage {
       parent.log("write");
     }
     if (responseGenerator == null) {
-      // We don't need to suppress writes here - the connection automatically suppresses writes if
-      // there's nothing left to write.
+      // The connection automatically suppresses writes once the output buffer is empty.
       return;
     }
+
     outputBuffer.compact(); // prepare buffer for writing
     ContinuationToken token = responseGenerator.generate(outputBuffer);
     outputBuffer.flip(); // prepare buffer for reading
     if (token == ContinuationToken.CONTINUE) {
       // Continue writing.
     } else if (token == ContinuationToken.PAUSE) {
-      parent.suppressWrites();
+      // The connection automatically suppresses writes once the output buffer is empty.
     } else if (token == ContinuationToken.STOP) {
       parent.notifySent(responseGenerator.getRequest(), responseGenerator.getResponse());
       boolean keepAlive = responseGenerator.keepAlive();
