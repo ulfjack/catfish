@@ -11,16 +11,16 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
-
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SNIServerName;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.HttpRequest.Body;
 import de.ofahrt.catfish.model.HttpRequest.InMemoryBody;
+import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.utils.ConnectionClosedException;
 
 public final class HttpConnection implements Closeable {
   public static HttpConnection connect(String server, int port) throws IOException {

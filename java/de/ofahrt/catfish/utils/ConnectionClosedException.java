@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.client;
+package de.ofahrt.catfish.utils;
 
 import java.io.IOException;
 
