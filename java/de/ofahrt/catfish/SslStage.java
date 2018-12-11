@@ -149,7 +149,7 @@ final class SslStage implements NioEngine.Stage {
   }
 
   @Override
-  public void close() throws IOException {
+  public void close() {
     next.close();
   }
 }

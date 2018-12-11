@@ -51,7 +51,7 @@ final class NioEngine {
   interface Stage {
     void read() throws IOException;
     void write() throws IOException;
-    void close() throws IOException;
+    void close();
   }
 
   interface Pipeline {
@@ -259,6 +259,8 @@ final class NioEngine {
         }
       }
       if (closed) {
+        // Release resources, we may have a worker thread blocked on writing to the connection.
+        first.close();
         closedCounter.incrementAndGet();
         log("Close");
         key.cancel();

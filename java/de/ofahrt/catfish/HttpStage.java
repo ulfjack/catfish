@@ -141,32 +141,40 @@ final class HttpStage implements Stage {
     if (VERBOSE) {
       parent.log("write");
     }
-    if (responseGenerator != null) {
-      outputBuffer.compact(); // prepare buffer for writing
-      ContinuationToken token = responseGenerator.generate(outputBuffer);
-      outputBuffer.flip(); // prepare buffer for reading
-      if (token == ContinuationToken.PAUSE) {
-        parent.suppressWrites();
-      } else if (token == ContinuationToken.STOP) {
-        parent.log("Completed. keepAlive=%s", Boolean.valueOf(responseGenerator.keepAlive()));
-        if (responseGenerator.keepAlive()) {
-          parent.encourageReads();
-        } else {
-          parent.close();
-        }
-        parent.notifySent(responseGenerator.getRequest(), responseGenerator.getResponse());
-        responseGenerator = null;
+    if (responseGenerator == null) {
+      // We don't need to suppress writes here - the connection automatically suppresses writes if
+      // there's nothing left to write.
+      return;
+    }
+    outputBuffer.compact(); // prepare buffer for writing
+    ContinuationToken token = responseGenerator.generate(outputBuffer);
+    outputBuffer.flip(); // prepare buffer for reading
+    if (token == ContinuationToken.CONTINUE) {
+      // Continue writing.
+    } else if (token == ContinuationToken.PAUSE) {
+      parent.suppressWrites();
+    } else if (token == ContinuationToken.STOP) {
+      parent.notifySent(responseGenerator.getRequest(), responseGenerator.getResponse());
+      boolean keepAlive = responseGenerator.keepAlive();
+      responseGenerator = null;
+      parent.log("Completed. keepAlive=%s", Boolean.valueOf(keepAlive));
+      if (keepAlive) {
+        parent.encourageReads();
+        // We may already have the next request on hold in the parser. If so, process it now.
         if (parser.isDone()) {
           processRequest();
         }
+      } else {
+        parent.close();
       }
     }
   }
 
   @Override
-  public void close() throws IOException {
+  public void close() {
     if (responseGenerator != null) {
       responseGenerator.close();
+      responseGenerator = null;
     }
   }
 
