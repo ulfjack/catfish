@@ -163,6 +163,13 @@ final class HttpStage implements Stage {
     }
   }
 
+  @Override
+  public void close() throws IOException {
+    if (responseGenerator != null) {
+      responseGenerator.close();
+    }
+  }
+
   private final void startStreamed(HttpResponseGeneratorStreamed gen) {
     this.responseGenerator = gen;
     HttpResponse response = responseGenerator.getResponse();

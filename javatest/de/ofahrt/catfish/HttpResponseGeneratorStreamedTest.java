@@ -1,9 +1,9 @@
 package de.ofahrt.catfish;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -11,11 +11,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.junit.Test;
-
 import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
 import de.ofahrt.catfish.model.StandardResponses;
+import de.ofahrt.catfish.utils.ConnectionClosedException;
 
 public class HttpResponseGeneratorStreamedTest {
 
@@ -230,5 +229,30 @@ public class HttpResponseGeneratorStreamedTest {
     buffer.flip();
     response = new String(buffer.array(), 1, buffer.limit() - 1);
     assertEquals("", response);
+  }
+
+  @Test
+  public void closeNotifiesWriter() throws Exception {
+    Semaphore called = new Semaphore(0);
+    HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
+        called::release, null, StandardResponses.OK, true, 4);
+    Thread t = new Thread(new Runnable() {
+      @Override
+      public void run() {
+        try (OutputStream out = gen.getOutputStream()) {
+          out.write(new byte[] { 1, 2, 3, 4, 5 });
+        } catch (ConnectionClosedException expected) {
+          // Expected
+        } catch (Exception e) {
+          e.printStackTrace();
+          fail();
+        }
+      }
+    });
+    t.start();
+    called.acquire();
+    gen.close();
+    t.join(100);
+    assertFalse(t.isAlive());
   }
 }

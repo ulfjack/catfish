@@ -51,6 +51,8 @@ abstract class HttpResponseGenerator {
 
   public abstract ContinuationToken generate(ByteBuffer buffer);
 
+  public abstract void close();
+
   public boolean keepAlive() {
     return HttpConnectionHeader.isKeepAlive(getResponse().getHeaders());
   }

@@ -72,4 +72,8 @@ final class HttpResponseGeneratorBuffered extends HttpResponseGenerator {
     }
     return ContinuationToken.CONTINUE;
   }
+
+  @Override
+  public void close() {
+  }
 }

@@ -9,6 +9,7 @@ import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.utils.ConnectionClosedException;
 
 final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private static final boolean DEBUG = false;
@@ -19,7 +20,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
 
   public static HttpResponseGeneratorStreamed create(
       Runnable dataAvailableCallback, HttpRequest request, HttpResponse response, boolean includeBody) {
-    return new HttpResponseGeneratorStreamed(dataAvailableCallback, request, response, includeBody, DEFAULT_BUFFER_SIZE);
+    return create(dataAvailableCallback, request, response, includeBody, DEFAULT_BUFFER_SIZE);
   }
 
   public static HttpResponseGeneratorStreamed create(
@@ -63,6 +64,9 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
 
   private HttpResponseGeneratorStreamed(
       Runnable dataAvailableCallback, HttpRequest request, HttpResponse response, boolean includeBody, int bufferSize) {
+    if (bufferSize <= 0) {
+      throw new IllegalArgumentException("Buffer size must be positive, but is " + bufferSize);
+    }
     this.request = request;
     this.response = response;
     this.includeBody = includeBody;
@@ -229,11 +233,14 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     }
   }
 
-  private synchronized void buffer(byte[] b, int off, int len) {
+  private synchronized void buffer(byte[] b, int off, int len) throws IOException {
     checkActive();
     while (len > 0) {
       int spaceAvailable;
       do {
+        if (readState == ReadState.CLOSED) {
+          throw new ConnectionClosedException("Stream was closed from the other side");
+        }
         spaceAvailable = (readPosition > writePosition) || isFull ? readPosition - writePosition
             : buffer.length - writePosition;
         if (spaceAvailable == 0) {
@@ -255,16 +262,12 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
             "WROTE " + bytesToCopy + " -> " + readPosition + " " + writePosition + (isFull ? " FULL" : ""));
       }
       if (isFull) {
-        flush(false);
+        internalFlush(false);
       }
     }
   }
 
-  private void buffer(byte[] b) {
-    buffer(b, 0, b.length);
-  }
-
-  private synchronized void flush(boolean close) {
+  private synchronized void internalFlush(boolean close) {
     if (DEBUG) {
       System.out.println("flush(close=" + close + ") state=" + writeState + " callback=" + requireCallback);
     }
@@ -319,11 +322,18 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
 //    }
 //  }
 
-  private synchronized void close() {
+  private synchronized void internalClose() {
     if (writeState == WriteState.CLOSED) {
       return;
     }
-    flush(true);
+    internalFlush(true);
+  }
+
+  @Override
+  public synchronized void close() {
+    writeState = WriteState.CLOSED;
+    readState = ReadState.CLOSED;
+    notify();
   }
 
   public OutputStream getOutputStream() {
@@ -333,7 +343,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     return new OutputStream() {
       @Override
       public void write(int b) throws IOException {
-        buffer(new byte[] { (byte) b });
+        write(new byte[] { (byte) b });
       }
 
       @Override
@@ -343,12 +353,12 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
 
       @Override
       public void flush() {
-        HttpResponseGeneratorStreamed.this.flush(false);
+        HttpResponseGeneratorStreamed.this.internalFlush(false);
       }
 
       @Override
       public void close() {
-        HttpResponseGeneratorStreamed.this.close();
+        HttpResponseGeneratorStreamed.this.internalClose();
       }
     };
   }
