@@ -23,11 +23,15 @@ import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
-final class HttpStage implements Stage {
+final class HttpServerStage implements Stage {
   private static final boolean VERBOSE = false;
 
   public interface RequestQueue {
     void queueRequest(HttpHandler httpHandler, Connection connection, HttpRequest request, HttpResponseWriter responseWriter);
+  }
+
+  public interface RequestListener {
+    void notifySent(Connection connection, HttpRequest request, HttpResponse response);
   }
 
   private final class HttpResponseWriterImpl implements HttpResponseWriter {
@@ -98,21 +102,24 @@ final class HttpStage implements Stage {
   }
 
   private final Pipeline parent;
-  private final HttpStage.RequestQueue requestHandler;
+  private final RequestQueue requestHandler;
+  private final RequestListener requestListener;
   private final Function<String, HttpVirtualHost> virtualHostLookup;
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
   private final IncrementalHttpRequestParser parser;
   private HttpResponseGenerator responseGenerator;
 
-  HttpStage(
+  HttpServerStage(
       Pipeline parent,
-      HttpStage.RequestQueue requestHandler,
+      RequestQueue requestHandler,
+      RequestListener requestListener,
       Function<String, HttpVirtualHost> virtualHostLookup,
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer) {
     this.parent = parent;
     this.requestHandler = requestHandler;
+    this.requestListener = requestListener;
     this.virtualHostLookup = virtualHostLookup;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
@@ -154,7 +161,7 @@ final class HttpStage implements Stage {
     } else if (token == ContinuationToken.PAUSE) {
       // The connection automatically suppresses writes once the output buffer is empty.
     } else if (token == ContinuationToken.STOP) {
-      parent.notifySent(responseGenerator.getRequest(), responseGenerator.getResponse());
+      requestListener.notifySent(parent.getConnection(), responseGenerator.getRequest(), responseGenerator.getResponse());
       boolean keepAlive = responseGenerator.keepAlive();
       responseGenerator = null;
       parent.log("Completed. keepAlive=%s", Boolean.valueOf(keepAlive));
@@ -183,7 +190,7 @@ final class HttpStage implements Stage {
     HttpResponse response = responseGenerator.getResponse();
     parent.log("%s %d %s",
         response.getProtocolVersion(), Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
-    if (HttpStage.VERBOSE) {
+    if (HttpServerStage.VERBOSE) {
       System.out.println(CoreHelper.responseToString(response));
     }
   }
@@ -194,7 +201,7 @@ final class HttpStage implements Stage {
     HttpResponse response = responseGenerator.getResponse();
     parent.log("%s %d %s",
         response.getProtocolVersion(), Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
-    if (HttpStage.VERBOSE) {
+    if (HttpServerStage.VERBOSE) {
       System.out.println(CoreHelper.responseToString(response));
     }
   }

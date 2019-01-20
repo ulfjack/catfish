@@ -22,9 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import de.ofahrt.catfish.model.Connection;
-import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpResponse;
-import de.ofahrt.catfish.model.server.HttpServerListener;
+import de.ofahrt.catfish.model.NetworkEventListener;
 
 final class NioEngine {
   private static final boolean DEBUG = false;
@@ -63,7 +61,6 @@ final class NioEngine {
     void close();
     void queue(Runnable runnable);
     void log(String text, Object... params);
-    void notifySent(HttpRequest request, HttpResponse response);
   }
 
   private interface LogHandler {
@@ -130,7 +127,7 @@ final class NioEngine {
         Connection connection,
         SocketChannel socketChannel,
         SelectionKey key,
-        boolean ssl,
+        ServerHandler handler,
         LogHandler logHandler) {
       this.queue = queue;
       this.connection = connection;
@@ -143,27 +140,7 @@ final class NioEngine {
       inputBuffer.flip(); // prepare for reading
       outputBuffer.clear();
       outputBuffer.flip(); // prepare for reading
-      if (ssl) {
-        ByteBuffer decryptedInputBuffer = ByteBuffer.allocate(4096);
-        ByteBuffer decryptedOutputBuffer = ByteBuffer.allocate(4096);
-        decryptedInputBuffer.clear();
-        decryptedInputBuffer.flip(); // prepare for reading
-        decryptedOutputBuffer.clear();
-        decryptedOutputBuffer.flip(); // prepare for reading
-        HttpStage httpStage = new HttpStage(
-            this, server::queueRequest, server::determineHttpVirtualHost, decryptedInputBuffer, decryptedOutputBuffer);
-        this.first = new SslStage(
-            this,
-            httpStage,
-            server::getSSLContext,
-            inputBuffer,
-            outputBuffer,
-            decryptedInputBuffer,
-            decryptedOutputBuffer);
-      } else {
-        this.first = new HttpStage(
-            this, server::queueRequest, server::determineHttpVirtualHost, inputBuffer, outputBuffer);
-      }
+      this.first = handler.connect(this, inputBuffer, outputBuffer);
     }
 
     @Override
@@ -233,7 +210,7 @@ final class NioEngine {
             first.read();
           }
         } catch (IOException e) {
-          serverListener.notifyInternalError(connection, e);
+          networkEventListener.notifyInternalError(connection, e);
           close();
           return;
         }
@@ -253,7 +230,7 @@ final class NioEngine {
             suppressWrites();
           }
         } catch (IOException e) {
-          serverListener.notifyInternalError(connection, e);
+          networkEventListener.notifyInternalError(connection, e);
           close();
           return;
         }
@@ -268,7 +245,7 @@ final class NioEngine {
           socketChannel.close();
         } catch (IOException ignored) {
           // There's nothing we can do if this fails.
-          serverListener.notifyInternalError(connection, ignored);
+          networkEventListener.notifyInternalError(connection, ignored);
         }
       }
     }
@@ -299,22 +276,17 @@ final class NioEngine {
                 printedText));
       }
     }
-
-    @Override
-    public void notifySent(HttpRequest request, HttpResponse response) {
-      server.notifySent(connection, request, response, 0);
-    }
   }
 
   private final class ServerSocketHandler implements EventHandler, Runnable {
     private final ServerSocketChannel serverChannel;
     private final SelectionKey key;
-    private final boolean ssl;
+    private final ServerHandler handler;
 
-    public ServerSocketHandler(ServerSocketChannel serverChannel, SelectionKey key, boolean ssl) {
+    public ServerSocketHandler(ServerSocketChannel serverChannel, SelectionKey key, ServerHandler handler) {
       this.serverChannel = serverChannel;
       this.key = key;
-      this.ssl = ssl;
+      this.handler = handler;
     }
 
     @Override
@@ -326,12 +298,12 @@ final class NioEngine {
         Connection connection = new Connection(
             (InetSocketAddress) socketChannel.socket().getLocalSocketAddress(),
             (InetSocketAddress) socketChannel.socket().getRemoteSocketAddress(),
-            ssl);
+            handler.usesSsl());
         socketChannel.configureBlocking(false);
         socketChannel.socket().setTcpNoDelay(true);
         socketChannel.socket().setKeepAlive(true);
         socketChannel.socket().setSoLinger(false, 0);
-        attachConnection(connection, socketChannel, ssl);
+        getQueueForConnection().attachConnection(connection, socketChannel, handler);
       }
     }
 
@@ -344,6 +316,11 @@ final class NioEngine {
         // Not much we can do at this point.
       }
     }
+  }
+
+  interface ServerHandler {
+    boolean usesSsl();
+    Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer);
   }
 
   private final class SelectorQueue implements Runnable {
@@ -363,34 +340,31 @@ final class NioEngine {
       t.start();
     }
 
-    private void start(final InetAddress address, final int port, final boolean ssl) throws IOException, InterruptedException {
+    private void listenPort(final InetAddress address, final int port, final ServerHandler handler) throws IOException, InterruptedException {
       if (shutdownInitiated.get()) {
         throw new IllegalStateException();
       }
       final CountDownLatch latch = new CountDownLatch(1);
       final AtomicReference<IOException> thrownException = new AtomicReference<>();
-      queue(new Runnable() {
-        @Override
-        public void run() {
-          try {
-            if (shutdown) {
-              return;
-            }
-            serverListener.portOpened(port, ssl);
-            @SuppressWarnings("resource")
-            ServerSocketChannel serverChannel = ServerSocketChannel.open();
-            serverChannel.configureBlocking(false);
-            serverChannel.socket().setReuseAddress(true);
-            serverChannel.socket().bind(new InetSocketAddress(address, port));
-            SelectionKey key = serverChannel.register(selector, SelectionKey.OP_ACCEPT);
-            ServerSocketHandler handler = new ServerSocketHandler(serverChannel, key, ssl);
-            key.attach(handler);
-            shutdownQueue.add(handler);
-          } catch (IOException e) {
-            thrownException.set(e);
+      queue(() -> {
+        try {
+          if (shutdown) {
+            return;
           }
-          latch.countDown();
+          networkEventListener.portOpened(port, handler.usesSsl());
+          @SuppressWarnings("resource")
+          ServerSocketChannel serverChannel = ServerSocketChannel.open();
+          serverChannel.configureBlocking(false);
+          serverChannel.socket().setReuseAddress(true);
+          serverChannel.socket().bind(new InetSocketAddress(address, port));
+          SelectionKey key = serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+          ServerSocketHandler socketHandler = new ServerSocketHandler(serverChannel, key, handler);
+          key.attach(socketHandler);
+          shutdownQueue.add(socketHandler);
+        } catch (IOException e) {
+          thrownException.set(e);
         }
+        latch.countDown();
       });
       latch.await();
       IOException e = thrownException.get();
@@ -399,39 +373,26 @@ final class NioEngine {
       }
     }
 
-    private void stop() throws InterruptedException {
+    private void shutdown() throws InterruptedException {
       if (!shutdownInitiated.getAndSet(true)) {
         throw new IllegalStateException();
       }
       final CountDownLatch latch = new CountDownLatch(1);
-      shutdownQueue.add(new Runnable() {
-        @Override
-        public void run() {
-          latch.countDown();
-        }
-      });
-      queue(new Runnable() {
-        @Override
-        public void run() {
-          shutdown = true;
-        }
-      });
+      shutdownQueue.add(() -> latch.countDown());
+      queue(() -> shutdown = true);
       latch.await();
     }
 
-    private void attachConnection(Connection connection, SocketChannel socketChannel, boolean ssl) {
-      queue(new Runnable() {
-        @Override
-        public void run() {
-          try {
-            SelectionKey socketKey = socketChannel.register(selector, SelectionKey.OP_READ);
-            SocketHandler socketHandler =
-                new SocketHandler(SelectorQueue.this, connection, socketChannel, socketKey, ssl, logHandler);
-            socketHandler.log("New");
-            socketKey.attach(socketHandler);
-          } catch (ClosedChannelException e) {
-            throw new RuntimeException(e);
-          }
+    private void attachConnection(Connection connection, SocketChannel socketChannel, ServerHandler handler) {
+      queue(() -> {
+        try {
+          SelectionKey socketKey = socketChannel.register(selector, SelectionKey.OP_READ);
+          SocketHandler socketHandler =
+              new SocketHandler(SelectorQueue.this, connection, socketChannel, socketKey, handler, logHandler);
+          socketHandler.log("New");
+          socketKey.attach(socketHandler);
+        } catch (ClosedChannelException e) {
+          throw new RuntimeException(e);
         }
       });
     }
@@ -468,13 +429,12 @@ final class NioEngine {
           shutdownQueue.remove().run();
         }
       } catch (IOException e) {
-        serverListener.notifyInternalError(null, e);
+        networkEventListener.notifyInternalError(null, e);
       }
     }
   }
 
-  private final CatfishHttpServer server;
-  private final HttpServerListener serverListener;
+  private final NetworkEventListener networkEventListener;
 
   private final AtomicInteger openCounter = new AtomicInteger();
   private final AtomicInteger closedCounter = new AtomicInteger();
@@ -482,9 +442,8 @@ final class NioEngine {
   private final SelectorQueue[] queues;
   private final AtomicInteger connectionIndex = new AtomicInteger();
 
-  public NioEngine(CatfishHttpServer server) throws IOException {
-    this.server = server;
-    this.serverListener = server.getServerListener();
+  public NioEngine(NetworkEventListener networkEventListener) throws IOException {
+    this.networkEventListener = networkEventListener;
     this.queues = new SelectorQueue[8];
     LogHandler logHandler;
     if (LOG_TO_FILE) {
@@ -497,34 +456,32 @@ final class NioEngine {
     }
   }
 
-  public void start(int port, boolean ssl) throws IOException, InterruptedException {
-    start(null, port, ssl);
+  public void listenAll(int port, ServerHandler handler) throws IOException, InterruptedException {
+    listen(null, port, handler);
   }
 
-  public void startLocal(int port, boolean ssl) throws IOException, InterruptedException {
-    start(InetAddress.getLoopbackAddress(), port, ssl);
+  public void listenLocalhost(int port, ServerHandler handler) throws IOException, InterruptedException {
+    listen(InetAddress.getLoopbackAddress(), port, handler);
   }
 
-  private void start(InetAddress address, int port, boolean ssl) throws IOException, InterruptedException {
-    int index = mod(connectionIndex.incrementAndGet(), queues.length);
-    queues[index].start(address, port, ssl);
+  private void listen(InetAddress address, int port, ServerHandler handler) throws IOException, InterruptedException {
+    getQueueForConnection().listenPort(address, port, handler);
   }
 
-  public void stop() throws InterruptedException {
+  public void shutdown() throws InterruptedException {
     for (SelectorQueue queue : queues) {
-      queue.stop();
+      queue.shutdown();
     }
+    networkEventListener.shutdown();
   }
 
   public int getOpenConnections() {
     return openCounter.get() - closedCounter.get();
   }
 
-  private void attachConnection(Connection connection, SocketChannel socketChannel,
-      boolean ssl) {
-    int index = mod(connectionIndex.incrementAndGet(), queues.length);
-//    System.err.println(index);
-    queues[index].attachConnection(connection, socketChannel, ssl);
+  SelectorQueue getQueueForConnection() {
+    int index = mod(connectionIndex.getAndIncrement(), queues.length);
+    return queues[index];
   }
 
   private int mod(int a, int b) {

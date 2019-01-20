@@ -62,11 +62,7 @@ public final class CatfishHttpServer {
         }
       }
     });
-    this.engine = new NioEngine(this);
-  }
-
-  HttpServerListener getServerListener() {
-    return serverListener;
+    this.engine = new NioEngine(serverListener);
   }
 
   public void addHttpHost(String name, HttpHandler handler, SSLContext sslContext) {
@@ -162,20 +158,19 @@ public final class CatfishHttpServer {
   }
 
   public void stop() throws InterruptedException {
-    engine.stop();
-    serverListener.shutdown();
+    engine.shutdown();
   }
 
   public void listenHttpLocal(int port) throws IOException, InterruptedException {
-    engine.startLocal(port, /*ssl=*/false);
+    engine.listenLocalhost(port, new HttpServerHandler(this, /*ssl=*/false));
   }
 
   public void listenHttp(int port) throws IOException, InterruptedException {
-    engine.start(port, /*ssl=*/false);
+    engine.listenAll(port, new HttpServerHandler(this, /*ssl=*/false));
   }
 
   public void listenHttps(int port) throws IOException, InterruptedException {
-    engine.start(port, /*ssl=*/true);
+    engine.listenAll(port, new HttpServerHandler(this, /*ssl=*/true));
   }
 
   public int getOpenConnections() {
