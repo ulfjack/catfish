@@ -28,10 +28,6 @@ final class NioEngine {
   private static final boolean DEBUG = false;
   private static final boolean LOG_TO_FILE = false;
 
-  private interface EventHandler {
-    void handleEvent() throws IOException;
-  }
-
   // Incoming data:
   // Socket -> SSL Stage -> HTTP Stage -> Request Queue
   // Flow control:
@@ -61,6 +57,15 @@ final class NioEngine {
     void close();
     void queue(Runnable runnable);
     void log(String text, Object... params);
+  }
+
+  interface ServerHandler {
+    boolean usesSsl();
+    Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer);
+  }
+
+  private interface EventHandler {
+    void handleEvent() throws IOException;
   }
 
   private interface LogHandler {
@@ -316,11 +321,6 @@ final class NioEngine {
         // Not much we can do at this point.
       }
     }
-  }
-
-  interface ServerHandler {
-    boolean usesSsl();
-    Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer);
   }
 
   private final class SelectorQueue implements Runnable {
