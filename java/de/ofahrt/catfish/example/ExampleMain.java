@@ -5,6 +5,7 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import javax.net.ssl.SSLContext;
 import de.ofahrt.catfish.CatfishHttpServer;
+import de.ofahrt.catfish.RequestListener;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.fastcgi.FcgiServlet;
@@ -59,13 +60,18 @@ public class ExampleMain {
       public void notifyInternalError(Connection id, Throwable throwable) {
         throwable.printStackTrace();
       }
-
+    });
+    server.addRequestListener(new RequestListener() {
       @Override
-      public void notifyRequest(Connection connection, HttpRequest request, HttpResponse response) {
+      public void notifySent(Connection connection, HttpRequest request, HttpResponse response, int bytesSent) {
         if ((response.getStatusCode() / 100) == 5) {
           System.out.printf("[CATFISH] %d %s\n",
               Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
         }
+      }
+
+      @Override
+      public void notifyInternalError(Connection connection, HttpRequest request, Throwable exception) {
       }
     });
 

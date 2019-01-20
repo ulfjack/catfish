@@ -21,6 +21,7 @@ public interface HttpServerListener extends NetworkEventListener {
    * @param request
    * @param response
    */
+  @Deprecated
   default void notifyRequest(Connection connection, HttpRequest request, HttpResponse response) {
   }
 }

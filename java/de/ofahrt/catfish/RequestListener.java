@@ -6,5 +6,9 @@ import de.ofahrt.catfish.model.HttpResponse;
 
 public interface RequestListener {
   void notifySent(Connection connection, HttpRequest request, HttpResponse response, int bytesSent);
-  void notifyInternalError(Connection connection, HttpRequest request, Throwable exception);
+
+  @SuppressWarnings("unused")
+  @Deprecated
+  default void notifyInternalError(Connection connection, HttpRequest request, Throwable exception) {
+  }
 }

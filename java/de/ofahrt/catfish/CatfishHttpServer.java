@@ -96,24 +96,13 @@ public final class CatfishHttpServer {
     return "Catfish/12.0";
   }
 
+  @SuppressWarnings("deprecation") // for notifyRequest
   void notifySent(Connection connection, HttpRequest request, HttpResponse response, int amount) {
     serverListener.notifyRequest(connection, request, response);
     for (int i = 0; i < listeners.size(); i++) {
       RequestListener l = listeners.get(i);
       try {
         l.notifySent(connection, request, response, amount);
-      } catch (Throwable error) {
-        error.printStackTrace();
-      }
-    }
-  }
-
-  void notifyInternalError(Connection connection, HttpRequest req, Throwable e) {
-    e.printStackTrace();
-    for (int i = 0; i < listeners.size(); i++) {
-      RequestListener l = listeners.get(i);
-      try {
-        l.notifyInternalError(connection, req, e);
       } catch (Throwable error) {
         error.printStackTrace();
       }
