@@ -6,12 +6,12 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Collections;
 import javax.servlet.Servlet;
-import de.ofahrt.catfish.model.Connection;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.layout.SiteLayout;
+import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 

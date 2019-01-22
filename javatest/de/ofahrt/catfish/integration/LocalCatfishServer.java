@@ -8,9 +8,9 @@ import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.client.HttpConnection;
-import de.ofahrt.catfish.model.Connection;
 import de.ofahrt.catfish.model.HttpResponse;
-import de.ofahrt.catfish.model.server.HttpServerListener;
+import de.ofahrt.catfish.model.network.Connection;
+import de.ofahrt.catfish.model.network.NetworkEventListener;
 
 final class LocalCatfishServer implements Server {
 
@@ -22,7 +22,7 @@ final class LocalCatfishServer implements Server {
   public static final String HTTP_ROOT = "http://localhost:" + HTTP_PORT;
   public static final String HTTPS_ROOT = "https://localhost:" + HTTPS_PORT;
 
-  private final CatfishHttpServer server = new CatfishHttpServer(new HttpServerListener() {
+  private final CatfishHttpServer server = new CatfishHttpServer(new NetworkEventListener() {
     @Override
     public void shutdown() {
       if (DEBUG) System.out.println("[CATFISH] Server stopped.");

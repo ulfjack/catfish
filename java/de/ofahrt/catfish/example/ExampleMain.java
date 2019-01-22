@@ -5,16 +5,16 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import javax.net.ssl.SSLContext;
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.RequestListener;
+import de.ofahrt.catfish.HttpRequestListener;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.fastcgi.FcgiServlet;
-import de.ofahrt.catfish.model.Connection;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.network.Connection;
+import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.BasicHttpHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
-import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.ssl.SSLContextFactory;
 import de.ofahrt.catfish.ssl.SSLContextFactory.SSLInfo;
 
@@ -45,7 +45,7 @@ public class ExampleMain {
       domainName = sslInfo.getCertificateCommonName();
     }
 
-    CatfishHttpServer server = new CatfishHttpServer(new HttpServerListener() {
+    CatfishHttpServer server = new CatfishHttpServer(new NetworkEventListener() {
       @Override
       public void shutdown() {
         System.out.println("[CATFISH] Server stopped.");
@@ -61,17 +61,13 @@ public class ExampleMain {
         throwable.printStackTrace();
       }
     });
-    server.addRequestListener(new RequestListener() {
+    server.addRequestListener(new HttpRequestListener() {
       @Override
       public void notifySent(Connection connection, HttpRequest request, HttpResponse response, int bytesSent) {
         if ((response.getStatusCode() / 100) == 5) {
           System.out.printf("[CATFISH] %d %s\n",
               Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
         }
-      }
-
-      @Override
-      public void notifyInternalError(Connection connection, HttpRequest request, Throwable exception) {
       }
     });
 

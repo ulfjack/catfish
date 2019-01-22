@@ -1,8 +1,8 @@
 package de.ofahrt.catfish.model.server;
 
 import java.io.IOException;
-import de.ofahrt.catfish.model.Connection;
 import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.network.Connection;
 
 public interface HttpHandler {
   void handle(

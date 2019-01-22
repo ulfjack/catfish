@@ -16,11 +16,11 @@ import org.junit.Test;
 import de.ofahrt.catfish.CollectionsUtils;
 import de.ofahrt.catfish.HashConflictGenerator;
 import de.ofahrt.catfish.InputStreams;
-import de.ofahrt.catfish.model.Connection;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
+import de.ofahrt.catfish.model.network.Connection;
 
 /**
  * Tests for {@link RequestImpl}.

@@ -3,12 +3,12 @@ package de.ofahrt.catfish.model.server;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.util.Map;
-import de.ofahrt.catfish.model.Connection;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
+import de.ofahrt.catfish.model.network.Connection;
 
 public final class BasicHttpHandler implements HttpHandler {
   private static final String MESSAGE_HTTP_CONTENT_TYPE = "message/http";

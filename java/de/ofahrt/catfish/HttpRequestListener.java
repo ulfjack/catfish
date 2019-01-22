@@ -1,10 +1,10 @@
 package de.ofahrt.catfish;
 
-import de.ofahrt.catfish.model.Connection;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.network.Connection;
 
-public interface RequestListener {
+public interface HttpRequestListener {
   void notifySent(Connection connection, HttpRequest request, HttpResponse response, int bytesSent);
 
   @SuppressWarnings("unused")

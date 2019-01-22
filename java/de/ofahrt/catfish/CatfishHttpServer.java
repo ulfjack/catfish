@@ -10,13 +10,13 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.net.ssl.SSLContext;
-import de.ofahrt.catfish.model.Connection;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.StandardResponses;
+import de.ofahrt.catfish.model.network.Connection;
+import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
-import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.upload.SimpleUploadPolicy;
@@ -29,14 +29,12 @@ public final class CatfishHttpServer {
     void reject();
   }
 
-  private final HttpServerListener serverListener;
-
   private final ConcurrentHashMap<String, HttpVirtualHost> hosts = new ConcurrentHashMap<>();
 
   private volatile boolean mayCompress = true;
   private volatile boolean mayKeepAlive = false;
 
-  private final ArrayList<RequestListener> listeners = new ArrayList<>();
+  private final ArrayList<HttpRequestListener> listeners = new ArrayList<>();
   private final NioEngine engine;
 
   private final ThreadPoolExecutor executor =
@@ -51,8 +49,7 @@ public final class CatfishHttpServer {
             }
           });
 
-  public CatfishHttpServer(HttpServerListener serverListener) throws IOException {
-    this.serverListener = serverListener;
+  public CatfishHttpServer(NetworkEventListener serverListener) throws IOException {
     // TODO: This implements tail drop.
     executor.setRejectedExecutionHandler(new RejectedExecutionHandler() {
       @Override
@@ -84,11 +81,11 @@ public final class CatfishHttpServer {
     mayKeepAlive = keepAliveAllowed;
   }
 
-  public void addRequestListener(RequestListener l) {
+  public void addRequestListener(HttpRequestListener l) {
     listeners.add(l);
   }
 
-  public void removeRequestListener(RequestListener l) {
+  public void removeRequestListener(HttpRequestListener l) {
     listeners.remove(l);
   }
 
@@ -96,11 +93,9 @@ public final class CatfishHttpServer {
     return "Catfish/12.0";
   }
 
-  @SuppressWarnings("deprecation") // for notifyRequest
   void notifySent(Connection connection, HttpRequest request, HttpResponse response, int amount) {
-    serverListener.notifyRequest(connection, request, response);
     for (int i = 0; i < listeners.size(); i++) {
-      RequestListener l = listeners.get(i);
+      HttpRequestListener l = listeners.get(i);
       try {
         l.notifySent(connection, request, response, amount);
       } catch (Throwable error) {

@@ -1,7 +1,12 @@
-package de.ofahrt.catfish.model;
+package de.ofahrt.catfish.model.network;
 
 public interface NetworkEventListener {
   void portOpened(int port, boolean ssl);
+
+  default void portOpened(NetworkServer server) {
+    portOpened(server.port(), server.ssl());
+  }
+
   void shutdown();
 
   /**

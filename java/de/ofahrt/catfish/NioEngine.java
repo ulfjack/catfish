@@ -21,8 +21,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import de.ofahrt.catfish.model.Connection;
-import de.ofahrt.catfish.model.NetworkEventListener;
+import de.ofahrt.catfish.model.network.Connection;
+import de.ofahrt.catfish.model.network.NetworkEventListener;
+import de.ofahrt.catfish.model.network.NetworkServer;
 
 final class NioEngine {
   private static final boolean DEBUG = false;
@@ -351,7 +352,22 @@ final class NioEngine {
           if (shutdown) {
             return;
           }
-          networkEventListener.portOpened(port, handler.usesSsl());
+          networkEventListener.portOpened(new NetworkServer() {
+            @Override
+            public InetAddress address() {
+              return address;
+            }
+
+            @Override
+            public int port() {
+              return port;
+            }
+
+            @Override
+            public boolean ssl() {
+              return handler.usesSsl();
+            }
+          });
           @SuppressWarnings("resource")
           ServerSocketChannel serverChannel = ServerSocketChannel.open();
           serverChannel.configureBlocking(false);
