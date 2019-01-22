@@ -14,6 +14,7 @@ java_library(
 java_binary(
   name = "catfish-dist",
   runtime_deps = [
+    "//java/de/ofahrt/catfish/client",
     ":catfish",
   ],
 )
