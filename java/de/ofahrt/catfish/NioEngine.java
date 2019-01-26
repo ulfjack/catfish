@@ -60,7 +60,7 @@ final class NioEngine {
     void log(String text, Object... params);
   }
 
-  interface ServerHandler {
+  interface NetworkHandler {
     boolean usesSsl();
     Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer);
   }
@@ -133,7 +133,7 @@ final class NioEngine {
         Connection connection,
         SocketChannel socketChannel,
         SelectionKey key,
-        ServerHandler handler,
+        NetworkHandler handler,
         LogHandler logHandler) {
       this.queue = queue;
       this.connection = connection;
@@ -287,9 +287,9 @@ final class NioEngine {
   private final class ServerSocketHandler implements EventHandler, Runnable {
     private final ServerSocketChannel serverChannel;
     private final SelectionKey key;
-    private final ServerHandler handler;
+    private final NetworkHandler handler;
 
-    public ServerSocketHandler(ServerSocketChannel serverChannel, SelectionKey key, ServerHandler handler) {
+    public ServerSocketHandler(ServerSocketChannel serverChannel, SelectionKey key, NetworkHandler handler) {
       this.serverChannel = serverChannel;
       this.key = key;
       this.handler = handler;
@@ -341,7 +341,7 @@ final class NioEngine {
       t.start();
     }
 
-    private void listenPort(final InetAddress address, final int port, final ServerHandler handler) throws IOException, InterruptedException {
+    private void listenPort(final InetAddress address, final int port, final NetworkHandler handler) throws IOException, InterruptedException {
       if (shutdownInitiated.get()) {
         throw new IllegalStateException();
       }
@@ -399,7 +399,7 @@ final class NioEngine {
       latch.await();
     }
 
-    private void attachConnection(Connection connection, SocketChannel socketChannel, ServerHandler handler) {
+    private void attachConnection(Connection connection, SocketChannel socketChannel, NetworkHandler handler) {
       queue(() -> {
         try {
           SelectionKey socketKey = socketChannel.register(selector, SelectionKey.OP_READ);
@@ -472,15 +472,15 @@ final class NioEngine {
     }
   }
 
-  public void listenAll(int port, ServerHandler handler) throws IOException, InterruptedException {
+  public void listenAll(int port, NetworkHandler handler) throws IOException, InterruptedException {
     listen(null, port, handler);
   }
 
-  public void listenLocalhost(int port, ServerHandler handler) throws IOException, InterruptedException {
+  public void listenLocalhost(int port, NetworkHandler handler) throws IOException, InterruptedException {
     listen(InetAddress.getLoopbackAddress(), port, handler);
   }
 
-  private void listen(InetAddress address, int port, ServerHandler handler) throws IOException, InterruptedException {
+  private void listen(InetAddress address, int port, NetworkHandler handler) throws IOException, InterruptedException {
     getQueueForConnection().listenPort(address, port, handler);
   }
 
