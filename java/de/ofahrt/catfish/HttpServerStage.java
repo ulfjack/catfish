@@ -7,9 +7,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
+
 import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
-import de.ofahrt.catfish.NioEngine.Pipeline;
-import de.ofahrt.catfish.NioEngine.Stage;
+import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
+import de.ofahrt.catfish.internal.network.NetworkEngine.Stage;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpMethodName;
@@ -25,6 +26,20 @@ import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
 final class HttpServerStage implements Stage {
   private static final boolean VERBOSE = false;
+
+  // Incoming data:
+  // Socket -> SSL Stage -> HTTP Stage -> Request Queue
+  // Flow control:
+  // - Drop entire connection early if system overloaded
+  // - Otherwise start in readable state
+  // - Read data into parser, until request complete
+  // - Queue full? -> Need to start dropping requests
+  //
+  // Outgoing data:
+  // Socket <- SSL Stage <- HTTP Stage <- Response Stage <- AsyncBuffer <- Servlet
+  // Flow control:
+  // - Data available -> select on write
+  // - AsyncBuffer blocks when the buffer is full
 
   public interface RequestQueue {
     void queueRequest(HttpHandler httpHandler, Connection connection, HttpRequest request, HttpResponseWriter responseWriter);

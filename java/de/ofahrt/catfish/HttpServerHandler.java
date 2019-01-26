@@ -1,9 +1,10 @@
 package de.ofahrt.catfish;
 
 import java.nio.ByteBuffer;
-import de.ofahrt.catfish.NioEngine.Pipeline;
-import de.ofahrt.catfish.NioEngine.NetworkHandler;
-import de.ofahrt.catfish.NioEngine.Stage;
+
+import de.ofahrt.catfish.internal.network.NetworkEngine.NetworkHandler;
+import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
+import de.ofahrt.catfish.internal.network.NetworkEngine.Stage;
 
 final class HttpServerHandler implements NetworkHandler {
   private final CatfishHttpServer server;

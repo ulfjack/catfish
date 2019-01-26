@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.internal.network;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -21,35 +21,22 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.network.NetworkServer;
 
-final class NioEngine {
+public final class NetworkEngine {
   private static final boolean DEBUG = false;
   private static final boolean LOG_TO_FILE = false;
 
-  // Incoming data:
-  // Socket -> SSL Stage -> HTTP Stage -> Request Queue
-  // Flow control:
-  // - Drop entire connection early if system overloaded
-  // - Otherwise start in readable state
-  // - Read data into parser, until request complete
-  // - Queue full? -> Need to start dropping requests
-  //
-  // Outgoing data:
-  // Socket <- SSL Stage <- HTTP Stage <- Response Stage <- AsyncBuffer <- Servlet
-  // Flow control:
-  // - Data available -> select on write
-  // - AsyncBuffer blocks when the buffer is full
-
-  interface Stage {
+  public interface Stage {
     void read() throws IOException;
     void write() throws IOException;
     void close();
   }
 
-  interface Pipeline {
+  public interface Pipeline {
     Connection getConnection();
     void suppressWrites();
     void encourageWrites();
@@ -60,7 +47,7 @@ final class NioEngine {
     void log(String text, Object... params);
   }
 
-  interface NetworkHandler {
+  public interface NetworkHandler {
     boolean usesSsl();
     Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer);
   }
@@ -458,7 +445,7 @@ final class NioEngine {
   private final SelectorQueue[] queues;
   private final AtomicInteger connectionIndex = new AtomicInteger();
 
-  public NioEngine(NetworkEventListener networkEventListener) throws IOException {
+  public NetworkEngine(NetworkEventListener networkEventListener) throws IOException {
     this.networkEventListener = networkEventListener;
     this.queues = new SelectorQueue[8];
     LogHandler logHandler;
@@ -495,7 +482,7 @@ final class NioEngine {
     return openCounter.get() - closedCounter.get();
   }
 
-  SelectorQueue getQueueForConnection() {
+  private SelectorQueue getQueueForConnection() {
     int index = mod(connectionIndex.getAndIncrement(), queues.length);
     return queues[index];
   }

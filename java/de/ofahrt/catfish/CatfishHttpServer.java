@@ -9,7 +9,10 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import javax.net.ssl.SSLContext;
+
+import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.StandardResponses;
@@ -36,7 +39,7 @@ public final class CatfishHttpServer {
   private volatile boolean mayKeepAlive = false;
 
   private final ArrayList<HttpServerListener> listeners = new ArrayList<>();
-  private final NioEngine engine;
+  private final NetworkEngine engine;
 
   private final ThreadPoolExecutor executor =
       new ThreadPoolExecutor(
@@ -60,7 +63,7 @@ public final class CatfishHttpServer {
         }
       }
     });
-    this.engine = new NioEngine(serverListener);
+    this.engine = new NetworkEngine(serverListener);
   }
 
   public void addHttpHost(String name, HttpHandler handler, SSLContext sslContext) {

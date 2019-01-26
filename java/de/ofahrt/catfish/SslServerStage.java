@@ -8,10 +8,10 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.Status;
 
-import de.ofahrt.catfish.NioEngine.Pipeline;
-import de.ofahrt.catfish.NioEngine.Stage;
+import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
+import de.ofahrt.catfish.internal.network.NetworkEngine.Stage;
 
-final class SslServerStage implements NioEngine.Stage {
+final class SslServerStage implements Stage {
   public interface SSLContextProvider {
     SSLContext getSSLContext(String host);
   }
