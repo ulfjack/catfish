@@ -34,7 +34,7 @@ public final class CatfishHttpServer {
   private volatile boolean mayCompress = true;
   private volatile boolean mayKeepAlive = false;
 
-  private final ArrayList<HttpRequestListener> listeners = new ArrayList<>();
+  private final ArrayList<HttpServerListener> listeners = new ArrayList<>();
   private final NioEngine engine;
 
   private final ThreadPoolExecutor executor =
@@ -81,11 +81,11 @@ public final class CatfishHttpServer {
     mayKeepAlive = keepAliveAllowed;
   }
 
-  public void addRequestListener(HttpRequestListener l) {
+  public void addRequestListener(HttpServerListener l) {
     listeners.add(l);
   }
 
-  public void removeRequestListener(HttpRequestListener l) {
+  public void removeRequestListener(HttpServerListener l) {
     listeners.remove(l);
   }
 
@@ -95,7 +95,7 @@ public final class CatfishHttpServer {
 
   void notifySent(Connection connection, HttpRequest request, HttpResponse response, int amount) {
     for (int i = 0; i < listeners.size(); i++) {
-      HttpRequestListener l = listeners.get(i);
+      HttpServerListener l = listeners.get(i);
       try {
         l.notifySent(connection, request, response, amount);
       } catch (Throwable error) {

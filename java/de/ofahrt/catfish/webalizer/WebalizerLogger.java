@@ -6,12 +6,12 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import de.ofahrt.catfish.HttpRequestListener;
+import de.ofahrt.catfish.HttpServerListener;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.network.Connection;
 
-public final class WebalizerLogger implements HttpRequestListener {
+public final class WebalizerLogger implements HttpServerListener {
 
 	private class LogFileWriter implements Runnable {
 		private PrintStream out = null;
@@ -68,11 +68,6 @@ public final class WebalizerLogger implements HttpRequestListener {
     Thread t = new Thread(new LogFileWriter());
     t.setDaemon(true);
     t.start();
-  }
-
-  @Override
-  public void notifyInternalError(Connection connection, HttpRequest request, Throwable exception) {
-    // Ignore errors; no logging.
   }
 
   @Override

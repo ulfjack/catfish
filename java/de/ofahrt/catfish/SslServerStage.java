@@ -11,7 +11,7 @@ import javax.net.ssl.SSLEngineResult.Status;
 import de.ofahrt.catfish.NioEngine.Pipeline;
 import de.ofahrt.catfish.NioEngine.Stage;
 
-final class SslStage implements NioEngine.Stage {
+final class SslServerStage implements NioEngine.Stage {
   public interface SSLContextProvider {
     SSLContext getSSLContext(String host);
   }
@@ -26,7 +26,7 @@ final class SslStage implements NioEngine.Stage {
   private boolean lookingForSni;
   private SSLEngine sslEngine;
 
-  public SslStage(
+  public SslServerStage(
       Pipeline parent,
       Stage next,
       SSLContextProvider contextProvider,

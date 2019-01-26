@@ -35,7 +35,7 @@ final class HttpServerHandler implements ServerHandler {
           server::determineHttpVirtualHost,
           decryptedInputBuffer,
           decryptedOutputBuffer);
-      return new SslStage(
+      return new SslServerStage(
           pipeline,
           httpStage,
           server::getSSLContext,
