@@ -6,10 +6,11 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import de.ofahrt.catfish.HttpServerListener;
+
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.network.Connection;
+import de.ofahrt.catfish.model.server.HttpServerListener;
 
 public final class WebalizerLogger implements HttpServerListener {
 

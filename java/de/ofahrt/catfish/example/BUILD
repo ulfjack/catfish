@@ -9,6 +9,7 @@ java_binary(
     "//java/de/ofahrt/catfish/bridge",
     "//java/de/ofahrt/catfish/fastcgi",
     "//java/de/ofahrt/catfish/model",
+    "//java/de/ofahrt/catfish/model/network",
     "//java/de/ofahrt/catfish/model/server",
     "//java/de/ofahrt/catfish/servlets",
     "//java/de/ofahrt/catfish/ssl",

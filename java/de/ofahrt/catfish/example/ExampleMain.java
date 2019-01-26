@@ -5,7 +5,6 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import javax.net.ssl.SSLContext;
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.HttpServerListener;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.fastcgi.FcgiServlet;
@@ -15,6 +14,7 @@ import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.BasicHttpHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
+import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.ssl.SSLContextFactory;
 import de.ofahrt.catfish.ssl.SSLContextFactory.SSLInfo;
 
