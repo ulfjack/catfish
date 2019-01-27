@@ -1,6 +1,8 @@
 package de.ofahrt.catfish;
 
 import java.io.IOException;
+
+import de.ofahrt.catfish.internal.CoreHelper;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpStatusCode;
