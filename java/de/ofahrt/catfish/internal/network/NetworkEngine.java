@@ -30,6 +30,9 @@ public final class NetworkEngine {
   private static final boolean DEBUG = false;
   private static final boolean LOG_TO_FILE = false;
 
+  private static final boolean OUTGOING_CONNECTION = true;
+  private static final boolean INCOMING_CONNECTION = false;
+
   public interface Stage {
     void read() throws IOException;
     void write() throws IOException;
@@ -111,7 +114,8 @@ public final class NetworkEngine {
     private final LogHandler logHandler;
 
     private final Stage first;
-    private boolean reading = true;
+    private boolean connecting;
+    private boolean reading;
     private boolean writing;
     private boolean closed;
 
@@ -121,7 +125,8 @@ public final class NetworkEngine {
         SocketChannel socketChannel,
         SelectionKey key,
         NetworkHandler handler,
-        LogHandler logHandler) {
+        LogHandler logHandler,
+        boolean outgoing) {
       this.queue = queue;
       this.connection = connection;
       this.socketChannel = socketChannel;
@@ -133,6 +138,8 @@ public final class NetworkEngine {
       inputBuffer.flip(); // prepare for reading
       outputBuffer.clear();
       outputBuffer.flip(); // prepare for reading
+      this.connecting = outgoing;
+      this.reading = !outgoing;
       this.first = handler.connect(this, inputBuffer, outputBuffer);
     }
 
@@ -189,6 +196,16 @@ public final class NetworkEngine {
 
     @Override
     public void handleEvent() {
+      if (connecting && key.isConnectable()) {
+        try {
+          socketChannel.finishConnect();
+          encourageWrites();
+        } catch (IOException e) {
+          networkEventListener.notifyInternalError(connection, e);
+          close();
+          return;
+        }
+      }
       if (key.isReadable()) {
         try {
           inputBuffer.compact(); // prepare buffer for writing
@@ -271,7 +288,7 @@ public final class NetworkEngine {
     }
   }
 
-  private final class ServerSocketHandler implements EventHandler, Runnable {
+  private final class ServerSocketHandler implements EventHandler {
     private final ServerSocketChannel serverChannel;
     private final SelectionKey key;
     private final NetworkHandler handler;
@@ -300,8 +317,7 @@ public final class NetworkEngine {
       }
     }
 
-    @Override
-    public void run() {
+    public void shutdown() {
       key.cancel();
       try {
         serverChannel.close();
@@ -332,8 +348,8 @@ public final class NetworkEngine {
       if (shutdownInitiated.get()) {
         throw new IllegalStateException();
       }
-      final CountDownLatch latch = new CountDownLatch(1);
-      final AtomicReference<IOException> thrownException = new AtomicReference<>();
+      CountDownLatch latch = new CountDownLatch(1);
+      AtomicReference<IOException> thrownException = new AtomicReference<>();
       queue(() -> {
         try {
           if (shutdown) {
@@ -363,7 +379,49 @@ public final class NetworkEngine {
           SelectionKey key = serverChannel.register(selector, SelectionKey.OP_ACCEPT);
           ServerSocketHandler socketHandler = new ServerSocketHandler(serverChannel, key, handler);
           key.attach(socketHandler);
-          shutdownQueue.add(socketHandler);
+          shutdownQueue.add(socketHandler::shutdown);
+        } catch (IOException e) {
+          thrownException.set(e);
+        }
+        latch.countDown();
+      });
+      latch.await();
+      IOException e = thrownException.get();
+      if (e != null) {
+        throw e;
+      }
+    }
+
+    public void connect(InetAddress address, int port, NetworkHandler handler) throws IOException, InterruptedException {
+      if (shutdownInitiated.get()) {
+        throw new IllegalStateException();
+      }
+      CountDownLatch latch = new CountDownLatch(1);
+      AtomicReference<IOException> thrownException = new AtomicReference<>();
+      queue(() -> {
+        try {
+          if (shutdown) {
+            return;
+          }
+          @SuppressWarnings("resource")
+          SocketChannel socketChannel = SocketChannel.open();
+          socketChannel.configureBlocking(false);
+//          clientChannel.socket().setReuseAddress(true);
+//          clientChannel.socket().bind(new InetSocketAddress(address, port));
+          socketChannel.socket().setTcpNoDelay(true);
+          socketChannel.socket().setKeepAlive(true);
+//          clientChannel.socket().setSoLinger(false, 0);
+          InetSocketAddress remoteAddress = new InetSocketAddress(address, port);
+          socketChannel.connect(remoteAddress);
+          SelectionKey key = socketChannel.register(selector, SelectionKey.OP_CONNECT);
+          Connection connection = new Connection(
+              (InetSocketAddress) socketChannel.socket().getLocalSocketAddress(),
+              remoteAddress,
+              handler.usesSsl());
+          SocketHandler socketHandler =
+              new SocketHandler(
+                  this, connection, socketChannel, key, handler, logHandler, OUTGOING_CONNECTION);
+          key.attach(socketHandler);
         } catch (IOException e) {
           thrownException.set(e);
         }
@@ -377,7 +435,7 @@ public final class NetworkEngine {
     }
 
     private void shutdown() throws InterruptedException {
-      if (!shutdownInitiated.getAndSet(true)) {
+      if (shutdownInitiated.getAndSet(true)) {
         throw new IllegalStateException();
       }
       final CountDownLatch latch = new CountDownLatch(1);
@@ -391,7 +449,8 @@ public final class NetworkEngine {
         try {
           SelectionKey socketKey = socketChannel.register(selector, SelectionKey.OP_READ);
           SocketHandler socketHandler =
-              new SocketHandler(SelectorQueue.this, connection, socketChannel, socketKey, handler, logHandler);
+              new SocketHandler(
+                  this, connection, socketChannel, socketKey, handler, logHandler, INCOMING_CONNECTION);
           socketHandler.log("New");
           socketKey.attach(socketHandler);
         } catch (ClosedChannelException e) {
@@ -469,6 +528,10 @@ public final class NetworkEngine {
 
   private void listen(InetAddress address, int port, NetworkHandler handler) throws IOException, InterruptedException {
     getQueueForConnection().listenPort(address, port, handler);
+  }
+
+  public void connect(InetAddress address, int port, NetworkHandler handler) throws IOException, InterruptedException {
+    getQueueForConnection().connect(address, port, handler);
   }
 
   public void shutdown() throws InterruptedException {

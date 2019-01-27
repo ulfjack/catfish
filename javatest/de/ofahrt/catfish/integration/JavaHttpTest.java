@@ -6,7 +6,7 @@ import java.io.IOException;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import de.ofahrt.catfish.client.CatfishHttpClient;
+import de.ofahrt.catfish.client.TestingCatfishHttpClient;
 import de.ofahrt.catfish.model.HttpResponse;
 
 public class JavaHttpTest {
@@ -26,7 +26,7 @@ public class JavaHttpTest {
 
   @Test
   public void getWithJavaHttpUrlConnection() throws IOException {
-  	CatfishHttpClient client = CatfishHttpClient.createNetworkedClient();
+  	TestingCatfishHttpClient client = TestingCatfishHttpClient.createNetworkedClient();
   	HttpResponse response = client.get(LocalCatfishServer.HTTP_ROOT + "/compression.html");
   	assertNotNull(response);
   	assertEquals(200, response.getStatusCode());
@@ -34,7 +34,7 @@ public class JavaHttpTest {
 
   @Test
   public void sslGetWithJavaHttpUrlConnection() throws IOException {
-  	CatfishHttpClient client = CatfishHttpClient.createNetworkedClient();
+  	TestingCatfishHttpClient client = TestingCatfishHttpClient.createNetworkedClient();
   	HttpResponse response = client.get(LocalCatfishServer.HTTPS_ROOT + "/compression.html");
   	assertNotNull(response);
   	assertEquals(200, response.getStatusCode());

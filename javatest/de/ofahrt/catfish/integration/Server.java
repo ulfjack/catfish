@@ -1,7 +1,8 @@
 package de.ofahrt.catfish.integration;
 
 import java.io.IOException;
-import de.ofahrt.catfish.client.HttpConnection;
+
+import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpResponse;
 
 interface Server {

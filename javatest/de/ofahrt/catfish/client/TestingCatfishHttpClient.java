@@ -28,17 +28,17 @@ import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 
-public abstract class CatfishHttpClient {
+public abstract class TestingCatfishHttpClient {
 
-  public static CatfishHttpClient createNetworkedClient() {
+  public static TestingCatfishHttpClient createNetworkedClient() {
     return new NetworkedHttpClient();
   }
 
-  public static CatfishHttpClient createClientForServlet(final Servlet servlet) {
+  public static TestingCatfishHttpClient createClientForServlet(final Servlet servlet) {
     return new ServletHttpClient(servlet);
   }
 
-  private CatfishHttpClient() {
+  private TestingCatfishHttpClient() {
     // Don't allow sub-classing except in this class.
   }
 
@@ -60,7 +60,7 @@ public abstract class CatfishHttpClient {
     return send(uri.getScheme() + "//" + uri.getHost() + ":" + uri.getPort(), request);
   }
 
-  private static final class ServletHttpClient extends CatfishHttpClient {
+  private static final class ServletHttpClient extends TestingCatfishHttpClient {
     private final class BufferedHttpResponseWriter implements HttpResponseWriter {
       private HttpResponse response;
       private ByteArrayOutputStream buffer;
@@ -122,7 +122,7 @@ public abstract class CatfishHttpClient {
     }
   }
 
-  private static final class NetworkedHttpClient extends CatfishHttpClient {
+  private static final class NetworkedHttpClient extends TestingCatfishHttpClient {
     @Override
     public HttpResponse send(String schemaHostPort, HttpRequest request) throws IOException {
       URL url = new URL(schemaHostPort + request.getUri());

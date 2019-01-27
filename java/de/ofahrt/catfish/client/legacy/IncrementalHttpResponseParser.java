@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.client;
+package de.ofahrt.catfish.client.legacy;
 
 import java.util.Arrays;
 
@@ -20,15 +20,12 @@ final class IncrementalHttpResponseParser {
     CHUNKED_CONTENT_NEXT;
   }
 
-  private static final int MAX_HEADER_NAME_LENGTH = 1024;
-  private static final int MAX_HEADER_VALUE_LENGTH = 4096;
-
   private final int maxContentLength = 1000000;
 
-  private SimpleHttpResponse.Builder response;
-  private StringBuilder elementBuffer;
-  private State state;
-  private int counter;
+  private SimpleHttpResponse.Builder response = new SimpleHttpResponse.Builder();
+  private StringBuilder elementBuffer = new StringBuilder();
+  private State state = State.RESPONSE_VERSION_HTTP;
+  private int counter = 0;
   private boolean expectLineFeed;
 
   private String messageHeaderName;
@@ -38,10 +35,6 @@ final class IncrementalHttpResponseParser {
   private int contentIndex;
 
   private boolean done;
-
-  public IncrementalHttpResponseParser() {
-    reset();
-  }
 
   //       CTL            = <any US-ASCII control character
   //                        (octets 0 - 31) and DEL (127)>
@@ -82,49 +75,31 @@ final class IncrementalHttpResponseParser {
     }
   }
 
-  public void reset() {
-    response = new SimpleHttpResponse.Builder();
-    elementBuffer = new StringBuilder();
-    state = State.RESPONSE_VERSION_HTTP;
-    counter = 0;
-    expectLineFeed = false;
-    messageHeaderName = null;
-    messageHeaderValue = null;
-    content = null;
-    contentIndex = 0;
-    done = false;
-  }
-
-  private int setBadResponse(String errorMessage) {
-    response.setBadResponse(errorMessage);
-    return 1;
-  }
-
-  public int parse(byte[] input) {
+  public int parse(byte[] input) throws MalformedResponseException {
     return parse(input, 0, input.length);
   }
 
-  public int parse(byte[] input, int offset, int length) {
+  public int parse(byte[] input, int offset, int length) throws MalformedResponseException {
     for (int i = 0; i < length; i++) {
       final char c = (char) (input[offset + i] & 0xff);
       if (expectLineFeed) {
         expectLineFeed = false;
         if (c != '\n') {
-          return setBadResponse("Expected line feed character in state " + state);
+          throw new MalformedResponseException("Expected line feed character in state "+state);
         }
       }
       switch (state) {
         case RESPONSE_VERSION_HTTP :
           if ((counter == 0) && (c != 'H')) {
-            return setBadResponse("Expected 'H' of response version string");
+            throw new MalformedResponseException("Expected 'H' of response version string");
           } else if ((counter == 1) && (c != 'T')) {
-            return setBadResponse("Expected 'T' of response version string");
+            throw new MalformedResponseException("Expected 'T' of response version string");
           } else if ((counter == 2) && (c != 'T')) {
-            return setBadResponse("Expected 'T' of response version string");
+            throw new MalformedResponseException("Expected 'T' of response version string");
           } else if ((counter == 3) && (c != 'P')) {
-            return setBadResponse("Expected 'P' of response version string");
+            throw new MalformedResponseException("Expected 'P' of response version string");
           } else if ((counter == 4) && (c != '/')) {
-            return setBadResponse("Expected '/' of response version string");
+            throw new MalformedResponseException("Expected '/' of response version string");
           }
           if (counter < 4) {
             counter++;
@@ -140,14 +115,14 @@ final class IncrementalHttpResponseParser {
             if ((elementBuffer.length() == 1) && (elementBuffer.charAt(0) == '0')) {
               elementBuffer.setLength(0);
             }
-            if (elementBuffer.length() > 8) {
-              return setBadResponse("Http major version number is too long");
-            }
             elementBuffer.append(c);
+            if (elementBuffer.length() > 9) {
+              throw new MalformedResponseException("Http major version number is too long");
+            }
           }
           else if (c == '.') {
             if (elementBuffer.length() == 0) {
-              return setBadResponse("Http major version number expected");
+              throw new MalformedResponseException("Http major version number expected");
             }
             String majorVersionString = elementBuffer.toString();
             if (!"0".equals(majorVersionString) && !"1".equals(majorVersionString)) {
@@ -158,7 +133,7 @@ final class IncrementalHttpResponseParser {
             elementBuffer.setLength(0);
             state = State.RESPONSE_VERSION_MINOR;
           } else {
-            return setBadResponse("Expected '.' of response version string");
+            throw new MalformedResponseException("Expected '.' of response version string");
           }
           break;
         case RESPONSE_VERSION_MINOR :
@@ -167,44 +142,44 @@ final class IncrementalHttpResponseParser {
             if ((elementBuffer.length() == 1) && (elementBuffer.charAt(0) == '0')) {
               elementBuffer.setLength(0);
             }
-            if (elementBuffer.length() > 8) {
-              return setBadResponse("Http minor version number is too long");
-            }
             elementBuffer.append(c);
+            if (elementBuffer.length() > 9) {
+              throw new MalformedResponseException("Http minor version number is too long");
+            }
           } else if (c == ' ') {
             if (elementBuffer.length() == 0) {
-              return setBadResponse("Http minor version number expected");
+              throw new MalformedResponseException("Http minor version number expected");
             }
             if (elementBuffer.length() > 7) {
-              return setBadResponse("Http minor version too long");
+              throw new MalformedResponseException("Http minor version too long");
             }
             response.setMinorVersion(Integer.parseInt(elementBuffer.toString()));
             counter = 0;
             elementBuffer.setLength(0);
             state = State.RESPONSE_CODE;
           } else {
-            return setBadResponse("Expected end of response version string");
+            throw new MalformedResponseException("Expected end of response version string");
           }
           break;
         case RESPONSE_CODE :
           if (isDigit(c)) {
-            if (elementBuffer.length() > 2) {
-              return setBadResponse("Status code is too long");
-            }
             elementBuffer.append(c);
+            if (elementBuffer.length() > 3) {
+              throw new MalformedResponseException("Status code is too long");
+            }
           } else if (c == ' ') {
             if (elementBuffer.length() != 3) {
-              return setBadResponse("Status code is too short; 3 digits expected");
+              throw new MalformedResponseException("Status code is too short; 3 digits expected");
             }
             if (elementBuffer.charAt(0) == '0') {
-              return setBadResponse("Leading zero in status code, what now?");
+              throw new MalformedResponseException("Leading zero in status code, what now?");
             }
             response.setStatusCode(Integer.parseInt(elementBuffer.toString()));
             counter = 0;
             elementBuffer.setLength(0);
             state = State.RESPONSE_REASON_PHRASE;
           } else {
-            return setBadResponse("Expected status code digit");
+            throw new MalformedResponseException("Expected status code digit");
           }
           break;
         case RESPONSE_REASON_PHRASE :
@@ -215,16 +190,13 @@ final class IncrementalHttpResponseParser {
             elementBuffer.setLength(0);
             state = State.MESSAGE_HEADER_NAME;
           } else {
-            if (elementBuffer.length() > 1024) {
-              return setBadResponse("Reason phrase is too long");
-            }
             elementBuffer.append(c);
           }
           break;
         case MESSAGE_HEADER_NAME :
           if (c == ':') {
             if (elementBuffer.length() == 0) {
-              return setBadResponse("Expected message header field name, but ':' found");
+              throw new MalformedResponseException("Expected message header field name, but ':' found");
             }
             messageHeaderName = elementBuffer.toString();
             counter = 0;
@@ -234,17 +206,14 @@ final class IncrementalHttpResponseParser {
             expectLineFeed = true;
           } else if (c == '\n') {
             if (elementBuffer.length() != 0) {
-              return setBadResponse("Unexpected end of line in message header field name");
+              throw new MalformedResponseException("Unexpected end of line in message header field name");
             }
             done = true;
             return i + 1;
           } else if (isTokenCharacter(c)) {
-            if (elementBuffer.length() > MAX_HEADER_NAME_LENGTH) {
-              return setBadResponse("Header name is too long");
-            }
             elementBuffer.append(c);
           } else {
-            return setBadResponse("Illegal character in request method");
+            throw new MalformedResponseException("Illegal character in request method");
           }
           break;
         case MESSAGE_HEADER_VALUE :
@@ -263,9 +232,6 @@ final class IncrementalHttpResponseParser {
           } else if (isSpace(c)) {
             trimAndAppendSpace();
           } else {
-            if (elementBuffer.length() > MAX_HEADER_VALUE_LENGTH) {
-              return setBadResponse("Header name is too long");
-            }
             elementBuffer.append(c);
           }
           break;
@@ -293,10 +259,10 @@ final class IncrementalHttpResponseParser {
               try {
                 contentLength = Long.parseLong(contentLengthValue);
               } catch (NumberFormatException e) {
-                return setBadResponse("Illegal content length value");
+                throw new MalformedResponseException("Illegal content length value");
               }
               if (contentLength > maxContentLength) {
-                return setBadResponse("Too large content length");
+                throw new MalformedResponseException("Too large content length");
               }
               if (contentLength == 0) {
                 done = true;
@@ -318,12 +284,9 @@ final class IncrementalHttpResponseParser {
             counter = 0;
             elementBuffer.setLength(0);
             state = State.MESSAGE_HEADER_NAME;
-            if (elementBuffer.length() > MAX_HEADER_VALUE_LENGTH) {
-              return setBadResponse("Header name is too long");
-            }
             elementBuffer.append(c);
           } else {
-            return setBadResponse("Illegal character in request header name");
+            throw new MalformedResponseException("Illegal character in request header name");
           }
           break;
         case CONTENT : {
@@ -354,21 +317,18 @@ final class IncrementalHttpResponseParser {
               content = new byte[parsedChunkLength];
             } else {
               if (parsedChunkLength > maxContentLength) {
-                return setBadResponse("Too large chunk");
+                throw new MalformedResponseException("Too large chunk");
               }
               if (content.length > maxContentLength - parsedChunkLength) {
-                return setBadResponse("Too large content length");
+                throw new MalformedResponseException("Too large content length");
               }
               content = Arrays.copyOf(content, content.length + parsedChunkLength);
             }
             state = State.CHUNKED_CONTENT_DATA;
           } else if (((c >= '0') && (c <= '9')) || ((c >= 'A') && (c <= 'F')) || ((c >= 'a') && (c <= 'f'))) {
-            if (elementBuffer.length() > 8) {
-              return setBadResponse("Chunk length field is too long");
-            }
             elementBuffer.append(c);
           } else {
-            return setBadResponse("Illegal character in chunked content length");
+            throw new MalformedResponseException("Illegal character in chunked content length");
           }
           break;
         case CHUNKED_CONTENT_DATA : {
@@ -387,7 +347,7 @@ final class IncrementalHttpResponseParser {
           } else if (c == '\n') {
             state = State.CHUNKED_CONTENT_LENGTH;
           } else {
-            return setBadResponse("Expected line break");
+            throw new MalformedResponseException("Expected line break");
           }
           break;
         default :

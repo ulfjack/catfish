@@ -52,8 +52,18 @@ public final class SimpleHttpResponse implements HttpResponse {
     private final Map<String, String> headers = new HashMap<>();
     private byte[] content = new byte[0];
 
-    public SimpleHttpResponse build() {
+    private String errorMessage;
+
+    public SimpleHttpResponse build() throws MalformedResponseException {
+      if (errorMessage != null) {
+        throw new MalformedResponseException(errorMessage);
+      }
       return new SimpleHttpResponse(this);
+    }
+
+    public Builder setBadResponse(String errorMessage) {
+      this.errorMessage = errorMessage;
+      return this;
     }
 
     public Builder setMajorVersion(int majorVersion) {
@@ -87,12 +97,14 @@ public final class SimpleHttpResponse implements HttpResponse {
       key = HttpHeaderName.canonicalize(key);
       if (headers.get(key) != null) {
         if (!HttpHeaderName.mayOccurMultipleTimes(key)) {
+          setBadResponse("Illegal message headers: multiple occurrance for non-list field");
           throw new IllegalArgumentException("Illegal message headers: multiple occurrance for non-list field");
         }
         value = headers.get(key) + ", " + value;
       }
       if (HttpHeaderName.HOST.equals(key)) {
         if (!HttpHeaderName.validHostPort(value)) {
+          setBadResponse("Illegal 'Host' header");
           throw new IllegalArgumentException("Illegal 'Host' header");
         }
       }

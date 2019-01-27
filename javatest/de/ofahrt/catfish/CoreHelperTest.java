@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
+import de.ofahrt.catfish.internal.CoreHelper;
 import de.ofahrt.catfish.utils.HttpContentTypeTest;
 
 @SuppressWarnings("boxing")

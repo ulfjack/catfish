@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.client;
+package de.ofahrt.catfish.client.legacy;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
