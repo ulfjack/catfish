@@ -34,8 +34,6 @@ public final class BasicHttpHandler implements HttpHandler {
       responseWriter.commitBuffered(StandardResponses.BAD_REQUEST);
     } else if (HttpMethodName.TRACE.equals(request.getMethod())) {
       handleTrace(request, responseWriter);
-    } else if ("*".equals(request.getUri())) {
-      responseWriter.commitBuffered(StandardResponses.BAD_REQUEST);
     } else {
       delegate.handle(connection, request, responseWriter);
     }
