@@ -66,7 +66,7 @@ public class IncrementalHttpParserTest {
       fail();
     } catch (MalformedRequestException e) {
       assertEquals(HttpStatusCode.URI_TOO_LONG.getStatusCode(), e.getErrorResponse().getStatusCode());
-      assertEquals("414 Uri too long", e.getMessage());
+      assertEquals("414 URI Too Long", e.getMessage());
     }
   }
 
@@ -80,8 +80,8 @@ public class IncrementalHttpParserTest {
       parser.getRequest();
       fail();
     } catch (MalformedRequestException e) {
-      assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
-      assertEquals("400 Header name is too long", e.getMessage());
+      assertEquals(HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE.getStatusCode(), e.getErrorResponse().getStatusCode());
+      assertEquals("431 Header name is too long", e.getMessage());
     }
   }
 
@@ -95,8 +95,8 @@ public class IncrementalHttpParserTest {
       parser.getRequest();
       fail();
     } catch (MalformedRequestException e) {
-      assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
-      assertEquals("400 Header value is too long", e.getMessage());
+      assertEquals(HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE.getStatusCode(), e.getErrorResponse().getStatusCode());
+      assertEquals("431 Header value is too long", e.getMessage());
     }
   }
 
@@ -110,8 +110,8 @@ public class IncrementalHttpParserTest {
       parser.getRequest();
       fail();
     } catch (MalformedRequestException e) {
-      assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
-      assertEquals("400 Too many header fields", e.getMessage());
+      assertEquals(HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE.getStatusCode(), e.getErrorResponse().getStatusCode());
+      assertEquals("431 Too many header fields", e.getMessage());
     }
   }
 

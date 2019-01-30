@@ -155,7 +155,7 @@ final class IncrementalHttpRequestParser {
             return setBadRequest("Unexpected end of line in request uri");
           } else {
             if (elementBuffer.length() >= MAX_URI_LENGTH) {
-              return setError(HttpStatusCode.URI_TOO_LONG, "Uri too long");
+              return setError(HttpStatusCode.URI_TOO_LONG);
             }
             if (c == '|') {
               elementBuffer.append(CoreHelper.encode('|'));
@@ -260,7 +260,7 @@ final class IncrementalHttpRequestParser {
             return i + 1;
           } else if (isTokenCharacter(c)) {
             if (elementBuffer.length() >= MAX_HEADER_NAME_LENGTH) {
-              return setBadRequest("Header name is too long");
+              return setError(HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Header name is too long");
             }
             elementBuffer.append(c);
           } else {
@@ -284,7 +284,7 @@ final class IncrementalHttpRequestParser {
             trimAndAppendSpace();
           } else {
             if (elementBuffer.length() >= MAX_HEADER_VALUE_LENGTH) {
-              return setBadRequest("Header value is too long");
+              return setError(HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Header value is too long");
             }
             elementBuffer.append(c);
           }
@@ -304,7 +304,7 @@ final class IncrementalHttpRequestParser {
           }
 
           if (headerFieldCount >= MAX_HEADER_FIELD_COUNT) {
-            return setBadRequest("Too many header fields");
+            return setError(HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Too many header fields");
           }
           headerFieldCount++;
           builder.addHeader(messageHeaderName, messageHeaderValue);
@@ -370,6 +370,10 @@ final class IncrementalHttpRequestParser {
 
   private int setBadRequest(String statusMessage) {
     return setError(HttpStatusCode.BAD_REQUEST, statusMessage);
+  }
+
+  private int setError(HttpStatusCode statusCode) {
+    return setError(statusCode, statusCode.getStatusMessage());
   }
 
   private int setError(HttpStatusCode statusCode, String statusMessage) {

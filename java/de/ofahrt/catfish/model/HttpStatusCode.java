@@ -39,7 +39,10 @@ public enum HttpStatusCode {
   UNSUPPORTED_MEDIA_TYPE (415, "Unsupported Media Type"),
   RANGE_NOT_SATISFIABLE  (416, "Requested Range Not Satisfiable"),
   EXPECTATION_FAILED     (417, "Expectation Failed"),
+  MISDIRECTED_REQUEST    (421, "Misdirected Request"),
+  UNPROCESSABLE_ENTITY   (422, "Unprocessable Entity"),
   UPGRADE_REQUIRED       (426, "Upgrade Required"),
+  REQUEST_HEADER_FIELDS_TOO_LARGE(431, "Request Header Fields Too Large"),
 
   INTERNAL_SERVER_ERROR  (500, "Internal Server Error"),
   NOT_IMPLEMENTED        (501, "Not Implemented"),
@@ -73,6 +76,11 @@ public enum HttpStatusCode {
   private static String[] constructStatusMessageMap() {
     String[] result = new String[506];
     for (HttpStatusCode r : HttpStatusCode.values()) {
+      if (result[r.getStatusCode()] != null) {
+        throw new IllegalStateException(
+            String.format(
+                "Multiple enums map to the same code: %s and %s", result[r.getStatusCode()], r));
+      }
       result[r.getStatusCode()] = r.getStatusMessage();
     }
     return result;
