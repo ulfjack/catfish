@@ -1,8 +1,12 @@
 package de.ofahrt.catfish.model;
 
 public enum HttpStatusCode {
+  // See the IANA registry for the complete list and mapping to RFCs:
+  // https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
   CONTINUE               (100, "Continue"),
   SWITCHING_PROTOCOLS    (101, "Switching Protocols"),
+  PROCESSING             (102, "Processing"),
+  EARLY_HINTS            (103, "Early Hints"),
 
   OK                     (200, "OK"),
   CREATED                (201, "Created"),
@@ -11,6 +15,9 @@ public enum HttpStatusCode {
   NO_CONTENT             (204, "No Content"),
   RESET_CONTENT          (205, "Reset Content"),
   PARTIAL_CONTENT        (206, "Partial Content"),
+  MULTI_STATUS           (207, "Multi-Status"),
+  ALREADY_REPORTED       (208, "Already Reported"),
+  IM_USED                (226, "IM Used"),
 
   MULTIPLE_CHOICES       (300, "Multiple Choices"),
   MOVED_PERMANENTLY      (301, "Moved Permanently"),
@@ -39,17 +46,33 @@ public enum HttpStatusCode {
   UNSUPPORTED_MEDIA_TYPE (415, "Unsupported Media Type"),
   RANGE_NOT_SATISFIABLE  (416, "Requested Range Not Satisfiable"),
   EXPECTATION_FAILED     (417, "Expectation Failed"),
+  // 418-420 unassigned
   MISDIRECTED_REQUEST    (421, "Misdirected Request"),
   UNPROCESSABLE_ENTITY   (422, "Unprocessable Entity"),
+  LOCKED                 (423, "Locked"),
+  FAILED_DEPENDENCY      (424, "Failed Dependency"),
+  TOO_EARLY              (425, "Too Early"),
   UPGRADE_REQUIRED       (426, "Upgrade Required"),
+  // 427 unassigned
+  PRECONDITION_REQUIRED  (428, "Precondition Required"),
+  TOO_MANY_REQUESTS      (429, "Too Many Requests"),
+  // 430 unassigned
   REQUEST_HEADER_FIELDS_TOO_LARGE(431, "Request Header Fields Too Large"),
+  // 432-450 unassigned
+  UNAVAILABLE_FOR_LEGAL_REASONS(451, "Unavailable For Legal Reasons"),
 
   INTERNAL_SERVER_ERROR  (500, "Internal Server Error"),
   NOT_IMPLEMENTED        (501, "Not Implemented"),
   BAD_GATEWAY            (502, "Bad Gateway"),
   SERVICE_UNAVAILABLE    (503, "Service Unavailable"),
   GATEWAY_TIMEOUT        (504, "Gateway Timeout"),
-  VERSION_NOT_SUPPORTED  (505, "HTTP Version Not Supported");
+  VERSION_NOT_SUPPORTED  (505, "HTTP Version Not Supported"),
+  VARIANT_ALSO_NEGOTIATES(506, "Variant Also Negotiates"),
+  INSUFFICIENT_STORAGE   (507, "Insufficient Storage"),
+  LOOP_DETECTED          (508, "Loop Detected"),
+  // 509 unassigned
+  NOT_EXTENDED           (510, "Not Extended"),
+  NETWORK_AUTHENTICATION_REQUIRED(511, "Network Authentication Required");
 
   private final int statusCode;
   private final String statusMessage;
