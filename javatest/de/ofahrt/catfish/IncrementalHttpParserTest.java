@@ -55,9 +55,25 @@ public class IncrementalHttpParserTest {
   }
 
   @Test
-  public void disallowBothContentLengthAndTransferEncoding() {
+  public void disallowTooLongRequestUri() {
     IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
-    byte[] data = "GET / HTTP/1.1\r\nContent-Length: 4\r\nTransfer-Encoding: unknown\r\n\r\nfoobar".getBytes();
+    // The URI is 10001 characters including the leading '/'.
+    byte[] data = ("GET /" + repeat("x", 10000) + " HTTP/1.1\r\nHost: foo\r\n\r\n").getBytes();
+    parser.parse(data);
+    assertTrue(parser.isDone());
+    try {
+      parser.getRequest();
+      fail();
+    } catch (MalformedRequestException e) {
+      assertEquals(HttpStatusCode.URI_TOO_LONG.getStatusCode(), e.getErrorResponse().getStatusCode());
+      assertEquals("414 Uri too long", e.getMessage());
+    }
+  }
+
+  @Test
+  public void disallowTooLongHeaderName() {
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    byte[] data = ("GET / HTTP/1.1\r\nHost: foo\r\n" + repeat("x", 1001) + ": unknown\r\n\r\n").getBytes();
     parser.parse(data);
     assertTrue(parser.isDone());
     try {
@@ -65,6 +81,45 @@ public class IncrementalHttpParserTest {
       fail();
     } catch (MalformedRequestException e) {
       assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
+      assertEquals("400 Header name is too long", e.getMessage());
     }
+  }
+
+  @Test
+  public void disallowTooLongHeaderValue() {
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    byte[] data = ("GET / HTTP/1.1\r\nHost: foo\r\nHeader: " + repeat("x", 10001) + "\r\n\r\n").getBytes();
+    parser.parse(data);
+    assertTrue(parser.isDone());
+    try {
+      parser.getRequest();
+      fail();
+    } catch (MalformedRequestException e) {
+      assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
+      assertEquals("400 Header value is too long", e.getMessage());
+    }
+  }
+
+  @Test
+  public void disallowTooManyHeaderFields() {
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    byte[] data = ("GET / HTTP/1.1\r\nHost: foo\r\n" + repeat("field: xyz\r\n", 1000) + "\r\n").getBytes();
+    parser.parse(data);
+    assertTrue(parser.isDone());
+    try {
+      parser.getRequest();
+      fail();
+    } catch (MalformedRequestException e) {
+      assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
+      assertEquals("400 Too many header fields", e.getMessage());
+    }
+  }
+
+  private static String repeat(String s, int count) {
+    StringBuilder result = new StringBuilder();
+    for (int i = 0; i < count; i++) {
+      result.append(s);
+    }
+    return result.toString();
   }
 }

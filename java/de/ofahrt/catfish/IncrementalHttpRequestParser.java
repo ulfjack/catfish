@@ -13,6 +13,10 @@ import de.ofahrt.catfish.model.server.PayloadParser;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 
 final class IncrementalHttpRequestParser {
+  private static final int MAX_URI_LENGTH = 10_000;
+  private static final int MAX_HEADER_NAME_LENGTH = 1000;
+  private static final int MAX_HEADER_VALUE_LENGTH = 10_000;
+  private static final int MAX_HEADER_FIELD_COUNT = 1000;
 
   private static enum State {
     // Request-Line   = Method SP Request-URI SP HTTP-Version CRLF
@@ -30,6 +34,7 @@ final class IncrementalHttpRequestParser {
   private StringBuilder elementBuffer;
   private int counter;
   private boolean expectLineFeed;
+  private int headerFieldCount;
 
   private boolean done;
 
@@ -54,6 +59,7 @@ final class IncrementalHttpRequestParser {
     elementBuffer = new StringBuilder();
     counter = 0;
     expectLineFeed = false;
+    headerFieldCount = 0;
 
     done = false;
     builder.reset();
@@ -97,7 +103,7 @@ final class IncrementalHttpRequestParser {
   private void trimAndAppendSpace() {
     if (elementBuffer.length() == 0) {
       // Trim all linear whitespace at the beginning.
-    } else if (elementBuffer.charAt(elementBuffer.length()-1) == ' ') {
+    } else if (elementBuffer.charAt(elementBuffer.length() - 1) == ' ') {
       // Reduce all linear whitespace to a single space.
     } else {
       elementBuffer.append(' ');
@@ -147,14 +153,19 @@ final class IncrementalHttpRequestParser {
           } else if ((c == '\r') || (c == '\n')) {
             // TODO: This probably shouldn't allow any control characters.
             return setBadRequest("Unexpected end of line in request uri");
-          } else if (c == '|') {
-            elementBuffer.append(CoreHelper.encode('|'));
-          } else if (c == '^') {
-            elementBuffer.append(CoreHelper.encode('^'));
-          } else if (c == '`') {
-            elementBuffer.append(CoreHelper.encode('`'));
           } else {
-            elementBuffer.append(c);
+            if (elementBuffer.length() >= MAX_URI_LENGTH) {
+              return setError(HttpStatusCode.URI_TOO_LONG, "Uri too long");
+            }
+            if (c == '|') {
+              elementBuffer.append(CoreHelper.encode('|'));
+            } else if (c == '^') {
+              elementBuffer.append(CoreHelper.encode('^'));
+            } else if (c == '`') {
+              elementBuffer.append(CoreHelper.encode('`'));
+            } else {
+              elementBuffer.append(c);
+            }
           }
           break;
         // HTTP-Version   = "HTTP" "/" 1*DIGIT "." 1*DIGIT
@@ -248,6 +259,9 @@ final class IncrementalHttpRequestParser {
             done = true;
             return i + 1;
           } else if (isTokenCharacter(c)) {
+            if (elementBuffer.length() >= MAX_HEADER_NAME_LENGTH) {
+              return setBadRequest("Header name is too long");
+            }
             elementBuffer.append(c);
           } else {
             return setBadRequest("Illegal character in header field name");
@@ -269,6 +283,9 @@ final class IncrementalHttpRequestParser {
           } else if (isSpace(c)) {
             trimAndAppendSpace();
           } else {
+            if (elementBuffer.length() >= MAX_HEADER_VALUE_LENGTH) {
+              return setBadRequest("Header value is too long");
+            }
             elementBuffer.append(c);
           }
           break;
@@ -278,6 +295,7 @@ final class IncrementalHttpRequestParser {
             elementBuffer.append(messageHeaderValue);
             trimAndAppendSpace();
             break;
+            // return setBadRequest("Line folding is obsolete and illegal");
           }
 
           if (c == '\r') {
@@ -285,6 +303,10 @@ final class IncrementalHttpRequestParser {
             break;
           }
 
+          if (headerFieldCount >= MAX_HEADER_FIELD_COUNT) {
+            return setBadRequest("Too many header fields");
+          }
+          headerFieldCount++;
           builder.addHeader(messageHeaderName, messageHeaderValue);
           messageHeaderName = null;
           messageHeaderValue = null;

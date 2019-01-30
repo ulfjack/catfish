@@ -3,7 +3,6 @@ package de.ofahrt.catfish;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
-
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import org.junit.Test;
@@ -244,5 +243,12 @@ public abstract class HttpParserTest {
   @Test
   public void missingHost() throws Exception {
     checkError("400 Missing 'Host' field", "GET / HTTP/1.1\n\n");
+  }
+
+  @Test
+  public void disallowBothContentLengthAndTransferEncoding() throws Exception {
+    checkError(
+        "400 Must not set both Content-Length and Transfer-Encoding",
+        "GET / HTTP/1.1\nContent-Length: 4\nTransfer-Encoding: unknown\n\nfoobar");
   }
 }

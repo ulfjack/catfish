@@ -8,6 +8,8 @@ import de.ofahrt.catfish.model.MalformedResponseException;
 import de.ofahrt.catfish.model.SimpleHttpResponse;
 
 final class IncrementalHttpResponseParser {
+  private static final int MAX_HEADER_NAME_LENGTH = 1024;
+  private static final int MAX_HEADER_VALUE_LENGTH = 4096;
 
   private static enum State {
     // Status-Line = HTTP-Version SP Status-Code SP Reason-Phrase CRLF
@@ -19,9 +21,6 @@ final class IncrementalHttpResponseParser {
     CHUNKED_CONTENT_DATA,
     CHUNKED_CONTENT_NEXT;
   }
-
-  private static final int MAX_HEADER_NAME_LENGTH = 1024;
-  private static final int MAX_HEADER_VALUE_LENGTH = 4096;
 
   private final int maxContentLength = 1000000;
 
@@ -239,7 +238,7 @@ final class IncrementalHttpResponseParser {
             done = true;
             return i + 1;
           } else if (isTokenCharacter(c)) {
-            if (elementBuffer.length() > MAX_HEADER_NAME_LENGTH) {
+            if (elementBuffer.length() >= MAX_HEADER_NAME_LENGTH) {
               return setBadResponse("Header name is too long");
             }
             elementBuffer.append(c);
