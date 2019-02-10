@@ -97,7 +97,7 @@ public enum HttpStatusCode {
   private static final String[] STATUS_MESSAGE_MAP = constructStatusMessageMap();
 
   private static String[] constructStatusMessageMap() {
-    String[] result = new String[506];
+    String[] result = new String[600];
     for (HttpStatusCode r : HttpStatusCode.values()) {
       if (result[r.getStatusCode()] != null) {
         throw new IllegalStateException(
