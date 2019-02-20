@@ -132,8 +132,8 @@ public final class NetworkEngine {
       this.socketChannel = socketChannel;
       this.key = key;
       this.logHandler = logHandler;
-      this.inputBuffer = ByteBuffer.allocate(4096);
-      this.outputBuffer = ByteBuffer.allocate(4096);
+      this.inputBuffer = ByteBuffer.allocate(32768);
+      this.outputBuffer = ByteBuffer.allocate(32768);
       inputBuffer.clear();
       inputBuffer.flip(); // prepare for reading
       outputBuffer.clear();
