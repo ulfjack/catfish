@@ -65,7 +65,7 @@ public class BasicIntegrationTest {
 
   @Test
   public void doubleGetInOnePacket() throws Exception {
-    HttpConnection connection = localServer.connect(false);
+    HttpConnection connection = localServer.connect(/*ssl=*/false);
     connection.write(toBytes(
         "GET / HTTP/1.1\nHost: localhost\n\nGET / HTTP/1.1\nHost: localhost\n\n"));
     HttpResponse response1 = connection.readResponse();
@@ -77,7 +77,7 @@ public class BasicIntegrationTest {
 
   @Test
   public void sslDoubleGetInOnePacket() throws Exception {
-    HttpConnection connection = localServer.connect(true);
+    HttpConnection connection = localServer.connect(/*ssl=*/true);
     connection.write(toBytes(
         "GET / HTTP/1.1\nHost: localhost\n\nGET / HTTP/1.1\nHost: localhost\n\n"));
     HttpResponse response1 = connection.readResponse();
@@ -105,7 +105,7 @@ public class BasicIntegrationTest {
 
   @Test
   public void getSplitAcrossTwoPackets() throws Exception {
-    HttpConnection connection = localServer.connect(false);
+    HttpConnection connection = localServer.connect(/*ssl=*/false);
     connection.write(toBytes("GET / HTTP/1.1\n"));
     Thread.sleep(20);
     connection.write(toBytes("Host: localhost\n\n"));

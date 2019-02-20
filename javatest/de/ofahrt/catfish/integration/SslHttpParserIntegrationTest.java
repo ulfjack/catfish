@@ -41,7 +41,7 @@ public class SslHttpParserIntegrationTest extends ServletEngineTest {
 
   @Override
   public HttpServletRequest parseLegacy(byte[] data) throws Exception {
-    HttpConnection connection = localServer.connect(true);
+    HttpConnection connection = localServer.connect(/*ssl=*/true);
     connection.write(data);
     HttpResponse response = connection.readResponse();
     connection.close();

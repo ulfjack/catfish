@@ -39,7 +39,7 @@ public class HttpParserIntegrationTest extends ServletEngineTest {
 
   @Override
   public HttpServletRequest parseLegacy(byte[] data) throws Exception {
-    HttpConnection connection = server.connect(false);
+    HttpConnection connection = server.connect(/*ssl=*/false);
     connection.write(data);
     HttpResponse response = connection.readResponse();
     connection.close();
