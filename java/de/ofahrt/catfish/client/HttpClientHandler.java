@@ -1,7 +1,7 @@
 package de.ofahrt.catfish.client;
 
 import java.nio.ByteBuffer;
-
+import javax.net.ssl.SSLContext;
 import de.ofahrt.catfish.client.HttpClientStage.ResponseHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.NetworkHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
@@ -11,44 +11,42 @@ import de.ofahrt.catfish.model.HttpRequest;
 final class HttpClientHandler implements NetworkHandler {
   private final HttpRequest request;
   private final ResponseHandler responseHandler;
-  private final boolean ssl;
+  private final SSLContext sslContext;
 
-  HttpClientHandler(HttpRequest request, ResponseHandler responseHandler, boolean ssl) {
+  HttpClientHandler(HttpRequest request, ResponseHandler responseHandler, SSLContext sslContext) {
     this.request = request;
     this.responseHandler = responseHandler;
-    this.ssl = ssl;
+    this.sslContext = sslContext;
   }
 
   @Override
   public boolean usesSsl() {
-    return ssl;
+    return sslContext != null;
   }
 
   @Override
   public Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer) {
-    if (ssl) {
-      throw new UnsupportedOperationException();
-//      ByteBuffer decryptedInputBuffer = ByteBuffer.allocate(4096);
-//      ByteBuffer decryptedOutputBuffer = ByteBuffer.allocate(4096);
-//      decryptedInputBuffer.clear();
-//      decryptedInputBuffer.flip(); // prepare for reading
-//      decryptedOutputBuffer.clear();
-//      decryptedOutputBuffer.flip(); // prepare for reading
-//      HttpServerStage httpStage = new HttpServerStage(
-//          pipeline,
-//          server::queueRequest,
-//          (conn, req, res) -> server.notifySent(conn, req, res, 0),
-//          server::determineHttpVirtualHost,
-//          decryptedInputBuffer,
-//          decryptedOutputBuffer);
-//      return new SslServerStage(
-//          pipeline,
-//          httpStage,
-//          server::getSSLContext,
-//          inputBuffer,
-//          outputBuffer,
-//          decryptedInputBuffer,
-//          decryptedOutputBuffer);
+    if (sslContext != null) {
+      ByteBuffer decryptedInputBuffer = ByteBuffer.allocate(32768);
+      ByteBuffer decryptedOutputBuffer = ByteBuffer.allocate(32768);
+      decryptedInputBuffer.clear();
+      decryptedInputBuffer.flip(); // prepare for reading
+      decryptedOutputBuffer.clear();
+      decryptedOutputBuffer.flip(); // prepare for reading
+      HttpClientStage httpStage = new HttpClientStage(
+          pipeline,
+          request,
+          responseHandler,
+          decryptedInputBuffer,
+          decryptedOutputBuffer);
+      return new SslClientStage(
+          pipeline,
+          httpStage,
+          sslContext,
+          inputBuffer,
+          outputBuffer,
+          decryptedInputBuffer,
+          decryptedOutputBuffer);
     } else {
       return new HttpClientStage(
           pipeline,

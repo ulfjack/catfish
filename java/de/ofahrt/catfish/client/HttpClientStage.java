@@ -49,7 +49,6 @@ final class HttpClientStage implements Stage {
       Pipeline parent,
       HttpRequest request,
       ResponseHandler responseHandler,
-//      RequestListener requestListener,
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer) {
     this.parent = parent;

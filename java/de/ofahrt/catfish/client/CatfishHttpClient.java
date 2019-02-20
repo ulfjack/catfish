@@ -2,9 +2,9 @@ package de.ofahrt.catfish.client;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
-
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
+import javax.net.ssl.SSLContext;
 import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
@@ -17,19 +17,16 @@ public class CatfishHttpClient {
     this.engine = new NetworkEngine(eventListener);
   }
 
-  public HttpResponse send(String host, HttpRequest request) throws IOException, InterruptedException {
-    AtomicReference<HttpResponse> responseHolder = new AtomicReference<>();
-    CountDownLatch latch = new CountDownLatch(1);
+  public Future<HttpResponse> send(String host, int port, SSLContext sslContext, HttpRequest request) throws IOException, InterruptedException {
+    CompletableFuture<HttpResponse> future = new CompletableFuture<>();
     HttpClientHandler handler = new HttpClientHandler(
         request,
         response -> {
-          responseHolder.set(response);
-          latch.countDown();
+          future.complete(response);
         },
-        false);
-    engine.connect(InetAddress.getByName(host), 80, handler);
-    latch.await();
-    return responseHolder.get();
+        sslContext);
+    engine.connect(InetAddress.getByName(host), port, handler);
+    return future;
   }
 
   public void shutdown() throws InterruptedException {
