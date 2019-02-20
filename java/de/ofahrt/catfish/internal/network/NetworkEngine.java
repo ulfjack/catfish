@@ -196,17 +196,16 @@ public final class NetworkEngine {
 
     @Override
     public void handleEvent() {
-      if (connecting && key.isConnectable()) {
+      if (connecting && key.isConnectable() && !closed) {
         try {
           socketChannel.finishConnect();
           encourageWrites();
         } catch (IOException e) {
           networkEventListener.notifyInternalError(connection, e);
           close();
-          return;
         }
       }
-      if (key.isReadable()) {
+      if (key.isReadable() && !closed) {
         try {
           inputBuffer.compact(); // prepare buffer for writing
           int readCount = socketChannel.read(inputBuffer);
@@ -222,10 +221,9 @@ public final class NetworkEngine {
         } catch (IOException e) {
           networkEventListener.notifyInternalError(connection, e);
           close();
-          return;
         }
       }
-      if (key.isWritable()) {
+      if (key.isWritable() && !closed) {
         try {
           first.write();
           if (outputBuffer.hasRemaining()) {
@@ -242,7 +240,6 @@ public final class NetworkEngine {
         } catch (IOException e) {
           networkEventListener.notifyInternalError(connection, e);
           close();
-          return;
         }
       }
       if (closed) {
