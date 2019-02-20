@@ -46,22 +46,22 @@ final class SslServerStage implements Stage {
   private void checkStatus() {
     while (true) {
       switch (sslEngine.getHandshakeStatus()) {
-      case NEED_UNWRAP:
-        // Want to read more.
-        parent.encourageReads();
-        return;
-      case NEED_WRAP:
-        // Want to write some.
-        parent.encourageWrites();
-        return;
-      case NEED_TASK:
-        parent.log("SSLEngine delegated task");
-        sslEngine.getDelegatedTask().run();
-        parent.log("Done -> %s", sslEngine.getHandshakeStatus());
-        break;
-      case FINISHED:
-      case NOT_HANDSHAKING:
-        return;
+        case NEED_UNWRAP:
+          // Want to read more.
+          parent.encourageReads();
+          return;
+        case NEED_WRAP:
+          // Want to write some.
+          parent.encourageWrites();
+          return;
+        case NEED_TASK:
+          parent.log("SSLEngine delegated task");
+          sslEngine.getDelegatedTask().run();
+          parent.log("Done -> %s", sslEngine.getHandshakeStatus());
+          break;
+        case FINISHED:
+        case NOT_HANDSHAKING:
+          return;
       }
     }
   }
