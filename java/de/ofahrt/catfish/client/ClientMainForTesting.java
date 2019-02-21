@@ -13,6 +13,7 @@ import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
 public class ClientMainForTesting {
+  private static final boolean USE_SSL = true;
 
   public static void main(String[] args) throws Exception {
     CatfishHttpClient client = new CatfishHttpClient(new NetworkEventListener() {
@@ -29,17 +30,25 @@ public class ClientMainForTesting {
         throwable.printStackTrace();
       }
     });
-    HttpRequest request = new SimpleHttpRequest.Builder()
-        .setVersion(HttpVersion.HTTP_1_1)
-        .setMethod(HttpMethodName.GET)
-        .setUri("/")
-        .addHeader(HttpHeaderName.HOST, "www.example.com")
-        .addHeader(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE)
-        .setBody(new HttpRequest.InMemoryBody(new byte[0]))
-        .build();
-    SSLContext sslContext = SSLContext.getDefault();
-    HttpResponse response = client.send("www.example.com", 443, sslContext, request).get();
-    System.out.println(CoreHelper.responseToString(response));
-    client.shutdown();
+    try {
+      HttpRequest request = new SimpleHttpRequest.Builder()
+          .setVersion(HttpVersion.HTTP_1_1)
+          .setMethod(HttpMethodName.GET)
+          .setUri("/")
+          .addHeader(HttpHeaderName.HOST, "www.example.com")
+          .addHeader(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE)
+          .setBody(new HttpRequest.InMemoryBody(new byte[0]))
+          .build();
+      HttpResponse response;
+      if (USE_SSL) {
+        SSLContext sslContext = SSLContext.getDefault();
+        response = client.send("www.datayoureat.com", 443, sslContext, request).get();
+      } else {
+        response = client.send("www.example.com", 80, null, request).get();
+      }
+      System.out.println(CoreHelper.responseToString(response));
+    } finally {
+      client.shutdown();
+    }
   }
 }

@@ -2,12 +2,12 @@ package de.ofahrt.catfish;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
+import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
-
+import de.ofahrt.catfish.internal.network.NetworkEngine.FlowState;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Stage;
 
@@ -25,6 +25,8 @@ final class SslServerStage implements Stage {
   private final ByteBuffer outputBuffer;
   private boolean lookingForSni;
   private SSLEngine sslEngine;
+  private boolean readAfterWrite;
+  private boolean writeAfterRead;
 
   public SslServerStage(
       Pipeline parent,
@@ -44,25 +46,10 @@ final class SslServerStage implements Stage {
   }
 
   private void checkStatus() {
-    while (true) {
-      switch (sslEngine.getHandshakeStatus()) {
-        case NEED_UNWRAP:
-          // Want to read more.
-          parent.encourageReads();
-          return;
-        case NEED_WRAP:
-          // Want to write some.
-          parent.encourageWrites();
-          return;
-        case NEED_TASK:
-          parent.log("SSLEngine delegated task");
-          sslEngine.getDelegatedTask().run();
-          parent.log("Done -> %s", sslEngine.getHandshakeStatus());
-          break;
-        case FINISHED:
-        case NOT_HANDSHAKING:
-          return;
-      }
+    if (sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_TASK) {
+      parent.log("SSLEngine delegated task");
+      sslEngine.getDelegatedTask().run();
+      parent.log("Done -> %s", sslEngine.getHandshakeStatus());
     }
   }
 
@@ -86,52 +73,58 @@ final class SslServerStage implements Stage {
     // System.out.println(sslEngine.getSession().getApplicationBufferSize());
     // sslEngine.setEnabledCipherSuites(sslEngine.getSupportedCipherSuites());
     // System.out.println(sslEngine.getSession().getPacketBufferSize());
-    // try
-    // {
-    // outputByteBuffer.clear();
-    // outputByteBuffer.flip();
-    // SSLEngineResult result = sslEngine.wrap(outputByteBuffer,
-    // netOutputBuffer);
-    // System.out.println(result);
-    // key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-    // }
-    // catch (SSLException e)
-    // { throw new RuntimeException(e); }
   }
 
   @Override
-  public void read() throws IOException {
+  public FlowState read() throws IOException {
+    if (writeAfterRead) {
+      parent.encourageWrites();
+      writeAfterRead = false;
+    }
     if (lookingForSni) {
       // This call may change lookingForSni as a side effect!
       findSni();
-    }
-    // findSni may change lookingForSni as a side effect.
-    if (!lookingForSni) {
-      // TODO: This could end up an infinite loop if the SSL engine ever returns
-      // NEED_WRAP.
-      while (netInputBuffer.remaining() > 0) {
-        parent.log("Bytes left %d", Integer.valueOf(netInputBuffer.remaining()));
-        SSLEngineResult result = sslEngine.unwrap(netInputBuffer, inputBuffer);
-        if (result.getStatus() == Status.CLOSED) {
-          parent.close();
-          break;
-        } else if (result.getStatus() != Status.OK) {
-          throw new IOException(result.toString());
-        }
-        parent.log("STATUS=%s", result);
-        checkStatus();
-        if (inputBuffer.hasRemaining()) {
-          next.read();
-        }
+      if (lookingForSni) {
+        return FlowState.CONTINUE;
       }
     }
+    if (netInputBuffer.hasRemaining()) {
+      parent.log("Bytes left %d", Integer.valueOf(netInputBuffer.remaining()));
+      SSLEngineResult result = sslEngine.unwrap(netInputBuffer, inputBuffer);
+      if (result.getStatus() == Status.CLOSED) {
+        return FlowState.CLOSE;
+      } else if (result.getStatus() != Status.OK) {
+        throw new IOException(result.toString());
+      }
+      parent.log("STATUS=%s", result);
+      checkStatus();
+    }
+    if (sslEngine.getHandshakeStatus() != HandshakeStatus.NEED_UNWRAP) {
+      return FlowState.CONTINUE;
+    }
+    if (sslEngine.getHandshakeStatus() != HandshakeStatus.NEED_WRAP) {
+      parent.encourageWrites();
+      readAfterWrite = true;
+      return FlowState.PAUSE;
+    }
+    return next.read();
   }
 
   @Override
-  public void write() throws IOException {
-    next.write();
+  public void inputClosed() throws IOException {
+    sslEngine.closeInbound();
+    next.inputClosed();
+  }
+
+  @Override
+  public FlowState write() throws IOException {
+    if (readAfterWrite) {
+      parent.encourageReads();
+      readAfterWrite = false;
+    }
+    FlowState nextState = next.write();
     // invariant: both netOutputBuffer and outputBuffer are readable
-    if (netOutputBuffer.remaining() == 0) {
+    if (!netOutputBuffer.hasRemaining() && (outputBuffer.hasRemaining() || sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP)) {
       netOutputBuffer.clear(); // prepare for writing
       parent.log("Wrapping: %d", Integer.valueOf(outputBuffer.remaining()));
       SSLEngineResult result = sslEngine.wrap(outputBuffer, netOutputBuffer);
@@ -141,11 +134,13 @@ final class SslServerStage implements Stage {
         throw new IOException(result.toString());
       }
       checkStatus();
-      if (netOutputBuffer.remaining() == 0) {
-        parent.log("Nothing to do.");
-        return;
-      }
     }
+    if (sslEngine.getHandshakeStatus() != HandshakeStatus.NEED_UNWRAP) {
+      parent.encourageReads();
+      writeAfterRead = true;
+      return FlowState.PAUSE;
+    }
+    return nextState;
   }
 
   @Override

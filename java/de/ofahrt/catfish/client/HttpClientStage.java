@@ -2,9 +2,9 @@ package de.ofahrt.catfish.client;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-
 import de.ofahrt.catfish.client.HttpRequestGenerator.ContinuationToken;
 import de.ofahrt.catfish.internal.CoreHelper;
+import de.ofahrt.catfish.internal.network.NetworkEngine.FlowState;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Stage;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -31,6 +31,7 @@ final class HttpClientStage implements Stage {
 
   public interface ResponseHandler {
     void received(HttpResponse response);
+    void failed(Exception exception);
   }
 
 //  public interface RequestListener {
@@ -65,42 +66,47 @@ final class HttpClientStage implements Stage {
   }
 
   @Override
-  public void read() {
+  public FlowState read() {
     // invariant: inputBuffer is readable
-    if (inputBuffer.remaining() == 0) {
-      parent.log("NO INPUT!");
-      return;
+    if (inputBuffer.hasRemaining()) {
+      int consumed = parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.limit());
+      inputBuffer.position(inputBuffer.position() + consumed);
     }
-    int consumed = parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.limit());
-    inputBuffer.position(inputBuffer.position() + consumed);
     if (parser.isDone()) {
       processResponse();
-      parent.close();
+      return FlowState.CLOSE;
     }
+    return FlowState.CONTINUE;
   }
 
   @Override
-  public void write() throws IOException {
+  public void inputClosed() {
+    parent.close();
+  }
+
+  @Override
+  public FlowState write() throws IOException {
     if (VERBOSE) {
       parent.log("write");
     }
     if (requestGenerator == null) {
-      // The connection automatically suppresses writes once the output buffer is empty.
-      return;
+      return FlowState.PAUSE;
     }
 
+    // invariant: outputBuffer is readable
     outputBuffer.compact(); // prepare buffer for writing
     ContinuationToken token = requestGenerator.generate(outputBuffer);
     outputBuffer.flip(); // prepare buffer for reading
-    if (token == ContinuationToken.CONTINUE) {
-      // Continue writing.
-    } else if (token == ContinuationToken.PAUSE) {
-      // The connection automatically suppresses writes once the output buffer is empty.
-    } else if (token == ContinuationToken.STOP) {
-//      requestListener.notifySent(parent.getConnection(), responseGenerator.getRequest(), responseGenerator.getResponse());
-      requestGenerator = null;
-      parent.log("Request completed.");
-      parent.encourageReads();
+    switch (token) {
+      case CONTINUE: return FlowState.CONTINUE;
+      case PAUSE: return FlowState.PAUSE;
+      case STOP:
+        parent.encourageReads();
+        requestGenerator = null;
+        parent.log("Request completed.");
+        return FlowState.PAUSE;
+      default:
+        throw new IllegalStateException();
     }
   }
 
@@ -110,36 +116,8 @@ final class HttpClientStage implements Stage {
       requestGenerator.close();
       requestGenerator = null;
     }
+    responseHandler.failed(new IOException("Closed prematurely"));
   }
-
-//  private final void startStreamed(HttpResponseGeneratorStreamed gen) {
-//    this.responseGenerator = gen;
-//    HttpResponse response = responseGenerator.getResponse();
-//    parent.log("%s %d %s",
-//        response.getProtocolVersion(), Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
-//    if (HttpClientStage.VERBOSE) {
-//      System.out.println(CoreHelper.responseToString(response));
-//    }
-//  }
-
-//  private final void startBuffered(HttpRequestGeneratorBuffered gen) {
-//    this.requestGenerator = gen;
-//    parent.encourageWrites();
-//    HttpRequest request = requestGenerator.getRequest();
-//    parent.log("%s %s %s",
-//        request.getVersion(), request.getMethod(), request.getUri());
-////    if (HttpClientStage.VERBOSE) {
-////      System.out.println(CoreHelper.responseToString(response));
-////    }
-//  }
-//
-//  private void startBuffered(HttpRequest requestToWrite) {
-//    byte[] body = ((InMemoryBody) requestToWrite.getBody()).toByteArray();
-//    if (body == null) {
-//      throw new IllegalArgumentException();
-//    }
-//    startBuffered(HttpRequestGeneratorBuffered.createWithBody(requestToWrite));
-//  }
 
   private final boolean processResponse() {
     HttpResponse response;

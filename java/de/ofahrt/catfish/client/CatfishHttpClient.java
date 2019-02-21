@@ -5,6 +5,7 @@ import java.net.InetAddress;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import javax.net.ssl.SSLContext;
+import de.ofahrt.catfish.client.HttpClientStage.ResponseHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
@@ -21,8 +22,16 @@ public class CatfishHttpClient {
     CompletableFuture<HttpResponse> future = new CompletableFuture<>();
     HttpClientHandler handler = new HttpClientHandler(
         request,
-        response -> {
-          future.complete(response);
+        new ResponseHandler() {
+          @Override
+          public void received(HttpResponse response) {
+            future.complete(response);
+          }
+
+          @Override
+          public void failed(Exception exception) {
+            future.completeExceptionally(exception);
+          }
         },
         sslContext);
     engine.connect(InetAddress.getByName(host), port, handler);

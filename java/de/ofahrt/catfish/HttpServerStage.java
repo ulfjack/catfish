@@ -10,6 +10,7 @@ import java.util.function.Function;
 
 import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
 import de.ofahrt.catfish.internal.CoreHelper;
+import de.ofahrt.catfish.internal.network.NetworkEngine.FlowState;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Stage;
 import de.ofahrt.catfish.model.HttpHeaderName;
@@ -24,6 +25,7 @@ import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
+import info.adams.commons.Preconditions;
 
 final class HttpServerStage implements Stage {
   private static final boolean VERBOSE = false;
@@ -146,50 +148,52 @@ final class HttpServerStage implements Stage {
   }
 
   @Override
-  public void read() {
+  public FlowState read() {
     // invariant: inputBuffer is readable
-    if (inputBuffer.remaining() == 0) {
-      parent.log("NO INPUT!");
-      return;
-    }
+    Preconditions.checkState(inputBuffer.hasRemaining());
     int consumed = parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.limit());
     inputBuffer.position(inputBuffer.position() + consumed);
     if (parser.isDone()) {
-      processRequest();
+      return processRequest();
+    }
+    return FlowState.CONTINUE;
+  }
+
+  @Override
+  public void inputClosed() {
+    if (responseGenerator == null) {
+      parent.close();
     }
   }
 
   @Override
-  public void write() throws IOException {
+  public FlowState write() throws IOException {
     if (VERBOSE) {
       parent.log("write");
     }
-    if (responseGenerator == null) {
-      // The connection automatically suppresses writes once the output buffer is empty.
-      return;
-    }
-
+    Preconditions.checkState(responseGenerator != null);
     outputBuffer.compact(); // prepare buffer for writing
     ContinuationToken token = responseGenerator.generate(outputBuffer);
     outputBuffer.flip(); // prepare buffer for reading
-    if (token == ContinuationToken.CONTINUE) {
-      // Continue writing.
-    } else if (token == ContinuationToken.PAUSE) {
-      // The connection automatically suppresses writes once the output buffer is empty.
-    } else if (token == ContinuationToken.STOP) {
-      requestListener.notifySent(parent.getConnection(), responseGenerator.getRequest(), responseGenerator.getResponse());
-      boolean keepAlive = responseGenerator.keepAlive();
-      responseGenerator = null;
-      parent.log("Completed. keepAlive=%s", Boolean.valueOf(keepAlive));
-      if (keepAlive) {
-        parent.encourageReads();
-        // We may already have the next request on hold in the parser. If so, process it now.
-        if (parser.isDone()) {
-          processRequest();
+    switch (token) {
+      case CONTINUE: return FlowState.CONTINUE;
+      case PAUSE: return FlowState.PAUSE;
+      case STOP:
+        requestListener.notifySent(parent.getConnection(), responseGenerator.getRequest(), responseGenerator.getResponse());
+        boolean keepAlive = responseGenerator.keepAlive();
+        responseGenerator = null;
+        parent.log("Completed. keepAlive=%s", Boolean.valueOf(keepAlive));
+        if (keepAlive) {
+          // We may already have the next request on hold in the parser. If so, process it now.
+          if (parser.isDone()) {
+            processRequest();
+          }
+          return FlowState.PAUSE;
+        } else {
+          return FlowState.HALF_CLOSE;
         }
-      } else {
-        parent.close();
-      }
+      default:
+        throw new IllegalStateException(token.toString());
     }
   }
 
@@ -201,6 +205,39 @@ final class HttpServerStage implements Stage {
     }
   }
 
+  private final FlowState processRequest() {
+    if (responseGenerator != null) {
+      return FlowState.PAUSE;
+    }
+    HttpRequest request;
+    try {
+      request = parser.getRequest();
+    } catch (MalformedRequestException e) {
+      startBuffered(null, e.getErrorResponse());
+      return FlowState.CONTINUE;
+    } finally {
+      parser.reset();
+    }
+    parent.log("%s %s %s", request.getVersion(), request.getMethod(), request.getUri());
+    if (VERBOSE) {
+      System.out.println(CoreHelper.requestToString(request));
+    }
+    if ("*".equals(request.getUri())) {
+      startBuffered(request, StandardResponses.BAD_REQUEST);
+      return FlowState.CONTINUE;
+    } else {
+      HttpVirtualHost host = virtualHostLookup.apply(request.getHeaders().get(HttpHeaderName.HOST));
+      if (host == null) {
+        startBuffered(request, StandardResponses.NOT_FOUND);
+        return FlowState.CONTINUE;
+      } else {
+        HttpResponseWriter writer = new HttpResponseWriterImpl(request, host.getResponsePolicy());
+        requestHandler.queueRequest(host.getHttpHandler(), parent.getConnection(), request, writer);
+        return FlowState.CONTINUE;
+      }
+    }
+  }
+
   private final void startStreamed(HttpResponseGeneratorStreamed gen) {
     this.responseGenerator = gen;
     HttpResponse response = responseGenerator.getResponse();
@@ -209,17 +246,7 @@ final class HttpServerStage implements Stage {
     if (HttpServerStage.VERBOSE) {
       System.out.println(CoreHelper.responseToString(response));
     }
-  }
-
-  private final void startBuffered(HttpResponseGeneratorBuffered gen) {
-    this.responseGenerator = gen;
     parent.encourageWrites();
-    HttpResponse response = responseGenerator.getResponse();
-    parent.log("%s %d %s",
-        response.getProtocolVersion(), Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
-    if (HttpServerStage.VERBOSE) {
-      System.out.println(CoreHelper.responseToString(response));
-    }
   }
 
   private void startBuffered(HttpRequest request, HttpResponse responseToWrite) {
@@ -234,34 +261,14 @@ final class HttpServerStage implements Stage {
     startBuffered(HttpResponseGeneratorBuffered.createWithBody(request, response));
   }
 
-  private final void processRequest() {
-    if (responseGenerator != null) {
-      parent.suppressReads();
-      return;
+  private final void startBuffered(HttpResponseGeneratorBuffered gen) {
+    this.responseGenerator = gen;
+    HttpResponse response = responseGenerator.getResponse();
+    parent.log("%s %d %s",
+        response.getProtocolVersion(), Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
+    if (HttpServerStage.VERBOSE) {
+      System.out.println(CoreHelper.responseToString(response));
     }
-    HttpRequest request;
-    try {
-      request = parser.getRequest();
-    } catch (MalformedRequestException e) {
-      startBuffered(null, e.getErrorResponse());
-      return;
-    } finally {
-      parser.reset();
-    }
-    parent.log("%s %s %s", request.getVersion(), request.getMethod(), request.getUri());
-    if (VERBOSE) {
-      System.out.println(CoreHelper.requestToString(request));
-    }
-    if ("*".equals(request.getUri())) {
-      startBuffered(request, StandardResponses.BAD_REQUEST);
-    } else {
-      HttpVirtualHost host = virtualHostLookup.apply(request.getHeaders().get(HttpHeaderName.HOST));
-      if (host == null) {
-        startBuffered(request, StandardResponses.NOT_FOUND);
-      } else {
-        HttpResponseWriter writer = new HttpResponseWriterImpl(request, host.getResponsePolicy());
-        requestHandler.queueRequest(host.getHttpHandler(), parent.getConnection(), request, writer);
-      }
-    }
+    parent.encourageWrites();
   }
 }
