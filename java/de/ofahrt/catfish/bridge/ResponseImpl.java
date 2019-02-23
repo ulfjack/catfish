@@ -27,6 +27,33 @@ import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.MimeType;
 
 public final class ResponseImpl implements HttpServletResponse {
+  private static final class StreamingHttpResponse implements HttpResponse {
+    private final HttpVersion committedVersion;
+    private final int committedStatus;
+    private final HttpHeaders committedHeaders;
+
+    private StreamingHttpResponse(HttpVersion committedVersion, int committedStatus, HttpHeaders committedHeaders) {
+      this.committedVersion = committedVersion;
+      this.committedStatus = committedStatus;
+      this.committedHeaders = committedHeaders;
+    }
+
+    @Override
+    public HttpVersion getProtocolVersion() {
+      return committedVersion;
+    }
+
+    @Override
+    public int getStatusCode() {
+      return committedStatus;
+    }
+
+    @Override
+    public HttpHeaders getHeaders() {
+      return committedHeaders;
+    }
+  }
+
   private final HttpRequest request;
   private final HttpResponseWriter responseWriter;
   private final ResponsePolicy policy;
@@ -177,25 +204,7 @@ public final class ResponseImpl implements HttpServletResponse {
     // But locale.toString is clearly not correct.
     // if ((locale != null) && containsHeader(HttpFieldName.CONTENT_TYPE))
     // setHeaderInternal(HttpFieldName.CONTENT_LANGUAGE, locale.toString());
-    final HttpVersion committedVersion = version;
-    final int committedStatus = status;
-    final HttpHeaders committedHeaders = HttpHeaders.of(header);
-    return new HttpResponse() {
-      @Override
-      public HttpVersion getProtocolVersion() {
-        return committedVersion;
-      }
-
-      @Override
-      public int getStatusCode() {
-        return committedStatus;
-      }
-
-      @Override
-      public HttpHeaders getHeaders() {
-        return committedHeaders;
-      }
-    };
+    return new StreamingHttpResponse(version, status, HttpHeaders.of(header));
   }
 
   public void close() throws IOException {
