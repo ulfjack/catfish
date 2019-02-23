@@ -81,9 +81,10 @@ public class ExampleMain {
         .build();
     handler = new BasicHttpHandler(handler);
 
-    server.addHttpHost("localhost", handler, null);
+    // Keep-alive and compression policies must be set before adding a host.
     server.setKeepAliveAllowed(true);
     server.setCompressionAllowed(false);
+    server.addHttpHost("localhost", handler, null);
     server.listenHttp(8080);
     if (sslContext != null) {
       // TODO: This doesn't work for wildcard certificates.
