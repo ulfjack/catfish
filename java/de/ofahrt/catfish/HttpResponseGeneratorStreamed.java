@@ -38,7 +38,19 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     UNCOMMITTED,
     READ_RESPONSE,
     READ_BODY,
+    READ_TAIL,
     CLOSED;
+  }
+
+  private enum ReadToken {
+    /** Continue reading. */
+    CONTINUE,
+    /** Not enough space in output buffer. */
+    NOT_ENOUGH_SPACE,
+    /** No data to generate. Wait for callback. */
+    PAUSE,
+    /** Done reading. Don't call again. */
+    FINISHED;
   }
 
   private WriteState writeState = WriteState.UNCOMMITTED;
@@ -89,6 +101,9 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     if (DEBUG) {
       System.out.println("generate(" + outputBuffer.remaining() + ")");
     }
+    if (!outputBuffer.hasRemaining()) {
+      throw new IllegalStateException();
+    }
     if (readState == ReadState.UNCOMMITTED) {
       requireCallback = true;
       return ContinuationToken.PAUSE;
@@ -96,24 +111,28 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     if (readState == ReadState.CLOSED) {
       return ContinuationToken.STOP;
     }
-    int totalBytesCopied = 0;
+    ReadToken token = ReadToken.CONTINUE;
+    int before = outputBuffer.remaining();
     loop: while (outputBuffer.hasRemaining()) {
-      int bytesCopied;
       switch (readState) {
         case UNCOMMITTED:
           throw new IllegalStateException();
         case READ_RESPONSE:
-          bytesCopied = generateResponse(outputBuffer);
-          if (bytesCopied < 0) {
+          token = generateResponse(outputBuffer);
+          if (token == ReadToken.FINISHED) {
             readState = includeBody ? ReadState.READ_BODY : ReadState.CLOSED;
           }
           break;
         case READ_BODY:
-          bytesCopied = generateBody(outputBuffer);
-          if (bytesCopied < 0) {
+          token = generateBody(outputBuffer);
+          if (token == ReadToken.FINISHED) {
+            readState = useChunking ? ReadState.READ_TAIL : ReadState.CLOSED;
+          }
+          break;
+        case READ_TAIL:
+          token = generateTail(outputBuffer);
+          if (token == ReadToken.FINISHED) {
             readState = ReadState.CLOSED;
-          } else if (bytesCopied == 0) {
-            break loop;
           }
           break;
         case CLOSED:
@@ -121,46 +140,39 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
         default:
           throw new IllegalStateException();
       }
-      totalBytesCopied += bytesCopied < 0 ? 0 : bytesCopied;
+      if (token == ReadToken.PAUSE || token == ReadToken.NOT_ENOUGH_SPACE) {
+        break;
+      }
+    }
+    int bytesGenerated = before - outputBuffer.remaining();
+    if (DEBUG) {
+      System.out.println("Generated: " + bytesGenerated);
     }
     notify();
-    if (totalBytesCopied == 0) {
-      if (readState == ReadState.CLOSED) {
-        return ContinuationToken.STOP;
-      } else {
-        requireCallback = true;
-        return ContinuationToken.PAUSE;
-      }
+    if (readState == ReadState.CLOSED) {
+      return ContinuationToken.STOP;
+    } else if (token == ReadToken.PAUSE) {
+      requireCallback = true;
+      return ContinuationToken.PAUSE;
     }
     return ContinuationToken.CONTINUE;
   }
 
-  private int generateResponse(ByteBuffer outputBuffer) {
+  private ReadToken generateResponse(ByteBuffer outputBuffer) {
     if (currentBlock >= data.length) {
-      return -1;
+      return ReadToken.FINISHED;
     }
-    int totalBytesCopied = 0;
-    while (outputBuffer.hasRemaining()) {
-      int bytesCopyCount = Math.min(outputBuffer.remaining(), data[currentBlock].length - currentIndex);
-      outputBuffer.put(data[currentBlock], currentIndex, bytesCopyCount);
-      totalBytesCopied += bytesCopyCount;
-      currentIndex += bytesCopyCount;
-      if (currentIndex >= data[currentBlock].length) {
-        currentBlock++;
-        currentIndex = 0;
-      }
-      if (currentBlock >= data.length) {
-        break;
-      }
+    int bytesCopyCount = Math.min(outputBuffer.remaining(), data[currentBlock].length - currentIndex);
+    outputBuffer.put(data[currentBlock], currentIndex, bytesCopyCount);
+    currentIndex += bytesCopyCount;
+    if (currentIndex >= data[currentBlock].length) {
+      currentBlock++;
+      currentIndex = 0;
     }
-    if ((totalBytesCopied == 0) && (currentBlock >= data.length)) {
-      // There wasn't actually any data left.
-      return -1;
-    }
-    return totalBytesCopied;
+    return ReadToken.CONTINUE;
   }
 
-  private int generateBody(ByteBuffer outputBuffer) {
+  private ReadToken generateBody(ByteBuffer outputBuffer) {
     boolean wrapAround;
     int bytesAvailable;
     if ((writePosition >= readPosition) && !isFull) {
@@ -171,15 +183,8 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
       wrapAround = true;
     }
     if (bytesAvailable == 0) {
-      if (useChunking && writeState == WriteState.CLOSED) {
-        if (outputBuffer.remaining() >= LAST_CHUNK.length) {
-          outputBuffer.put(LAST_CHUNK);
-          useChunking = false;
-        } else {
-          return 0;
-        }
-      }
-      return writeState == WriteState.CLOSED ? -1 : 0;
+      return writeState == WriteState.CLOSED
+          ? ReadToken.FINISHED : ReadToken.PAUSE;
     }
     int bytesToCopy;
     if (useChunking) {
@@ -190,7 +195,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
       int overhead = hexDigits + 4;
       bytesToCopy = Math.min(bytesAvailable, outputBuffer.remaining() - overhead);
       if (bytesToCopy <= 0) {
-        return 0;
+        return ReadToken.NOT_ENOUGH_SPACE;
       }
       byte[] chunkHeader = new byte[6];
       int bytesToCopyRemainder = bytesToCopy;
@@ -208,8 +213,13 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     if (wrapAround) {
       int firstCopy = Math.min(buffer.length - readPosition, bytesToCopy);
       outputBuffer.put(buffer, readPosition, firstCopy);
-      int secondCopy = Math.min(writePosition, bytesToCopy - firstCopy);
-      outputBuffer.put(buffer, 0, secondCopy);
+      int secondCopy = bytesToCopy - firstCopy;
+      if (secondCopy > writePosition) {
+        throw new IllegalStateException();
+      }
+      if (secondCopy > 0) {
+        outputBuffer.put(buffer, 0, secondCopy);
+      }
     } else {
       outputBuffer.put(buffer, readPosition, bytesToCopy);
     }
@@ -219,12 +229,23 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     readPosition = (readPosition + bytesToCopy) % buffer.length;
     isFull = false;
     if (DEBUG) {
-      System.out.println("READ " + bytesToCopy + " -> " + readPosition + " " + writePosition);
+      System.out.println(
+          "READ " + bytesToCopy + " (readPosition=" + readPosition + " writePosition=" + writePosition + ")");
     }
     if (bytesToCopy == 0 && writeState == WriteState.CLOSED) {
-      return -1;
+      return ReadToken.FINISHED;
     }
-    return bytesToCopy;
+    return ReadToken.CONTINUE;
+  }
+
+  private ReadToken generateTail(ByteBuffer outputBuffer) {
+    if (useChunking) {
+      if (outputBuffer.remaining() < LAST_CHUNK.length) {
+        return ReadToken.NOT_ENOUGH_SPACE;
+      }
+      outputBuffer.put(LAST_CHUNK);
+    }
+    return ReadToken.FINISHED;
   }
 
   private void checkActive() {

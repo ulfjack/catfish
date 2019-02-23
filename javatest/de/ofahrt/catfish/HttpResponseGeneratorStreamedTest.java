@@ -21,16 +21,15 @@ public class HttpResponseGeneratorStreamedTest {
   private byte[] readUntil(HttpResponseGeneratorStreamed generator, ContinuationToken expected) {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     ByteBuffer buffer = ByteBuffer.allocate(7);
-    buffer.clear();
     ContinuationToken token;
     do {
       buffer.clear();
       token = generator.generate(buffer);
+      buffer.flip();
+      out.write(buffer.array(), buffer.position(), buffer.remaining());
       if (token == ContinuationToken.PAUSE) {
         break;
       }
-      buffer.flip();
-      out.write(buffer.array(), buffer.position(), buffer.remaining());
     } while (token != ContinuationToken.STOP);
     if (expected != null) {
       assertEquals(expected, token);
