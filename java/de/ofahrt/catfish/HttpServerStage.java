@@ -102,7 +102,7 @@ final class HttpServerStage implements Stage {
       if (!committed.compareAndSet(false, true)) {
         throw new IllegalStateException();
       }
-      boolean keepAlive = responsePolicy.shouldKeepAlive(request); // && server.isKeepAliveAllowed();
+      boolean keepAlive = responsePolicy.shouldKeepAlive(request);
       if (keepAlive) {
         responseToWrite = responseToWrite
             .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONNECTION, HttpConnectionHeader.KEEP_ALIVE));
