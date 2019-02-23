@@ -126,8 +126,12 @@ public final class CatfishHttpServer {
 
       @Override
       public void reject() {
-        HttpResponse responseToWrite = StandardResponses.SERVICE_UNAVAILABLE;
-        responseWriter.commitBuffered(responseToWrite);
+        try {
+          HttpResponse responseToWrite = StandardResponses.SERVICE_UNAVAILABLE;
+          responseWriter.commitBuffered(responseToWrite);
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
       }
     });
   }

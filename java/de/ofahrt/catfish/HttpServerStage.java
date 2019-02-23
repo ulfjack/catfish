@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
+import java.util.zip.GZIPOutputStream;
 import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
 import de.ofahrt.catfish.internal.CoreHelper;
 import de.ofahrt.catfish.internal.network.NetworkEngine.ConnectionFlowState;
@@ -25,6 +26,7 @@ import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
+import de.ofahrt.catfish.utils.HttpContentType;
 
 final class HttpServerStage implements Stage {
   private static final boolean VERBOSE = false;
@@ -62,11 +64,6 @@ final class HttpServerStage implements Stage {
     }
 
     @Override
-    public ResponsePolicy getResponsePolicy() {
-      return responsePolicy;
-    }
-
-    @Override
     public void commitBuffered(HttpResponse responseToWrite) {
       if (!committed.compareAndSet(false, true)) {
         throw new IllegalStateException();
@@ -99,24 +96,39 @@ final class HttpServerStage implements Stage {
     }
 
     @Override
-    public OutputStream commitStreamed(HttpResponse responseToWrite) {
+    public OutputStream commitStreamed(HttpResponse responseToWrite) throws IOException {
       if (!committed.compareAndSet(false, true)) {
         throw new IllegalStateException();
       }
       boolean keepAlive = responsePolicy.shouldKeepAlive(request);
-      if (keepAlive) {
-        responseToWrite = responseToWrite
-            .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONNECTION, HttpConnectionHeader.KEEP_ALIVE));
-      } else {
-        responseToWrite = responseToWrite
-            .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE));
+      boolean alreadyCompressed = responseToWrite.getHeaders().get(HttpHeaderName.CONTENT_ENCODING) != null;
+      boolean compress = !alreadyCompressed && shouldCompress(responseToWrite);
+//      System.err.println("COMPRESSION: " + alreadyCompressed + " " + compress);
+      Map<String, String> overrides = new HashMap<>();
+      overrides.put(HttpHeaderName.CONNECTION, keepAlive ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
+      if (compress) {
+        overrides.put(HttpHeaderName.CONTENT_ENCODING, "gzip");
       }
+      responseToWrite = responseToWrite.withHeaderOverrides(HttpHeaders.of(overrides));
       boolean includeBody = !HttpMethodName.HEAD.equals(request.getMethod());
       HttpResponseGeneratorStreamed gen =
           HttpResponseGeneratorStreamed.create(
               () -> parent.queue(parent::encourageWrites), request, responseToWrite, includeBody);
       parent.queue(() -> startStreamed(gen));
-      return gen.getOutputStream();
+      return compress ? new GZIPOutputStream(gen.getOutputStream()) : gen.getOutputStream();
+    }
+
+    private boolean shouldCompress(HttpResponse responseToWrite) {
+      String contentType = responseToWrite.getHeaders().get(HttpHeaderName.CONTENT_TYPE);
+      if (contentType == null) {
+        return false;
+      }
+      try {
+        String mimeType = HttpContentType.getMimeTypeFromContentType(contentType);
+        return responsePolicy.shouldCompress(request, mimeType);
+      } catch (IllegalArgumentException e) {
+        return false;
+      }
     }
   }
 

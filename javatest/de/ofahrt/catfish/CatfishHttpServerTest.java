@@ -21,7 +21,6 @@ import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.BasicHttpHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
-import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.upload.SimpleUploadPolicy;
 
 public class CatfishHttpServerTest {
@@ -46,11 +45,6 @@ public class CatfishHttpServerTest {
     final AtomicReference<HttpResponse> writtenResponse = new AtomicReference<>();
     final AtomicReference<ByteArrayOutputStream> writtenOutput = new AtomicReference<>();
     HttpResponseWriter writer = new HttpResponseWriter() {
-      @Override
-      public ResponsePolicy getResponsePolicy() {
-        return ResponsePolicy.ALLOW_NOTHING;
-      }
-
       @Override
       public void commitBuffered(HttpResponse response) {
         if (!writtenResponse.compareAndSet(null, response)) {

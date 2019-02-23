@@ -26,7 +26,6 @@ import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.SimpleHttpResponse;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
-import de.ofahrt.catfish.model.server.ResponsePolicy;
 
 public abstract class TestingCatfishHttpClient {
 
@@ -67,11 +66,6 @@ public abstract class TestingCatfishHttpClient {
 
       public HttpResponse getResponse() {
         return buffer != null ? response.withBody(buffer.toByteArray()) : response;
-      }
-
-      @Override
-      public ResponsePolicy getResponsePolicy() {
-        return ResponsePolicy.ALLOW_NOTHING;
       }
 
       @Override
