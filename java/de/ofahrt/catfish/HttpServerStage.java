@@ -78,9 +78,10 @@ final class HttpServerStage implements Stage {
           ((responseToWrite.getStatusCode() / 100) == 1)
           || (responseToWrite.getStatusCode() == 204)
           || (responseToWrite.getStatusCode() == 304);
-      boolean keepAlive = responsePolicy.shouldKeepAlive(request);
       Map<String, String> overrides = new HashMap<>();
-      if (!keepAlive) {
+      if (responsePolicy.shouldKeepAlive(request)) {
+        overrides.put(HttpHeaderName.CONNECTION, HttpConnectionHeader.KEEP_ALIVE);
+      } else {
         overrides.put(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE);
       }
       if (!noBodyAllowed) {
@@ -88,9 +89,7 @@ final class HttpServerStage implements Stage {
       } else {
         // TODO: Tombstone CONTENT_LENGTH in some way?
       }
-      if (!overrides.isEmpty()) {
-        responseToWrite = responseToWrite.withHeaderOverrides(HttpHeaders.of(overrides));
-      }
+      responseToWrite = responseToWrite.withHeaderOverrides(HttpHeaders.of(overrides));
       boolean includeBody = !HttpMethodName.HEAD.equals(request.getMethod()) && !noBodyAllowed;
       HttpResponse actualResponse = responseToWrite;
       // We want to create the ResponseGenerator on the current thread.
@@ -103,8 +102,11 @@ final class HttpServerStage implements Stage {
       if (!committed.compareAndSet(false, true)) {
         throw new IllegalStateException();
       }
-      boolean keepAlive = HttpConnectionHeader.mayKeepAlive(request); // && server.isKeepAliveAllowed();
-      if (!keepAlive) {
+      boolean keepAlive = responsePolicy.shouldKeepAlive(request); // && server.isKeepAliveAllowed();
+      if (keepAlive) {
+        responseToWrite = responseToWrite
+            .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONNECTION, HttpConnectionHeader.KEEP_ALIVE));
+      } else {
         responseToWrite = responseToWrite
             .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE));
       }
