@@ -30,7 +30,7 @@ import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.network.NetworkServer;
 
 public final class NetworkEngine {
-  private static final boolean DEBUG = true;
+  private static final boolean DEBUG = false;
   private static final boolean LOG_TO_FILE = false;
 
   private static final boolean OUTGOING_CONNECTION = true;
