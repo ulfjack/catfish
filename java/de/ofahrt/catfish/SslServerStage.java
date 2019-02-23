@@ -7,6 +7,7 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
+import de.ofahrt.catfish.internal.network.NetworkEngine.ConnectionFlowState;
 import de.ofahrt.catfish.internal.network.NetworkEngine.FlowState;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Stage;
@@ -43,6 +44,11 @@ final class SslServerStage implements Stage {
     this.netOutputBuffer = netOutputBuffer;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
+  }
+
+  @Override
+  public ConnectionFlowState connect() {
+    return next.connect();
   }
 
   private void checkStatus() {

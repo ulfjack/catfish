@@ -36,7 +36,7 @@ public final class CatfishHttpServer {
   private final ConcurrentHashMap<String, HttpVirtualHost> hosts = new ConcurrentHashMap<>();
 
   private volatile boolean mayCompress = true;
-  private volatile boolean mayKeepAlive = false;
+  private volatile boolean mayKeepAlive = true;
 
   private final ArrayList<HttpServerListener> listeners = new ArrayList<>();
   private final NetworkEngine engine;

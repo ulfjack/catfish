@@ -8,6 +8,7 @@ import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
+import de.ofahrt.catfish.internal.network.NetworkEngine.ConnectionFlowState;
 import de.ofahrt.catfish.internal.network.NetworkEngine.FlowState;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Stage;
@@ -44,6 +45,11 @@ final class SslClientStage implements Stage {
     } catch (SSLException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  @Override
+  public ConnectionFlowState connect() {
+    return next.connect();
   }
 
   private void checkStatus() {

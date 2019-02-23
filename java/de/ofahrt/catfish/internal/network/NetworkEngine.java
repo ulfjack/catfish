@@ -13,6 +13,10 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
@@ -21,17 +25,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.network.NetworkServer;
 
 public final class NetworkEngine {
-  private static final boolean DEBUG = false;
+  private static final boolean DEBUG = true;
   private static final boolean LOG_TO_FILE = false;
 
   private static final boolean OUTGOING_CONNECTION = true;
   private static final boolean INCOMING_CONNECTION = false;
+
+  private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS");
 
   public enum FlowState {
     CONTINUE,
@@ -41,7 +46,14 @@ public final class NetworkEngine {
     CLOSE;
   }
 
+  public enum ConnectionFlowState {
+    READ,
+    WRITE,
+    BOTH;
+  }
+
   public interface Stage {
+    ConnectionFlowState connect();
     FlowState read() throws IOException;
     void inputClosed() throws IOException;
     FlowState write() throws IOException;
@@ -111,6 +123,10 @@ public final class NetworkEngine {
     }
   }
 
+    private static final String[] SELECT_MODE = new String[] {
+        "NONE", "READ", "WRITE", "READ+WRITE"
+    };
+
   private final class SocketHandler implements EventHandler, Pipeline {
     private final SelectorQueue queue;
     private final Connection connection;
@@ -122,10 +138,11 @@ public final class NetworkEngine {
 
     private final Stage first;
     private final AtomicBoolean active = new AtomicBoolean();
-    private FlowState reading = FlowState.PAUSE;
-    private FlowState writing = FlowState.PAUSE;
+    private FlowState reading;
+    private FlowState writing;
     private boolean connecting;
     private boolean closed;
+    private boolean closing;
 
     SocketHandler(
         SelectorQueue queue,
@@ -147,13 +164,36 @@ public final class NetworkEngine {
       outputBuffer.clear();
       outputBuffer.flip(); // prepare for reading
       this.connecting = outgoing;
+      // We start the connection as paused.
+      // - Outgoing connections become active upon connection.
+      // - Incoming connections register READ interest ops.
+      // This does not currently support incoming connections where the server sends the first packet.
       this.reading = outgoing ? FlowState.PAUSE : FlowState.CONTINUE;
+      this.writing = FlowState.PAUSE;
       this.first = handler.connect(this, inputBuffer, outputBuffer);
+      log("%s at %s", outgoing ? "Outgoing" : "Incoming",
+          DATE_FORMATTER.format(
+              ZonedDateTime.ofInstant(
+                  Instant.ofEpochMilli(connection.startTimeMillis()), ZoneId.systemDefault())));
+      if (outgoing) {
+        key.interestOps(SelectionKey.OP_CONNECT);
+      } else {
+        ConnectionFlowState state = first.connect();
+        updateSelector(state != ConnectionFlowState.WRITE, state != ConnectionFlowState.READ);
+      }
     }
 
     @Override
     public Connection getConnection() {
       return connection;
+    }
+
+    private void updateSelector(boolean selectRead, boolean selectWrite) {
+      int ops = (selectRead ? SelectionKey.OP_READ : 0) | (selectWrite ? SelectionKey.OP_WRITE : 0);
+      if (ops != key.interestOps()) {
+        log("Selecting: %s", SELECT_MODE[(selectRead ? 1 : 0) + (selectWrite ? 2 : 0)]);
+        key.interestOps(ops);
+      }
     }
 
     @Override
@@ -163,7 +203,7 @@ public final class NetworkEngine {
           return;
         }
         writing = FlowState.CONTINUE;
-        handleEvent();
+        updateSelector(reading == FlowState.CONTINUE, true);
       });
     }
 
@@ -182,19 +222,26 @@ public final class NetworkEngine {
     public void close() {
       if (!active.get()) {
         queue.queue(() -> {
-          closed = true;
+          closing = true;
           handleEvent();
         });
       }
-      closed = true;
+      closing = true;
     }
 
     @Override
     public void handleEvent() {
-      log("connecting=" + connecting + " reading=" + reading + " writing=" + writing + " closed=" + closed);
+      if (closed) {
+        if (key.isValid()) {
+          throw new IllegalStateException();
+        }
+        return;
+      }
+      log("Event: connecting=%s reading=%s writing=%s closing=%s",
+          Boolean.valueOf(connecting), reading, writing, Boolean.valueOf(closing));
       active.set(true);
       try {
-        if (!closed && connecting) {
+        if (!closing && connecting) {
           if (key.isConnectable()) {
             log("Connected");
             socketChannel.finishConnect();
@@ -206,7 +253,7 @@ public final class NetworkEngine {
           }
         }
 
-        if (!closed && reading == FlowState.CONTINUE && key.isReadable()) {
+        if (!closing && reading == FlowState.CONTINUE && key.isReadable()) {
           inputBuffer.compact(); // prepare buffer for writing
           int readCount = socketChannel.read(inputBuffer);
           inputBuffer.flip(); // prepare buffer for reading
@@ -218,63 +265,64 @@ public final class NetworkEngine {
                 Integer.valueOf(readCount), Integer.valueOf(inputBuffer.remaining()));
           }
         }
-        while (!closed && reading == FlowState.CONTINUE && inputBuffer.hasRemaining()) {
+        while (!closing && reading == FlowState.CONTINUE && inputBuffer.hasRemaining()) {
           reading = first.read();
           if (reading == FlowState.SLOW_CLOSE) {
             throw new IllegalStateException(
                 String.format("Cannot slow-close after read (%s)", first));
           }
           if (reading == FlowState.CLOSE) {
-            closed = true;
+            closing = true;
             break;
           }
         }
-        if (!closed && reading == FlowState.HALF_CLOSE) {
+        if (!closing && reading == FlowState.HALF_CLOSE) {
           socketChannel.shutdownInput();
         }
 
-        while (!closed && writing == FlowState.CONTINUE && (available(outputBuffer) > 0)) {
+        while (!closing && writing == FlowState.CONTINUE && (available(outputBuffer) > 0)) {
           int before = available(outputBuffer);
           writing = first.write();
+//          log("Have %d bytes outgoing", Integer.valueOf(outputBuffer.remaining()));
           if (writing == FlowState.CLOSE) {
-            closed = true;
+            closing = true;
             break;
           }
           if (before == available(outputBuffer)) {
             break;
           }
         }
-        if (!closed && outputBuffer.hasRemaining() && key.isWritable()) {
+        if (!closing && outputBuffer.hasRemaining() && key.isWritable()) {
           int before = outputBuffer.remaining();
           socketChannel.write(outputBuffer);
-          log("Wrote %d bytes", Integer.valueOf(before - outputBuffer.remaining()));
+          log("Wrote %d bytes (%d still buffered)",
+              Integer.valueOf(before - outputBuffer.remaining()),
+              Integer.valueOf(outputBuffer.remaining()));
           if (outputBuffer.remaining() > 0) {
             outputBuffer.compact(); // prepare for writing
             outputBuffer.flip(); // prepare for reading
           }
-        } else if (!closed && writing == FlowState.HALF_CLOSE) {
+        } else if (!closing && !outputBuffer.hasRemaining() && writing == FlowState.HALF_CLOSE) {
           socketChannel.shutdownOutput();
-        } else if (writing == FlowState.SLOW_CLOSE) {
-          closed = true;
+        } else if (!closing && !outputBuffer.hasRemaining() && writing == FlowState.SLOW_CLOSE) {
+          closing = true;
         }
 
-        if (!closed) {
-          int ops = (reading == FlowState.CONTINUE ? SelectionKey.OP_READ : 0)
-              | ((outputBuffer.hasRemaining() || writing == FlowState.CONTINUE) ? SelectionKey.OP_WRITE : 0);
-          if (ops != key.interestOps()) {
-            log("Changing to: " + ops);
-            key.interestOps(ops);
-          }
+        if (!closing) {
+          boolean selectRead = reading == FlowState.CONTINUE;
+          boolean selectWrite = outputBuffer.hasRemaining() || writing == FlowState.CONTINUE;
+          updateSelector(selectRead, selectWrite);
         }
       } catch (IOException e) {
+        e = new IOException(connection.getId().toString(), e);
         networkEventListener.notifyInternalError(connection, e);
-        closed = true;
+        closing = true;
       } finally {
         active.set(false);
       }
 
-      if (closed) {
-        log("Close");
+      if (closing) {
+        log("Closing");
         // Release resources, we may have a worker thread blocked on writing to the connection.
         first.close();
         closedCounter.incrementAndGet();
@@ -285,6 +333,7 @@ public final class NetworkEngine {
           // There's nothing we can do if this fails.
           networkEventListener.notifyInternalError(connection, ignored);
         }
+        closed = true;
       }
     }
 
@@ -440,11 +489,11 @@ public final class NetworkEngine {
 //          clientChannel.socket().setSoLinger(false, 0);
           InetSocketAddress remoteAddress = new InetSocketAddress(address, port);
           socketChannel.connect(remoteAddress);
-          SelectionKey key = socketChannel.register(selector, SelectionKey.OP_CONNECT);
           Connection connection = new Connection(
               (InetSocketAddress) socketChannel.socket().getLocalSocketAddress(),
               remoteAddress,
               handler.usesSsl());
+          SelectionKey key = socketChannel.register(selector, 0);
           SocketHandler socketHandler =
               new SocketHandler(
                   this, connection, socketChannel, key, handler, logHandler, OUTGOING_CONNECTION);
@@ -474,11 +523,10 @@ public final class NetworkEngine {
     private void attachConnection(Connection connection, SocketChannel socketChannel, NetworkHandler handler) {
       queue(() -> {
         try {
-          SelectionKey socketKey = socketChannel.register(selector, SelectionKey.OP_READ);
+          SelectionKey socketKey = socketChannel.register(selector, 0);
           SocketHandler socketHandler =
               new SocketHandler(
                   this, connection, socketChannel, socketKey, handler, logHandler, INCOMING_CONNECTION);
-          socketHandler.log("New");
           socketKey.attach(socketHandler);
         } catch (ClosedChannelException e) {
           throw new RuntimeException(e);
@@ -517,7 +565,7 @@ public final class NetworkEngine {
         while (!shutdownQueue.isEmpty()) {
           shutdownQueue.remove().run();
         }
-      } catch (IOException e) {
+      } catch (Exception e) {
         networkEventListener.notifyInternalError(null, e);
       }
     }

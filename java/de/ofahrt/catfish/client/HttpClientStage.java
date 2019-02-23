@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import de.ofahrt.catfish.client.HttpRequestGenerator.ContinuationToken;
 import de.ofahrt.catfish.internal.CoreHelper;
+import de.ofahrt.catfish.internal.network.NetworkEngine.ConnectionFlowState;
 import de.ofahrt.catfish.internal.network.NetworkEngine.FlowState;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Stage;
@@ -63,6 +64,11 @@ final class HttpClientStage implements Stage {
     if (VERBOSE) {
       System.out.println(CoreHelper.requestToString(request));
     }
+  }
+
+  @Override
+  public ConnectionFlowState connect() {
+    return ConnectionFlowState.WRITE;
   }
 
   @Override

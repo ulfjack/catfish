@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
 import de.ofahrt.catfish.internal.CoreHelper;
+import de.ofahrt.catfish.internal.network.NetworkEngine.ConnectionFlowState;
 import de.ofahrt.catfish.internal.network.NetworkEngine.FlowState;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Stage;
@@ -148,6 +149,11 @@ final class HttpServerStage implements Stage {
   }
 
   @Override
+  public ConnectionFlowState connect() {
+    return ConnectionFlowState.READ;
+  }
+
+  @Override
   public FlowState read() {
     // invariant: inputBuffer is readable
     if (!inputBuffer.hasRemaining()) {
@@ -174,7 +180,7 @@ final class HttpServerStage implements Stage {
       parent.log("write");
     }
     if (responseGenerator == null) {
-      throw new IllegalStateException();
+      return FlowState.PAUSE;
     }
     outputBuffer.compact(); // prepare buffer for writing
     ContinuationToken token = responseGenerator.generate(outputBuffer);
@@ -194,7 +200,7 @@ final class HttpServerStage implements Stage {
           }
           return FlowState.PAUSE;
         } else {
-          return FlowState.HALF_CLOSE;
+          return FlowState.SLOW_CLOSE;
         }
       default:
         throw new IllegalStateException(token.toString());
@@ -222,7 +228,7 @@ final class HttpServerStage implements Stage {
     } finally {
       parser.reset();
     }
-    parent.log("%s %s %s", request.getVersion(), request.getMethod(), request.getUri());
+    parent.log("%s %s %s", request.getMethod(), request.getUri(), request.getVersion());
     if (VERBOSE) {
       System.out.println(CoreHelper.requestToString(request));
     }
