@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
-
 import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
 import de.ofahrt.catfish.internal.CoreHelper;
 import de.ofahrt.catfish.internal.network.NetworkEngine.FlowState;
@@ -25,7 +24,6 @@ import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
-import info.adams.commons.Preconditions;
 
 final class HttpServerStage implements Stage {
   private static final boolean VERBOSE = false;
@@ -150,7 +148,9 @@ final class HttpServerStage implements Stage {
   @Override
   public FlowState read() {
     // invariant: inputBuffer is readable
-    Preconditions.checkState(inputBuffer.hasRemaining());
+    if (!inputBuffer.hasRemaining()) {
+      throw new IllegalStateException();
+    }
     int consumed = parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.limit());
     inputBuffer.position(inputBuffer.position() + consumed);
     if (parser.isDone()) {
@@ -171,7 +171,9 @@ final class HttpServerStage implements Stage {
     if (VERBOSE) {
       parent.log("write");
     }
-    Preconditions.checkState(responseGenerator != null);
+    if (responseGenerator == null) {
+      throw new IllegalStateException();
+    }
     outputBuffer.compact(); // prepare buffer for writing
     ContinuationToken token = responseGenerator.generate(outputBuffer);
     outputBuffer.flip(); // prepare buffer for reading

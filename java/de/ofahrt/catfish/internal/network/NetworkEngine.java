@@ -221,7 +221,8 @@ public final class NetworkEngine {
         while (!closed && reading == FlowState.CONTINUE && inputBuffer.hasRemaining()) {
           reading = first.read();
           if (reading == FlowState.SLOW_CLOSE) {
-            throw new IllegalStateException(String.format("Cannot slow-close after read", first, reading));
+            throw new IllegalStateException(
+                String.format("Cannot slow-close after read (%s)", first));
           }
           if (reading == FlowState.CLOSE) {
             closed = true;
