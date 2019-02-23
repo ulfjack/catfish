@@ -9,8 +9,6 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Locale;
-import java.util.zip.GZIPOutputStream;
-
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletResponse;
@@ -21,8 +19,6 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
-import de.ofahrt.catfish.model.server.ResponsePolicy;
-import de.ofahrt.catfish.utils.HttpContentType;
 import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.MimeType;
 
@@ -54,9 +50,9 @@ public final class ResponseImpl implements HttpServletResponse {
     }
   }
 
-  private final HttpRequest request;
+  // TODO(ulfjack): Do we need this for anything?
+  @SuppressWarnings("unused") private final HttpRequest request;
   private final HttpResponseWriter responseWriter;
-  private final ResponsePolicy policy;
 
   private boolean isCommitted;
   private boolean isCompleted;
@@ -75,7 +71,6 @@ public final class ResponseImpl implements HttpServletResponse {
   ResponseImpl(HttpRequest request, HttpResponseWriter responseWriter) {
     this.request = request;
     this.responseWriter = responseWriter;
-    this.policy = responseWriter == null ? null : responseWriter.getResponsePolicy();
   }
 
   void setVersion(HttpVersion version) {
@@ -117,9 +112,7 @@ public final class ResponseImpl implements HttpServletResponse {
 
     // TODO: The charset may not be set yet. Store the content type as a field and only set the
     // header when finalizing the response.
-    String mimeType = MimeType.APPLICATION_OCTET_STREAM.toString();
     if (contentType != null) {
-      mimeType = HttpContentType.getMimeTypeFromContentType(contentType);
       String type = contentType;
       if (isTextMimeType(type) && (charset != null)) {
         type += "; charset=" + charset;
@@ -178,16 +171,7 @@ public final class ResponseImpl implements HttpServletResponse {
       }
     };
 
-    if (policy.shouldCompress(request, mimeType)) {
-      setHeaderInternal(HttpHeaderName.CONTENT_ENCODING, "gzip");
-      try {
-        keepStream = new GZIPOutputStream(internalStream);
-      } catch (IOException e) {
-        throw new IllegalStateException(e);
-      }
-    } else {
-      keepStream = internalStream;
-    }
+    keepStream = internalStream;
     return keepStream;
   }
 
@@ -394,12 +378,12 @@ public final class ResponseImpl implements HttpServletResponse {
   }
 
   @Override
-  public void sendError(int statusCode) {
+  public void sendError(int statusCode) throws IOException {
     sendError(statusCode, null);
   }
 
   @Override
-  public void sendError(int statusCode, String msg) {
+  public void sendError(int statusCode, String msg) throws IOException {
     if (isCommitted) {
       throw new IllegalStateException();
     }
