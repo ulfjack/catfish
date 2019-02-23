@@ -18,6 +18,7 @@ final class DefaultResponsePolicy implements ResponsePolicy {
   private static final String MIME_TEXT_CSS = "text/css";
   private static final String MIME_TEXT_CSV = "text/csv";
   private static final String MIME_TEXT_HTML  = "text/html";
+  private static final String MIME_TEXT_JAVASCRIPT  = "text/javascript";
   private static final String MIME_TEXT_PLAIN = "text/plain";
   private static final String MIME_TEXT_RICHTEXT = "text/richtext";
   private static final String MIME_TEXT_RTF = "text/rtf";
@@ -35,6 +36,7 @@ final class DefaultResponsePolicy implements ResponsePolicy {
     result.add(MIME_TEXT_CSS);
     result.add(MIME_TEXT_CSV);
     result.add(MIME_TEXT_HTML);
+    result.add(MIME_TEXT_JAVASCRIPT);
     result.add(MIME_TEXT_PLAIN);
     result.add(MIME_TEXT_RICHTEXT);
     result.add(MIME_TEXT_RTF);
