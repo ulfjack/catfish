@@ -50,13 +50,12 @@ public final class MimeType implements Serializable {
   public static final MimeType APPLICATION_ZIP = getInstance("application", "zip");
 
   public static final MimeType IMAGE_GIF = getInstance("image", "gif");
+  public static final MimeType IMAGE_VND_MICROSOFT_ICO = getInstance("image", "vnd.microsoft.icon");
   public static final MimeType IMAGE_JPEG = getInstance("image", "jpeg");
   public static final MimeType IMAGE_PNG = getInstance("image", "png");
   public static final MimeType IMAGE_TIFF = getInstance("image", "tiff");
   public static final MimeType IMAGE_SVG = getInstance("image", "svg+xml");
-
-  public static final MimeType MODEL_MESH = getInstance("model", "mesh");
-  public static final MimeType MODEL_VRML = getInstance("model", "vrml");
+  public static final MimeType IMAGE_X_ICON = getInstance("image", "x-icon");
 
   public static final MimeType TEXT_CALENDAR = getInstance("text", "calendar");
   public static final MimeType TEXT_CSS = getInstance("text", "css");
@@ -66,9 +65,6 @@ public final class MimeType implements Serializable {
   public static final MimeType TEXT_RICHTEXT = getInstance("text", "richtext");
   public static final MimeType TEXT_RTF = getInstance("text", "rtf");
   public static final MimeType TEXT_XML = getInstance("text", "xml");
-
-  public static final MimeType VIDEO_MPEG = getInstance("video", "mpeg");
-  public static final MimeType VIDEO_QUICKTIME = getInstance("video", "quicktime");
 
   private final String primary;
   private final String subtype;
