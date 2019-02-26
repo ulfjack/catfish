@@ -135,9 +135,12 @@ public final class MimeTypeRegistry {
     
     result.put("pdb",  MimeType.getInstance("chemical", "x-pdb"));
     result.put("xyz",  MimeType.getInstance("chemical", "x-xyz"));
+
+    result.put("woff2", MimeType.getInstance("font", "woff2"));
     
     result.put("bmp",  MimeType.getInstance("image", "bmp"));
     result.put("gif",  MimeType.getInstance("image", "gif"));
+    result.put("ico",  MimeType.getInstance("image", "x-icon"));
     result.put("ief",  MimeType.getInstance("image", "ief"));
     result.put("jpeg", MimeType.getInstance("image", "jpeg"));
     result.put("jpg",  MimeType.getInstance("image", "jpeg"));
