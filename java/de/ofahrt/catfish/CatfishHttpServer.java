@@ -77,6 +77,15 @@ public final class CatfishHttpServer {
     hosts.put(name, new HttpVirtualHost(handler, responsePolicy, uploadPolicy, sslContext));
   }
 
+  public void addHttpHost(
+      String name,
+      UploadPolicy uploadPolicy,
+      ResponsePolicy responsePolicy,
+      HttpHandler handler,
+      SSLContext sslContext) {
+    hosts.put(name, new HttpVirtualHost(handler, responsePolicy, uploadPolicy, sslContext));
+  }
+
   public void setCompressionAllowed(boolean compressionAllowed) {
     mayCompress = compressionAllowed;
   }
