@@ -110,6 +110,16 @@ public enum HttpStatusCode {
   }
 
   /**
+   * Returns true if the status code is not 1xx, not 204, and not 304. The HTTP spec says that these
+   * responses must not have a body.
+   */
+  public static boolean mayHaveBody(int statusCode) {
+    return ((statusCode / 100) != 1)
+        && (statusCode != 204)
+        && (statusCode != 304);
+  }
+
+  /**
    * Return a string containing the code and the well-known status text, if
    * defined by RFC 2616. If the status text is unknown, returns informational
    * status text as defined by the ranges in RFC 2616. If the status code is

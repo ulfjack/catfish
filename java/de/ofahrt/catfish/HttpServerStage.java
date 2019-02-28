@@ -1,5 +1,6 @@
 package de.ofahrt.catfish;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -19,6 +20,7 @@ import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
@@ -30,6 +32,8 @@ import de.ofahrt.catfish.utils.HttpContentType;
 
 final class HttpServerStage implements Stage {
   private static final boolean VERBOSE = false;
+  private static final byte[] EMPTY_BODY = new byte[0];
+  private static final String GZIP_ENCODING = "gzip";
 
   // Incoming data:
   // Socket -> SSL Stage -> HTTP Stage -> Request Queue
@@ -64,61 +68,90 @@ final class HttpServerStage implements Stage {
     }
 
     @Override
-    public void commitBuffered(HttpResponse responseToWrite) {
+    public void commitBuffered(HttpResponse responseToWrite) throws IOException {
       if (!committed.compareAndSet(false, true)) {
-        throw new IllegalStateException();
+        throw new IllegalStateException("This response is already committed");
       }
+
       byte[] body = responseToWrite.getBody();
+      boolean bodyAllowed = HttpStatusCode.mayHaveBody(responseToWrite.getStatusCode());
+      if (!bodyAllowed) {
+        if (body != null && body.length != 0) {
+          throw new IllegalArgumentException(
+              String.format(
+                  "Responses with status code %d are not allowed to have a body",
+                  Integer.valueOf(responseToWrite.getStatusCode())));
+        }
+        if (responseToWrite.getHeaders().get(HttpHeaderName.CONTENT_LENGTH) != null) {
+          throw new IllegalArgumentException(
+              String.format(
+                  "Responses with status code %d are not allowed to have a content length",
+                  Integer.valueOf(responseToWrite.getStatusCode())));
+        }
+        body = EMPTY_BODY;
+      }
       if (body == null) {
-        throw new IllegalArgumentException();
+        throw new IllegalArgumentException("Buffered responses must have a non-null body");
       }
-      boolean noBodyAllowed =
-          ((responseToWrite.getStatusCode() / 100) == 1)
-          || (responseToWrite.getStatusCode() == 204)
-          || (responseToWrite.getStatusCode() == 304);
+
       Map<String, String> overrides = new HashMap<>();
-      if (responsePolicy.shouldKeepAlive(request)) {
-        overrides.put(HttpHeaderName.CONNECTION, HttpConnectionHeader.KEEP_ALIVE);
-      } else {
-        overrides.put(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE);
-      }
-      if (!noBodyAllowed) {
+      overrides.put(HttpHeaderName.CONNECTION, shouldKeepAlive() ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
+      if (bodyAllowed) {
         overrides.put(HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length));
-      } else {
-        // TODO: Tombstone CONTENT_LENGTH in some way?
+      }
+      boolean compress = (body.length >= 512) && shouldCompress(responseToWrite);
+      if (compress) {
+        overrides.put(HttpHeaderName.CONTENT_ENCODING, GZIP_ENCODING);
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try (GZIPOutputStream gzip = new GZIPOutputStream(buffer)) {
+          gzip.write(body);
+        }
+        body = buffer.toByteArray();
       }
       responseToWrite = responseToWrite.withHeaderOverrides(HttpHeaders.of(overrides));
-      boolean includeBody = !HttpMethodName.HEAD.equals(request.getMethod()) && !noBodyAllowed;
+      boolean headRequest = HttpMethodName.HEAD.equals(request.getMethod());
       HttpResponse actualResponse = responseToWrite;
       // We want to create the ResponseGenerator on the current thread.
-      HttpResponseGeneratorBuffered gen = HttpResponseGeneratorBuffered.create(request, actualResponse, includeBody);
+      HttpResponseGeneratorBuffered gen = HttpResponseGeneratorBuffered.create(request, actualResponse, !headRequest);
       parent.queue(() -> startBuffered(gen));
     }
 
     @Override
     public OutputStream commitStreamed(HttpResponse responseToWrite) throws IOException {
       if (!committed.compareAndSet(false, true)) {
-        throw new IllegalStateException();
+        throw new IllegalStateException("This response is already committed");
       }
-      boolean keepAlive = responsePolicy.shouldKeepAlive(request);
-      boolean alreadyCompressed = responseToWrite.getHeaders().get(HttpHeaderName.CONTENT_ENCODING) != null;
-      boolean compress = !alreadyCompressed && shouldCompress(responseToWrite);
-//      System.err.println("COMPRESSION: " + alreadyCompressed + " " + compress);
+
+      if (!HttpStatusCode.mayHaveBody(responseToWrite.getStatusCode())) {
+        throw new IllegalArgumentException(
+            String.format(
+                "Responses with status code %d are not allowed to have a body",
+                Integer.valueOf(responseToWrite.getStatusCode())));
+      }
+
       Map<String, String> overrides = new HashMap<>();
-      overrides.put(HttpHeaderName.CONNECTION, keepAlive ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
+      overrides.put(HttpHeaderName.CONNECTION, shouldKeepAlive() ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
+      boolean compress = shouldCompress(responseToWrite);
       if (compress) {
-        overrides.put(HttpHeaderName.CONTENT_ENCODING, "gzip");
+        overrides.put(HttpHeaderName.CONTENT_ENCODING, GZIP_ENCODING);
       }
       responseToWrite = responseToWrite.withHeaderOverrides(HttpHeaders.of(overrides));
-      boolean includeBody = !HttpMethodName.HEAD.equals(request.getMethod());
+      boolean headRequest = HttpMethodName.HEAD.equals(request.getMethod());
       HttpResponseGeneratorStreamed gen =
           HttpResponseGeneratorStreamed.create(
-              () -> parent.queue(parent::encourageWrites), request, responseToWrite, includeBody);
+              () -> parent.queue(parent::encourageWrites), request, responseToWrite, !headRequest);
       parent.queue(() -> startStreamed(gen));
       return compress ? new GZIPOutputStream(gen.getOutputStream()) : gen.getOutputStream();
     }
 
+    private boolean shouldKeepAlive() {
+      return HttpConnectionHeader.mayKeepAlive(request) && responsePolicy.shouldKeepAlive(request);
+    }
+
     private boolean shouldCompress(HttpResponse responseToWrite) {
+      if (responseToWrite.getHeaders().get(HttpHeaderName.CONTENT_ENCODING) != null) {
+        return false;
+      }
       String contentType = responseToWrite.getHeaders().get(HttpHeaderName.CONTENT_TYPE);
       if (contentType == null) {
         return false;
