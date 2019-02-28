@@ -96,7 +96,7 @@ public final class CatfishHttpServer {
   }
 
   public String getServerName() {
-    return "Catfish/12.0";
+    return "Catfish/13.0";
   }
 
   void notifySent(Connection connection, HttpRequest request, HttpResponse response, int amount) {
