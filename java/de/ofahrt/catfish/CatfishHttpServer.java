@@ -32,9 +32,6 @@ public final class CatfishHttpServer {
 
   private final ConcurrentHashMap<String, HttpVirtualHost> hosts = new ConcurrentHashMap<>();
 
-  private volatile boolean mayCompress = true;
-  private volatile boolean mayKeepAlive = true;
-
   private final ArrayList<HttpServerListener> listeners = new ArrayList<>();
   private final NetworkEngine engine;
 
@@ -67,7 +64,7 @@ public final class CatfishHttpServer {
     addHttpHost(
         name,
         UploadPolicy.DENY,
-        new DefaultResponsePolicy(mayKeepAlive, mayCompress),
+        ResponsePolicy.KEEP_ALIVE,
         handler,
         sslContext);
   }
@@ -76,7 +73,7 @@ public final class CatfishHttpServer {
     addHttpHost(
         name,
         uploadPolicy,
-        new DefaultResponsePolicy(mayKeepAlive, mayCompress),
+        ResponsePolicy.KEEP_ALIVE,
         handler,
         sslContext);
   }
@@ -88,14 +85,6 @@ public final class CatfishHttpServer {
       HttpHandler handler,
       SSLContext sslContext) {
     hosts.put(name, new HttpVirtualHost(handler, responsePolicy, uploadPolicy, sslContext));
-  }
-
-  public void setCompressionAllowed(boolean compressionAllowed) {
-    mayCompress = compressionAllowed;
-  }
-
-  public void setKeepAliveAllowed(boolean keepAliveAllowed) {
-    mayKeepAlive = keepAliveAllowed;
   }
 
   public void addRequestListener(HttpServerListener l) {
