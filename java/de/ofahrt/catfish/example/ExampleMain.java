@@ -15,6 +15,8 @@ import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.BasicHttpHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
+import de.ofahrt.catfish.model.server.ResponsePolicy;
+import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.ssl.SSLContextFactory;
 import de.ofahrt.catfish.ssl.SSLContextFactory.SSLInfo;
 
@@ -82,9 +84,12 @@ public class ExampleMain {
     handler = new BasicHttpHandler(handler);
 
     // Keep-alive and compression policies must be set before adding a host.
-    server.setKeepAliveAllowed(true);
-    server.setCompressionAllowed(false);
-    server.addHttpHost("localhost", handler, null);
+    server.addHttpHost(
+        "localhost",
+        UploadPolicy.DENY,
+        ResponsePolicy.KEEP_ALIVE,
+        handler,
+        null);
     server.listenHttp(8080);
     if (sslContext != null) {
       // TODO: This doesn't work for wildcard certificates.

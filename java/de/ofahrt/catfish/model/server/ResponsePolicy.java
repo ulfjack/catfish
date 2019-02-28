@@ -15,6 +15,18 @@ public interface ResponsePolicy {
     }
   };
 
+  public static final ResponsePolicy KEEP_ALIVE = new ResponsePolicy() {
+    @Override
+    public boolean shouldKeepAlive(HttpRequest request) {
+      return true;
+    }
+
+    @Override
+    public boolean shouldCompress(HttpRequest request, String mimeType) {
+      return false;
+    }
+  };
+
   boolean shouldKeepAlive(HttpRequest request);
   boolean shouldCompress(HttpRequest request, String mimeType);
 }

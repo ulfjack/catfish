@@ -50,7 +50,7 @@ final class IncrementalHttpRequestParser {
   }
 
   public IncrementalHttpRequestParser() {
-    this.uploadPolicy = new DenyUploadPolicy();
+    this.uploadPolicy = UploadPolicy.DENY;
     reset();
   }
 

@@ -9,9 +9,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import javax.net.ssl.SSLContext;
-
 import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
@@ -23,7 +21,6 @@ import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
-import de.ofahrt.catfish.upload.SimpleUploadPolicy;
 
 /**
  * A <code>CatfishHttpServer</code> manages a HTTP-Server.
@@ -67,14 +64,21 @@ public final class CatfishHttpServer {
   }
 
   public void addHttpHost(String name, HttpHandler handler, SSLContext sslContext) {
-    ResponsePolicy responsePolicy = new DefaultResponsePolicy(mayKeepAlive, mayCompress);
-    UploadPolicy uploadPolicy = new SimpleUploadPolicy(1024 * 1024);
-    hosts.put(name, new HttpVirtualHost(handler, responsePolicy, uploadPolicy, sslContext));
+    addHttpHost(
+        name,
+        UploadPolicy.DENY,
+        new DefaultResponsePolicy(mayKeepAlive, mayCompress),
+        handler,
+        sslContext);
   }
 
   public void addHttpHost(String name, UploadPolicy uploadPolicy, HttpHandler handler, SSLContext sslContext) {
-    ResponsePolicy responsePolicy = new DefaultResponsePolicy(mayKeepAlive, mayCompress);
-    hosts.put(name, new HttpVirtualHost(handler, responsePolicy, uploadPolicy, sslContext));
+    addHttpHost(
+        name,
+        uploadPolicy,
+        new DefaultResponsePolicy(mayKeepAlive, mayCompress),
+        handler,
+        sslContext);
   }
 
   public void addHttpHost(
