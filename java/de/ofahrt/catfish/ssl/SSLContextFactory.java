@@ -17,6 +17,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.RSAPrivateKeySpec;
+import java.util.Base64;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.net.ssl.KeyManagerFactory;
@@ -86,7 +87,7 @@ public final class SSLContextFactory {
   }
 
   private static byte[] decodePem(InputStream in) throws IOException {
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.ISO_8859_1))) {
       StringBuffer base64Data = new StringBuffer();
       boolean copyingData = false;
       String s;
@@ -101,7 +102,7 @@ public final class SSLContextFactory {
           copyingData = true;
         }
       }
-      return Base64.decode(base64Data.toString());
+      return Base64.getDecoder().decode(base64Data.toString().getBytes(StandardCharsets.ISO_8859_1));
     }
   }
 
