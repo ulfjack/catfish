@@ -313,7 +313,7 @@ public final class NetworkEngine {
           boolean selectWrite = outputBuffer.hasRemaining() || writing == FlowState.CONTINUE;
           updateSelector(selectRead, selectWrite);
         }
-      } catch (IOException e) {
+      } catch (Exception e) {
         e = new IOException(connection.getId().toString(), e);
         networkEventListener.notifyInternalError(connection, e);
         closing = true;
@@ -375,21 +375,39 @@ public final class NetworkEngine {
       this.handler = handler;
     }
 
+    @SuppressWarnings("resource")
     @Override
-    public void handleEvent() throws IOException {
+    public void handleEvent() {
       if (key.isAcceptable()) {
-        @SuppressWarnings("resource")
-        SocketChannel socketChannel = serverChannel.accept();
+        // The socket channel is owned by the attachConnection call, which in turn has to guarantee
+        // that the channel is closed eventually.
+        SocketChannel socketChannel;
+        try {
+          socketChannel = serverChannel.accept();
+        } catch (IOException e) {
+          networkEventListener.notifyInternalError(null, e);
+          return;
+        }
+
         openCounter.incrementAndGet();
         Connection connection = new Connection(
             (InetSocketAddress) socketChannel.socket().getLocalSocketAddress(),
             (InetSocketAddress) socketChannel.socket().getRemoteSocketAddress(),
             handler.usesSsl());
-        socketChannel.configureBlocking(false);
-        socketChannel.socket().setTcpNoDelay(true);
-        socketChannel.socket().setKeepAlive(true);
-        socketChannel.socket().setSoLinger(false, 0);
-        getQueueForConnection().attachConnection(connection, socketChannel, handler);
+        try {
+          socketChannel.configureBlocking(false);
+          socketChannel.socket().setTcpNoDelay(true);
+          socketChannel.socket().setKeepAlive(true);
+          socketChannel.socket().setSoLinger(false, 0);
+          getQueueForConnection().attachConnection(connection, socketChannel, handler);
+        } catch (IOException e) {
+          try {
+            serverChannel.close();
+          } catch (IOException e1) {
+            e.addSuppressed(e1);
+          }
+          networkEventListener.notifyInternalError(connection, e);
+        }
       }
     }
 
@@ -543,30 +561,40 @@ public final class NetworkEngine {
     public void run() {
       try {
         while (!shutdown) {
-//          if (DEBUG) {
-//            System.out.println(
-//                "PENDING: " + (openCounter.get() - closedCounter.get()) + " REJECTED " + rejectedCounter.get());
-//          }
+  //          if (DEBUG) {
+  //            System.out.println(
+  //                "PENDING: " + (openCounter.get() - closedCounter.get()) + " REJECTED " + rejectedCounter.get());
+  //          }
           selector.select();
-//          if (DEBUG) {
-//            System.out.printf(
-//                "Queue=%d, Keys=%d\n", Integer.valueOf(id), Integer.valueOf(selector.keys().size()));
-//          }
+  //        if (DEBUG) {
+  //          System.out.printf(
+  //              "Queue=%d, Keys=%d\n", Integer.valueOf(id), Integer.valueOf(selector.keys().size()));
+  //        }
           Runnable runnable;
           while ((runnable = eventQueue.poll()) != null) {
-            runnable.run();
+            try {
+              runnable.run();
+            } catch (Exception e) {
+              networkEventListener.notifyInternalError(null, e);
+            }
           }
           for (SelectionKey key : selector.selectedKeys()) {
             EventHandler handler = (EventHandler) key.attachment();
-            handler.handleEvent();
+            try {
+              handler.handleEvent();
+            } catch (Exception e) {
+              networkEventListener.notifyInternalError(null, e);
+            }
           }
           selector.selectedKeys().clear();
         }
         while (!shutdownQueue.isEmpty()) {
           shutdownQueue.remove().run();
         }
-      } catch (Exception e) {
-        networkEventListener.notifyInternalError(null, e);
+      } catch (Throwable e) {
+        // Last resort: print, notify listener of fatal error. We expect this to exit the Jvm.
+        e.printStackTrace();
+        networkEventListener.fatalInternalError(e);
       }
     }
   }

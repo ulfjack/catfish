@@ -10,9 +10,17 @@ public interface NetworkEventListener {
   void shutdown();
 
   /**
-   * @param connection
+   * @param connection connection if one is available, null otherwise
    * @param throwable
    */
   default void notifyInternalError(Connection connection, Throwable throwable) {
+  }
+
+  /**
+   * The expectation is that implementations call System.exit in this case.
+   *
+   * @param throwable
+   */
+  default void fatalInternalError(Throwable throwable) {
   }
 }
