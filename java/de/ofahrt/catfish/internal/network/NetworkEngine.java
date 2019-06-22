@@ -323,6 +323,8 @@ public final class NetworkEngine {
 
       if (closing) {
         log("Closing");
+        writing = FlowState.CLOSE;
+        reading = FlowState.CLOSE;
         // Release resources, we may have a worker thread blocked on writing to the connection.
         first.close();
         closedCounter.incrementAndGet();
