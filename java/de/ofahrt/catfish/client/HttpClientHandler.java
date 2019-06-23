@@ -5,7 +5,7 @@ import javax.net.ssl.SSLContext;
 import de.ofahrt.catfish.client.HttpClientStage.ResponseHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.NetworkHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
-import de.ofahrt.catfish.internal.network.NetworkEngine.Stage;
+import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.HttpRequest;
 
 final class HttpClientHandler implements NetworkHandler {

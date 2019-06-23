@@ -4,13 +4,12 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import de.ofahrt.catfish.client.HttpRequestGenerator.ContinuationToken;
 import de.ofahrt.catfish.internal.CoreHelper;
-import de.ofahrt.catfish.internal.network.NetworkEngine.ConnectionFlowState;
-import de.ofahrt.catfish.internal.network.NetworkEngine.FlowState;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
-import de.ofahrt.catfish.internal.network.NetworkEngine.Stage;
+import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.MalformedResponseException;
+import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
 final class HttpClientStage implements Stage {
@@ -67,12 +66,12 @@ final class HttpClientStage implements Stage {
   }
 
   @Override
-  public ConnectionFlowState connect() {
-    return ConnectionFlowState.WRITE;
+  public InitialConnectionState connect(Connection connection) {
+    return InitialConnectionState.WRITE_ONLY;
   }
 
   @Override
-  public FlowState read() {
+  public ConnectionControl read() {
     // invariant: inputBuffer is readable
     if (inputBuffer.hasRemaining()) {
       int consumed = parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.limit());
@@ -80,9 +79,9 @@ final class HttpClientStage implements Stage {
     }
     if (parser.isDone()) {
       processResponse();
-      return FlowState.CLOSE;
+      return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
     }
-    return FlowState.CONTINUE;
+    return ConnectionControl.CONTINUE;
   }
 
   @Override
@@ -91,12 +90,12 @@ final class HttpClientStage implements Stage {
   }
 
   @Override
-  public FlowState write() throws IOException {
+  public ConnectionControl write() throws IOException {
     if (VERBOSE) {
       parent.log("write");
     }
     if (requestGenerator == null) {
-      return FlowState.PAUSE;
+      return ConnectionControl.PAUSE;
     }
 
     // invariant: outputBuffer is readable
@@ -104,13 +103,13 @@ final class HttpClientStage implements Stage {
     ContinuationToken token = requestGenerator.generate(outputBuffer);
     outputBuffer.flip(); // prepare buffer for reading
     switch (token) {
-      case CONTINUE: return FlowState.CONTINUE;
-      case PAUSE: return FlowState.PAUSE;
+      case CONTINUE: return ConnectionControl.CONTINUE;
+      case PAUSE: return ConnectionControl.PAUSE;
       case STOP:
         parent.encourageReads();
         requestGenerator = null;
         parent.log("Request completed.");
-        return FlowState.PAUSE;
+        return ConnectionControl.PAUSE;
       default:
         throw new IllegalStateException();
     }

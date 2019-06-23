@@ -4,7 +4,7 @@ import java.nio.ByteBuffer;
 
 import de.ofahrt.catfish.internal.network.NetworkEngine.NetworkHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
-import de.ofahrt.catfish.internal.network.NetworkEngine.Stage;
+import de.ofahrt.catfish.internal.network.Stage;
 
 final class HttpServerHandler implements NetworkHandler {
   private final CatfishHttpServer server;

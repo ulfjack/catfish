@@ -25,6 +25,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import de.ofahrt.catfish.internal.network.Stage.ConnectionControl;
+import de.ofahrt.catfish.internal.network.Stage.InitialConnectionState;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.network.NetworkServer;
@@ -38,30 +40,7 @@ public final class NetworkEngine {
 
   private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS");
 
-  public enum FlowState {
-    CONTINUE,
-    PAUSE,
-    HALF_CLOSE,
-    SLOW_CLOSE,
-    CLOSE;
-  }
-
-  public enum ConnectionFlowState {
-    READ,
-    WRITE,
-    BOTH;
-  }
-
-  public interface Stage {
-    ConnectionFlowState connect();
-    FlowState read() throws IOException;
-    void inputClosed() throws IOException;
-    FlowState write() throws IOException;
-    void close();
-  }
-
   public interface Pipeline {
-    Connection getConnection();
     void encourageWrites();
     void encourageReads();
     void close();
@@ -123,9 +102,25 @@ public final class NetworkEngine {
     }
   }
 
-    private static final String[] SELECT_MODE = new String[] {
-        "NONE", "READ", "WRITE", "READ+WRITE"
-    };
+  private static final String[] SELECT_MODE = new String[] {
+      "NONE", "READ", "WRITE", "READ+WRITE"
+  };
+
+  private enum ConnectionState {
+    CONNECTING,
+    OPEN,
+    CLOSING,
+    CLOSED;
+  }
+
+  private enum FlowState {
+    OPEN,
+    PAUSED,
+    PAUSED_CLOSE_AFTER_FLUSH,
+    CLOSE_AFTER_FLUSH,
+    CLOSE_CONNECTION_AFTER_FLUSH,
+    CLOSED;
+  }
 
   private final class SocketHandler implements EventHandler, Pipeline {
     private final SelectorQueue queue;
@@ -137,12 +132,9 @@ public final class NetworkEngine {
     private final LogHandler logHandler;
 
     private final Stage first;
-    private final AtomicBoolean active = new AtomicBoolean();
-    private FlowState reading;
-    private FlowState writing;
-    private boolean connecting;
-    private boolean closed;
-    private boolean closing;
+    private ConnectionState state;
+    private FlowState readState;
+    private FlowState writeState;
 
     SocketHandler(
         SelectorQueue queue,
@@ -163,32 +155,41 @@ public final class NetworkEngine {
       inputBuffer.flip(); // prepare for reading
       outputBuffer.clear();
       outputBuffer.flip(); // prepare for reading
-      this.connecting = outgoing;
       // We start the connection as paused.
       // - Outgoing connections become active upon connection.
       // - Incoming connections register READ interest ops.
       // This does not currently support incoming connections where the server sends the first packet.
-      this.reading = outgoing ? FlowState.PAUSE : FlowState.CONTINUE;
-      this.writing = FlowState.PAUSE;
       this.first = handler.connect(this, inputBuffer, outputBuffer);
       log("%s at %s", outgoing ? "Outgoing" : "Incoming",
           DATE_FORMATTER.format(
               ZonedDateTime.ofInstant(
                   Instant.ofEpochMilli(connection.startTimeMillis()), ZoneId.systemDefault())));
       if (outgoing) {
+        state = ConnectionState.CONNECTING;
+        readState = FlowState.PAUSED;
+        writeState = FlowState.PAUSED;
         key.interestOps(SelectionKey.OP_CONNECT);
       } else {
-        ConnectionFlowState state = first.connect();
-        updateSelector(state != ConnectionFlowState.WRITE, state != ConnectionFlowState.READ);
+        connect();
       }
     }
 
-    @Override
-    public Connection getConnection() {
-      return connection;
+    private void connect() {
+      log("Connected");
+      try {
+        state = ConnectionState.OPEN;
+        InitialConnectionState initialState = first.connect(connection);
+        readState = initialState != InitialConnectionState.WRITE_ONLY ? FlowState.PAUSED : FlowState.OPEN;
+        writeState = initialState != InitialConnectionState.READ_ONLY ? FlowState.PAUSED : FlowState.OPEN;
+        updateSelector();
+      } catch (Exception e) {
+        close();
+      }
     }
 
-    private void updateSelector(boolean selectRead, boolean selectWrite) {
+    private void updateSelector() {
+      boolean selectRead = readState == FlowState.OPEN;
+      boolean selectWrite = outputBuffer.hasRemaining() || writeState == FlowState.OPEN;
       int ops = (selectRead ? SelectionKey.OP_READ : 0) | (selectWrite ? SelectionKey.OP_WRITE : 0);
       if (ops != key.interestOps()) {
         log("Selecting: %s", SELECT_MODE[(selectRead ? 1 : 0) + (selectWrite ? 2 : 0)]);
@@ -199,132 +200,50 @@ public final class NetworkEngine {
     @Override
     public void encourageWrites() {
       queue.queue(() -> {
-        if (writing == FlowState.HALF_CLOSE || writing == FlowState.CLOSE) {
-          return;
+        if (state == ConnectionState.OPEN && writeState == FlowState.PAUSED) {
+          writeState = FlowState.OPEN;
+          updateSelector();
         }
-        writing = FlowState.CONTINUE;
-        updateSelector(reading == FlowState.CONTINUE, true);
       });
     }
 
     @Override
     public void encourageReads() {
       queue.queue(() -> {
-        if (reading == FlowState.HALF_CLOSE || reading == FlowState.CLOSE) {
-          return;
+        if (state == ConnectionState.OPEN) {
+          if (readState == FlowState.PAUSED) {
+            readState = FlowState.OPEN;
+            handleEvent();
+          } else if (readState == FlowState.PAUSED_CLOSE_AFTER_FLUSH) {
+            readState = FlowState.CLOSE_AFTER_FLUSH;
+            handleEvent();
+          }
         }
-        reading = FlowState.CONTINUE;
-        handleEvent();
       });
     }
 
     @Override
     public void close() {
-      if (!active.get()) {
-        queue.queue(() -> {
-          closing = true;
-          handleEvent();
-        });
-      }
-      closing = true;
+      queue.queue(() -> {
+        if (state == ConnectionState.CLOSED) {
+          return;
+        }
+        state = ConnectionState.CLOSING;
+        handleEvent();
+      });
     }
 
     @Override
     public void handleEvent() {
-      if (closed) {
+      log("Event: state=%s readState=%s writeState=%s", state, readState, writeState);
+      if (state == ConnectionState.CLOSED) {
         if (key.isValid()) {
           throw new IllegalStateException();
         }
-        return;
-      }
-      log("Event: connecting=%s reading=%s writing=%s closing=%s",
-          Boolean.valueOf(connecting), reading, writing, Boolean.valueOf(closing));
-      active.set(true);
-      try {
-        if (!closing && connecting) {
-          if (key.isConnectable()) {
-            log("Connected");
-            socketChannel.finishConnect();
-            connecting = false;
-            reading = FlowState.PAUSE;
-            writing = FlowState.CONTINUE;
-          } else {
-            return;
-          }
-        }
-
-        if (!closing && reading == FlowState.CONTINUE && key.isReadable()) {
-          inputBuffer.compact(); // prepare buffer for writing
-          int readCount = socketChannel.read(inputBuffer);
-          inputBuffer.flip(); // prepare buffer for reading
-          if (readCount == -1) {
-            log("Input closed");
-            first.inputClosed();
-          } else {
-            log("Read %d bytes (%d buffered)",
-                Integer.valueOf(readCount), Integer.valueOf(inputBuffer.remaining()));
-          }
-        }
-        while (!closing && reading == FlowState.CONTINUE && inputBuffer.hasRemaining()) {
-          reading = first.read();
-          if (reading == FlowState.SLOW_CLOSE) {
-            throw new IllegalStateException(
-                String.format("Cannot slow-close after read (%s)", first));
-          }
-          if (reading == FlowState.CLOSE) {
-            closing = true;
-            break;
-          }
-        }
-        if (!closing && reading == FlowState.HALF_CLOSE) {
-          socketChannel.shutdownInput();
-        }
-
-        while (!closing && writing == FlowState.CONTINUE && (available(outputBuffer) > 0)) {
-          int before = available(outputBuffer);
-          writing = first.write();
-//          log("Have %d bytes outgoing", Integer.valueOf(outputBuffer.remaining()));
-          if (writing == FlowState.CLOSE) {
-            closing = true;
-            break;
-          }
-          if (before == available(outputBuffer)) {
-            break;
-          }
-        }
-        if (!closing && outputBuffer.hasRemaining() && key.isWritable()) {
-          int before = outputBuffer.remaining();
-          socketChannel.write(outputBuffer);
-          log("Wrote %d bytes (%d still buffered)",
-              Integer.valueOf(before - outputBuffer.remaining()),
-              Integer.valueOf(outputBuffer.remaining()));
-          if (outputBuffer.remaining() > 0) {
-            outputBuffer.compact(); // prepare for writing
-            outputBuffer.flip(); // prepare for reading
-          }
-        } else if (!closing && !outputBuffer.hasRemaining() && writing == FlowState.HALF_CLOSE) {
-          socketChannel.shutdownOutput();
-        } else if (!closing && !outputBuffer.hasRemaining() && writing == FlowState.SLOW_CLOSE) {
-          closing = true;
-        }
-
-        if (!closing) {
-          boolean selectRead = reading == FlowState.CONTINUE;
-          boolean selectWrite = outputBuffer.hasRemaining() || writing == FlowState.CONTINUE;
-          updateSelector(selectRead, selectWrite);
-        }
-      } catch (Exception e) {
-        e = new IOException(connection.getId().toString(), e);
-        networkEventListener.notifyInternalError(connection, e);
-        closing = true;
-      } finally {
-        active.set(false);
-      }
-
-      if (closing) {
-        log("Closing");
-        writing = FlowState.CLOSE;
-        reading = FlowState.CLOSE;
+      } else if (state == ConnectionState.CLOSING) {
+        state = ConnectionState.CLOSED;
+        writeState = FlowState.CLOSED;
+        readState = FlowState.CLOSED;
         // Release resources, we may have a worker thread blocked on writing to the connection.
         first.close();
         closedCounter.incrementAndGet();
@@ -335,7 +254,152 @@ public final class NetworkEngine {
           // There's nothing we can do if this fails.
           networkEventListener.notifyInternalError(connection, ignored);
         }
-        closed = true;
+      } else if (state == ConnectionState.CONNECTING) {
+        if (key.isConnectable()) {
+          try {
+            if (!socketChannel.finishConnect()) {
+              throw new IllegalStateException("This should not be possible");
+            }
+            connect();
+          } catch (IOException e) {
+            first.close();
+            // TODO: This is not really an error.
+            networkEventListener.notifyInternalError(connection, e);
+          }
+        }
+      } else {
+        try {
+          // Read data from the network if data is available.
+          if (readState == FlowState.OPEN && key.isReadable()) {
+            inputBuffer.compact(); // prepare buffer for writing
+            int readCount = socketChannel.read(inputBuffer);
+            inputBuffer.flip(); // prepare buffer for reading
+            if (readCount == -1) {
+              log("Input closed");
+              readState = FlowState.CLOSE_AFTER_FLUSH;
+            } else {
+              log("Read %d bytes (%d buffered)",
+                  Integer.valueOf(readCount), Integer.valueOf(inputBuffer.remaining()));
+            }
+          }
+  
+          // Process any data in the input buffer.
+          while (readState == FlowState.CLOSE_AFTER_FLUSH) {
+            // There's no more incoming data, but we only want to notify the stage once all data is
+            // processed.
+            if (inputBuffer.hasRemaining()) {
+              ConnectionControl control = first.read();
+              switch (control) {
+                case CONTINUE:
+                  break;
+                case PAUSE:
+                  if (inputBuffer.hasRemaining()) {
+                    // There's still data left in the buffer, so we're not done yet.
+                    readState = FlowState.PAUSED_CLOSE_AFTER_FLUSH;
+                  } else {
+                    // Buffer empty, notify the stage that the other side shut down the input.
+                    readState = FlowState.CLOSED;
+                    first.inputClosed();
+                  }
+                  break;
+                case CLOSE:
+                  // The other side already shut down, and we agree with that. Mark as closed.
+                  // We intentionally don't call inputClosed here. We don't guarantee that it is
+                  // called; in particular, local processing and remote shutdown may race, so it
+                  // could just as well not have arrived before we close input locally.
+                  readState = FlowState.CLOSED;
+                  // This is probably unnecessary.
+                  socketChannel.shutdownInput();
+                  break;
+                case CLOSE_CONNECTION_AFTER_FLUSH:
+                  throw new IllegalStateException(String.format("Cannot close-connection-after-flush after read (%s)", first));
+                case CLOSE_CONNECTION_IMMEDIATELY:
+                  close();
+                  return;
+              }
+            } else {
+              readState = FlowState.CLOSED;
+              first.inputClosed();
+            }
+          }
+          while ((readState == FlowState.OPEN) && inputBuffer.hasRemaining()) {
+            ConnectionControl control = first.read();
+            switch (control) {
+              case CONTINUE:
+                break;
+              case PAUSE:
+                readState = FlowState.PAUSED;
+                break;
+              case CLOSE:
+                readState = FlowState.CLOSED;
+                socketChannel.shutdownInput();
+                break;
+              case CLOSE_CONNECTION_AFTER_FLUSH:
+                throw new IllegalStateException(String.format("Cannot close-connection-after-flush after read (%s)", first));
+              case CLOSE_CONNECTION_IMMEDIATELY:
+                close();
+                return;
+            }
+          }
+  
+          // Generate data for writing.
+          while (writeState == FlowState.OPEN && (available(outputBuffer) > 0)) {
+            int before = available(outputBuffer);
+            ConnectionControl control = first.write();
+  //          log("Have %d bytes outgoing", Integer.valueOf(outputBuffer.remaining()));
+            switch (control) {
+              case CONTINUE:
+                break;
+              case PAUSE:
+                writeState = FlowState.PAUSED;
+                break;
+              case CLOSE:
+                writeState = FlowState.CLOSE_AFTER_FLUSH;
+                break;
+              case CLOSE_CONNECTION_AFTER_FLUSH:
+                writeState = FlowState.CLOSE_CONNECTION_AFTER_FLUSH;
+                break;
+              case CLOSE_CONNECTION_IMMEDIATELY:
+                close();
+                return;
+            }
+            if (before == available(outputBuffer)) {
+              // Pipeline did not read any data.
+              break;
+            }
+          }
+  
+          // Write data to the network if possible.
+          if (outputBuffer.hasRemaining() && key.isWritable()) {
+            int before = outputBuffer.remaining();
+            socketChannel.write(outputBuffer);
+            log("Wrote %d bytes (%d still buffered)",
+                Integer.valueOf(before - outputBuffer.remaining()),
+                Integer.valueOf(outputBuffer.remaining()));
+            if (outputBuffer.remaining() > 0) {
+              outputBuffer.compact(); // prepare for writing
+              outputBuffer.flip(); // prepare for reading
+            }
+          } else if (!outputBuffer.hasRemaining()) {
+            // There's no remaining data to be written.
+            if (writeState == FlowState.CLOSE_AFTER_FLUSH) {
+              // Half-close the connection.
+              writeState = FlowState.CLOSED;
+              socketChannel.shutdownOutput();
+            } else if (writeState == FlowState.CLOSE_CONNECTION_AFTER_FLUSH) {
+              // Close the connection entirely.
+              close();
+              return;
+            }
+          }
+  
+          updateSelector();
+        } catch (Exception e) {
+          e = new IOException(connection.getId().toString(), e);
+          // TODO: This may due to the other side closing the connection prematurely.
+          networkEventListener.notifyInternalError(connection, e);
+          close();
+        }
       }
     }
 

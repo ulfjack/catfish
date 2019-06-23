@@ -8,10 +8,9 @@ import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
-import de.ofahrt.catfish.internal.network.NetworkEngine.ConnectionFlowState;
-import de.ofahrt.catfish.internal.network.NetworkEngine.FlowState;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
-import de.ofahrt.catfish.internal.network.NetworkEngine.Stage;
+import de.ofahrt.catfish.internal.network.Stage;
+import de.ofahrt.catfish.model.network.Connection;
 
 final class SslClientStage implements Stage {
   private final Pipeline parent;
@@ -48,8 +47,8 @@ final class SslClientStage implements Stage {
   }
 
   @Override
-  public ConnectionFlowState connect() {
-    return next.connect();
+  public InitialConnectionState connect(Connection connection) {
+    return next.connect(connection);
   }
 
   private void checkStatus() {
@@ -61,7 +60,7 @@ final class SslClientStage implements Stage {
   }
 
   @Override
-  public FlowState read() throws IOException {
+  public ConnectionControl read() throws IOException {
     if (writeAfterRead) {
       parent.encourageWrites();
       writeAfterRead = false;
@@ -75,7 +74,7 @@ final class SslClientStage implements Stage {
       parent.log("After unwrapping: net_in=%d app_in=%d", Integer.valueOf(netInputBuffer.remaining()), Integer.valueOf(inputBuffer.remaining()));
       if (result.getStatus() == Status.CLOSED) {
         parent.close();
-        return FlowState.CLOSE;
+        return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
       } else if (result.getStatus() != Status.OK) {
         throw new IOException(result.toString());
       }
@@ -83,12 +82,12 @@ final class SslClientStage implements Stage {
     }
     checkStatus();
     if (sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_UNWRAP) {
-      return FlowState.CONTINUE;
+      return ConnectionControl.CONTINUE;
     }
     if (sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP) {
       parent.encourageWrites();
       readAfterWrite = true;
-      return FlowState.PAUSE;
+      return ConnectionControl.PAUSE;
     }
     return next.read();
   }
@@ -100,12 +99,12 @@ final class SslClientStage implements Stage {
   }
 
   @Override
-  public FlowState write() throws IOException {
+  public ConnectionControl write() throws IOException {
     if (readAfterWrite) {
       parent.encourageReads();
       readAfterWrite = false;
     }
-    FlowState nextState = next.write();
+    ConnectionControl nextState = next.write();
     // invariant: both netOutputBuffer and outputBuffer are readable
     if (!netOutputBuffer.hasRemaining() && (outputBuffer.hasRemaining() || sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP)) {
       parent.log("Wrapping: app_out=%d net_out=%d", Integer.valueOf(outputBuffer.remaining()), Integer.valueOf(netOutputBuffer.remaining()));
@@ -114,7 +113,7 @@ final class SslClientStage implements Stage {
       netOutputBuffer.flip(); // prepare for reading
       parent.log("After Wrapping: app_out=%d net_out=%d", Integer.valueOf(outputBuffer.remaining()), Integer.valueOf(netOutputBuffer.remaining()));
       if (result.getStatus() == Status.CLOSED) {
-        return FlowState.CLOSE;
+        return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
       } else if (result.getStatus() != Status.OK) {
         throw new IOException(result.toString());
       }
@@ -123,10 +122,10 @@ final class SslClientStage implements Stage {
     if (sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_UNWRAP) {
       parent.encourageReads();
       writeAfterRead = true;
-      return FlowState.PAUSE;
+      return ConnectionControl.PAUSE;
     }
     if (sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP) {
-      return FlowState.CONTINUE;
+      return ConnectionControl.CONTINUE;
     }
     return nextState;
   }
