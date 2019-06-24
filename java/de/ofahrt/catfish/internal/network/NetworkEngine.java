@@ -375,7 +375,8 @@ public final class NetworkEngine {
               outputBuffer.compact(); // prepare for writing
               outputBuffer.flip(); // prepare for reading
             }
-          } else if (!outputBuffer.hasRemaining()) {
+          }
+          if (!outputBuffer.hasRemaining()) {
             // There's no remaining data to be written.
             if (writeState == FlowState.CLOSE_AFTER_FLUSH) {
               // Half-close the connection.
