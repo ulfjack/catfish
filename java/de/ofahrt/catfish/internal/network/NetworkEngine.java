@@ -179,8 +179,8 @@ public final class NetworkEngine {
       try {
         state = ConnectionState.OPEN;
         InitialConnectionState initialState = first.connect(connection);
-        readState = initialState != InitialConnectionState.WRITE_ONLY ? FlowState.PAUSED : FlowState.OPEN;
-        writeState = initialState != InitialConnectionState.READ_ONLY ? FlowState.PAUSED : FlowState.OPEN;
+        readState = initialState != InitialConnectionState.WRITE_ONLY ? FlowState.OPEN : FlowState.PAUSED;
+        writeState = initialState != InitialConnectionState.READ_ONLY ? FlowState.OPEN : FlowState.PAUSED;
         updateSelector();
       } catch (Exception e) {
         close();
