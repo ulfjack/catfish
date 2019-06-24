@@ -135,7 +135,9 @@ final class LocalCatfishServer implements Server {
     if (ssl && !startSsl) {
       throw new IllegalStateException();
     }
-    return HttpConnection.connect(HTTP_SERVER, ssl ? HTTPS_PORT : HTTP_PORT,
+    return HttpConnection.connect(
+        HTTP_SERVER,
+        ssl ? HTTPS_PORT : HTTP_PORT,
         ssl ? TestHelper.getSSLContext() : null);
   }
 }
