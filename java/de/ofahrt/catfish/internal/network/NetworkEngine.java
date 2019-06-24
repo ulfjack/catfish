@@ -155,10 +155,6 @@ public final class NetworkEngine {
       inputBuffer.flip(); // prepare for reading
       outputBuffer.clear();
       outputBuffer.flip(); // prepare for reading
-      // We start the connection as paused.
-      // - Outgoing connections become active upon connection.
-      // - Incoming connections register READ interest ops.
-      // This does not currently support incoming connections where the server sends the first packet.
       this.first = handler.connect(this, inputBuffer, outputBuffer);
       log("%s at %s", outgoing ? "Outgoing" : "Incoming",
           DATE_FORMATTER.format(
@@ -202,7 +198,7 @@ public final class NetworkEngine {
       queue.queue(() -> {
         if (state == ConnectionState.OPEN && writeState == FlowState.PAUSED) {
           writeState = FlowState.OPEN;
-          updateSelector();
+          handleEvent();
         }
       });
     }
@@ -225,11 +221,10 @@ public final class NetworkEngine {
     @Override
     public void close() {
       queue.queue(() -> {
-        if (state == ConnectionState.CLOSED) {
-          return;
+        if (state != ConnectionState.CLOSED) {
+          state = ConnectionState.CLOSING;
+          handleEvent();
         }
-        state = ConnectionState.CLOSING;
-        handleEvent();
       });
     }
 
