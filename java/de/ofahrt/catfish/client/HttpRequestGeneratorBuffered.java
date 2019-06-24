@@ -1,17 +1,14 @@
 package de.ofahrt.catfish.client;
 
 import java.nio.ByteBuffer;
-
+import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpRequest.InMemoryBody;
 
 final class HttpRequestGeneratorBuffered extends HttpRequestGenerator {
-  public static HttpRequestGeneratorBuffered create(HttpRequest request, boolean includeBody) {
-    if (request.getBody() == null) {
-      throw new IllegalArgumentException();
-    }
-    byte[] body = includeBody ? ((InMemoryBody) request.getBody()).toByteArray() : EMPTY_BYTE_ARRAY;
+  public static HttpRequestGeneratorBuffered create(HttpRequest request) {
+    byte[] body = mustHaveBody(request) ? ((InMemoryBody) request.getBody()).toByteArray() : EMPTY_BYTE_ARRAY;
     HttpHeaders headers = request.getHeaders();
     byte[][] data = new byte[][] {
       requestLineToByteArray(request),
@@ -21,8 +18,9 @@ final class HttpRequestGeneratorBuffered extends HttpRequestGenerator {
     return new HttpRequestGeneratorBuffered(request, data);
   }
 
-  public static HttpRequestGeneratorBuffered createWithBody(HttpRequest request) {
-    return create(request, true);
+  private static boolean mustHaveBody(HttpRequest request) {
+    return request.getHeaders().containsKey(HttpHeaderName.CONTENT_LENGTH)
+        || request.getHeaders().containsKey(HttpHeaderName.TRANSFER_ENCODING);
   }
 
   private final HttpRequest request;

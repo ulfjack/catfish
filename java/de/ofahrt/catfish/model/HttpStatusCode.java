@@ -110,8 +110,9 @@ public enum HttpStatusCode {
   }
 
   /**
-   * Returns true if the status code is not 1xx, not 204, and not 304. The HTTP spec says that these
-   * responses must not have a body.
+   * Returns true if a response with the given status code is allowed to have a body. Specifically,
+   * the HTTP spec says that responses with a status code of 1xx, 204, and 304 must not have a
+   * message body.
    */
   public static boolean mayHaveBody(int statusCode) {
     return ((statusCode / 100) != 1)

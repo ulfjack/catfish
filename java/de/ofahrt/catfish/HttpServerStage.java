@@ -137,7 +137,7 @@ final class HttpServerStage implements Stage {
       boolean headRequest = HttpMethodName.HEAD.equals(request.getMethod());
       HttpResponseGeneratorStreamed gen =
           HttpResponseGeneratorStreamed.create(
-              () -> parent.queue(parent::encourageWrites), request, responseToWrite, !headRequest);
+              parent::encourageWrites, request, responseToWrite, !headRequest);
       parent.queue(() -> startStreamed(gen));
       return compress ? new GZIPOutputStream(gen.getOutputStream()) : gen.getOutputStream();
     }

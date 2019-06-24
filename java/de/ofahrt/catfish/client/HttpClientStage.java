@@ -53,7 +53,7 @@ final class HttpClientStage implements Stage {
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer) {
     this.parent = parent;
-    this.requestGenerator = HttpRequestGeneratorBuffered.createWithBody(request);
+    this.requestGenerator = HttpRequestGeneratorBuffered.create(request);
     this.responseHandler = responseHandler;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
