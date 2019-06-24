@@ -171,10 +171,10 @@ public final class NetworkEngine {
     }
 
     private void connect() {
-      log("Connected");
       try {
         state = ConnectionState.OPEN;
         InitialConnectionState initialState = first.connect(connection);
+        log("Connected state=%s", initialState);
         readState = initialState != InitialConnectionState.WRITE_ONLY ? FlowState.OPEN : FlowState.PAUSED;
         writeState = initialState != InitialConnectionState.READ_ONLY ? FlowState.OPEN : FlowState.PAUSED;
         updateSelector();
