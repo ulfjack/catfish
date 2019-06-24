@@ -11,7 +11,12 @@ import org.junit.Test;
 
 import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpMethodName;
+import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.HttpStatusCode;
+import de.ofahrt.catfish.model.HttpVersion;
+import de.ofahrt.catfish.model.SimpleHttpRequest;
 
 public class BasicIntegrationTest {
   private static LocalCatfishServer localServer;
@@ -119,6 +124,20 @@ public class BasicIntegrationTest {
     HttpResponse response = localServer.send("GET ../ HTTP/1.0\n\n");
     // TODO: This should be an error code!
     assertEquals(404, response.getStatusCode());
+  }
+
+  @Test
+  public void unknownTransferEncoding() throws Exception {
+    HttpRequest request = new SimpleHttpRequest.Builder()
+        .setVersion(HttpVersion.HTTP_1_1)
+        .setMethod(HttpMethodName.GET)
+        .setUri("/index")
+        .addHeader(HttpHeaderName.HOST, "localhost")
+        .addHeader(HttpHeaderName.TRANSFER_ENCODING, "unknown")
+        .setBody(new HttpRequest.InMemoryBody(new byte[10]))
+        .build();
+    HttpResponse response = localServer.send(HttpRequestHelper.toByteArray(request));
+    assertEquals(HttpStatusCode.OK.getStatusCode(), response.getStatusCode());
   }
 
 //  @Test

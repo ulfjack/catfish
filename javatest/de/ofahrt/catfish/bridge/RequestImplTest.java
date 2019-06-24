@@ -47,6 +47,7 @@ public class RequestImplTest {
   private RequestImpl requestForBody(byte[] data) throws Exception {
     RequestImpl result = toRequestImpl(
         new SimpleHttpRequest.Builder()
+            .addHeader(HttpHeaderName.CONTENT_LENGTH, Integer.toString(data.length))
             .setBody(new HttpRequest.InMemoryBody(data))
             .setUri("*"));
     return result;
@@ -140,7 +141,6 @@ public class RequestImplTest {
   public void regressionTestForGetCompleteUrl() throws Exception {
     RequestImpl request = new RequestImpl(
         new SimpleHttpRequest.Builder()
-            .setBody(new HttpRequest.InMemoryBody(new byte[] { -1, -1 }))
             .setUri("*")
             .build(),
         new Connection(new InetSocketAddress(80), null, false),

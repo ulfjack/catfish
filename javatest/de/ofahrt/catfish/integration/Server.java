@@ -13,6 +13,8 @@ interface Server {
 
   void shutdown() throws Exception;
 
+  HttpResponse send(byte[] content) throws IOException;
+
   HttpResponse send(String content) throws IOException;
 
   HttpResponse sendSsl(String content) throws IOException;

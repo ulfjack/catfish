@@ -6,9 +6,10 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
 @SuiteClasses({
+  ConnectionHandlingTest.class,
   MultiRunnerTest.class,
-	BasicIntegrationTest.class,
-	HttpParserIntegrationTest.class,
+  BasicIntegrationTest.class,
+  HttpParserIntegrationTest.class,
   SslHttpParserIntegrationTest.class,
 })
 public class IntegrationTestSuite {

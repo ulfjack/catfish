@@ -126,8 +126,13 @@ final class LocalCatfishServer implements Server {
   }
 
   @Override
+  public HttpResponse send(byte[] content) throws IOException {
+    return send(LocalCatfishServer.HTTP_SERVER, LocalCatfishServer.HTTP_PORT, false, null, content);
+  }
+
+  @Override
   public HttpResponse send(String content) throws IOException {
-    return send(LocalCatfishServer.HTTP_SERVER, LocalCatfishServer.HTTP_PORT, false, null, toBytes(content));
+    return send(toBytes(content));
   }
 
   @Override
