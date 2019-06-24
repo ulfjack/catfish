@@ -23,8 +23,8 @@ final class HttpServerHandler implements NetworkHandler {
   @Override
   public Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer) {
     if (ssl) {
-      ByteBuffer decryptedInputBuffer = ByteBuffer.allocate(4096);
-      ByteBuffer decryptedOutputBuffer = ByteBuffer.allocate(4096);
+      ByteBuffer decryptedInputBuffer = ByteBuffer.allocate(32768);
+      ByteBuffer decryptedOutputBuffer = ByteBuffer.allocate(32768);
       decryptedInputBuffer.clear();
       decryptedInputBuffer.flip(); // prepare for reading
       decryptedOutputBuffer.clear();

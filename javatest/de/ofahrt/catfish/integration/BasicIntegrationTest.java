@@ -57,7 +57,7 @@ public class BasicIntegrationTest {
   // This test doesn't actually test very much.
   @Test
   public void sslGetWithSni() throws IOException {
-    HttpResponse response = localServer.sendSslWithSni("testhostname", "GET / HTTP/1.0\n\n");
+    HttpResponse response = localServer.sendSslWithSni("localhost", "GET / HTTP/1.0\nHost: localhost\n\n");
     assertEquals(200, response.getStatusCode());
   }
 
