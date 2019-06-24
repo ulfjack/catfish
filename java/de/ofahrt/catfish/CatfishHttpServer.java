@@ -48,7 +48,7 @@ public final class CatfishHttpServer {
           });
 
   public CatfishHttpServer(NetworkEventListener serverListener) throws IOException {
-    // TODO: This implements tail drop.
+    // TODO: This implements tail drop; head drop might be better.
     executor.setRejectedExecutionHandler(new RejectedExecutionHandler() {
       @Override
       public void rejectedExecution(Runnable task, ThreadPoolExecutor actualExecutor) {
