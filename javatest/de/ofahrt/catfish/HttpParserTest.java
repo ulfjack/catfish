@@ -43,25 +43,25 @@ public abstract class HttpParserTest {
 
   @Test
   public void parseGetWithoutHeader() throws Exception {
-    HttpRequest request = parse("GET / HTTP/1.0\n\n");
+    HttpRequest request = parse("GET / HTTP/1.1\nHost: localhost\n\n");
     assertEquals("GET", request.getMethod());
   }
 
   @Test
   public void zeroMajorVersion() throws Exception {
-    HttpRequest request = parse("GET / HTTP/0.7\n\n");
+    HttpRequest request = parse("GET / HTTP/0.7\nHost: localhost\n\n");
     assertEquals(HttpVersion.of(0, 7), request.getVersion());
   }
 
   @Test // Leading zeros MUST be ignored by recipients.
   public void ignoreLeadingZerosInMajorVersion() throws Exception {
-    HttpRequest request = parse("GET / HTTP/01.0\n\n");
+    HttpRequest request = parse("GET / HTTP/01.0\nHost: localhost\n\n");
     assertEquals(HttpVersion.HTTP_1_0, request.getVersion());
   }
 
   @Test
   public void ignoreLeadingZerosInMinorVersion() throws Exception {
-    HttpRequest request = parse("GET / HTTP/1.08\nHost: \n\n");
+    HttpRequest request = parse("GET / HTTP/1.08\nHost: localhost\n\n");
     assertEquals(HttpVersion.of(1, 8), request.getVersion());
   }
 
@@ -86,25 +86,25 @@ public abstract class HttpParserTest {
 
   @Test
   public void parseGetWithContinuation() throws Exception {
-    HttpRequest request = parse("GET / HTTP/1.0\nUser-Agent: A/1\n B/2\n\n");
+    HttpRequest request = parse("GET / HTTP/1.1\nHost: localhost\nUser-Agent: A/1\n B/2\n\n");
     assertEquals("A/1 B/2", request.getHeaders().get("User-Agent"));
   }
 
   @Test
   public void parseGetWithDuplicateHeader() throws Exception {
-    HttpRequest request = parse("GET / HTTP/1.0\nAccept: text/html\nAccept: application/xhtml+xml\n\n");
+    HttpRequest request = parse("GET / HTTP/1.1\nHost: localhost\nAccept: text/html\nAccept: application/xhtml+xml\n\n");
     assertEquals("text/html, application/xhtml+xml", request.getHeaders().get("Accept"));
   }
 
   @Test
   public void headerWithTrailingWhitespace() throws Exception {
-    HttpRequest request = parse("GET / HTTP/1.0\nUser-Agent: A/1 \t \n\n");
+    HttpRequest request = parse("GET / HTTP/1.1\nHost: localhost\nUser-Agent: A/1 \t \n\n");
     assertEquals("A/1", request.getHeaders().get("User-Agent"));
   }
 
   @Test
   public void headerWithTrailingContinuation() throws Exception {
-    HttpRequest request = parse("GET / HTTP/1.0\nUser-Agent: A/1\n  \n\n");
+    HttpRequest request = parse("GET / HTTP/1.1\nHost: localhost\nUser-Agent: A/1\n  \n\n");
     assertEquals("A/1", request.getHeaders().get("User-Agent"));
   }
 
@@ -115,15 +115,15 @@ public abstract class HttpParserTest {
 
   @Test
   public void headerValueIsOptional() throws Exception {
-    checkHeader("User-Agent", "", "GET / HTTP/1.0\nUser-Agent: \n\n");
-    checkHeader("User-Agent", "", "GET / HTTP/1.0\nUser-Agent:\n\n");
+    checkHeader("User-Agent", "", "GET / HTTP/1.1\nHost: localhost\nUser-Agent: \n\n");
+    checkHeader("User-Agent", "", "GET / HTTP/1.1\nHost: localhost\nUser-Agent:\n\n");
   }
 
   @Test
   public void requestManyHeaders() throws Exception {
     int count = 100;
     StringBuffer text = new StringBuffer();
-    text.append("GET / HTTP/1.0\n");
+    text.append("GET / HTTP/1.1\nHost: localhost\n");
     for (int i = 0; i < count; i++) {
       text.append("A").append(i).append(": ").append(i).append("\n");
     }
@@ -137,14 +137,14 @@ public abstract class HttpParserTest {
 
   @Test
   public void withContent() throws Exception {
-    HttpRequest request = parse("POST / HTTP/1.0\nContent-Length: 10\n\n1234567890");
+    HttpRequest request = parse("POST / HTTP/1.1\nHost: localhost\nContent-Length: 10\n\n1234567890");
     byte[] data = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
     assertEquals("1234567890", new String(data, StandardCharsets.UTF_8));
   }
 
   @Test
   public void withoutContentButWithContentLength() throws Exception {
-    HttpRequest request = parse("POST / HTTP/1.0\nContent-Length: 0\n\n");
+    HttpRequest request = parse("POST / HTTP/1.1\nHost: localhost\nContent-Length: 0\n\n");
     byte[] data = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
     assertArrayEquals(new byte[0], data);
   }

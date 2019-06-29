@@ -53,9 +53,15 @@ final class LocalCatfishServer implements Server {
     }
   };
 
-  private boolean startSsl = false;
+  private boolean startSsl;
+  private UploadPolicy uploadPolicy = UploadPolicy.DENY;
 
   public LocalCatfishServer() throws IOException {
+  }
+
+  public LocalCatfishServer setUploadPolicy(UploadPolicy uploadPolicy) {
+    this.uploadPolicy = uploadPolicy;
+    return this;
   }
 
   @Override
@@ -73,7 +79,7 @@ final class LocalCatfishServer implements Server {
 
     server.addHttpHost(
         "localhost",
-        UploadPolicy.DENY,
+        uploadPolicy,
         ResponsePolicy.KEEP_ALIVE,
         new BasicHttpHandler(handler),
         startSsl ? TestHelper.getSSLContext() : null);

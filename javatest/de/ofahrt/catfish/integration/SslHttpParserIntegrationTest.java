@@ -17,6 +17,7 @@ import org.junit.Test;
 import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.MalformedRequestException;
+import de.ofahrt.catfish.upload.SimpleUploadPolicy;
 
 public class SslHttpParserIntegrationTest extends ServletEngineTest {
 
@@ -24,7 +25,7 @@ public class SslHttpParserIntegrationTest extends ServletEngineTest {
 
   @BeforeClass
   public static void startServer() throws Exception {
-    localServer = new LocalCatfishServer();
+    localServer = new LocalCatfishServer().setUploadPolicy(new SimpleUploadPolicy(100));
     localServer.setStartSsl(true);
     localServer.start();
   }
@@ -64,7 +65,7 @@ public class SslHttpParserIntegrationTest extends ServletEngineTest {
 
   @Test
   public void isSecure() throws Exception {
-    HttpServletRequest request = parseLegacy("GET / HTTP/1.0\n\n");
+    HttpServletRequest request = parseLegacy("GET / HTTP/1.1\nHost: localhost\n\n");
     assertTrue(request.isSecure());
   }
 
