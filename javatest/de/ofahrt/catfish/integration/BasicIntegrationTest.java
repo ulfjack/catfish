@@ -140,6 +140,20 @@ public class BasicIntegrationTest {
     assertEquals(HttpStatusCode.NOT_IMPLEMENTED.getStatusCode(), response.getStatusCode());
   }
 
+  @Test
+  public void contentLengthWithoutHostShouldNotCrash() throws Exception {
+    HttpRequest request = new SimpleHttpRequest.Builder()
+        .setVersion(HttpVersion.HTTP_1_1)
+        .setMethod(HttpMethodName.GET)
+        .setUri("/")
+        .addHeader(HttpHeaderName.HOST, "unknown")
+        .addHeader(HttpHeaderName.CONTENT_LENGTH, "10")
+        .setBody(new HttpRequest.InMemoryBody(new byte[10]))
+        .build();
+    HttpResponse response = localServer.send(HttpRequestHelper.toByteArray(request));
+    assertEquals(HttpStatusCode.PAYLOAD_TOO_LARGE.getStatusCode(), response.getStatusCode());
+  }
+
 //  @Test
 //  public void upwardsUrl2() throws Exception {
 //    checkError("Illegal character in request method",
