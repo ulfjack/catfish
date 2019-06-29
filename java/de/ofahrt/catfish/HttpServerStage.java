@@ -232,6 +232,7 @@ final class HttpServerStage implements Stage {
       parent.log("write");
     }
     if (responseGenerator == null) {
+      // Spurious write() call. Ignore.
       return ConnectionControl.PAUSE;
     }
     outputBuffer.compact(); // prepare buffer for writing

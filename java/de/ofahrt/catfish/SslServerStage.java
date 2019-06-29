@@ -19,7 +19,8 @@ final class SslServerStage implements Stage {
   private enum FlowStatus {
     FIND_SNI,
     HANDSHAKE,
-    OPEN
+    OPEN,
+    CLOSING
   }
 
   private final SSLContextProvider contextProvider;
@@ -177,9 +178,10 @@ final class SslServerStage implements Stage {
         return postHandshakeState == InitialConnectionState.READ_ONLY ? ConnectionControl.PAUSE : ConnectionControl.CONTINUE;
       }
       return ConnectionControl.CONTINUE;
-    } else {
+    } else if (status == FlowStatus.OPEN) {
       parent.log("SSL Write");
       ConnectionControl nextState = next.write();
+      parent.log("SSL next=%s", nextState);
       // invariant: both netOutputBuffer and outputBuffer are readable
       if (!netOutputBuffer.hasRemaining() && outputBuffer.hasRemaining()) {
         netOutputBuffer.clear(); // prepare for writing
@@ -195,7 +197,44 @@ final class SslServerStage implements Stage {
       if (sslEngine.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING) {
         throw new IOException("Re-entering handshake mode - what's up?");
       }
+      if (outputBuffer.hasRemaining()) {
+        // We still have data buffered, so we may need to override the control from the next stage.
+        switch (nextState) {
+          case CONTINUE:
+            return ConnectionControl.CONTINUE;
+          case PAUSE:
+            return ConnectionControl.CONTINUE;
+          case CLOSE_OUTPUT_AFTER_FLUSH:
+            throw new IllegalStateException("Not implemented yet!");
+          case CLOSE_CONNECTION_AFTER_FLUSH:
+            status = FlowStatus.CLOSING;
+            return ConnectionControl.CONTINUE;
+          case CLOSE_INPUT:
+            throw new IllegalStateException("Not implemented yet!");
+          case CLOSE_CONNECTION_IMMEDIATELY:
+            return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
+        }
+        throw new IllegalStateException("Not implemented yet!");
+      }
       return nextState;
+    } else { // status == FlowStatus.CLOSING
+      parent.log("SSL Write");
+      // invariant: both netOutputBuffer and outputBuffer are readable
+      if (!netOutputBuffer.hasRemaining() && outputBuffer.hasRemaining()) {
+        netOutputBuffer.clear(); // prepare for writing
+        SSLEngineResult result = sslEngine.wrap(outputBuffer, netOutputBuffer);
+        netOutputBuffer.flip(); // prepare for reading
+        parent.log("After Wrapping: %d out, %d net",
+            Integer.valueOf(outputBuffer.remaining()),
+            Integer.valueOf(netOutputBuffer.remaining()));
+        if (result.getStatus() != Status.OK) {
+          throw new IOException(result.toString());
+        }
+      }
+      if (sslEngine.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING) {
+        throw new IOException("Re-entering handshake mode - what's up?");
+      }
+      return outputBuffer.hasRemaining() ? ConnectionControl.CONTINUE : ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
     }
   }
 
