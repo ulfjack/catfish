@@ -206,7 +206,7 @@ final class HttpServerStage implements Stage {
   public ConnectionControl read() {
     // invariant: inputBuffer is readable
     if (!inputBuffer.hasRemaining()) {
-      throw new IllegalStateException();
+      return ConnectionControl.CONTINUE;
     }
     int consumed = parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.limit());
     inputBuffer.position(inputBuffer.position() + consumed);
