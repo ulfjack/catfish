@@ -277,19 +277,14 @@ final class HttpServerStage implements Stage {
     if (VERBOSE) {
       System.out.println(CoreHelper.requestToString(request));
     }
-    if ("*".equals(request.getUri())) {
-      startBuffered(request, StandardResponses.BAD_REQUEST);
+    HttpVirtualHost host = virtualHostLookup.apply(request.getHeaders().get(HttpHeaderName.HOST));
+    if (host == null) {
+      startBuffered(request, StandardResponses.NOT_FOUND);
       return ConnectionControl.CONTINUE;
     } else {
-      HttpVirtualHost host = virtualHostLookup.apply(request.getHeaders().get(HttpHeaderName.HOST));
-      if (host == null) {
-        startBuffered(request, StandardResponses.NOT_FOUND);
-        return ConnectionControl.CONTINUE;
-      } else {
-        HttpResponseWriter writer = new HttpResponseWriterImpl(request, host.getResponsePolicy());
-        requestHandler.queueRequest(host.getHttpHandler(), connection, request, writer);
-        return ConnectionControl.CONTINUE;
-      }
+      HttpResponseWriter writer = new HttpResponseWriterImpl(request, host.getResponsePolicy());
+      requestHandler.queueRequest(host.getHttpHandler(), connection, request, writer);
+      return ConnectionControl.CONTINUE;
     }
   }
 
