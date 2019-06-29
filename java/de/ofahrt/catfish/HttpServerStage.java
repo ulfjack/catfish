@@ -25,6 +25,7 @@ import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
+import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import de.ofahrt.catfish.utils.HttpContentType;
 
@@ -188,6 +189,9 @@ final class HttpServerStage implements Stage {
     this.outputBuffer = outputBuffer;
     this.parser = new IncrementalHttpRequestParser((builder) -> {
       HttpVirtualHost host = virtualHostLookup.apply(builder.getHeader(HttpHeaderName.HOST));
+      if (host == null) {
+        return UploadPolicy.DENY.accept(builder);
+      }
       return host.getUploadPolicy().accept(builder);
     });
   }
