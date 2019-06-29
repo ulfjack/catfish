@@ -15,6 +15,10 @@ public interface UploadPolicy {
         request.setError(HttpStatusCode.BAD_REQUEST, "Must not set both Content-Length and Transfer-Encoding");
         return null;
       }
+      if (transferEncodingValue != null) {
+        request.setError(HttpStatusCode.NOT_IMPLEMENTED, "Unknown Transfer-Encoding");
+        return null;
+      }
       if (contentLengthValue != null) {
         try {
           Long.parseLong(contentLengthValue);
@@ -28,5 +32,10 @@ public interface UploadPolicy {
     }
   };
 
+  /**
+   * Returns a {@link PayloadParser} instance that can be used to process the body of the given
+   * request. If the upload is denied or the request contains an error, then this method must set
+   * an error on the given builder and return {@code null}.
+   */
   PayloadParser accept(SimpleHttpRequest.Builder request);
 }

@@ -11,6 +11,7 @@ import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
+import de.ofahrt.catfish.model.server.BasicHttpHandler;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 
@@ -74,7 +75,7 @@ final class LocalCatfishServer implements Server {
         "localhost",
         UploadPolicy.DENY,
         ResponsePolicy.KEEP_ALIVE,
-        handler,
+        new BasicHttpHandler(handler),
         startSsl ? TestHelper.getSSLContext() : null);
     server.listenHttp(HTTP_PORT);
     if (startSsl) {

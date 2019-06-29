@@ -131,13 +131,13 @@ public class BasicIntegrationTest {
     HttpRequest request = new SimpleHttpRequest.Builder()
         .setVersion(HttpVersion.HTTP_1_1)
         .setMethod(HttpMethodName.GET)
-        .setUri("/index")
+        .setUri("/")
         .addHeader(HttpHeaderName.HOST, "localhost")
         .addHeader(HttpHeaderName.TRANSFER_ENCODING, "unknown")
         .setBody(new HttpRequest.InMemoryBody(new byte[10]))
         .build();
     HttpResponse response = localServer.send(HttpRequestHelper.toByteArray(request));
-    assertEquals(HttpStatusCode.OK.getStatusCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.NOT_IMPLEMENTED.getStatusCode(), response.getStatusCode());
   }
 
 //  @Test

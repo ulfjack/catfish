@@ -160,5 +160,12 @@ public final class SimpleHttpRequest implements HttpRequest {
     public boolean hasError() {
       return errorResponse != null;
     }
+
+    public HttpResponse getErrorResponse() {
+      if (errorResponse == null) {
+        throw new IllegalStateException("There is no getErrorResponse");
+      }
+      return errorResponse;
+    }
   }
 }
