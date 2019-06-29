@@ -112,7 +112,7 @@ private static final boolean DEBUG = false;
     }
     // Tricky: we don't know when the last request arrives at the server, so we can't reliably
     // unblock the server threads. :-/
-    Thread.sleep(1);
+    Thread.sleep(100);
     blocker.countDown();
     int[] statusCounts = new int[6];
     for (int i = 0; i < 200; i++) {

@@ -8,7 +8,6 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-
 import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpMethodName;
@@ -44,27 +43,14 @@ public class BasicIntegrationTest {
 
   @Test
   public void sslGet() throws IOException {
-    HttpResponse response = localServer.sendSsl("GET / HTTP/1.0\n\n");
-    assertEquals(200, response.getStatusCode());
-  }
-
-  @Test
-  public void sslGetWithKeepAlive() throws IOException {
-    HttpResponse response = localServer.sendSsl("GET / HTTP/1.1\nHost: localhost\n\n");
-    assertEquals(200, response.getStatusCode());
-  }
-
-  // This test doesn't actually test very much.
-  @Test
-  public void sslGetWithSni() throws IOException {
-    HttpResponse response = localServer.sendSslWithSni("localhost", "GET / HTTP/1.0\nHost: localhost\n\n");
+    HttpResponse response = localServer.sendSslWithSni("localhost", "GET / HTTP/1.1\nHost: localhost\n\n");
     assertEquals(200, response.getStatusCode());
   }
 
   @Test
   public void optionsStar() throws IOException {
-    HttpResponse response = localServer.send("OPTIONS * HTTP/1.0\n\n");
-    assertEquals(200, response.getStatusCode());
+    HttpResponse response = localServer.send("OPTIONS * HTTP/1.1\nHost: localhost\n\n");
+    assertEquals(HttpStatusCode.METHOD_NOT_ALLOWED.getStatusCode(), response.getStatusCode());
     assertEquals("0", response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
   }
 
