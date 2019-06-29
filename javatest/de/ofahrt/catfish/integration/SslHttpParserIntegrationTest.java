@@ -47,7 +47,7 @@ public class SslHttpParserIntegrationTest extends ServletEngineTest {
     connection.close();
     assertNotNull(response);
     if (response.getStatusCode() != 200) {
-      throw new MalformedRequestException(null); //response.getReasonPhrase());
+      throw new MalformedRequestException(response);
     }
     try (InputStream in = new ByteArrayInputStream(response.getBody())) {
       if (in.available() == 0) {
