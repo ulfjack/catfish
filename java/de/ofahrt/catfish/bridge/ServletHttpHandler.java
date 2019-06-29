@@ -6,6 +6,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Collections;
 import javax.servlet.Servlet;
+import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.MalformedRequestException;
@@ -24,6 +25,10 @@ public final class ServletHttpHandler implements HttpHandler {
 
   @Override
   public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter) throws IOException {
+    if (HttpMethodName.OPTIONS.equals(request.getMethod()) && "*".equals(request.getUri())) {
+      responseWriter.commitBuffered(StandardResponses.METHOD_NOT_ALLOWED);
+      return;
+    }
     String path = getPath(request);
     HttpHandler handler = siteLayout.resolve(path);
     if (handler == null) {

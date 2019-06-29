@@ -30,10 +30,10 @@ public final class BasicHttpHandler implements HttpHandler {
       responseWriter.commitBuffered(StandardResponses.EXPECTATION_FAILED);
     } else if (request.getHeaders().get(HttpHeaderName.CONTENT_ENCODING) != null) {
       responseWriter.commitBuffered(StandardResponses.UNSUPPORTED_MEDIA_TYPE);
-    } else if ("*".equals(request.getUri())) {
-      responseWriter.commitBuffered(StandardResponses.BAD_REQUEST);
     } else if (HttpMethodName.TRACE.equals(request.getMethod())) {
       handleTrace(request, responseWriter);
+    } else if ("*".equals(request.getUri()) && !HttpMethodName.OPTIONS.equals(request.getMethod())) {
+      responseWriter.commitBuffered(StandardResponses.BAD_REQUEST);
     } else {
       delegate.handle(connection, request, responseWriter);
     }
