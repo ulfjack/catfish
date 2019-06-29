@@ -172,6 +172,8 @@ final class HttpServerStage implements Stage {
   private final ByteBuffer outputBuffer;
   private final IncrementalHttpRequestParser parser;
   private Connection connection;
+  private boolean processing;
+  private boolean keepAlive = true;
   private HttpResponseGenerator responseGenerator;
 
   HttpServerStage(
@@ -205,11 +207,10 @@ final class HttpServerStage implements Stage {
   @Override
   public ConnectionControl read() {
     // invariant: inputBuffer is readable
-    if (!inputBuffer.hasRemaining()) {
-      return ConnectionControl.CONTINUE;
+    if (inputBuffer.hasRemaining()) {
+      int consumed = parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.limit());
+      inputBuffer.position(inputBuffer.position() + consumed);
     }
-    int consumed = parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.limit());
-    inputBuffer.position(inputBuffer.position() + consumed);
     if (parser.isDone()) {
       return processRequest();
     }
@@ -220,6 +221,8 @@ final class HttpServerStage implements Stage {
   public void inputClosed() {
     if (responseGenerator == null) {
       parent.close();
+    } else {
+      keepAlive = false;
     }
   }
 
@@ -239,21 +242,33 @@ final class HttpServerStage implements Stage {
       case PAUSE: return ConnectionControl.PAUSE;
       case STOP:
         requestListener.notifySent(connection, responseGenerator.getRequest(), responseGenerator.getResponse());
-        boolean keepAlive = responseGenerator.keepAlive();
         responseGenerator = null;
+        processing = false;
         parent.log("Completed. keepAlive=%s", Boolean.valueOf(keepAlive));
         if (keepAlive) {
-          // We may already have the next request on hold in the parser. If so, process it now.
-          if (parser.isDone()) {
-            processRequest();
+          // Process any data that is already buffered.
+          ConnectionControl next = read();
+          parent.log("control after read=%s", next);
+          switch (next) {
+            case CONTINUE:
+              parent.encourageReads();
+              break;
+            case PAUSE:
+              break;
+            case CLOSE_CONNECTION_AFTER_FLUSH:
+              throw new IllegalStateException();
+            case CLOSE_INPUT:
+              throw new IllegalStateException();
+            case CLOSE_OUTPUT_AFTER_FLUSH:
+            case CLOSE_CONNECTION_IMMEDIATELY:
+              return next;
           }
           return ConnectionControl.PAUSE;
         } else {
           return ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
         }
-      default:
-        throw new IllegalStateException(token.toString());
     }
+    throw new IllegalStateException(token.toString());
   }
 
   @Override
@@ -265,15 +280,16 @@ final class HttpServerStage implements Stage {
   }
 
   private final ConnectionControl processRequest() {
-    if (responseGenerator != null) {
+    if (processing) {
       return ConnectionControl.PAUSE;
     }
+    processing = true;
     HttpRequest request;
     try {
       request = parser.getRequest();
     } catch (MalformedRequestException e) {
       startBuffered(null, e.getErrorResponse());
-      return ConnectionControl.CONTINUE;
+      return ConnectionControl.CLOSE_INPUT;
     } finally {
       parser.reset();
     }
@@ -288,12 +304,13 @@ final class HttpServerStage implements Stage {
     } else {
       HttpResponseWriter writer = new HttpResponseWriterImpl(request, host.getResponsePolicy());
       requestHandler.queueRequest(host.getHttpHandler(), connection, request, writer);
-      return ConnectionControl.CONTINUE;
+      return ConnectionControl.PAUSE;
     }
   }
 
   private final void startStreamed(HttpResponseGeneratorStreamed gen) {
     this.responseGenerator = gen;
+    this.keepAlive = responseGenerator.keepAlive();
     HttpResponse response = responseGenerator.getResponse();
     parent.log("%s %d %s",
         response.getProtocolVersion(), Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
@@ -317,6 +334,7 @@ final class HttpServerStage implements Stage {
 
   private final void startBuffered(HttpResponseGeneratorBuffered gen) {
     this.responseGenerator = gen;
+    this.keepAlive = responseGenerator.keepAlive();
     HttpResponse response = responseGenerator.getResponse();
     parent.log("%s %d %s",
         response.getProtocolVersion(), Integer.valueOf(response.getStatusCode()), response.getStatusMessage());

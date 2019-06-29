@@ -297,7 +297,7 @@ public final class NetworkEngine {
                     first.inputClosed();
                   }
                   break;
-                case CLOSE:
+                case CLOSE_INPUT:
                   // The other side already shut down, and we agree with that. Mark as closed.
                   // We intentionally don't call inputClosed here. We don't guarantee that it is
                   // called; in particular, local processing and remote shutdown may race, so it
@@ -306,6 +306,8 @@ public final class NetworkEngine {
                   // This is probably unnecessary.
                   socketChannel.shutdownInput();
                   break;
+                case CLOSE_OUTPUT_AFTER_FLUSH:
+                  throw new IllegalStateException(String.format("Cannot close-output-after-flush after read (%s)", first));
                 case CLOSE_CONNECTION_AFTER_FLUSH:
                   throw new IllegalStateException(String.format("Cannot close-connection-after-flush after read (%s)", first));
                 case CLOSE_CONNECTION_IMMEDIATELY:
@@ -325,10 +327,12 @@ public final class NetworkEngine {
               case PAUSE:
                 readState = FlowState.PAUSED;
                 break;
-              case CLOSE:
+              case CLOSE_INPUT:
                 readState = FlowState.CLOSED;
                 socketChannel.shutdownInput();
                 break;
+              case CLOSE_OUTPUT_AFTER_FLUSH:
+                throw new IllegalStateException(String.format("Cannot close-output-after-flush after read (%s)", first));
               case CLOSE_CONNECTION_AFTER_FLUSH:
                 throw new IllegalStateException(String.format("Cannot close-connection-after-flush after read (%s)", first));
               case CLOSE_CONNECTION_IMMEDIATELY:
@@ -348,7 +352,9 @@ public final class NetworkEngine {
               case PAUSE:
                 writeState = FlowState.PAUSED;
                 break;
-              case CLOSE:
+              case CLOSE_INPUT:
+                throw new IllegalStateException(String.format("Cannot close-input after write (%s)", first));
+              case CLOSE_OUTPUT_AFTER_FLUSH:
                 writeState = FlowState.CLOSE_AFTER_FLUSH;
                 break;
               case CLOSE_CONNECTION_AFTER_FLUSH:

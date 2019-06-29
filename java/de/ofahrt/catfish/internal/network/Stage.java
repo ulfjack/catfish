@@ -30,10 +30,16 @@ public interface Stage {
     PAUSE,
 
     /**
-     * Requests the current stream to be closed. Outgoing streams are closed after all data is
-     * written to the network. Incoming streams are closed immediately. 
+     * Requests the input stream to be closed. It is illegal to return this from {@link
+     * Stage#write}.
      */
-    CLOSE,
+    CLOSE_INPUT,
+
+    /**
+     * Requests the output stream to be closed after all outgoing data has been written. It is
+     * illegal to return this from {@link Stage#read}.
+     */
+    CLOSE_OUTPUT_AFTER_FLUSH,
 
     /**
      * Closes the connection after all outgoing data has been written. It is illegal to return
@@ -44,8 +50,7 @@ public interface Stage {
     /**
      * Closes the connection immediately. This should only be called if a fatal error occurred that
      * makes it impossible to continue with the current connection. Any remaining data in the input
-     * and output buffers will be discarded and no further calls to the network stage should be
-     * made.
+     * and output buffers will be discarded and no further calls to the pipeline should be made.
      */
     CLOSE_CONNECTION_IMMEDIATELY;
   }
