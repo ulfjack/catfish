@@ -17,7 +17,8 @@ final class IncrementalHttpResponseParser {
     CONTENT,
     CHUNKED_CONTENT_LENGTH,
     CHUNKED_CONTENT_DATA,
-    CHUNKED_CONTENT_NEXT;
+    CHUNKED_CONTENT_NEXT,
+    CHUNKED_CONTENT_END;
   }
 
   private final int maxContentLength = 1000000;
@@ -309,9 +310,8 @@ final class IncrementalHttpResponseParser {
             elementBuffer.setLength(0);
             int parsedChunkLength = Integer.parseInt(chunkLength, 16);
             if (parsedChunkLength == 0) {
-              response.setBody(content);
-              done = true;
-              return i + 1;
+              state = State.CHUNKED_CONTENT_END;
+              break;
             }
             if (content == null) {
               content = new byte[parsedChunkLength];
@@ -346,6 +346,17 @@ final class IncrementalHttpResponseParser {
             expectLineFeed = true;
           } else if (c == '\n') {
             state = State.CHUNKED_CONTENT_LENGTH;
+          } else {
+            throw new MalformedResponseException("Expected line break");
+          }
+          break;
+        case CHUNKED_CONTENT_END:
+          if (c == '\r') {
+            expectLineFeed = true;
+          } else if (c == '\n') {
+            response.setBody(content);
+            done = true;
+            return i + 1;
           } else {
             throw new MalformedResponseException("Expected line break");
           }

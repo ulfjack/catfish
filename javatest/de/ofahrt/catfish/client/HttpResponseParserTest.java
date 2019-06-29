@@ -50,7 +50,7 @@ public abstract class HttpResponseParserTest {
         "HTTP/1.1 200 OK\nTransfer-Encoding: chunked\n\n"
         + "23\nThis is the data in the first chunk\n"
         + "1B\n and this is the second one\n"
-        + "0\n");
+        + "0\n\n");
     assertEquals(
         "This is the data in the first chunk and this is the second one",
         bodyAsString(response));
@@ -61,7 +61,7 @@ public abstract class HttpResponseParserTest {
     HttpResponse response = parse(
         "HTTP/1.1 200 OK\nTransfer-Encoding: chunked\n\n"
         + "a\n123456789a\n"
-        + "0\n");
+        + "0\n\n");
     assertEquals("123456789a", bodyAsString(response));
   }
 }
