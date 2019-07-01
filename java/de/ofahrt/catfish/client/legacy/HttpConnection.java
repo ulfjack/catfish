@@ -106,15 +106,15 @@ public final class HttpConnection implements Closeable {
       if (length == 0) {
         length = in.read(buffer);
         offset = 0;
-      }
-      if (length < 0) {
-        try {
-          // At least try to close the socket.
-          socket.close();
-        } catch (IOException ignored) {
-          // Can't do anything.
+        if (length < 0) {
+          try {
+            // At least try to close the socket.
+            socket.close();
+          } catch (IOException ignored) {
+            // Can't do anything.
+          }
+          throw new ConnectionClosedException("Connection closed prematurely!");
         }
-        throw new ConnectionClosedException("Connection closed prematurely!");
       }
 //        System.out.println(new String(buffer, 0, length));
       int used = parser.parse(buffer, offset, length);
