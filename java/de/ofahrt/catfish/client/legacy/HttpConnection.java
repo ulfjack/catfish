@@ -11,13 +11,11 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
-
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SNIServerName;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
-
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpRequest.Body;
 import de.ofahrt.catfish.model.HttpRequest.InMemoryBody;
@@ -29,21 +27,15 @@ public final class HttpConnection implements Closeable {
     return connect(server, port, null);
   }
 
-  public static HttpConnection connect(String server, int port, SSLContext sslContext) throws IOException {
-    return connect(server, port, sslContext, null);
-  }
-
   @SuppressWarnings("resource")
-  public static HttpConnection connect(String server, int port, SSLContext sslContext, String sniHostname) throws IOException {
+  public static HttpConnection connect(String server, int port, SSLContext sslContext) throws IOException {
     Socket socket;
     if (sslContext != null) {
       socket = sslContext.getSocketFactory().createSocket();
-      if (sniHostname != null) {
-        SSLSocket asSslSocket = (SSLSocket) socket;
-        SSLParameters params = asSslSocket.getSSLParameters();
-        params.setServerNames(Arrays.<SNIServerName>asList(new SNIHostName(sniHostname)));
-        asSslSocket.setSSLParameters(params);
-      }
+      SSLSocket asSslSocket = (SSLSocket) socket;
+      SSLParameters params = asSslSocket.getSSLParameters();
+      params.setServerNames(Arrays.<SNIServerName>asList(new SNIHostName(server)));
+      asSslSocket.setSSLParameters(params);
     } else {
       socket = new Socket();
     }

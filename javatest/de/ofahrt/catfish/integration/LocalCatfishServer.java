@@ -107,15 +107,12 @@ final class LocalCatfishServer implements Server {
     return data.replace("\n", "\r\n").getBytes("ISO-8859-1");
   }
 
-  private HttpResponse send(String hostname, int port, boolean ssl, String sniHostname, byte[] content) throws IOException {
+  private HttpResponse send(String hostname, int port, boolean ssl, byte[] content) throws IOException {
     if (ssl && !startSsl) {
       throw new IllegalStateException();
     }
-    if (!ssl && sniHostname != null) {
-      throw new IllegalStateException();
-    }
-    HttpConnection connection = HttpConnection.connect(hostname, port,
-        ssl ? TestHelper.getSSLContext() : null, sniHostname);
+    HttpConnection connection = HttpConnection.connect(
+        hostname, port, ssl ? TestHelper.getSSLContext() : null);
     connection.write(content);
     HttpResponse response = connection.readResponse();
     connection.close();
@@ -124,17 +121,12 @@ final class LocalCatfishServer implements Server {
 
   @Override
   public HttpResponse sendSsl(String content) throws IOException {
-    return send(LocalCatfishServer.HTTP_SERVER, LocalCatfishServer.HTTPS_PORT, true, null, toBytes(content));
-  }
-
-  @Override
-  public HttpResponse sendSslWithSni(String sniHostname, String content) throws IOException {
-    return send(LocalCatfishServer.HTTP_SERVER, LocalCatfishServer.HTTPS_PORT, true, sniHostname, toBytes(content));
+    return send(LocalCatfishServer.HTTP_SERVER, LocalCatfishServer.HTTPS_PORT, true, toBytes(content));
   }
 
   @Override
   public HttpResponse send(byte[] content) throws IOException {
-    return send(LocalCatfishServer.HTTP_SERVER, LocalCatfishServer.HTTP_PORT, false, null, content);
+    return send(LocalCatfishServer.HTTP_SERVER, LocalCatfishServer.HTTP_PORT, false, content);
   }
 
   @Override

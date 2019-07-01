@@ -19,8 +19,6 @@ interface Server {
 
   HttpResponse sendSsl(String content) throws IOException;
 
-  HttpResponse sendSslWithSni(String sniHostname, String content) throws IOException;
-
   HttpConnection connect(boolean ssl) throws IOException;
 
   void waitForNoOpenConnections();
