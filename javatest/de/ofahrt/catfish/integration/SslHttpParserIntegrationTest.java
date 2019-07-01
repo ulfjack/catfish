@@ -71,9 +71,9 @@ public class SslHttpParserIntegrationTest extends ServletEngineTest {
 
   @Test
   public void getRequestUrlReturnsAbsoluteUrl() throws Exception {
-    assertEquals("https://127.0.0.1:" + getPort() + "/",
-        parseLegacy("GET / HTTP/1.0\n\n").getRequestURL().toString());
-    assertEquals("https://127.0.0.1/",
-        parseLegacy("GET http://127.0.0.1/ HTTP/1.0\n\n").getRequestURL().toString());
+    assertEquals("https://localhost/",
+        parseLegacy("GET / HTTP/1.1\nHost: localhost\n\n").getRequestURL().toString());
+    assertEquals("https://localhost/",
+        parseLegacy("GET http://127.0.0.1/ HTTP/1.1\nHost: localhost\n\n").getRequestURL().toString());
   }
 }
