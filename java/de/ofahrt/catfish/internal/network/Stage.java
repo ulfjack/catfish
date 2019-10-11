@@ -23,7 +23,10 @@ public interface Stage {
     /** Continue the current stream. */
     CONTINUE,
 
-    /** Read only: continue the current stream, but stop processing the remaining input data. */
+    /**
+     * Continue the current stream, but stop processing the remaining input data. It is illegal
+     * to return this from {@link Stage#write}.
+     */
     NEED_MORE_DATA,
 
     /**
