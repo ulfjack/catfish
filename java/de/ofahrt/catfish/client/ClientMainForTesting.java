@@ -37,7 +37,6 @@ public class ClientMainForTesting {
           .setUri("/")
           .addHeader(HttpHeaderName.HOST, "www.example.com")
           .addHeader(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE)
-          .setBody(new HttpRequest.InMemoryBody(new byte[0]))
           .build();
       HttpResponse response;
       if (USE_SSL) {
