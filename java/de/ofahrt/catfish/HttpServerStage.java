@@ -252,6 +252,7 @@ final class HttpServerStage implements Stage {
           parent.log("control after read=%s", next);
           switch (next) {
             case CONTINUE:
+            case NEED_MORE_DATA:
               parent.encourageReads();
               break;
             case PAUSE:

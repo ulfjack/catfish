@@ -107,7 +107,7 @@ final class SslServerStage implements Stage {
           case CLOSED:
             return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
           case BUFFER_UNDERFLOW:
-            return ConnectionControl.CONTINUE;
+            return ConnectionControl.NEED_MORE_DATA;
           case OK:
             break;
           default:
@@ -208,6 +208,8 @@ final class SslServerStage implements Stage {
         switch (nextState) {
           case CONTINUE:
             return ConnectionControl.CONTINUE;
+          case NEED_MORE_DATA:
+            return ConnectionControl.NEED_MORE_DATA;
           case PAUSE:
             return ConnectionControl.CONTINUE;
           case CLOSE_OUTPUT_AFTER_FLUSH:

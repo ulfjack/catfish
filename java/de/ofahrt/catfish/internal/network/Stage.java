@@ -23,6 +23,9 @@ public interface Stage {
     /** Continue the current stream. */
     CONTINUE,
 
+    /** Read only: continue the current stream, but stop processing the remaining input data. */
+    NEED_MORE_DATA,
+
     /**
      * Pause the current stream; call {@link Pipeline#encourageReads} or {@link
      * Pipeline#encourageWrites} to resume the stream.

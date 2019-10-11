@@ -287,6 +287,10 @@ public final class NetworkEngine {
               switch (control) {
                 case CONTINUE:
                   break;
+                case NEED_MORE_DATA:
+                  // No more data is coming and the stage thinks it needs more. Close the connection.
+                  inputBuffer.clear();
+                  break;
                 case PAUSE:
                   if (inputBuffer.hasRemaining()) {
                     // There's still data left in the buffer, so we're not done yet.
@@ -325,11 +329,13 @@ public final class NetworkEngine {
             ConnectionControl control = first.read();
             switch (control) {
               case CONTINUE:
-                if ((inputBuffer.remaining() == before) && (attempt++ == 1)) {
-                  // The pipeline did not read any data. It may be an SSL stage that requires more input.
-                  break loop;
+                if ((inputBuffer.remaining() == before) && (attempt++ == 10)) {
+                  // The pipeline did not read any data after several attempts. Looks like a bug.
+                  throw new IllegalStateException(String.format("Stage did not process remaining input data after 10 attempts (%s)", first));
                 }
                 break;
+              case NEED_MORE_DATA:
+                break loop;
               case PAUSE:
                 readState = FlowState.PAUSED;
                 break;
@@ -355,6 +361,8 @@ public final class NetworkEngine {
             switch (control) {
               case CONTINUE:
                 break;
+              case NEED_MORE_DATA:
+                throw new IllegalStateException(String.format("Cannot provide more data to write (%s)", first));
               case PAUSE:
                 writeState = FlowState.PAUSED;
                 break;
