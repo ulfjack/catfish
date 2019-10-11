@@ -102,10 +102,16 @@ final class SslServerStage implements Stage {
         inputBuffer.compact(); // prepare buffer for writing
         SSLEngineResult result = sslEngine.unwrap(netInputBuffer, inputBuffer);
         inputBuffer.flip(); // prepare buffer for reading
-        if (result.getStatus() == Status.CLOSED) {
-          return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
-        } else if (result.getStatus() != Status.OK) {
-          throw new IOException(result.toString());
+        Status sslStatus = result.getStatus();
+        switch (sslStatus) {
+          case CLOSED:
+            return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
+          case BUFFER_UNDERFLOW:
+            return ConnectionControl.CONTINUE;
+          case OK:
+            break;
+          default:
+            throw new IOException(result.toString());
         }
   //      parent.log("SSL STATUS=%s", result);
         checkStatus();

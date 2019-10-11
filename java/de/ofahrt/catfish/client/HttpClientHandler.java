@@ -1,7 +1,11 @@
 package de.ofahrt.catfish.client;
 
 import java.nio.ByteBuffer;
+
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLParameters;
+
 import de.ofahrt.catfish.client.HttpClientStage.ResponseHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.NetworkHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
@@ -12,16 +16,18 @@ final class HttpClientHandler implements NetworkHandler {
   private final HttpRequest request;
   private final ResponseHandler responseHandler;
   private final SSLContext sslContext;
+  private final SSLParameters sslParameters;
 
-  HttpClientHandler(HttpRequest request, ResponseHandler responseHandler, SSLContext sslContext) {
+  HttpClientHandler(HttpRequest request, ResponseHandler responseHandler, SSLContext sslContext, SSLParameters sslParameters) {
     this.request = request;
     this.responseHandler = responseHandler;
     this.sslContext = sslContext;
+    this.sslParameters = sslParameters;
   }
 
   @Override
   public boolean usesSsl() {
-    return sslContext != null;
+    return sslParameters != null;
   }
 
   @Override
@@ -39,10 +45,12 @@ final class HttpClientHandler implements NetworkHandler {
           responseHandler,
           decryptedInputBuffer,
           decryptedOutputBuffer);
+      SSLEngine sslEngine = sslContext.createSSLEngine();
+      sslEngine.setSSLParameters(sslParameters);
       return new SslClientStage(
           pipeline,
           httpStage,
-          sslContext,
+          sslEngine,
           inputBuffer,
           outputBuffer,
           decryptedInputBuffer,

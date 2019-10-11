@@ -2,12 +2,14 @@ package de.ofahrt.catfish.client;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import javax.net.ssl.SSLContext;
+import java.util.Arrays;
+
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
+
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.network.Connection;
@@ -26,7 +28,7 @@ final class SslClientStage implements Stage {
   public SslClientStage(
       Pipeline parent,
       Stage next,
-      SSLContext sslContext,
+      SSLEngine sslEngine,
       ByteBuffer netInputBuffer,
       ByteBuffer netOutputBuffer,
       ByteBuffer inputBuffer,
@@ -37,8 +39,13 @@ final class SslClientStage implements Stage {
     this.netOutputBuffer = netOutputBuffer;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
-    this.sslEngine = sslContext.createSSLEngine();
+    this.sslEngine = sslEngine;
     this.sslEngine.setUseClientMode(true);
+    parent.log(
+        "SSL configuration: "
+        + Arrays.toString(sslEngine.getEnabledProtocols())
+        + " "
+        + Arrays.toString(sslEngine.getEnabledCipherSuites()));
     try {
       this.sslEngine.beginHandshake();
     } catch (SSLException e) {
@@ -72,13 +79,19 @@ final class SslClientStage implements Stage {
       SSLEngineResult result = sslEngine.unwrap(netInputBuffer, inputBuffer);
       inputBuffer.flip();
       parent.log("After unwrapping: net_in=%d app_in=%d", Integer.valueOf(netInputBuffer.remaining()), Integer.valueOf(inputBuffer.remaining()));
-      if (result.getStatus() == Status.CLOSED) {
-        parent.close();
-        return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
-      } else if (result.getStatus() != Status.OK) {
-        throw new IOException(result.toString());
-      }
       parent.log("STATUS=%s", result);
+      Status sslStatus = result.getStatus();
+      switch (sslStatus) {
+        case CLOSED:
+          parent.close();
+          return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
+        case BUFFER_UNDERFLOW:
+          return ConnectionControl.CONTINUE;
+        case OK:
+          break;
+        default:
+          throw new IOException(result.toString());
+      }
     }
     checkStatus();
     if (sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_UNWRAP) {

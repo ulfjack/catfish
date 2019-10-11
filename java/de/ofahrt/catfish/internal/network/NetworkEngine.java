@@ -319,10 +319,16 @@ public final class NetworkEngine {
               first.inputClosed();
             }
           }
-          while ((readState == FlowState.OPEN) && inputBuffer.hasRemaining()) {
+          int attempt = 0;
+          loop: while ((readState == FlowState.OPEN) && inputBuffer.hasRemaining()) {
+            int before = inputBuffer.remaining();
             ConnectionControl control = first.read();
             switch (control) {
               case CONTINUE:
+                if ((inputBuffer.remaining() == before) && (attempt++ == 1)) {
+                  // The pipeline did not read any data. It may be an SSL stage that requires more input.
+                  break loop;
+                }
                 break;
               case PAUSE:
                 readState = FlowState.PAUSED;
@@ -400,6 +406,7 @@ public final class NetworkEngine {
           e = new IOException(connection.getId().toString(), e);
           // TODO: This may due to the other side closing the connection prematurely.
           networkEventListener.notifyInternalError(connection, e);
+          state = ConnectionState.CLOSING;
           close();
         }
       }
@@ -568,11 +575,11 @@ public final class NetworkEngine {
           @SuppressWarnings("resource")
           SocketChannel socketChannel = SocketChannel.open();
           socketChannel.configureBlocking(false);
-//          clientChannel.socket().setReuseAddress(true);
-//          clientChannel.socket().bind(new InetSocketAddress(address, port));
           socketChannel.socket().setTcpNoDelay(true);
           socketChannel.socket().setKeepAlive(true);
-//          clientChannel.socket().setSoLinger(false, 0);
+//          socketChannel.socket().setReuseAddress(true);
+//          socketChannel.socket().bind(new InetSocketAddress(address, port));
+//        socketChannel.socket().setSoLinger(false, 0);
           InetSocketAddress remoteAddress = new InetSocketAddress(address, port);
           socketChannel.connect(remoteAddress);
           Connection connection = new Connection(

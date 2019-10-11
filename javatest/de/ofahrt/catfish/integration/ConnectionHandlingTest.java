@@ -107,7 +107,7 @@ private static final boolean DEBUG = false;
         .build();
     List<Future<HttpResponse>> futures = new ArrayList<>();
     for (int i = 0; i < 200; i++) {
-      Future<HttpResponse> future = client.send(HTTP_SERVER_NAME, HTTP_PORT, null, request);
+      Future<HttpResponse> future = client.send(HTTP_SERVER_NAME, HTTP_PORT, null, null, request);
       futures.add(future);
     }
     // Tricky: we don't know when the last request arrives at the server, so we can't reliably

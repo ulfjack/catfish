@@ -4,7 +4,10 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
+
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLParameters;
+
 import de.ofahrt.catfish.client.HttpClientStage.ResponseHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -18,7 +21,8 @@ public class CatfishHttpClient {
     this.engine = new NetworkEngine(eventListener);
   }
 
-  public Future<HttpResponse> send(String host, int port, SSLContext sslContext, HttpRequest request) throws IOException, InterruptedException {
+  public Future<HttpResponse> send(String host, int port, SSLContext sslContext, SSLParameters sslParameters, HttpRequest request)
+      throws IOException, InterruptedException {
     CompletableFuture<HttpResponse> future = new CompletableFuture<>();
     HttpClientHandler handler = new HttpClientHandler(
         request,
@@ -33,7 +37,7 @@ public class CatfishHttpClient {
             future.completeExceptionally(exception);
           }
         },
-        sslContext);
+        sslContext, sslParameters);
     engine.connect(InetAddress.getByName(host), port, handler);
     return future;
   }
