@@ -68,7 +68,7 @@ public class ClientMainForTesting {
 
           @Override
           public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-//            System.out.printf("checkServerTrusted(%s, %s)\n", Arrays.toString(chain), authType);
+            System.out.printf("checkServerTrusted(%s, %s)\n", Arrays.toString(chain), authType);
           }
 
           @Override
