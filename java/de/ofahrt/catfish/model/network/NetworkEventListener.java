@@ -13,6 +13,13 @@ public interface NetworkEventListener {
    * @param connection connection if one is available, null otherwise
    * @param throwable
    */
+  default void warning(Connection connection, Throwable throwable) {
+  }
+
+  /**
+   * @param connection connection if one is available, null otherwise
+   * @param throwable
+   */
   default void notifyInternalError(Connection connection, Throwable throwable) {
   }
 

@@ -267,7 +267,14 @@ public final class NetworkEngine {
           // Read data from the network if data is available.
           if (readState == FlowState.OPEN && key.isReadable()) {
             inputBuffer.compact(); // prepare buffer for writing
-            int readCount = socketChannel.read(inputBuffer);
+            int readCount;
+            try {
+              readCount = socketChannel.read(inputBuffer);
+            } catch (IOException e) {
+              networkEventListener.warning(connection, e);
+              close();
+              return;
+            }
             inputBuffer.flip(); // prepare buffer for reading
             if (readCount == -1) {
               log("Input closed");
@@ -387,7 +394,13 @@ public final class NetworkEngine {
           // Write data to the network if possible.
           if (outputBuffer.hasRemaining() && key.isWritable()) {
             int before = outputBuffer.remaining();
-            socketChannel.write(outputBuffer);
+            try {
+              socketChannel.write(outputBuffer);
+            } catch (IOException e) {
+              networkEventListener.warning(connection, e);
+              close();
+              return;
+            }
             log("Wrote %d bytes (%d still buffered)",
                 Integer.valueOf(before - outputBuffer.remaining()),
                 Integer.valueOf(outputBuffer.remaining()));
@@ -412,7 +425,6 @@ public final class NetworkEngine {
           updateSelector();
         } catch (Exception e) {
           e = new IOException(connection.getId().toString(), e);
-          // TODO: This may due to the other side closing the connection prematurely.
           networkEventListener.notifyInternalError(connection, e);
           state = ConnectionState.CLOSING;
           close();
