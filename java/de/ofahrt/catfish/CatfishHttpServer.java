@@ -139,8 +139,9 @@ public final class CatfishHttpServer {
   }
 
   HttpVirtualHost determineHttpVirtualHost(String hostHeader) {
+    HttpVirtualHost def = hosts.get("default");
     if (hostHeader == null) {
-      return null;
+      return def;
     }
     if (hostHeader.indexOf(':') >= 0) {
       hostHeader = hostHeader.substring(0, hostHeader.indexOf(':'));
@@ -148,7 +149,8 @@ public final class CatfishHttpServer {
     if (hostHeader.endsWith(".localhost")) {
       hostHeader = hostHeader.substring(0, hostHeader.length() - ".localhost".length());
     }
-    return hosts.get(hostHeader);
+    HttpVirtualHost actual = hosts.get(hostHeader);
+    return actual != null ? actual : def;
   }
 
   public void stop() throws InterruptedException {
