@@ -386,7 +386,7 @@ public final class NetworkEngine {
                 return;
             }
             if (before == available(outputBuffer)) {
-              // Pipeline did not read any data.
+              // Pipeline did not write any data.
               break;
             }
           }
@@ -421,7 +421,7 @@ public final class NetworkEngine {
               return;
             }
           }
-  
+
           updateSelector();
         } catch (Exception e) {
           e = new IOException(connection.getId().toString(), e);
