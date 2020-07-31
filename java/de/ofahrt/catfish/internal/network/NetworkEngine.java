@@ -538,12 +538,18 @@ public final class NetworkEngine {
         throw new IllegalStateException();
       }
       CountDownLatch latch = new CountDownLatch(1);
-      AtomicReference<IOException> thrownException = new AtomicReference<>();
+      AtomicReference<Exception> thrownException = new AtomicReference<>();
       queue(() -> {
         try {
           if (shutdown) {
             return;
           }
+          @SuppressWarnings("resource")
+          ServerSocketChannel serverChannel = ServerSocketChannel.open();
+          serverChannel.configureBlocking(false);
+          serverChannel.socket().setReuseAddress(true);
+          serverChannel.socket().bind(new InetSocketAddress(address, port));
+          SelectionKey key = serverChannel.register(selector, SelectionKey.OP_ACCEPT);
           networkEventListener.portOpened(new NetworkServer() {
             @Override
             public InetAddress address() {
@@ -560,24 +566,24 @@ public final class NetworkEngine {
               return handler.usesSsl();
             }
           });
-          @SuppressWarnings("resource")
-          ServerSocketChannel serverChannel = ServerSocketChannel.open();
-          serverChannel.configureBlocking(false);
-          serverChannel.socket().setReuseAddress(true);
-          serverChannel.socket().bind(new InetSocketAddress(address, port));
-          SelectionKey key = serverChannel.register(selector, SelectionKey.OP_ACCEPT);
           ServerSocketHandler socketHandler = new ServerSocketHandler(serverChannel, key, handler);
           key.attach(socketHandler);
           shutdownQueue.add(socketHandler::shutdown);
-        } catch (IOException e) {
+        } catch (Exception e) {
           thrownException.set(e);
+        } finally {
+          latch.countDown();
         }
-        latch.countDown();
       });
       latch.await();
-      IOException e = thrownException.get();
+      Exception e = thrownException.get();
       if (e != null) {
-        throw e;
+        if (e instanceof IOException) {
+          throw (IOException) e;
+        } else if (e instanceof RuntimeException) {
+          throw (RuntimeException) e;
+        }
+        throw new IOException("Unknown error", e);
       }
     }
 
