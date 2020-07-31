@@ -161,6 +161,10 @@ public final class CatfishHttpServer {
     engine.listenLocalhost(port, new HttpServerHandler(this, /*ssl=*/false));
   }
 
+  public void listenHttpsLocal(int port) throws IOException, InterruptedException {
+    engine.listenLocalhost(port, new HttpServerHandler(this, /*ssl=*/true));
+  }
+
   public void listenHttp(int port) throws IOException, InterruptedException {
     engine.listenAll(port, new HttpServerHandler(this, /*ssl=*/false));
   }
