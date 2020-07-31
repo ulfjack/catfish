@@ -404,10 +404,8 @@ public final class NetworkEngine {
             log("Wrote %d bytes (%d still buffered)",
                 Integer.valueOf(before - outputBuffer.remaining()),
                 Integer.valueOf(outputBuffer.remaining()));
-            if (outputBuffer.remaining() > 0) {
-              outputBuffer.compact(); // prepare for writing
-              outputBuffer.flip(); // prepare for reading
-            }
+            outputBuffer.compact(); // prepare for writing
+            outputBuffer.flip(); // prepare for reading
           }
           if (!outputBuffer.hasRemaining()) {
             // There's no remaining data to be written.
