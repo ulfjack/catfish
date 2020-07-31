@@ -1,16 +1,28 @@
 package de.ofahrt.catfish.integration;
 
 import static org.junit.Assert.assertEquals;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
+
 import org.junit.After;
 import org.junit.Test;
+
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.client.CatfishHttpClient;
 import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.HttpVersion;
@@ -24,13 +36,11 @@ import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 
 public class ConnectionHandlingTest {
-private static final boolean DEBUG = false;
+  private static final boolean DEBUG = false;
 
-  public static final String HTTP_SERVER_NAME = "localhost";
-  public static final int HTTP_PORT = 8080;
-  public static final int HTTPS_PORT = 8081;
-  public static final String HTTP_ROOT = "http://localhost:" + HTTP_PORT;
-  public static final String HTTPS_ROOT = "https://localhost:" + HTTPS_PORT;
+  private static final String HTTP_SERVER_NAME = "localhost";
+  private static final int HTTP_PORT = 8080;
+  private static final int HTTPS_PORT = 8081;
 
   private CatfishHttpServer server;
 
@@ -58,9 +68,9 @@ private static final boolean DEBUG = false;
         handler,
         startSsl ? TestHelper.getSSLContext() : null);
     if (startSsl) {
-      server.listenHttps(HTTPS_PORT);
+      server.listenHttpsLocal(HTTPS_PORT);
     } else {
-      server.listenHttp(HTTP_PORT);
+      server.listenHttpLocal(HTTP_PORT);
     }
   }
 
@@ -71,6 +81,7 @@ private static final boolean DEBUG = false;
   @After
   public void stopServer() throws Exception {
     server.stop();
+    server = null;
   }
 
   @Test
@@ -129,5 +140,74 @@ private static final boolean DEBUG = false;
       return -1;
     }
     return code / 100;
+  }
+
+  @Test
+  public void closeConnectionAfterRequest() throws Exception {
+    CountDownLatch blocker = new CountDownLatch(1);
+    CountDownLatch done = new CountDownLatch(1);
+    startServer((connection, request, responseWriter) -> {
+      try {
+        try (OutputStream out = responseWriter.commitStreamed(StandardResponses.OK)) {
+          try {
+            blocker.await();
+          } catch (InterruptedException e) {
+            throw new IllegalStateException();
+          }
+          for (int i = 0; i < 1000; i++) {
+            out.write(new byte[1024]);
+          }
+        } finally {
+          done.countDown();
+        }
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    });
+    Socket socket = new Socket();
+    socket.connect(new InetSocketAddress(InetAddress.getByName(HTTP_SERVER_NAME), HTTP_PORT));
+    HttpRequest request = new SimpleHttpRequest.Builder()
+        .setVersion(HttpVersion.HTTP_1_1)
+        .setMethod("GET")
+        .setUri("/")
+        .addHeader(HttpHeaderName.HOST, HTTP_SERVER_NAME)
+        .addHeader(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE)
+        .build();
+    try (OutputStream out = socket.getOutputStream()) {
+      out.write(requestLineToByteArray(request));
+      out.write(headersToByteArray(request.getHeaders()));
+      socket.getInputStream().close();
+    }
+    socket.close();
+    Thread.sleep(100);
+    blocker.countDown();
+    done.await();
+  }
+
+  private static final String CRLF = "\r\n";
+
+  private static byte[] requestLineToByteArray(HttpRequest request) {
+    StringBuilder buffer = new StringBuilder(200);
+    buffer.append(request.getMethod());
+    buffer.append(" ");
+    buffer.append(request.getUri());
+    buffer.append(" ");
+    buffer.append(request.getVersion());
+    buffer.append(CRLF);
+    return buffer.toString().getBytes(StandardCharsets.UTF_8);
+  }
+
+  private static byte[] headersToByteArray(HttpHeaders headers) {
+    StringBuilder buffer = new StringBuilder(200);
+    Iterator<Map.Entry<String, String>> it = headers.iterator();
+    while (it.hasNext()) {
+      Map.Entry<String, String> entry = it.next();
+      buffer.append(entry.getKey());
+      buffer.append(": ");
+      buffer.append(entry.getValue());
+      buffer.append(CRLF);
+    }
+    buffer.append(CRLF);
+    return buffer.toString().getBytes(StandardCharsets.UTF_8);
   }
 }
