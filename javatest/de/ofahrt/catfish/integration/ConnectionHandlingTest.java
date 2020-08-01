@@ -155,7 +155,7 @@ public class ConnectionHandlingTest {
             throw new IllegalStateException();
           }
           for (int i = 0; i < 1000; i++) {
-            out.write(new byte[1024]);
+            out.write(new byte[65536]);
           }
         } finally {
           done.countDown();

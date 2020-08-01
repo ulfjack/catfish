@@ -34,6 +34,7 @@ import de.ofahrt.catfish.model.network.NetworkServer;
 public final class NetworkEngine {
   private static final boolean DEBUG = false;
   private static final boolean LOG_TO_FILE = false;
+  private static final int DEFAULT_BUFFER_SIZE = 32768;
 
   private static final boolean OUTGOING_CONNECTION = true;
   private static final boolean INCOMING_CONNECTION = false;
@@ -149,8 +150,8 @@ public final class NetworkEngine {
       this.socketChannel = socketChannel;
       this.key = key;
       this.logHandler = logHandler;
-      this.inputBuffer = ByteBuffer.allocate(32768);
-      this.outputBuffer = ByteBuffer.allocate(32768);
+      this.inputBuffer = ByteBuffer.allocate(DEFAULT_BUFFER_SIZE);
+      this.outputBuffer = ByteBuffer.allocate(DEFAULT_BUFFER_SIZE);
       inputBuffer.clear();
       inputBuffer.flip(); // prepare for reading
       outputBuffer.clear();

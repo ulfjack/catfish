@@ -14,7 +14,7 @@ import de.ofahrt.catfish.utils.ConnectionClosedException;
 final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private static final boolean DEBUG = false;
 
-  private static final int DEFAULT_BUFFER_SIZE = 2048;
+  private static final int DEFAULT_BUFFER_SIZE = 32768;
   private static final byte[] HEX_DIGITS = "0123456789abcdef".getBytes(StandardCharsets.UTF_8);
   private static final byte[] LAST_CHUNK = "0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
