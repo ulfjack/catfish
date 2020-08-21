@@ -86,7 +86,7 @@ final class SslClientStage implements Stage {
           parent.close();
           return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
         case BUFFER_UNDERFLOW:
-          return ConnectionControl.CONTINUE;
+          return ConnectionControl.NEED_MORE_DATA;
         case OK:
           break;
         default:
