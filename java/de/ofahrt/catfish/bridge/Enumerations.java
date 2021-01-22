@@ -16,7 +16,7 @@ public final class Enumerations {
   }
 
   public static <T> Enumeration<T> of(final T value) {
-    return new Enumeration<>() {
+    return new Enumeration<T>() {
       private boolean returned = false;
 
       @Override

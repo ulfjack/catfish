@@ -447,7 +447,7 @@ public final class RequestImpl implements HttpServletRequest {
   @Override
   public Enumeration<String> getHeaderNames() {
     final Iterator<String> it = headers.keySet().iterator();
-    return new Enumeration<>() {
+    return new Enumeration<String>() {
       @Override
       public boolean hasMoreElements() {
         return it.hasNext();
