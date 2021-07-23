@@ -7,6 +7,7 @@ import de.ofahrt.catfish.model.HttpVersion;
 
 public class HttpVersionTest {
   @Test
+  @SuppressWarnings({"SelfComparison"})
   public void compareTo() {
     assertEquals(-1, HttpVersion.HTTP_0_9.compareTo(HttpVersion.HTTP_1_1));
     assertEquals(1, HttpVersion.HTTP_1_1.compareTo(HttpVersion.HTTP_1_0));
