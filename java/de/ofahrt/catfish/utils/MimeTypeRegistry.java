@@ -157,7 +157,7 @@ public final class MimeTypeRegistry {
     result.put("pgm",  MimeType.getInstance("image", "x-portable-graymap"));
     result.put("ppm",  MimeType.getInstance("image", "x-portable-pixmap"));
     result.put("rgb",  MimeType.getInstance("image", "x-rgb"));
-    result.put("svg",  Mimetype.getInstance("image", "svg+xml"));
+    result.put("svg",  MimeType.getInstance("image", "svg+xml"));
     result.put("xbm",  MimeType.getInstance("image", "x-xbitmap"));
     result.put("xpm",  MimeType.getInstance("image", "x-xpixmap"));
     result.put("xwd",  MimeType.getInstance("image", "x-xwindowdump"));
