@@ -97,8 +97,8 @@ public final class SimpleHttpResponse implements HttpResponse {
       key = HttpHeaderName.canonicalize(key);
       if (headers.get(key) != null) {
         if (!HttpHeaderName.mayOccurMultipleTimes(key)) {
-          setBadResponse("Illegal message headers: multiple occurrance for non-list field");
-          throw new IllegalArgumentException("Illegal message headers: multiple occurrance for non-list field");
+          setBadResponse("Illegal message headers: multiple occurence for non-list field");
+          throw new IllegalArgumentException("Illegal message headers: multiple occurence for non-list field");
         }
         value = headers.get(key) + ", " + value;
       }
