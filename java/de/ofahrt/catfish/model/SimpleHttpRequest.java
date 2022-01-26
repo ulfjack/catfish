@@ -123,7 +123,7 @@ public final class SimpleHttpRequest implements HttpRequest {
       key = HttpHeaderName.canonicalize(key);
       if (headers.get(key) != null) {
         if (!HttpHeaderName.mayOccurMultipleTimes(key)) {
-          setError(HttpStatusCode.BAD_REQUEST, "Illegal message headers: multiple occurrance for non-list field");
+          setError(HttpStatusCode.BAD_REQUEST, "Illegal message headers: multiple occurence for non-list field");
           return this;
         }
         value = headers.get(key) + ", " + value;
