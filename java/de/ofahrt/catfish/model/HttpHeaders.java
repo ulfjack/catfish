@@ -68,4 +68,14 @@ public final class HttpHeaders implements Iterable<Map.Entry<String, String>> {
     mergedMap.putAll(overrides.entries);
     return new HttpHeaders(mergedMap);
   }
+
+  @Override
+  public int hashCode() {
+    return entries.hashCode();
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    return entries.equals(obj);
+  }
 }
