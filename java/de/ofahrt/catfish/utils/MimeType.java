@@ -38,10 +38,13 @@ public final class MimeType implements Serializable {
     throw new IllegalArgumentException("not a valid mime-type: \"" + type + "\"");
   }
 
+  public static final MimeType APPLICATION_DOCX = getInstance("application",
+      "vnd.openxmlformats-officedocument.wordprocessingml.document");
   public static final MimeType APPLICATION_JAVASCRIPT = getInstance("application", "javascript");
   public static final MimeType APPLICATION_JSON = getInstance("application", "json");
   public static final MimeType APPLICATION_OCTET_STREAM = getInstance("application", "octet-stream");
   public static final MimeType APPLICATION_OGG = getInstance("application", "ogg");
+  public static final MimeType APPLICATION_MSWORD = getInstance("application", "msword");
   public static final MimeType APPLICATION_PDF = getInstance("application", "pdf");
   public static final MimeType APPLICATION_POSTSCRIPT = getInstance("application", "postscript");
   public static final MimeType APPLICATION_XHTML_AND_XML = getInstance("application", "xhtml+xml");

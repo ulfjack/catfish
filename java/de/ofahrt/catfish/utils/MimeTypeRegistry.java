@@ -11,25 +11,25 @@ public final class MimeTypeRegistry {
   private static final Map<String,MimeType> EXTENSION_TABLE = getExtensionTable();
 
   public static MimeType guessFromExtension(String fileextension) {
-  	MimeType result = EXTENSION_TABLE.get(fileextension.toLowerCase(Locale.US));
-  	if (result == null) {
-  	  return DEFAULT_MIMETYPE;
-  	}
-  	return result;
+    MimeType result = EXTENSION_TABLE.get(fileextension.toLowerCase(Locale.US));
+    if (result == null) {
+      return DEFAULT_MIMETYPE;
+    }
+    return result;
   }
 
   public static MimeType guessFromFilename(String filename) {
-  	String extension = filename.substring(filename.lastIndexOf('.')+1).toLowerCase(Locale.US);
-  	MimeType result = EXTENSION_TABLE.get(extension);
-  	if (result == null) {
-  	  return DEFAULT_MIMETYPE;
-  	}
-  	return result;
+    String extension = filename.substring(filename.lastIndexOf('.')+1).toLowerCase(Locale.US);
+    MimeType result = EXTENSION_TABLE.get(extension);
+    if (result == null) {
+      return DEFAULT_MIMETYPE;
+    }
+    return result;
   }
 
   private static Map<String, MimeType> getExtensionTable() {
-  	Map<String,MimeType> result = new HashMap<>();
-  	result.put("ez",    MimeType.getInstance("application", "andrew-inset"));
+    Map<String,MimeType> result = new HashMap<>();
+    result.put("ez",    MimeType.getInstance("application", "andrew-inset"));
     result.put("hqx",   MimeType.getInstance("application", "mac-binhex40"));
     result.put("cpt",   MimeType.getInstance("application", "mac-compactpro"));
     result.put("doc",   MimeType.getInstance("application", "msword"));
@@ -52,6 +52,8 @@ public final class MimeTypeRegistry {
     result.put("mif",   MimeType.getInstance("application", "vnd.mif"));
     result.put("xls",   MimeType.getInstance("application", "vnd.ms-excel"));
     result.put("ppt",   MimeType.getInstance("application", "vnd.ms-powerpoint"));
+    result.put("docx",  MimeType.getInstance("application",
+        "vnd.openxmlformats-officedocument.wordprocessingml.document"));
     result.put("sic",   MimeType.getInstance("application", "vnd.wap.sic"));
     result.put("slc",   MimeType.getInstance("application", "vnd.wap.slc"));
     result.put("wbxml", MimeType.getInstance("application", "vnd.wap.wbxml"));
@@ -80,7 +82,7 @@ public final class MimeTypeRegistry {
     result.put("kpt",   MimeType.getInstance("application", "x-kpresenter"));
     result.put("chrt",  MimeType.getInstance("application", "x-kchart"));
     result.put("kil",   MimeType.getInstance("application", "x-killustrator"));
-  	result.put("rdf",   MimeType.getInstance("application", "xml"));
+    result.put("rdf",   MimeType.getInstance("application", "xml"));
     result.put("skp",   MimeType.getInstance("application", "x-koan"));
     result.put("skd",   MimeType.getInstance("application", "x-koan"));
     result.put("skt",   MimeType.getInstance("application", "x-koan"));
@@ -111,11 +113,11 @@ public final class MimeTypeRegistry {
     result.put("src",   MimeType.getInstance("application", "x-wais-source"));
     result.put("xhtml", MimeType.getInstance("application", "xhtml+xml"));
     result.put("xht",   MimeType.getInstance("application", "xhtml+xml"));
-  	result.put("xul",   MimeType.getInstance("application", "vnd.mozilla.xul+xml"));
+    result.put("xul",   MimeType.getInstance("application", "vnd.mozilla.xul+xml"));
     result.put("zip",   MimeType.getInstance("application", "zip"));
-    
+   
     result.put("jar", MimeType.getInstance("application", "java-archive"));
-    
+
     result.put("au",   MimeType.getInstance("audio", "basic"));
     result.put("snd",  MimeType.getInstance("audio", "basic"));
     result.put("mid",  MimeType.getInstance("audio", "midi"));
@@ -132,12 +134,12 @@ public final class MimeTypeRegistry {
     result.put("rm",   MimeType.getInstance("audio", "x-pn-realaudio"));
     result.put("ra",   MimeType.getInstance("audio", "x-realaudio"));
     result.put("wav",  MimeType.getInstance("audio", "x-wav"));
-    
+   
     result.put("pdb",  MimeType.getInstance("chemical", "x-pdb"));
     result.put("xyz",  MimeType.getInstance("chemical", "x-xyz"));
 
     result.put("woff2", MimeType.getInstance("font", "woff2"));
-    
+   
     result.put("bmp",  MimeType.getInstance("image", "bmp"));
     result.put("gif",  MimeType.getInstance("image", "gif"));
     result.put("ico",  MimeType.getInstance("image", "x-icon"));
@@ -161,7 +163,7 @@ public final class MimeTypeRegistry {
     result.put("xbm",  MimeType.getInstance("image", "x-xbitmap"));
     result.put("xpm",  MimeType.getInstance("image", "x-xpixmap"));
     result.put("xwd",  MimeType.getInstance("image", "x-xwindowdump"));
-    
+   
     result.put("igs",  MimeType.getInstance("model", "iges"));
     result.put("iges", MimeType.getInstance("model", "iges"));
     result.put("msh",  MimeType.getInstance("model", "mesh"));
@@ -169,7 +171,7 @@ public final class MimeTypeRegistry {
     result.put("silo", MimeType.getInstance("model", "mesh"));
     result.put("wrl",  MimeType.getInstance("model", "vrml"));
     result.put("vrml", MimeType.getInstance("model", "vrml"));
-    
+   
     result.put("js",   MimeType.getInstance("text", "javascript"));
     result.put("css",  MimeType.getInstance("text", "css"));
     result.put("html", MimeType.getInstance("text", "html"));
@@ -188,7 +190,7 @@ public final class MimeTypeRegistry {
     result.put("etx",  MimeType.getInstance("text", "x-setext"));
     result.put("xml",  MimeType.getInstance("text", "xml"));
     result.put("xsl",  MimeType.getInstance("text", "xml"));
-    
+   
     result.put("mpeg", MimeType.getInstance("video", "mpeg"));
     result.put("mpg",  MimeType.getInstance("video", "mpeg"));
     result.put("mpe",  MimeType.getInstance("video", "mpeg"));
@@ -197,7 +199,7 @@ public final class MimeTypeRegistry {
     result.put("mxu",  MimeType.getInstance("video", "vnd.mpegurl"));
     result.put("avi",  MimeType.getInstance("video", "x-msvideo"));
     result.put("movie", MimeType.getInstance("video", "x-sgi-movie"));
-    
+   
     result.put("ice",  MimeType.getInstance("x-conference", "x-cooltalk"));
     return Collections.unmodifiableMap(result);
   }
