@@ -11,7 +11,7 @@ public final class Connection {
   private final InetSocketAddress localAddress;
   private final InetSocketAddress remoteAddress;
   private final boolean ssl;
-  private final SslSession sslSession;
+  private final SSLSession sslSession;
 
   public Connection(InetSocketAddress localAddress, InetSocketAddress remoteAddress, boolean ssl) {
     this.id = UUID.randomUUID();
@@ -23,7 +23,7 @@ public final class Connection {
     this.sslSession = null;
   }
 
-  public Connection(InetSocketAddress localAddress, InetSocketAddress remoteAddress, SslSession sslSession) {
+  public Connection(InetSocketAddress localAddress, InetSocketAddress remoteAddress, SSLSession sslSession) {
     this.id = UUID.randomUUID();
     this.startTimeMillis = System.currentTimeMillis();
     this.startTimeNanos = System.nanoTime();
@@ -57,7 +57,7 @@ public final class Connection {
     return ssl;
   }
 
-  public SslSession getSslSession() {
+  public SSLSession getSSLSession() {
     return sslSession;
   }
 
