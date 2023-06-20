@@ -1,2 +1,5 @@
 .ijwb/
+.idea/
 bazel-*
+catfish.iml
+out/
