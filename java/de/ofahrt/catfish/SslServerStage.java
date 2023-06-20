@@ -185,8 +185,15 @@ final class SslServerStage implements Stage {
       }
       return ConnectionControl.CONTINUE;
     } else if (status == FlowStatus.OPEN) {
-      parent.log("SSL Write");
-      ConnectionControl nextState = next.write();
+      long availableCapacity =
+          outputBuffer.capacity() - outputBuffer.limit() + outputBuffer.position();
+      parent.log("SSL Write capacity=%s", availableCapacity);
+      ConnectionControl nextState;
+      if (availableCapacity == 0) {
+        nextState = ConnectionControl.CONTINUE;
+      } else {
+        nextState = next.write();
+      }
       parent.log("SSL next=%s", nextState);
       // invariant: both netOutputBuffer and outputBuffer are readable
       if (!netOutputBuffer.hasRemaining() && outputBuffer.hasRemaining()) {
