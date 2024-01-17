@@ -557,7 +557,7 @@ public final class NetworkEngine {
 
             @Override
             public int port() {
-              return port;
+              return serverChannel.socket().getLocalPort();
             }
 
             @Override
