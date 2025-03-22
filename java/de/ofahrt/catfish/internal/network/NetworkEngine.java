@@ -242,7 +242,6 @@ public final class NetworkEngine {
         readState = FlowState.CLOSED;
         // Release resources, we may have a worker thread blocked on writing to the connection.
         first.close();
-        closedCounter.incrementAndGet();
         key.cancel();
         try {
           socketChannel.close();
@@ -250,6 +249,7 @@ public final class NetworkEngine {
           // There's nothing we can do if this fails.
           networkEventListener.notifyInternalError(connection, ignored);
         }
+        closedCounter.incrementAndGet();
       } else if (state == ConnectionState.CONNECTING) {
         if (key.isConnectable()) {
           try {
@@ -636,6 +636,10 @@ public final class NetworkEngine {
       shutdownQueue.add(() -> latch.countDown());
       queue(() -> shutdown = true);
       latch.await();
+      try {
+        selector.close();
+      } catch (IOException ignored) {
+      }
     }
 
     private void attachConnection(Connection connection, SocketChannel socketChannel, NetworkHandler handler) {
