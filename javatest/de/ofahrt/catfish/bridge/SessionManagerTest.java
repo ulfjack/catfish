@@ -100,7 +100,7 @@ public class SessionManagerTest {
     assertEquals(1, c.compareTo(a));
     assertEquals(-1, b.compareTo(c));
     assertEquals(1, c.compareTo(b));
-    assertEquals(a, a);
+    assertTrue(a.equals(a));
     assertFalse(a.equals(b));
     assertEquals(System.identityHashCode(a), a.hashCode());
   }
