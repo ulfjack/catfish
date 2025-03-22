@@ -1,6 +1,7 @@
 java_test(
     name = "catfish",
     srcs = glob(["**/*.java"]),
+    classpath_resources = ["test-certificate.p12"],
     test_class = "de.ofahrt.catfish.CatfishTestSuite",
     deps = [
         "//java/de/ofahrt/catfish",
