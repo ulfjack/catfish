@@ -34,7 +34,7 @@ public class RequestImplTest {
         null);
   }
 
-  @Test(expected = IllegalStateException.class)
+  @Test(expected = MalformedRequestException.class)
   public void missingUri() throws MalformedRequestException {
     new SimpleHttpRequest.Builder().build();
   }

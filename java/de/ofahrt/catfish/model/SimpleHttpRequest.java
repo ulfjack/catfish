@@ -69,22 +69,22 @@ public final class SimpleHttpRequest implements HttpRequest {
 
     @SuppressWarnings("unused")
     public HttpRequest build() throws MalformedRequestException {
-      if ((errorResponse == null)
-          && (version.compareTo(HttpVersion.HTTP_1_1) >= 0)
-          && !headers.containsKey(HttpHeaderName.HOST)) {
-        setError(HttpStatusCode.BAD_REQUEST, "Missing 'Host' field");
+      if (errorResponse != null) {
+        throw new MalformedRequestException(errorResponse);
       }
-      if ((unparsedUri == null) && (errorResponse == null)) {
-        throw new IllegalStateException("Missing URI!");
+      if (unparsedUri == null) {
+        setError(HttpStatusCode.BAD_REQUEST, "Missing URI!");
+        throw new MalformedRequestException(errorResponse);
       }
       try {
-        if (unparsedUri != null) {
-          new URI(unparsedUri);
-        }
+        new URI(unparsedUri);
       } catch (URISyntaxException e) {
         setError(HttpStatusCode.BAD_REQUEST, "Malformed URI");
+        throw new MalformedRequestException(errorResponse);
       }
-      if (errorResponse != null) {
+      if ((version.compareTo(HttpVersion.HTTP_1_1) >= 0)
+          && !headers.containsKey(HttpHeaderName.HOST)) {
+        setError(HttpStatusCode.BAD_REQUEST, "Missing 'Host' field");
         throw new MalformedRequestException(errorResponse);
       }
       boolean hasContentLength = headers.containsKey(HttpHeaderName.CONTENT_LENGTH);
@@ -92,12 +92,14 @@ public final class SimpleHttpRequest implements HttpRequest {
       boolean mustHaveBody = hasContentLength || hasTransferEncoding;
       if (mustHaveBody) {
         if (body == null) {
-          throw new IllegalStateException(
+          setError(HttpStatusCode.BAD_REQUEST,
               "Requests with a Content-Length or Transfer-Encoding header must have a body");
+          throw new MalformedRequestException(errorResponse);
         }
       } else if (body != null) {
-        throw new IllegalStateException(
+        setError(HttpStatusCode.BAD_REQUEST,
             "Requests without a Content-Length or Transfer-Encoding header must not have a body");
+        throw new MalformedRequestException(errorResponse);
       }
       return new SimpleHttpRequest(this);
     }
@@ -123,7 +125,8 @@ public final class SimpleHttpRequest implements HttpRequest {
       key = HttpHeaderName.canonicalize(key);
       if (headers.get(key) != null) {
         if (!HttpHeaderName.mayOccurMultipleTimes(key)) {
-          setError(HttpStatusCode.BAD_REQUEST, "Illegal message headers: multiple occurence for non-list field");
+          setError(HttpStatusCode.BAD_REQUEST,
+              "Illegal message headers: multiple occurence for non-list field");
           return this;
         }
         value = headers.get(key) + ", " + value;
