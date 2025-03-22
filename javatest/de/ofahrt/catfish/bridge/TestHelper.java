@@ -1,14 +1,11 @@
 package de.ofahrt.catfish.bridge;
 
+import de.ofahrt.catfish.ssl.SSLContextFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
-
 import javax.net.ssl.SSLContext;
 import javax.servlet.http.HttpSession;
-
-import de.ofahrt.catfish.bridge.SessionImpl;
-import de.ofahrt.catfish.ssl.SSLContextFactory;
 
 public class TestHelper {
 
@@ -21,8 +18,13 @@ public class TestHelper {
   }
 
   private static InputStream getTestCertificate() {
-    InputStream in = TestHelper.class.getClassLoader().getResourceAsStream(
-        "de/ofahrt/catfish/test-certificate.p12");
+    InputStream in = TestHelper.class.getClassLoader().getResourceAsStream("test-certificate.p12");
+    if (in == null) {
+      in =
+          TestHelper.class
+              .getClassLoader()
+              .getResourceAsStream("de/ofahrt/catfish/test-certificate.p12");
+    }
     if (in == null) {
       throw new RuntimeException("PKCS12 test certificate not found");
     }
