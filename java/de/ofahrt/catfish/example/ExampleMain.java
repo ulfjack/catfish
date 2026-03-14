@@ -1,9 +1,5 @@
 package de.ofahrt.catfish.example;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStream;
-import javax.net.ssl.SSLContext;
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
@@ -19,6 +15,10 @@ import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.ssl.SSLContextFactory;
 import de.ofahrt.catfish.ssl.SSLContextFactory.SSLInfo;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import javax.net.ssl.SSLContext;
 
 public class ExampleMain {
 
@@ -42,54 +42,57 @@ public class ExampleMain {
       }
     }
     if ((sslKeyFile != null) && (sslCrtFile != null)) {
-      SSLInfo sslInfo = SSLContextFactory.loadPemKeyAndCrtFiles(new File(sslKeyFile), new File(sslCrtFile));
+      SSLInfo sslInfo =
+          SSLContextFactory.loadPemKeyAndCrtFiles(new File(sslKeyFile), new File(sslCrtFile));
       sslContext = sslInfo.getSSLContext();
       domainName = sslInfo.getCertificateCommonName();
     }
 
-    CatfishHttpServer server = new CatfishHttpServer(new NetworkEventListener() {
-      @Override
-      public void shutdown() {
-        System.out.println("[CATFISH] Server stopped.");
-      }
+    CatfishHttpServer server =
+        new CatfishHttpServer(
+            new NetworkEventListener() {
+              @Override
+              public void shutdown() {
+                System.out.println("[CATFISH] Server stopped.");
+              }
 
-      @Override
-      public void portOpened(int port, boolean ssl) {
-        System.out.println("[CATFISH] Opening socket on port "+port+(ssl ? " (ssl)" : ""));
-      }
+              @Override
+              public void portOpened(int port, boolean ssl) {
+                System.out.println(
+                    "[CATFISH] Opening socket on port " + port + (ssl ? " (ssl)" : ""));
+              }
 
-      @Override
-      public void notifyInternalError(Connection id, Throwable throwable) {
-        throwable.printStackTrace();
-      }
-    });
-    server.addRequestListener(new HttpServerListener() {
-      @Override
-      public void notifySent(Connection connection, HttpRequest request, HttpResponse response, int bytesSent) {
-        if ((response.getStatusCode() / 100) == 5) {
-          System.out.printf("[CATFISH] %d %s\n",
-              Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
-        }
-      }
-    });
+              @Override
+              public void notifyInternalError(Connection id, Throwable throwable) {
+                throwable.printStackTrace();
+              }
+            });
+    server.addRequestListener(
+        new HttpServerListener() {
+          @Override
+          public void notifySent(
+              Connection connection, HttpRequest request, HttpResponse response, int bytesSent) {
+            if ((response.getStatusCode() / 100) == 5) {
+              System.out.printf(
+                  "[CATFISH] %d %s\n",
+                  Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
+            }
+          }
+        });
 
-    HttpHandler handler = new ServletHttpHandler.Builder()
-        .withSessionManager(new SessionManager())
-        .exact("/hello.php", new FcgiServlet())
-        .exact("/post", new CheckPostHandler())
-        .exact("/", new TraceHandler())
-        .exact("/large", new LargeResponseHandler(16536))
-        .directory("/public/", new DirectoryHandler("/tmp/public/"))
-        .build();
+    HttpHandler handler =
+        new ServletHttpHandler.Builder()
+            .withSessionManager(new SessionManager())
+            .exact("/hello.php", new FcgiServlet())
+            .exact("/post", new CheckPostHandler())
+            .exact("/", new TraceHandler())
+            .exact("/large", new LargeResponseHandler(16536))
+            .directory("/public/", new DirectoryHandler("/tmp/public/"))
+            .build();
     handler = new BasicHttpHandler(handler);
 
     // Keep-alive and compression policies must be set before adding a host.
-    server.addHttpHost(
-        "localhost",
-        UploadPolicy.DENY,
-        ResponsePolicy.KEEP_ALIVE,
-        handler,
-        null);
+    server.addHttpHost("localhost", UploadPolicy.DENY, ResponsePolicy.KEEP_ALIVE, handler, null);
     server.listenHttp(8080);
     if (sslContext != null) {
       // TODO: This doesn't work for wildcard certificates.

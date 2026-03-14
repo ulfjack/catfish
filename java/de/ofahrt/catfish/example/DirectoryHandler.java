@@ -1,11 +1,5 @@
 package de.ofahrt.catfish.example;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.URI;
-import java.net.URISyntaxException;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpMethodName;
@@ -18,6 +12,12 @@ import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.MimeType;
 import de.ofahrt.catfish.utils.MimeTypeRegistry;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 public final class DirectoryHandler implements HttpHandler {
   private final String internalPath;
@@ -30,7 +30,8 @@ public final class DirectoryHandler implements HttpHandler {
   }
 
   @Override
-  public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter) throws IOException {
+  public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter)
+      throws IOException {
     if (!HttpMethodName.GET.equals(request.getMethod())) {
       responseWriter.commitBuffered(StandardResponses.METHOD_NOT_ALLOWED);
       return;
@@ -50,9 +51,10 @@ public final class DirectoryHandler implements HttpHandler {
     }
 
     long lastModified = f.lastModified();
-    HttpHeaders headers = HttpHeaders.of(
-        HttpHeaderName.LAST_MODIFIED, HttpDate.formatDate(lastModified),
-        HttpHeaderName.CONTENT_TYPE, guessContentType(f));
+    HttpHeaders headers =
+        HttpHeaders.of(
+            HttpHeaderName.LAST_MODIFIED, HttpDate.formatDate(lastModified),
+            HttpHeaderName.CONTENT_TYPE, guessContentType(f));
 
     String ifModifiedSinceText = request.getHeaders().get(HttpHeaderName.IF_MODIFIED_SINCE);
     if (ifModifiedSinceText != null) {

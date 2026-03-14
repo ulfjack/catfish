@@ -1,5 +1,10 @@
 package de.ofahrt.catfish.internal.network;
 
+import de.ofahrt.catfish.internal.network.Stage.ConnectionControl;
+import de.ofahrt.catfish.internal.network.Stage.InitialConnectionState;
+import de.ofahrt.catfish.model.network.Connection;
+import de.ofahrt.catfish.model.network.NetworkEventListener;
+import de.ofahrt.catfish.model.network.NetworkServer;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -25,11 +30,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import de.ofahrt.catfish.internal.network.Stage.ConnectionControl;
-import de.ofahrt.catfish.internal.network.Stage.InitialConnectionState;
-import de.ofahrt.catfish.model.network.Connection;
-import de.ofahrt.catfish.model.network.NetworkEventListener;
-import de.ofahrt.catfish.model.network.NetworkServer;
 
 public final class NetworkEngine {
   private static final boolean DEBUG = false;
@@ -39,18 +39,24 @@ public final class NetworkEngine {
   private static final boolean OUTGOING_CONNECTION = true;
   private static final boolean INCOMING_CONNECTION = false;
 
-  private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS");
+  private static final DateTimeFormatter DATE_FORMATTER =
+      DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS");
 
   public interface Pipeline {
     void encourageWrites();
+
     void encourageReads();
+
     void close();
+
     void queue(Runnable runnable);
+
     void log(String text, Object... params);
   }
 
   public interface NetworkHandler {
     boolean usesSsl();
+
     Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer);
   }
 
@@ -62,7 +68,7 @@ public final class NetworkEngine {
     void log(String text);
   }
 
-  private final static class FileLogHandler implements LogHandler {
+  private static final class FileLogHandler implements LogHandler {
     private static final String POISON_PILL = "poison pill";
 
     private final BlockingQueue<String> queue = new ArrayBlockingQueue<>(100);
@@ -96,16 +102,14 @@ public final class NetworkEngine {
     }
   }
 
-  private final static class ConsoleLogHandler implements LogHandler {
+  private static final class ConsoleLogHandler implements LogHandler {
     @Override
     public void log(String text) {
       System.out.println(text);
     }
   }
 
-  private static final String[] SELECT_MODE = new String[] {
-      "NONE", "READ", "WRITE", "READ+WRITE"
-  };
+  private static final String[] SELECT_MODE = new String[] {"NONE", "READ", "WRITE", "READ+WRITE"};
 
   private enum ConnectionState {
     CONNECTING,
@@ -157,7 +161,9 @@ public final class NetworkEngine {
       outputBuffer.clear();
       outputBuffer.flip(); // prepare for reading
       this.first = handler.connect(this, inputBuffer, outputBuffer);
-      log("%s at %s", outgoing ? "Outgoing" : "Incoming",
+      log(
+          "%s at %s",
+          outgoing ? "Outgoing" : "Incoming",
           DATE_FORMATTER.format(
               ZonedDateTime.ofInstant(
                   Instant.ofEpochMilli(connection.startTimeMillis()), ZoneId.systemDefault())));
@@ -176,8 +182,10 @@ public final class NetworkEngine {
         state = ConnectionState.OPEN;
         InitialConnectionState initialState = first.connect(connection);
         log("Connected state=%s", initialState);
-        readState = initialState != InitialConnectionState.WRITE_ONLY ? FlowState.OPEN : FlowState.PAUSED;
-        writeState = initialState != InitialConnectionState.READ_ONLY ? FlowState.OPEN : FlowState.PAUSED;
+        readState =
+            initialState != InitialConnectionState.WRITE_ONLY ? FlowState.OPEN : FlowState.PAUSED;
+        writeState =
+            initialState != InitialConnectionState.READ_ONLY ? FlowState.OPEN : FlowState.PAUSED;
         updateSelector();
       } catch (Exception e) {
         close();
@@ -196,37 +204,40 @@ public final class NetworkEngine {
 
     @Override
     public void encourageWrites() {
-      queue.queue(() -> {
-        if (state == ConnectionState.OPEN && writeState == FlowState.PAUSED) {
-          writeState = FlowState.OPEN;
-          handleEvent();
-        }
-      });
+      queue.queue(
+          () -> {
+            if (state == ConnectionState.OPEN && writeState == FlowState.PAUSED) {
+              writeState = FlowState.OPEN;
+              handleEvent();
+            }
+          });
     }
 
     @Override
     public void encourageReads() {
-      queue.queue(() -> {
-        if (state == ConnectionState.OPEN) {
-          if (readState == FlowState.PAUSED) {
-            readState = FlowState.OPEN;
-            handleEvent();
-          } else if (readState == FlowState.PAUSED_CLOSE_AFTER_FLUSH) {
-            readState = FlowState.CLOSE_AFTER_FLUSH;
-            handleEvent();
-          }
-        }
-      });
+      queue.queue(
+          () -> {
+            if (state == ConnectionState.OPEN) {
+              if (readState == FlowState.PAUSED) {
+                readState = FlowState.OPEN;
+                handleEvent();
+              } else if (readState == FlowState.PAUSED_CLOSE_AFTER_FLUSH) {
+                readState = FlowState.CLOSE_AFTER_FLUSH;
+                handleEvent();
+              }
+            }
+          });
     }
 
     @Override
     public void close() {
-      queue.queue(() -> {
-        if (state != ConnectionState.CLOSED) {
-          state = ConnectionState.CLOSING;
-          handleEvent();
-        }
-      });
+      queue.queue(
+          () -> {
+            if (state != ConnectionState.CLOSED) {
+              state = ConnectionState.CLOSING;
+              handleEvent();
+            }
+          });
     }
 
     @Override
@@ -281,11 +292,12 @@ public final class NetworkEngine {
               log("Input closed");
               readState = FlowState.CLOSE_AFTER_FLUSH;
             } else {
-              log("Read %d bytes (%d buffered)",
+              log(
+                  "Read %d bytes (%d buffered)",
                   Integer.valueOf(readCount), Integer.valueOf(inputBuffer.remaining()));
             }
           }
-  
+
           // Process any data in the input buffer.
           while (readState == FlowState.CLOSE_AFTER_FLUSH) {
             // There's no more incoming data, but we only want to notify the stage once all data is
@@ -296,7 +308,8 @@ public final class NetworkEngine {
                 case CONTINUE:
                   break;
                 case NEED_MORE_DATA:
-                  // No more data is coming and the stage thinks it needs more. Close the connection.
+                  // No more data is coming and the stage thinks it needs more. Close the
+                  // connection.
                   inputBuffer.clear();
                   break;
                 case PAUSE:
@@ -319,9 +332,11 @@ public final class NetworkEngine {
                   socketChannel.shutdownInput();
                   break;
                 case CLOSE_OUTPUT_AFTER_FLUSH:
-                  throw new IllegalStateException(String.format("Cannot close-output-after-flush after read (%s)", first));
+                  throw new IllegalStateException(
+                      String.format("Cannot close-output-after-flush after read (%s)", first));
                 case CLOSE_CONNECTION_AFTER_FLUSH:
-                  throw new IllegalStateException(String.format("Cannot close-connection-after-flush after read (%s)", first));
+                  throw new IllegalStateException(
+                      String.format("Cannot close-connection-after-flush after read (%s)", first));
                 case CLOSE_CONNECTION_IMMEDIATELY:
                   close();
                   return;
@@ -332,14 +347,18 @@ public final class NetworkEngine {
             }
           }
           int attempt = 0;
-          loop: while ((readState == FlowState.OPEN) && inputBuffer.hasRemaining()) {
+          loop:
+          while ((readState == FlowState.OPEN) && inputBuffer.hasRemaining()) {
             int before = inputBuffer.remaining();
             ConnectionControl control = first.read();
             switch (control) {
               case CONTINUE:
                 if ((inputBuffer.remaining() == before) && (attempt++ == 10)) {
                   // The pipeline did not read any data after several attempts. Looks like a bug.
-                  throw new IllegalStateException(String.format("Stage did not process remaining input data after 10 attempts (%s)", first));
+                  throw new IllegalStateException(
+                      String.format(
+                          "Stage did not process remaining input data after 10 attempts (%s)",
+                          first));
                 }
                 break;
               case NEED_MORE_DATA:
@@ -352,30 +371,34 @@ public final class NetworkEngine {
                 socketChannel.shutdownInput();
                 break;
               case CLOSE_OUTPUT_AFTER_FLUSH:
-                throw new IllegalStateException(String.format("Cannot close-output-after-flush after read (%s)", first));
+                throw new IllegalStateException(
+                    String.format("Cannot close-output-after-flush after read (%s)", first));
               case CLOSE_CONNECTION_AFTER_FLUSH:
-                throw new IllegalStateException(String.format("Cannot close-connection-after-flush after read (%s)", first));
+                throw new IllegalStateException(
+                    String.format("Cannot close-connection-after-flush after read (%s)", first));
               case CLOSE_CONNECTION_IMMEDIATELY:
                 close();
                 return;
             }
           }
-  
+
           // Generate data for writing.
           while (writeState == FlowState.OPEN && (available(outputBuffer) > 0)) {
             int before = available(outputBuffer);
             ConnectionControl control = first.write();
-  //          log("Have %d bytes outgoing", Integer.valueOf(outputBuffer.remaining()));
+            //          log("Have %d bytes outgoing", Integer.valueOf(outputBuffer.remaining()));
             switch (control) {
               case CONTINUE:
                 break;
               case NEED_MORE_DATA:
-                throw new IllegalStateException(String.format("Cannot provide more data to write (%s)", first));
+                throw new IllegalStateException(
+                    String.format("Cannot provide more data to write (%s)", first));
               case PAUSE:
                 writeState = FlowState.PAUSED;
                 break;
               case CLOSE_INPUT:
-                throw new IllegalStateException(String.format("Cannot close-input after write (%s)", first));
+                throw new IllegalStateException(
+                    String.format("Cannot close-input after write (%s)", first));
               case CLOSE_OUTPUT_AFTER_FLUSH:
                 writeState = FlowState.CLOSE_AFTER_FLUSH;
                 break;
@@ -391,7 +414,7 @@ public final class NetworkEngine {
               break;
             }
           }
-  
+
           // Write data to the network if possible.
           if (outputBuffer.hasRemaining() && key.isWritable()) {
             int before = outputBuffer.remaining();
@@ -402,7 +425,8 @@ public final class NetworkEngine {
               close();
               return;
             }
-            log("Wrote %d bytes (%d still buffered)",
+            log(
+                "Wrote %d bytes (%d still buffered)",
                 Integer.valueOf(before - outputBuffer.remaining()),
                 Integer.valueOf(outputBuffer.remaining()));
             outputBuffer.compact(); // prepare for writing
@@ -450,10 +474,7 @@ public final class NetworkEngine {
         logHandler.log(
             String.format(
                 "%s[%3s.%9d] %s",
-                connection,
-                Long.valueOf(atSeconds),
-                Long.valueOf(nanoFraction),
-                printedText));
+                connection, Long.valueOf(atSeconds), Long.valueOf(nanoFraction), printedText));
       }
     }
   }
@@ -463,7 +484,8 @@ public final class NetworkEngine {
     private final SelectionKey key;
     private final NetworkHandler handler;
 
-    public ServerSocketHandler(ServerSocketChannel serverChannel, SelectionKey key, NetworkHandler handler) {
+    public ServerSocketHandler(
+        ServerSocketChannel serverChannel, SelectionKey key, NetworkHandler handler) {
       this.serverChannel = serverChannel;
       this.key = key;
       this.handler = handler;
@@ -484,10 +506,11 @@ public final class NetworkEngine {
         }
 
         openCounter.incrementAndGet();
-        Connection connection = new Connection(
-            (InetSocketAddress) socketChannel.socket().getLocalSocketAddress(),
-            (InetSocketAddress) socketChannel.socket().getRemoteSocketAddress(),
-            handler.usesSsl());
+        Connection connection =
+            new Connection(
+                (InetSocketAddress) socketChannel.socket().getLocalSocketAddress(),
+                (InetSocketAddress) socketChannel.socket().getRemoteSocketAddress(),
+                handler.usesSsl());
         try {
           socketChannel.configureBlocking(false);
           socketChannel.socket().setTcpNoDelay(true);
@@ -532,48 +555,52 @@ public final class NetworkEngine {
       t.start();
     }
 
-    private void listenPort(final InetAddress address, final int port, final NetworkHandler handler) throws IOException, InterruptedException {
+    private void listenPort(final InetAddress address, final int port, final NetworkHandler handler)
+        throws IOException, InterruptedException {
       if (shutdownInitiated.get()) {
         throw new IllegalStateException();
       }
       CountDownLatch latch = new CountDownLatch(1);
       AtomicReference<Exception> thrownException = new AtomicReference<>();
-      queue(() -> {
-        try {
-          if (shutdown) {
-            return;
-          }
-          @SuppressWarnings("resource")
-          ServerSocketChannel serverChannel = ServerSocketChannel.open();
-          serverChannel.configureBlocking(false);
-          serverChannel.socket().setReuseAddress(true);
-          serverChannel.socket().bind(new InetSocketAddress(address, port));
-          SelectionKey key = serverChannel.register(selector, SelectionKey.OP_ACCEPT);
-          networkEventListener.portOpened(new NetworkServer() {
-            @Override
-            public InetAddress address() {
-              return address;
-            }
+      queue(
+          () -> {
+            try {
+              if (shutdown) {
+                return;
+              }
+              @SuppressWarnings("resource")
+              ServerSocketChannel serverChannel = ServerSocketChannel.open();
+              serverChannel.configureBlocking(false);
+              serverChannel.socket().setReuseAddress(true);
+              serverChannel.socket().bind(new InetSocketAddress(address, port));
+              SelectionKey key = serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+              networkEventListener.portOpened(
+                  new NetworkServer() {
+                    @Override
+                    public InetAddress address() {
+                      return address;
+                    }
 
-            @Override
-            public int port() {
-              return serverChannel.socket().getLocalPort();
-            }
+                    @Override
+                    public int port() {
+                      return serverChannel.socket().getLocalPort();
+                    }
 
-            @Override
-            public boolean ssl() {
-              return handler.usesSsl();
+                    @Override
+                    public boolean ssl() {
+                      return handler.usesSsl();
+                    }
+                  });
+              ServerSocketHandler socketHandler =
+                  new ServerSocketHandler(serverChannel, key, handler);
+              key.attach(socketHandler);
+              shutdownQueue.add(socketHandler::shutdown);
+            } catch (Exception e) {
+              thrownException.set(e);
+            } finally {
+              latch.countDown();
             }
           });
-          ServerSocketHandler socketHandler = new ServerSocketHandler(serverChannel, key, handler);
-          key.attach(socketHandler);
-          shutdownQueue.add(socketHandler::shutdown);
-        } catch (Exception e) {
-          thrownException.set(e);
-        } finally {
-          latch.countDown();
-        }
-      });
       latch.await();
       Exception e = thrownException.get();
       if (e != null) {
@@ -586,41 +613,50 @@ public final class NetworkEngine {
       }
     }
 
-    public void connect(InetAddress address, int port, NetworkHandler handler) throws IOException, InterruptedException {
+    public void connect(InetAddress address, int port, NetworkHandler handler)
+        throws IOException, InterruptedException {
       if (shutdownInitiated.get()) {
         throw new IllegalStateException();
       }
       CountDownLatch latch = new CountDownLatch(1);
       AtomicReference<IOException> thrownException = new AtomicReference<>();
-      queue(() -> {
-        try {
-          if (shutdown) {
-            return;
-          }
-          @SuppressWarnings("resource")
-          SocketChannel socketChannel = SocketChannel.open();
-          socketChannel.configureBlocking(false);
-          socketChannel.socket().setTcpNoDelay(true);
-          socketChannel.socket().setKeepAlive(true);
-//          socketChannel.socket().setReuseAddress(true);
-//          socketChannel.socket().bind(new InetSocketAddress(address, port));
-//        socketChannel.socket().setSoLinger(false, 0);
-          InetSocketAddress remoteAddress = new InetSocketAddress(address, port);
-          socketChannel.connect(remoteAddress);
-          Connection connection = new Connection(
-              (InetSocketAddress) socketChannel.socket().getLocalSocketAddress(),
-              remoteAddress,
-              handler.usesSsl());
-          SelectionKey key = socketChannel.register(selector, 0);
-          SocketHandler socketHandler =
-              new SocketHandler(
-                  this, connection, socketChannel, key, handler, logHandler, OUTGOING_CONNECTION);
-          key.attach(socketHandler);
-        } catch (IOException e) {
-          thrownException.set(e);
-        }
-        latch.countDown();
-      });
+      queue(
+          () -> {
+            try {
+              if (shutdown) {
+                return;
+              }
+              @SuppressWarnings("resource")
+              SocketChannel socketChannel = SocketChannel.open();
+              socketChannel.configureBlocking(false);
+              socketChannel.socket().setTcpNoDelay(true);
+              socketChannel.socket().setKeepAlive(true);
+              //          socketChannel.socket().setReuseAddress(true);
+              //          socketChannel.socket().bind(new InetSocketAddress(address, port));
+              //        socketChannel.socket().setSoLinger(false, 0);
+              InetSocketAddress remoteAddress = new InetSocketAddress(address, port);
+              socketChannel.connect(remoteAddress);
+              Connection connection =
+                  new Connection(
+                      (InetSocketAddress) socketChannel.socket().getLocalSocketAddress(),
+                      remoteAddress,
+                      handler.usesSsl());
+              SelectionKey key = socketChannel.register(selector, 0);
+              SocketHandler socketHandler =
+                  new SocketHandler(
+                      this,
+                      connection,
+                      socketChannel,
+                      key,
+                      handler,
+                      logHandler,
+                      OUTGOING_CONNECTION);
+              key.attach(socketHandler);
+            } catch (IOException e) {
+              thrownException.set(e);
+            }
+            latch.countDown();
+          });
       latch.await();
       IOException e = thrownException.get();
       if (e != null) {
@@ -642,18 +678,26 @@ public final class NetworkEngine {
       }
     }
 
-    private void attachConnection(Connection connection, SocketChannel socketChannel, NetworkHandler handler) {
-      queue(() -> {
-        try {
-          SelectionKey socketKey = socketChannel.register(selector, 0);
-          SocketHandler socketHandler =
-              new SocketHandler(
-                  this, connection, socketChannel, socketKey, handler, logHandler, INCOMING_CONNECTION);
-          socketKey.attach(socketHandler);
-        } catch (ClosedChannelException e) {
-          throw new RuntimeException(e);
-        }
-      });
+    private void attachConnection(
+        Connection connection, SocketChannel socketChannel, NetworkHandler handler) {
+      queue(
+          () -> {
+            try {
+              SelectionKey socketKey = socketChannel.register(selector, 0);
+              SocketHandler socketHandler =
+                  new SocketHandler(
+                      this,
+                      connection,
+                      socketChannel,
+                      socketKey,
+                      handler,
+                      logHandler,
+                      INCOMING_CONNECTION);
+              socketKey.attach(socketHandler);
+            } catch (ClosedChannelException e) {
+              throw new RuntimeException(e);
+            }
+          });
     }
 
     private void queue(Runnable runnable) {
@@ -665,15 +709,17 @@ public final class NetworkEngine {
     public void run() {
       try {
         while (!shutdown) {
-  //          if (DEBUG) {
-  //            System.out.println(
-  //                "PENDING: " + (openCounter.get() - closedCounter.get()) + " REJECTED " + rejectedCounter.get());
-  //          }
+          //          if (DEBUG) {
+          //            System.out.println(
+          //                "PENDING: " + (openCounter.get() - closedCounter.get()) + " REJECTED " +
+          // rejectedCounter.get());
+          //          }
           selector.select();
-  //        if (DEBUG) {
-  //          System.out.printf(
-  //              "Queue=%d, Keys=%d\n", Integer.valueOf(id), Integer.valueOf(selector.keys().size()));
-  //        }
+          //        if (DEBUG) {
+          //          System.out.printf(
+          //              "Queue=%d, Keys=%d\n", Integer.valueOf(id),
+          // Integer.valueOf(selector.keys().size()));
+          //        }
           Runnable runnable;
           while ((runnable = eventQueue.poll()) != null) {
             try {
@@ -729,15 +775,18 @@ public final class NetworkEngine {
     listen(null, port, handler);
   }
 
-  public void listenLocalhost(int port, NetworkHandler handler) throws IOException, InterruptedException {
+  public void listenLocalhost(int port, NetworkHandler handler)
+      throws IOException, InterruptedException {
     listen(InetAddress.getLoopbackAddress(), port, handler);
   }
 
-  private void listen(InetAddress address, int port, NetworkHandler handler) throws IOException, InterruptedException {
+  private void listen(InetAddress address, int port, NetworkHandler handler)
+      throws IOException, InterruptedException {
     getQueueForConnection().listenPort(address, port, handler);
   }
 
-  public void connect(InetAddress address, int port, NetworkHandler handler) throws IOException, InterruptedException {
+  public void connect(InetAddress address, int port, NetworkHandler handler)
+      throws IOException, InterruptedException {
     getQueueForConnection().connect(address, port, handler);
   }
 

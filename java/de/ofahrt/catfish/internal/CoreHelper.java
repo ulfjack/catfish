@@ -1,16 +1,18 @@
 package de.ofahrt.catfish.internal;
 
-import java.util.Map;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import java.util.Map;
 
 public final class CoreHelper {
   // Response text output for debugging:
   public static String responseToString(HttpResponse response) {
     StringBuffer out = new StringBuffer();
     out.append(response.getProtocolVersion())
-        .append(" ").append(response.getStatusCode())
-        .append(" ").append(response.getStatusMessage());
+        .append(" ")
+        .append(response.getStatusCode())
+        .append(" ")
+        .append(response.getStatusMessage());
     for (Map.Entry<String, String> e : response.getHeaders()) {
       out.append("\n");
       out.append(e.getKey()).append(": ").append(e.getValue());
@@ -55,18 +57,20 @@ public final class CoreHelper {
 
   public static final String encode(char c) {
     if (c <= 0x007F) {
-      return "%"+toHex(c);
+      return "%" + toHex(c);
     }
 
     int i = c;
-    int j = i & 0x3F; i = i >> 6;
-    int k = i & 0x3F; i = i >> 6;
+    int j = i & 0x3F;
+    i = i >> 6;
+    int k = i & 0x3F;
+    i = i >> 6;
     int l = i;
 
     if (c <= 0x07FF) {
-      return "%"+toHex(0xC0 + k)+"%"+toHex(0x80 + j);
+      return "%" + toHex(0xC0 + k) + "%" + toHex(0x80 + j);
     }
-    return "%"+toHex(0xE0 + l)+"%"+toHex(0x80 + k)+"%"+toHex(0x80+j);
+    return "%" + toHex(0xE0 + l) + "%" + toHex(0x80 + k) + "%" + toHex(0x80 + j);
   }
 
   private CoreHelper() {

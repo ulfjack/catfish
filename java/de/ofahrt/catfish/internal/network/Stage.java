@@ -1,17 +1,16 @@
 package de.ofahrt.catfish.internal.network;
 
-import java.io.IOException;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.model.network.Connection;
+import java.io.IOException;
 
 /**
- * A single network pipeline stage. The first stage is connected directly to the network, and
- * each further stage is connected to the previous one. Each stage processes data from the
- * previous stage (or the network) and then passes the processed data on to the next state.
- * Usually, stages are connected through intermediate buffers, rather than using the same buffer.
+ * A single network pipeline stage. The first stage is connected directly to the network, and each
+ * further stage is connected to the previous one. Each stage processes data from the previous stage
+ * (or the network) and then passes the processed data on to the next state. Usually, stages are
+ * connected through intermediate buffers, rather than using the same buffer.
  *
- * <p>Any exception thrown from any method results in the immediate termination of the
- * connection.
+ * <p>Any exception thrown from any method results in the immediate termination of the connection.
  */
 public interface Stage {
 
@@ -24,8 +23,8 @@ public interface Stage {
     CONTINUE,
 
     /**
-     * Continue the current stream, but stop processing the remaining input data. It is illegal
-     * to return this from {@link Stage#write}.
+     * Continue the current stream, but stop processing the remaining input data. It is illegal to
+     * return this from {@link Stage#write}.
      */
     NEED_MORE_DATA,
 
@@ -48,8 +47,8 @@ public interface Stage {
     CLOSE_OUTPUT_AFTER_FLUSH,
 
     /**
-     * Closes the connection after all outgoing data has been written. It is illegal to return
-     * this from {@link Stage#read}.
+     * Closes the connection after all outgoing data has been written. It is illegal to return this
+     * from {@link Stage#read}.
      */
     CLOSE_CONNECTION_AFTER_FLUSH,
 
@@ -69,9 +68,9 @@ public interface Stage {
   }
 
   /**
-   * Called upon successful connection. This is usually the first method called on a Stage,
-   * except for an outgoing connection that fails outright, in which case only {@link #close} is
-   * called. Returns whether the connection should be open for reading, writing, or both.
+   * Called upon successful connection. This is usually the first method called on a Stage, except
+   * for an outgoing connection that fails outright, in which case only {@link #close} is called.
+   * Returns whether the connection should be open for reading, writing, or both.
    */
   InitialConnectionState connect(Connection connection);
 
@@ -83,15 +82,15 @@ public interface Stage {
   ConnectionControl read() throws IOException;
 
   /**
-   * Called when the input is closed, but only after all data in the input network buffer has
-   * been processed.
+   * Called when the input is closed, but only after all data in the input network buffer has been
+   * processed.
    */
   void inputClosed() throws IOException;
 
   /**
-   * Called to generate data for writing to the network (or the previous stage). Each stage
-   * should recursively call the next stage (except for the last one), and return how it wants
-   * the connection to proceed.
+   * Called to generate data for writing to the network (or the previous stage). Each stage should
+   * recursively call the next stage (except for the last one), and return how it wants the
+   * connection to proceed.
    *
    * <p>Note that there may be a delay between generating data for output and the data actually
    * being written to the network, if the socket is not yet ready for writing.
@@ -101,8 +100,8 @@ public interface Stage {
   /**
    * Called upon closure of the connection. In case of an outgoing connection, this may be called
    * without a previous call to {@link #connect} if the connection attempt fails outright. Most
-   * importantly, stages should release any resources that are blocked on this connection,
-   * including threads.
+   * importantly, stages should release any resources that are blocked on this connection, including
+   * threads.
    */
   void close();
 }

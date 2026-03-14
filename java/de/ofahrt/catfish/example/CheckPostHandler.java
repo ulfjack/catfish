@@ -1,9 +1,5 @@
 package de.ofahrt.catfish.example;
 
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
-import java.nio.charset.StandardCharsets;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpMethodName;
@@ -19,10 +15,15 @@ import de.ofahrt.catfish.upload.IncrementalMultipartParser;
 import de.ofahrt.catfish.upload.UrlEncodedParser;
 import de.ofahrt.catfish.utils.HttpContentType;
 import de.ofahrt.catfish.utils.MimeType;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 
 public final class CheckPostHandler implements HttpHandler {
   @Override
-  public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter) throws IOException {
+  public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter)
+      throws IOException {
     FormDataBody formData = null;
     if (HttpMethodName.POST.equals(request.getMethod())) {
       String ctHeader = request.getHeaders().get(HttpHeaderName.CONTENT_TYPE);
@@ -39,9 +40,11 @@ public final class CheckPostHandler implements HttpHandler {
       }
     }
 
-    HttpResponse response = StandardResponses.OK
-        .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, MimeType.TEXT_HTML.toString()));
-    try (Writer out = new OutputStreamWriter(responseWriter.commitStreamed(response), StandardCharsets.UTF_8)) {
+    HttpResponse response =
+        StandardResponses.OK.withHeaderOverrides(
+            HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, MimeType.TEXT_HTML.toString()));
+    try (Writer out =
+        new OutputStreamWriter(responseWriter.commitStreamed(response), StandardCharsets.UTF_8)) {
       out.append("<!DOCTYPE html>\n");
       out.append("<html><head><title>Check Post</title></head>\n");
       out.append("<body>\n");
