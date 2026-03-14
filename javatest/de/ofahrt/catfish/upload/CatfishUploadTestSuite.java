@@ -7,5 +7,6 @@ import org.junit.runners.Suite.SuiteClasses;
 @RunWith(Suite.class)
 @SuiteClasses({
   IncrementalMultipartParserTest.class,
+  UrlEncodedParserTest.class,
 })
 public class CatfishUploadTestSuite {}
