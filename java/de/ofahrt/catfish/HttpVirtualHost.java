@@ -1,9 +1,9 @@
 package de.ofahrt.catfish;
 
-import javax.net.ssl.SSLContext;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
+import javax.net.ssl.SSLContext;
 
 final class HttpVirtualHost {
   private final HttpHandler httpHandler;
@@ -11,7 +11,11 @@ final class HttpVirtualHost {
   private final UploadPolicy uploadPolicy;
   private final SSLContext sslContext;
 
-  HttpVirtualHost(HttpHandler httpHandler, ResponsePolicy responsePolicy, UploadPolicy uploadPolicy, SSLContext sslContext) {
+  HttpVirtualHost(
+      HttpHandler httpHandler,
+      ResponsePolicy responsePolicy,
+      UploadPolicy uploadPolicy,
+      SSLContext sslContext) {
     this.httpHandler = httpHandler;
     this.responsePolicy = responsePolicy;
     this.uploadPolicy = uploadPolicy;

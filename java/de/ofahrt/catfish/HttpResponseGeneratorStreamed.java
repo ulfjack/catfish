@@ -1,15 +1,15 @@
 package de.ofahrt.catfish;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.atomic.AtomicBoolean;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.utils.ConnectionClosedException;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private static final boolean DEBUG = false;
@@ -19,13 +19,21 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private static final byte[] LAST_CHUNK = "0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
   public static HttpResponseGeneratorStreamed create(
-      Runnable dataAvailableCallback, HttpRequest request, HttpResponse response, boolean includeBody) {
+      Runnable dataAvailableCallback,
+      HttpRequest request,
+      HttpResponse response,
+      boolean includeBody) {
     return create(dataAvailableCallback, request, response, includeBody, DEFAULT_BUFFER_SIZE);
   }
 
   public static HttpResponseGeneratorStreamed create(
-      Runnable dataAvailableCallback, HttpRequest request, HttpResponse response, boolean includeBody, int bufferSize) {
-    return new HttpResponseGeneratorStreamed(dataAvailableCallback, request, response, includeBody, bufferSize);
+      Runnable dataAvailableCallback,
+      HttpRequest request,
+      HttpResponse response,
+      boolean includeBody,
+      int bufferSize) {
+    return new HttpResponseGeneratorStreamed(
+        dataAvailableCallback, request, response, includeBody, bufferSize);
   }
 
   private enum WriteState {
@@ -75,7 +83,11 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private boolean isFull;
 
   private HttpResponseGeneratorStreamed(
-      Runnable dataAvailableCallback, HttpRequest request, HttpResponse response, boolean includeBody, int bufferSize) {
+      Runnable dataAvailableCallback,
+      HttpRequest request,
+      HttpResponse response,
+      boolean includeBody,
+      int bufferSize) {
     if (bufferSize <= 0) {
       throw new IllegalArgumentException("Buffer size must be positive, but is " + bufferSize);
     }
@@ -113,7 +125,8 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     }
     ReadToken token = ReadToken.CONTINUE;
     int before = outputBuffer.remaining();
-    loop: while (outputBuffer.hasRemaining()) {
+    loop:
+    while (outputBuffer.hasRemaining()) {
       switch (readState) {
         case UNCOMMITTED:
           throw new IllegalStateException();
@@ -162,7 +175,8 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     if (currentBlock >= data.length) {
       return ReadToken.FINISHED;
     }
-    int bytesCopyCount = Math.min(outputBuffer.remaining(), data[currentBlock].length - currentIndex);
+    int bytesCopyCount =
+        Math.min(outputBuffer.remaining(), data[currentBlock].length - currentIndex);
     outputBuffer.put(data[currentBlock], currentIndex, bytesCopyCount);
     currentIndex += bytesCopyCount;
     if (currentIndex >= data[currentBlock].length) {
@@ -183,8 +197,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
       wrapAround = true;
     }
     if (bytesAvailable == 0) {
-      return writeState == WriteState.CLOSED
-          ? ReadToken.FINISHED : ReadToken.PAUSE;
+      return writeState == WriteState.CLOSED ? ReadToken.FINISHED : ReadToken.PAUSE;
     }
     int bytesToCopy;
     if (useChunking) {
@@ -230,7 +243,13 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     isFull = false;
     if (DEBUG) {
       System.out.println(
-          "READ " + bytesToCopy + " (readPosition=" + readPosition + " writePosition=" + writePosition + ")");
+          "READ "
+              + bytesToCopy
+              + " (readPosition="
+              + readPosition
+              + " writePosition="
+              + writePosition
+              + ")");
     }
     if (bytesToCopy == 0 && writeState == WriteState.CLOSED) {
       return ReadToken.FINISHED;
@@ -262,8 +281,10 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
         if (readState == ReadState.CLOSED) {
           throw new ConnectionClosedException("Stream was closed from the other side");
         }
-        spaceAvailable = (readPosition > writePosition) || isFull ? readPosition - writePosition
-            : buffer.length - writePosition;
+        spaceAvailable =
+            (readPosition > writePosition) || isFull
+                ? readPosition - writePosition
+                : buffer.length - writePosition;
         if (spaceAvailable == 0) {
           try {
             wait();
@@ -280,7 +301,13 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
       isFull = writePosition == readPosition;
       if (DEBUG) {
         System.out.println(
-            "WROTE " + bytesToCopy + " -> " + readPosition + " " + writePosition + (isFull ? " FULL" : ""));
+            "WROTE "
+                + bytesToCopy
+                + " -> "
+                + readPosition
+                + " "
+                + writePosition
+                + (isFull ? " FULL" : ""));
       }
       if (isFull) {
         internalFlush(false);
@@ -290,7 +317,8 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
 
   private synchronized void internalFlush(boolean close) {
     if (DEBUG) {
-      System.out.println("flush(close=" + close + ") state=" + writeState + " callback=" + requireCallback);
+      System.out.println(
+          "flush(close=" + close + ") state=" + writeState + " callback=" + requireCallback);
     }
     switch (writeState) {
       case UNCOMMITTED:
@@ -316,32 +344,33 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     }
     if (close) {
       int contentLength = writePosition;
-      response = response.withHeaderOverrides(
-          HttpHeaders.of(HttpHeaderName.CONTENT_LENGTH, Integer.toString(contentLength)));
+      response =
+          response.withHeaderOverrides(
+              HttpHeaders.of(HttpHeaderName.CONTENT_LENGTH, Integer.toString(contentLength)));
     } else {
       // TODO: Only HTTP 1.1 clients support chunked encoding.
-      response = response.withHeaderOverrides(
-          HttpHeaders.of(HttpHeaderName.TRANSFER_ENCODING, "chunked"));
+      response =
+          response.withHeaderOverrides(HttpHeaders.of(HttpHeaderName.TRANSFER_ENCODING, "chunked"));
       useChunking = true;
     }
     HttpHeaders headers = response.getHeaders();
-    data = new byte[][] {
-      statusLineToByteArray(response),
-      headersToByteArray(headers),
-    };
+    data =
+        new byte[][] {
+          statusLineToByteArray(response), headersToByteArray(headers),
+        };
   }
 
-//  private int parseContentLength(HttpResponse responseToWrite) {
-//    String value = responseToWrite.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
-//    if (value == null) {
-//      return -1;
-//    }
-//    try {
-//      return Integer.parseInt(value);
-//    } catch (NumberFormatException e) {
-//      return -1;
-//    }
-//  }
+  //  private int parseContentLength(HttpResponse responseToWrite) {
+  //    String value = responseToWrite.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
+  //    if (value == null) {
+  //      return -1;
+  //    }
+  //    try {
+  //      return Integer.parseInt(value);
+  //    } catch (NumberFormatException e) {
+  //      return -1;
+  //    }
+  //  }
 
   private synchronized void internalClose() {
     if (writeState == WriteState.CLOSED) {
@@ -364,7 +393,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     return new OutputStream() {
       @Override
       public void write(int b) throws IOException {
-        write(new byte[] { (byte) b });
+        write(new byte[] {(byte) b});
       }
 
       @Override

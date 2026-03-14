@@ -1,5 +1,8 @@
 package de.ofahrt.catfish;
 
+import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
+import de.ofahrt.catfish.internal.network.Stage;
+import de.ofahrt.catfish.model.network.Connection;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import javax.net.ssl.SSLContext;
@@ -7,9 +10,6 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
-import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
-import de.ofahrt.catfish.model.network.Connection;
-import de.ofahrt.catfish.internal.network.Stage;
 
 final class SslServerStage implements Stage {
   public interface SSLContextProvider {
@@ -81,11 +81,11 @@ final class SslServerStage implements Stage {
     this.sslEngine.setUseClientMode(false);
     this.sslEngine.setNeedClientAuth(false);
     this.sslEngine.setWantClientAuth(false);
-//    System.out.println(Arrays.toString(sslEngine.getEnabledCipherSuites()));
-//    System.out.println(Arrays.toString(sslEngine.getSupportedCipherSuites()));
-//    System.out.println(sslEngine.getSession().getApplicationBufferSize());
-//    sslEngine.setEnabledCipherSuites(sslEngine.getSupportedCipherSuites());
-//    System.out.println(sslEngine.getSession().getPacketBufferSize());
+    //    System.out.println(Arrays.toString(sslEngine.getEnabledCipherSuites()));
+    //    System.out.println(Arrays.toString(sslEngine.getSupportedCipherSuites()));
+    //    System.out.println(sslEngine.getSession().getApplicationBufferSize());
+    //    sslEngine.setEnabledCipherSuites(sslEngine.getSupportedCipherSuites());
+    //    System.out.println(sslEngine.getSession().getPacketBufferSize());
   }
 
   @Override
@@ -95,9 +95,9 @@ final class SslServerStage implements Stage {
       findSni();
       return ConnectionControl.CONTINUE;
     } else if (status == FlowStatus.HANDSHAKE) {
-      parent.log("SSL Read: HandshakeStatus=%s, net=%d",
-          sslEngine.getHandshakeStatus(),
-          Integer.valueOf(netInputBuffer.remaining()));
+      parent.log(
+          "SSL Read: HandshakeStatus=%s, net=%d",
+          sslEngine.getHandshakeStatus(), Integer.valueOf(netInputBuffer.remaining()));
       if (netInputBuffer.hasRemaining()) {
         inputBuffer.compact(); // prepare buffer for writing
         SSLEngineResult result = sslEngine.unwrap(netInputBuffer, inputBuffer);
@@ -113,7 +113,7 @@ final class SslServerStage implements Stage {
           default:
             throw new IOException(result.toString());
         }
-  //      parent.log("SSL STATUS=%s", result);
+        //      parent.log("SSL STATUS=%s", result);
         checkStatus();
       }
       if (sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP) {
@@ -125,7 +125,9 @@ final class SslServerStage implements Stage {
         if (postHandshakeState != InitialConnectionState.READ_ONLY) {
           parent.encourageWrites();
         }
-        return postHandshakeState == InitialConnectionState.WRITE_ONLY ? ConnectionControl.PAUSE : ConnectionControl.CONTINUE;
+        return postHandshakeState == InitialConnectionState.WRITE_ONLY
+            ? ConnectionControl.PAUSE
+            : ConnectionControl.CONTINUE;
       }
       return ConnectionControl.CONTINUE;
     } else {
@@ -160,11 +162,13 @@ final class SslServerStage implements Stage {
     } else if (status == FlowStatus.HANDSHAKE) {
       parent.log("SSL Write: HandshakeStatus=%s", sslEngine.getHandshakeStatus());
       // invariant: both netOutputBuffer and outputBuffer are readable
-      if (!netOutputBuffer.hasRemaining() && sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP) {
+      if (!netOutputBuffer.hasRemaining()
+          && sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP) {
         netOutputBuffer.clear(); // prepare for writing
         SSLEngineResult result = sslEngine.wrap(outputBuffer, netOutputBuffer);
         netOutputBuffer.flip(); // prepare for reading
-        parent.log("After Wrapping: %d out, %d net",
+        parent.log(
+            "After Wrapping: %d out, %d net",
             Integer.valueOf(outputBuffer.remaining()),
             Integer.valueOf(netOutputBuffer.remaining()));
         if (result.getStatus() != Status.OK) {
@@ -181,7 +185,9 @@ final class SslServerStage implements Stage {
         if (postHandshakeState != InitialConnectionState.WRITE_ONLY) {
           parent.encourageReads();
         }
-        return postHandshakeState == InitialConnectionState.READ_ONLY ? ConnectionControl.PAUSE : ConnectionControl.CONTINUE;
+        return postHandshakeState == InitialConnectionState.READ_ONLY
+            ? ConnectionControl.PAUSE
+            : ConnectionControl.CONTINUE;
       }
       return ConnectionControl.CONTINUE;
     } else if (status == FlowStatus.OPEN) {
@@ -200,7 +206,8 @@ final class SslServerStage implements Stage {
         netOutputBuffer.clear(); // prepare for writing
         SSLEngineResult result = sslEngine.wrap(outputBuffer, netOutputBuffer);
         netOutputBuffer.flip(); // prepare for reading
-        parent.log("After Wrapping: %d out, %d net",
+        parent.log(
+            "After Wrapping: %d out, %d net",
             Integer.valueOf(outputBuffer.remaining()),
             Integer.valueOf(netOutputBuffer.remaining()));
         if (result.getStatus() != Status.OK) {
@@ -239,7 +246,8 @@ final class SslServerStage implements Stage {
         netOutputBuffer.clear(); // prepare for writing
         SSLEngineResult result = sslEngine.wrap(outputBuffer, netOutputBuffer);
         netOutputBuffer.flip(); // prepare for reading
-        parent.log("After Wrapping: %d out, %d net",
+        parent.log(
+            "After Wrapping: %d out, %d net",
             Integer.valueOf(outputBuffer.remaining()),
             Integer.valueOf(netOutputBuffer.remaining()));
         if (result.getStatus() != Status.OK) {
@@ -249,7 +257,9 @@ final class SslServerStage implements Stage {
       if (sslEngine.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING) {
         throw new IOException("Re-entering handshake mode - what's up?");
       }
-      return outputBuffer.hasRemaining() ? ConnectionControl.CONTINUE : ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
+      return outputBuffer.hasRemaining()
+          ? ConnectionControl.CONTINUE
+          : ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
     }
   }
 

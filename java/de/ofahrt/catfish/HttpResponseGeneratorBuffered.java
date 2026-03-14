@@ -1,26 +1,25 @@
 package de.ofahrt.catfish;
 
-import java.nio.ByteBuffer;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import java.nio.ByteBuffer;
 
 final class HttpResponseGeneratorBuffered extends HttpResponseGenerator {
-  public static HttpResponseGeneratorBuffered create(HttpRequest request, HttpResponse response, boolean includeBody) {
+  public static HttpResponseGeneratorBuffered create(
+      HttpRequest request, HttpResponse response, boolean includeBody) {
     if (response.getBody() == null) {
       throw new IllegalArgumentException();
     }
     byte[] body = includeBody ? response.getBody() : EMPTY_BYTE_ARRAY;
     HttpHeaders headers = response.getHeaders();
-    byte[][] data = new byte[][] {
-      statusLineToByteArray(response),
-      headersToByteArray(headers),
-      body
-    };
+    byte[][] data =
+        new byte[][] {statusLineToByteArray(response), headersToByteArray(headers), body};
     return new HttpResponseGeneratorBuffered(request, response, data);
   }
 
-  public static HttpResponseGeneratorBuffered createWithBody(HttpRequest request, HttpResponse response) {
+  public static HttpResponseGeneratorBuffered createWithBody(
+      HttpRequest request, HttpResponse response) {
     return create(request, response, true);
   }
 
@@ -54,7 +53,8 @@ final class HttpResponseGeneratorBuffered extends HttpResponseGenerator {
     }
     int totalBytesCopied = 0;
     while (outputBuffer.hasRemaining()) {
-      int bytesCopyCount = Math.min(outputBuffer.remaining(), data[currentBlock].length - currentIndex);
+      int bytesCopyCount =
+          Math.min(outputBuffer.remaining(), data[currentBlock].length - currentIndex);
       outputBuffer.put(data[currentBlock], currentIndex, bytesCopyCount);
       totalBytesCopied += bytesCopyCount;
       currentIndex += bytesCopyCount;
@@ -74,6 +74,5 @@ final class HttpResponseGeneratorBuffered extends HttpResponseGenerator {
   }
 
   @Override
-  public void close() {
-  }
+  public void close() {}
 }

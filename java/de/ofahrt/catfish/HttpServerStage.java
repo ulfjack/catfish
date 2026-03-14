@@ -1,14 +1,5 @@
 package de.ofahrt.catfish;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
-import java.util.zip.GZIPOutputStream;
 import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
 import de.ofahrt.catfish.internal.CoreHelper;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
@@ -28,6 +19,15 @@ import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import de.ofahrt.catfish.utils.HttpContentType;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import java.util.zip.GZIPOutputStream;
 
 final class HttpServerStage implements Stage {
   private static final boolean VERBOSE = false;
@@ -49,7 +49,11 @@ final class HttpServerStage implements Stage {
   // - AsyncBuffer blocks when the buffer is full
 
   public interface RequestQueue {
-    void queueRequest(HttpHandler httpHandler, Connection connection, HttpRequest request, HttpResponseWriter responseWriter);
+    void queueRequest(
+        HttpHandler httpHandler,
+        Connection connection,
+        HttpRequest request,
+        HttpResponseWriter responseWriter);
   }
 
   public interface RequestListener {
@@ -94,7 +98,9 @@ final class HttpServerStage implements Stage {
       }
 
       Map<String, String> overrides = new HashMap<>();
-      overrides.put(HttpHeaderName.CONNECTION, shouldKeepAlive() ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
+      overrides.put(
+          HttpHeaderName.CONNECTION,
+          shouldKeepAlive() ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
       if (bodyAllowed) {
         overrides.put(HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length));
       }
@@ -111,7 +117,8 @@ final class HttpServerStage implements Stage {
       boolean headRequest = HttpMethodName.HEAD.equals(request.getMethod());
       HttpResponse actualResponse = responseToWrite;
       // We want to create the ResponseGenerator on the current thread.
-      HttpResponseGeneratorBuffered gen = HttpResponseGeneratorBuffered.create(request, actualResponse, !headRequest);
+      HttpResponseGeneratorBuffered gen =
+          HttpResponseGeneratorBuffered.create(request, actualResponse, !headRequest);
       parent.queue(() -> startBuffered(gen));
     }
 
@@ -129,7 +136,9 @@ final class HttpServerStage implements Stage {
       }
 
       Map<String, String> overrides = new HashMap<>();
-      overrides.put(HttpHeaderName.CONNECTION, shouldKeepAlive() ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
+      overrides.put(
+          HttpHeaderName.CONNECTION,
+          shouldKeepAlive() ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
       boolean compress = shouldCompress(responseToWrite);
       if (compress) {
         overrides.put(HttpHeaderName.CONTENT_ENCODING, GZIP_ENCODING);
@@ -189,13 +198,16 @@ final class HttpServerStage implements Stage {
     this.virtualHostLookup = virtualHostLookup;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
-    this.parser = new IncrementalHttpRequestParser((builder) -> {
-      HttpVirtualHost host = virtualHostLookup.apply(builder.getHeader(HttpHeaderName.HOST));
-      if (host == null) {
-        return UploadPolicy.DENY.accept(builder);
-      }
-      return host.getUploadPolicy().accept(builder);
-    });
+    this.parser =
+        new IncrementalHttpRequestParser(
+            (builder) -> {
+              HttpVirtualHost host =
+                  virtualHostLookup.apply(builder.getHeader(HttpHeaderName.HOST));
+              if (host == null) {
+                return UploadPolicy.DENY.accept(builder);
+              }
+              return host.getUploadPolicy().accept(builder);
+            });
   }
 
   @Override
@@ -239,10 +251,13 @@ final class HttpServerStage implements Stage {
     ContinuationToken token = responseGenerator.generate(outputBuffer);
     outputBuffer.flip(); // prepare buffer for reading
     switch (token) {
-      case CONTINUE: return ConnectionControl.CONTINUE;
-      case PAUSE: return ConnectionControl.PAUSE;
+      case CONTINUE:
+        return ConnectionControl.CONTINUE;
+      case PAUSE:
+        return ConnectionControl.PAUSE;
       case STOP:
-        requestListener.notifySent(connection, responseGenerator.getRequest(), responseGenerator.getResponse());
+        requestListener.notifySent(
+            connection, responseGenerator.getRequest(), responseGenerator.getResponse());
         responseGenerator = null;
         processing = false;
         parent.log("Completed. keepAlive=%s", Boolean.valueOf(keepAlive));
@@ -314,8 +329,11 @@ final class HttpServerStage implements Stage {
     this.responseGenerator = gen;
     this.keepAlive = responseGenerator.keepAlive();
     HttpResponse response = responseGenerator.getResponse();
-    parent.log("%s %d %s",
-        response.getProtocolVersion(), Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
+    parent.log(
+        "%s %d %s",
+        response.getProtocolVersion(),
+        Integer.valueOf(response.getStatusCode()),
+        response.getStatusMessage());
     if (HttpServerStage.VERBOSE) {
       System.out.println(CoreHelper.responseToString(response));
     }
@@ -327,10 +345,13 @@ final class HttpServerStage implements Stage {
     if (body == null) {
       throw new IllegalArgumentException();
     }
-    HttpResponse response = responseToWrite
-        .withHeaderOverrides(HttpHeaders.of(
-            HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE,
-            HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length)));
+    HttpResponse response =
+        responseToWrite.withHeaderOverrides(
+            HttpHeaders.of(
+                HttpHeaderName.CONNECTION,
+                HttpConnectionHeader.CLOSE,
+                HttpHeaderName.CONTENT_LENGTH,
+                Integer.toString(body.length)));
     startBuffered(HttpResponseGeneratorBuffered.createWithBody(request, response));
   }
 
@@ -338,8 +359,11 @@ final class HttpServerStage implements Stage {
     this.responseGenerator = gen;
     this.keepAlive = responseGenerator.keepAlive();
     HttpResponse response = responseGenerator.getResponse();
-    parent.log("%s %d %s",
-        response.getProtocolVersion(), Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
+    parent.log(
+        "%s %d %s",
+        response.getProtocolVersion(),
+        Integer.valueOf(response.getStatusCode()),
+        response.getStatusMessage());
     if (HttpServerStage.VERBOSE) {
       System.out.println(CoreHelper.responseToString(response));
     }

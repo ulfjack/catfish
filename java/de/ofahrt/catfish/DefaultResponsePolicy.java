@@ -1,13 +1,13 @@
 package de.ofahrt.catfish;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Locale;
-import java.util.Set;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 
 final class DefaultResponsePolicy implements ResponsePolicy {
   private static final String MIME_APPLICATION_JAVASCRIPT = "application/javascript";
@@ -17,8 +17,8 @@ final class DefaultResponsePolicy implements ResponsePolicy {
 
   private static final String MIME_TEXT_CSS = "text/css";
   private static final String MIME_TEXT_CSV = "text/csv";
-  private static final String MIME_TEXT_HTML  = "text/html";
-  private static final String MIME_TEXT_JAVASCRIPT  = "text/javascript";
+  private static final String MIME_TEXT_HTML = "text/html";
+  private static final String MIME_TEXT_JAVASCRIPT = "text/javascript";
   private static final String MIME_TEXT_PLAIN = "text/plain";
   private static final String MIME_TEXT_RICHTEXT = "text/richtext";
   private static final String MIME_TEXT_RTF = "text/rtf";
@@ -59,7 +59,9 @@ final class DefaultResponsePolicy implements ResponsePolicy {
 
   @Override
   public boolean shouldCompress(HttpRequest request, String mimeType) {
-    return mayCompress && COMPRESSION_WHITELIST.contains(mimeType) && supportGzipCompression(request);
+    return mayCompress
+        && COMPRESSION_WHITELIST.contains(mimeType)
+        && supportGzipCompression(request);
   }
 
   private boolean supportGzipCompression(HttpRequest request) {
@@ -69,7 +71,8 @@ final class DefaultResponsePolicy implements ResponsePolicy {
         return true;
       }
     }
-    // Some firewalls disable compression, but leave a header like this in place of the original one:
+    // Some firewalls disable compression, but leave a header like this in place of the original
+    // one:
     // "~~~~~~~~~~~~~~~" -> "~~~~~ ~~~~~~~"
     // "---------------" -> "----- -------"
     // Norton sometimes eats the HTTP response if we compress anyway.

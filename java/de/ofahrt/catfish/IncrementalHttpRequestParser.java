@@ -1,7 +1,5 @@
 package de.ofahrt.catfish;
 
-import java.io.IOException;
-
 import de.ofahrt.catfish.internal.CoreHelper;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -11,6 +9,7 @@ import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.server.PayloadParser;
 import de.ofahrt.catfish.model.server.UploadPolicy;
+import java.io.IOException;
 
 final class IncrementalHttpRequestParser {
   private static final int MAX_URI_LENGTH = 10_000;
@@ -20,9 +19,15 @@ final class IncrementalHttpRequestParser {
 
   private static enum State {
     // Request-Line   = Method SP Request-URI SP HTTP-Version CRLF
-    REQUEST_METHOD, REQUEST_URI, REQUEST_VERSION_HTTP, REQUEST_VERSION_MAJOR, REQUEST_VERSION_MINOR,
+    REQUEST_METHOD,
+    REQUEST_URI,
+    REQUEST_VERSION_HTTP,
+    REQUEST_VERSION_MAJOR,
+    REQUEST_VERSION_MINOR,
     // message-header = field-name ":" [ field-value ]
-    MESSAGE_HEADER_NAME, MESSAGE_HEADER_NAME_OR_CONTINUATION, MESSAGE_HEADER_VALUE,
+    MESSAGE_HEADER_NAME,
+    MESSAGE_HEADER_NAME_OR_CONTINUATION,
+    MESSAGE_HEADER_VALUE,
     PAYLOAD;
   }
 
@@ -82,10 +87,25 @@ final class IncrementalHttpRequestParser {
   //                      | "/" | "[" | "]" | "?" | "="
   //                      | "{" | "}" | SP | HT
   private static boolean isSeparator(char c) {
-    return (c == '(') || (c == ')') || (c == '<') || (c == '>') || (c == '@') ||
-           (c == ',') || (c == ';') || (c == ':') || (c =='\\') || (c == '"') ||
-           (c == '/') || (c == '[') || (c == ']') || (c == '?') || (c == '=') ||
-           (c == '{') || (c == '}') || (c == ' ') || (c == '\t');
+    return (c == '(')
+        || (c == ')')
+        || (c == '<')
+        || (c == '>')
+        || (c == '@')
+        || (c == ',')
+        || (c == ';')
+        || (c == ':')
+        || (c == '\\')
+        || (c == '"')
+        || (c == '/')
+        || (c == '[')
+        || (c == ']')
+        || (c == '?')
+        || (c == '=')
+        || (c == '{')
+        || (c == '}')
+        || (c == ' ')
+        || (c == '\t');
   }
 
   static boolean isTokenCharacter(char c) {
@@ -128,7 +148,7 @@ final class IncrementalHttpRequestParser {
         }
       }
       switch (state) {
-        case REQUEST_METHOD :
+        case REQUEST_METHOD:
           if (c == ' ') {
             if (elementBuffer.length() == 0) {
               return setBadRequest("Expected request method, but <space> found");
@@ -143,7 +163,7 @@ final class IncrementalHttpRequestParser {
             return setBadRequest("Illegal character in request method");
           }
           break;
-        case REQUEST_URI : // "*" | absoluteURI | abs_path | authority
+        case REQUEST_URI: // "*" | absoluteURI | abs_path | authority
           if (c == ' ') {
             String unparsedUri = elementBuffer.toString();
             builder.setUri(unparsedUri);
@@ -169,7 +189,7 @@ final class IncrementalHttpRequestParser {
           }
           break;
         // HTTP-Version   = "HTTP" "/" 1*DIGIT "." 1*DIGIT
-        case REQUEST_VERSION_HTTP :
+        case REQUEST_VERSION_HTTP:
           if ((counter == 0) && (c != 'H')) {
             return setBadRequest("Expected 'H' of request version string");
           } else if ((counter == 1) && (c != 'T')) {
@@ -189,15 +209,14 @@ final class IncrementalHttpRequestParser {
             state = State.REQUEST_VERSION_MAJOR;
           }
           break;
-        case REQUEST_VERSION_MAJOR :
+        case REQUEST_VERSION_MAJOR:
           if (isDigit(c)) {
             // Leading zeros MUST be ignored by recipients.
             if ((elementBuffer.length() == 1) && (elementBuffer.charAt(0) == '0')) {
               elementBuffer.setLength(0);
             }
             elementBuffer.append(c);
-          }
-          else if (c == '.') {
+          } else if (c == '.') {
             if (elementBuffer.length() == 0) {
               return setBadRequest("Http major version number expected");
             }
@@ -216,7 +235,7 @@ final class IncrementalHttpRequestParser {
             return setBadRequest("Expected '.' of request version string");
           }
           break;
-        case REQUEST_VERSION_MINOR :
+        case REQUEST_VERSION_MINOR:
           if (isDigit(c)) {
             // Leading zeros MUST be ignored by recipients.
             if ((elementBuffer.length() == 1) && (elementBuffer.charAt(0) == '0')) {
@@ -241,7 +260,7 @@ final class IncrementalHttpRequestParser {
             return setBadRequest("Expected end of request version string");
           }
           break;
-        case MESSAGE_HEADER_NAME :
+        case MESSAGE_HEADER_NAME:
           if (c == ':') {
             if (elementBuffer.length() == 0) {
               return setBadRequest("Expected header field name, but ':' found");
@@ -260,14 +279,15 @@ final class IncrementalHttpRequestParser {
             return i + 1;
           } else if (isTokenCharacter(c)) {
             if (elementBuffer.length() >= MAX_HEADER_NAME_LENGTH) {
-              return setError(HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Header name is too long");
+              return setError(
+                  HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Header name is too long");
             }
             elementBuffer.append(c);
           } else {
             return setBadRequest("Illegal character in header field name");
           }
           break;
-        case MESSAGE_HEADER_VALUE :
+        case MESSAGE_HEADER_VALUE:
           if (c == '\r') {
             expectLineFeed = true;
           } else if (c == '\n') {
@@ -284,12 +304,13 @@ final class IncrementalHttpRequestParser {
             trimAndAppendSpace();
           } else {
             if (elementBuffer.length() >= MAX_HEADER_VALUE_LENGTH) {
-              return setError(HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Header value is too long");
+              return setError(
+                  HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Header value is too long");
             }
             elementBuffer.append(c);
           }
           break;
-        case MESSAGE_HEADER_NAME_OR_CONTINUATION :
+        case MESSAGE_HEADER_NAME_OR_CONTINUATION:
           if (isSpace(c)) {
             state = State.MESSAGE_HEADER_VALUE;
             elementBuffer.append(messageHeaderValue);
@@ -304,7 +325,8 @@ final class IncrementalHttpRequestParser {
           }
 
           if (headerFieldCount >= MAX_HEADER_FIELD_COUNT) {
-            return setError(HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Too many header fields");
+            return setError(
+                HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Too many header fields");
           }
           headerFieldCount++;
           builder.addHeader(messageHeaderName, messageHeaderValue);
@@ -345,7 +367,7 @@ final class IncrementalHttpRequestParser {
             return setBadRequest("Illegal character in header field name");
           }
           break;
-        case PAYLOAD :
+        case PAYLOAD:
           int parsed = payloadParser.parse(input, offset + i, length - i);
           if (parsed <= 0) {
             throw new IllegalStateException("Parser must process at least one byte");
@@ -361,7 +383,7 @@ final class IncrementalHttpRequestParser {
             return i + 1; // add the one back since we skip the loop increment
           }
           break;
-        default :
+        default:
           throw new RuntimeException("Not implemented!");
       }
     }

@@ -1,15 +1,5 @@
 package de.ofahrt.catfish;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.RejectedExecutionHandler;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import javax.net.ssl.SSLContext;
 import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
@@ -21,10 +11,18 @@ import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.RejectedExecutionHandler;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import javax.net.ssl.SSLContext;
 
-/**
- * A <code>CatfishHttpServer</code> manages a HTTP-Server.
- */
+/** A <code>CatfishHttpServer</code> manages a HTTP-Server. */
 public final class CatfishHttpServer {
   interface RequestCallback extends Runnable {
     void reject();
@@ -37,7 +35,11 @@ public final class CatfishHttpServer {
 
   private final ThreadPoolExecutor executor =
       new ThreadPoolExecutor(
-          8, 8, 1L, TimeUnit.SECONDS, new ArrayBlockingQueue<>(128),
+          8,
+          8,
+          1L,
+          TimeUnit.SECONDS,
+          new ArrayBlockingQueue<>(128),
           new ThreadFactory() {
             private final AtomicInteger threadNumber = new AtomicInteger(0);
 
@@ -49,33 +51,25 @@ public final class CatfishHttpServer {
 
   public CatfishHttpServer(NetworkEventListener serverListener) throws IOException {
     // TODO: This implements tail drop; head drop might be better.
-    executor.setRejectedExecutionHandler(new RejectedExecutionHandler() {
-      @Override
-      public void rejectedExecution(Runnable task, ThreadPoolExecutor actualExecutor) {
-        if (task instanceof RequestCallback) {
-          ((RequestCallback) task).reject();
-        }
-      }
-    });
+    executor.setRejectedExecutionHandler(
+        new RejectedExecutionHandler() {
+          @Override
+          public void rejectedExecution(Runnable task, ThreadPoolExecutor actualExecutor) {
+            if (task instanceof RequestCallback) {
+              ((RequestCallback) task).reject();
+            }
+          }
+        });
     this.engine = new NetworkEngine(serverListener);
   }
 
   public void addHttpHost(String name, HttpHandler handler, SSLContext sslContext) {
-    addHttpHost(
-        name,
-        UploadPolicy.DENY,
-        ResponsePolicy.KEEP_ALIVE,
-        handler,
-        sslContext);
+    addHttpHost(name, UploadPolicy.DENY, ResponsePolicy.KEEP_ALIVE, handler, sslContext);
   }
 
-  public void addHttpHost(String name, UploadPolicy uploadPolicy, HttpHandler handler, SSLContext sslContext) {
-    addHttpHost(
-        name,
-        uploadPolicy,
-        ResponsePolicy.KEEP_ALIVE,
-        handler,
-        sslContext);
+  public void addHttpHost(
+      String name, UploadPolicy uploadPolicy, HttpHandler handler, SSLContext sslContext) {
+    addHttpHost(name, uploadPolicy, ResponsePolicy.KEEP_ALIVE, handler, sslContext);
   }
 
   public void addHttpHost(
@@ -115,27 +109,32 @@ public final class CatfishHttpServer {
     return domain != null ? domain.getSSLContext() : null;
   }
 
-  void queueRequest(HttpHandler httpHandler, Connection connection, HttpRequest request, HttpResponseWriter responseWriter) {
-    executor.execute(new RequestCallback() {
-      @Override
-      public void run() {
-        try {
-          httpHandler.handle(connection, request, responseWriter);
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-      }
+  void queueRequest(
+      HttpHandler httpHandler,
+      Connection connection,
+      HttpRequest request,
+      HttpResponseWriter responseWriter) {
+    executor.execute(
+        new RequestCallback() {
+          @Override
+          public void run() {
+            try {
+              httpHandler.handle(connection, request, responseWriter);
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          }
 
-      @Override
-      public void reject() {
-        try {
-          HttpResponse responseToWrite = StandardResponses.SERVICE_UNAVAILABLE;
-          responseWriter.commitBuffered(responseToWrite);
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-      }
-    });
+          @Override
+          public void reject() {
+            try {
+              HttpResponse responseToWrite = StandardResponses.SERVICE_UNAVAILABLE;
+              responseWriter.commitBuffered(responseToWrite);
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          }
+        });
   }
 
   HttpVirtualHost determineHttpVirtualHost(String hostHeader) {
@@ -158,19 +157,19 @@ public final class CatfishHttpServer {
   }
 
   public void listenHttpLocal(int port) throws IOException, InterruptedException {
-    engine.listenLocalhost(port, new HttpServerHandler(this, /*ssl=*/false));
+    engine.listenLocalhost(port, new HttpServerHandler(this, /* ssl= */ false));
   }
 
   public void listenHttpsLocal(int port) throws IOException, InterruptedException {
-    engine.listenLocalhost(port, new HttpServerHandler(this, /*ssl=*/true));
+    engine.listenLocalhost(port, new HttpServerHandler(this, /* ssl= */ true));
   }
 
   public void listenHttp(int port) throws IOException, InterruptedException {
-    engine.listenAll(port, new HttpServerHandler(this, /*ssl=*/false));
+    engine.listenAll(port, new HttpServerHandler(this, /* ssl= */ false));
   }
 
   public void listenHttps(int port) throws IOException, InterruptedException {
-    engine.listenAll(port, new HttpServerHandler(this, /*ssl=*/true));
+    engine.listenAll(port, new HttpServerHandler(this, /* ssl= */ true));
   }
 
   public int getOpenConnections() {

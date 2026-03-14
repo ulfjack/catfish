@@ -1,10 +1,9 @@
 package de.ofahrt.catfish;
 
-import java.nio.ByteBuffer;
-
 import de.ofahrt.catfish.internal.network.NetworkEngine.NetworkHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
+import java.nio.ByteBuffer;
 
 final class HttpServerHandler implements NetworkHandler {
   private final CatfishHttpServer server;
@@ -29,13 +28,14 @@ final class HttpServerHandler implements NetworkHandler {
       decryptedInputBuffer.flip(); // prepare for reading
       decryptedOutputBuffer.clear();
       decryptedOutputBuffer.flip(); // prepare for reading
-      HttpServerStage httpStage = new HttpServerStage(
-          pipeline,
-          server::queueRequest,
-          (conn, req, res) -> server.notifySent(conn, req, res, 0),
-          server::determineHttpVirtualHost,
-          decryptedInputBuffer,
-          decryptedOutputBuffer);
+      HttpServerStage httpStage =
+          new HttpServerStage(
+              pipeline,
+              server::queueRequest,
+              (conn, req, res) -> server.notifySent(conn, req, res, 0),
+              server::determineHttpVirtualHost,
+              decryptedInputBuffer,
+              decryptedOutputBuffer);
       return new SslServerStage(
           pipeline,
           httpStage,

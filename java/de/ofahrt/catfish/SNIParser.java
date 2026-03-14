@@ -3,10 +3,7 @@ package de.ofahrt.catfish;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
-/**
- * {@link https://tools.ietf.org/rfc/rfc5246.txt}
- * {@link https://tools.ietf.org/rfc/rfc6066.txt}
- */
+/** {@link https://tools.ietf.org/rfc/rfc5246.txt} {@link https://tools.ietf.org/rfc/rfc6066.txt} */
 final class SNIParser {
   private static final boolean DEBUG = false;
 
@@ -70,8 +67,12 @@ final class SNIParser {
 
     int handshakeLength = getInt24(temp);
     if (handshakeLength > (recordLength - CLIENT_HELLO_HEADER_SIZE)) {
-      log("No SNI found (initial handshake appears split because " + handshakeLength + " > "
-          + (recordLength - CLIENT_HELLO_HEADER_SIZE) + "; unsupported)");
+      log(
+          "No SNI found (initial handshake appears split because "
+              + handshakeLength
+              + " > "
+              + (recordLength - CLIENT_HELLO_HEADER_SIZE)
+              + "; unsupported)");
       return UNSUPPORTED_SPLIT_RECORD;
     }
     // TODO: The handshakeLength could be shorter than the record length, and we should guard
