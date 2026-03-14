@@ -26,7 +26,8 @@ import javax.net.ssl.TrustManagerFactory;
 
 public final class SSLContextFactory {
 
-  public static SSLContext loadPkcs12(InputStream certificate) throws IOException, GeneralSecurityException {
+  public static SSLContext loadPkcs12(InputStream certificate)
+      throws IOException, GeneralSecurityException {
     char[] password = "".toCharArray();
     KeyStore keyStore = KeyStore.getInstance("PKCS12");
     keyStore.load(certificate, password);
@@ -45,7 +46,8 @@ public final class SSLContextFactory {
 
   private static final Pattern CN_PATTERN = Pattern.compile("CN=([^,]+),");
 
-  public static SSLInfo loadPemKeyAndCrtFiles(File sslKeyFile, File sslCrtFile) throws IOException, GeneralSecurityException {
+  public static SSLInfo loadPemKeyAndCrtFiles(File sslKeyFile, File sslCrtFile)
+      throws IOException, GeneralSecurityException {
     byte[] keyData;
     try (InputStream in = new FileInputStream(sslKeyFile)) {
       keyData = decodePem(in);
@@ -74,11 +76,13 @@ public final class SSLContextFactory {
     TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance("SunX509");
     trustManagerFactory.init(keyStore);
     SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
-    sslContext.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
+    sslContext.init(
+        keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
     return new SSLInfo(sslContext, certificateCommonName);
   }
 
-  private static Certificate readCertificate(InputStream in) throws IOException, CertificateException {
+  private static Certificate readCertificate(InputStream in)
+      throws IOException, CertificateException {
     byte[] crtData;
     crtData = decodePem(in);
     CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
@@ -87,7 +91,8 @@ public final class SSLContextFactory {
   }
 
   private static byte[] decodePem(InputStream in) throws IOException {
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.ISO_8859_1))) {
+    try (BufferedReader reader =
+        new BufferedReader(new InputStreamReader(in, StandardCharsets.ISO_8859_1))) {
       StringBuffer base64Data = new StringBuffer();
       boolean copyingData = false;
       String s;
@@ -102,7 +107,8 @@ public final class SSLContextFactory {
           copyingData = true;
         }
       }
-      return Base64.getDecoder().decode(base64Data.toString().getBytes(StandardCharsets.ISO_8859_1));
+      return Base64.getDecoder()
+          .decode(base64Data.toString().getBytes(StandardCharsets.ISO_8859_1));
     }
   }
 

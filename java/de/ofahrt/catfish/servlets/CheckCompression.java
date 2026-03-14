@@ -1,16 +1,14 @@
 package de.ofahrt.catfish.servlets;
 
+import de.ofahrt.catfish.bridge.ServletHelper;
+import de.ofahrt.catfish.utils.MimeType;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
-
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-
-import de.ofahrt.catfish.bridge.ServletHelper;
-import de.ofahrt.catfish.utils.MimeType;
 
 public final class CheckCompression extends HttpServlet {
 
@@ -21,8 +19,9 @@ public final class CheckCompression extends HttpServlet {
     response.setStatus(HttpServletResponse.SC_OK);
     response.setContentType(MimeType.TEXT_HTML.toString());
     StringBuilder buffer = new StringBuilder();
-    buffer.append("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
-        +"\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n");
+    buffer.append(
+        "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
+            + "\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n");
     buffer.append("<html xmlns=\"http://www.w3.org/1999/xhtml\">\n");
     buffer.append("<head><title>Check Compression</title></head>\n");
     buffer.append("<body>\n");

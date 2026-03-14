@@ -1,17 +1,15 @@
 package de.ofahrt.catfish.ssl;
 
+import de.ofahrt.catfish.ssl.Asn1Parser.Event;
+import de.ofahrt.catfish.ssl.Asn1Parser.ObjectIdentifier;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.security.spec.RSAPrivateCrtKeySpec;
-import de.ofahrt.catfish.ssl.Asn1Parser.Event;
-import de.ofahrt.catfish.ssl.Asn1Parser.ObjectIdentifier;
 
-/**
- * Parser for PKCS1 encoded RSA keys. See {@link https://www.ietf.org/rfc/rfc3447.txt}.
- */
+/** Parser for PKCS1 encoded RSA keys. See {@link https://www.ietf.org/rfc/rfc3447.txt}. */
 final class PKCS1 {
   private static final ObjectIdentifier RSA =
-      new ObjectIdentifier(new int[] { 1, 2, 840, 113549, 1, 1, 1 });
+      new ObjectIdentifier(new int[] {1, 2, 840, 113549, 1, 1, 1});
 
   static RSAPrivateCrtKeySpec parse(byte[] data) throws IOException {
     byte[] content = null;
@@ -27,11 +25,11 @@ final class PKCS1 {
         content = parser.getOctetString();
       }
     }
-//    new Asn1Parser(content).parse();
-//    for (int i = 0; i < data.length; i++) {
-//      System.out.print(Integer.toHexString(data[i] & 0xff) + ", ");
-//    }
-//    System.out.println();
+    //    new Asn1Parser(content).parse();
+    //    for (int i = 0; i < data.length; i++) {
+    //      System.out.print(Integer.toHexString(data[i] & 0xff) + ", ");
+    //    }
+    //    System.out.println();
     return new PKCS1(content).parse();
   }
 
@@ -44,7 +42,8 @@ final class PKCS1 {
   private void expect(Event expected) throws IOException {
     Event actual = parser.nextEvent();
     if (actual != expected) {
-      throw new IOException(String.format("Unexpected event (expected=%s, was=%s)", expected, actual));
+      throw new IOException(
+          String.format("Unexpected event (expected=%s, was=%s)", expected, actual));
     }
   }
 
@@ -62,6 +61,7 @@ final class PKCS1 {
     }
     expect(Event.END_SEQUENCE);
     expect(Event.END_INPUT);
-    return new RSAPrivateCrtKeySpec(values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7]);
+    return new RSAPrivateCrtKeySpec(
+        values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7]);
   }
 }

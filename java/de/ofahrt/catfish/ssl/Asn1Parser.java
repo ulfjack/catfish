@@ -7,9 +7,7 @@ import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Deque;
 
-/**
- * Parser for ASN.1.
- */
+/** Parser for ASN.1. */
 final class Asn1Parser {
   private static final int INTEGER_TAG = 0x02;
   private static final int OCTET_STRING_TAG = 0x04;

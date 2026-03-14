@@ -5,14 +5,14 @@ import java.util.Locale;
 import java.util.Map;
 
 final class MultipartHeaderName {
-  public static final String CONTENT_DISPOSITION       = "Content-Disposition";
-  public static final String CONTENT_TYPE              = "Content-Type";
+  public static final String CONTENT_DISPOSITION = "Content-Disposition";
+  public static final String CONTENT_TYPE = "Content-Type";
   public static final String CONTENT_TRANSFER_ENCODING = "Content-Transfer-Encoding";
 
-  private static Map<String,String> CANONICALIZATION_MAP = getCanonicalizationMap();
+  private static Map<String, String> CANONICALIZATION_MAP = getCanonicalizationMap();
 
-  private static Map<String,String> getCanonicalizationMap() {
-    Map<String,String> result = new HashMap<>();
+  private static Map<String, String> getCanonicalizationMap() {
+    Map<String, String> result = new HashMap<>();
     add(result, CONTENT_DISPOSITION);
     add(result, CONTENT_TYPE);
     add(result, CONTENT_TRANSFER_ENCODING);

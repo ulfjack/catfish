@@ -1,16 +1,14 @@
 package de.ofahrt.catfish.servlets;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
 import de.ofahrt.catfish.bridge.ServletHelper;
 import de.ofahrt.catfish.utils.MimeType;
 import de.ofahrt.catfish.utils.MimeTypeRegistry;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 public final class DirectoryServlet extends HttpServlet {
   private static final long serialVersionUID = 1L;

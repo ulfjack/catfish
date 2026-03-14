@@ -1,15 +1,14 @@
 package de.ofahrt.catfish.upload;
 
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.utils.HttpContentType;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-
-import de.ofahrt.catfish.model.HttpHeaderName;
-import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.utils.HttpContentType;
 
 public final class FormDataBody implements HttpRequest.Body, Iterable<FormEntry> {
   public static final FormDataBody EMPTY = new FormDataBody(Collections.emptyList());

@@ -18,7 +18,8 @@ public final class SimpleUploadPolicy implements UploadPolicy {
     String contentLengthValue = request.getHeader(HttpHeaderName.CONTENT_LENGTH);
     String transferEncodingValue = request.getHeader(HttpHeaderName.TRANSFER_ENCODING);
     if (transferEncodingValue != null && contentLengthValue != null) {
-      request.setError(HttpStatusCode.BAD_REQUEST, "Must not set both Content-Length and Transfer-Encoding");
+      request.setError(
+          HttpStatusCode.BAD_REQUEST, "Must not set both Content-Length and Transfer-Encoding");
       return null;
     }
     if (transferEncodingValue != null) {

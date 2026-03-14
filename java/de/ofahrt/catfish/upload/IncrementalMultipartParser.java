@@ -1,5 +1,7 @@
 package de.ofahrt.catfish.upload;
 
+import de.ofahrt.catfish.model.server.PayloadParser;
+import de.ofahrt.catfish.utils.HttpContentType;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -9,8 +11,6 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import de.ofahrt.catfish.model.server.PayloadParser;
-import de.ofahrt.catfish.utils.HttpContentType;
 
 public final class IncrementalMultipartParser implements PayloadParser {
   private static final Pattern nameExtractorPattern = Pattern.compile(".* name=\"([^\"]*)\".*");
@@ -21,7 +21,9 @@ public final class IncrementalMultipartParser implements PayloadParser {
     END_BOUNDARY_EXPECT_HYPHEN,
     END_BOUNDARY_EXPECT_CR,
     END_BOUNDARY_EXPECT_LF,
-    FIELD_NAME, FIELD_VALUE, FIELD_VALUE_EXPECT_LF,
+    FIELD_NAME,
+    FIELD_VALUE,
+    FIELD_VALUE_EXPECT_LF,
     FIELD_NAME_OR_CONTINUATION_OR_END,
     HEADERS_END_EXPECT_LF,
     PART_BODY,
@@ -59,7 +61,8 @@ public final class IncrementalMultipartParser implements PayloadParser {
       for (int i = 1; i < parsedContentType.length; i += 2) {
         if ("boundary".equals(parsedContentType[i])) {
           if (foundBoundary != null) {
-            error = new MalformedMultipartException("duplicate boundary specification in content type");
+            error =
+                new MalformedMultipartException("duplicate boundary specification in content type");
             continue;
           }
           try {
@@ -84,10 +87,21 @@ public final class IncrementalMultipartParser implements PayloadParser {
   //                      "+" / "_" / "," / "-" / "." /
   //                      "/" / ":" / "=" / "?"
   static boolean isBoundaryCharacter(char c) {
-    return ((c >= '0') && (c <= '9')) || ((c >= 'a') && (c <= 'z')) || ((c >= 'A') && (c <= 'Z'))
-        || (c == '\'') || (c == '(') || (c == ')')
-        || (c == '+') || (c == '_') || (c == ',') || (c == '-') || (c == '.')
-        || (c == '/') || (c == ':') || (c == '=') || (c == '?')
+    return ((c >= '0') && (c <= '9'))
+        || ((c >= 'a') && (c <= 'z'))
+        || ((c >= 'A') && (c <= 'Z'))
+        || (c == '\'')
+        || (c == '(')
+        || (c == ')')
+        || (c == '+')
+        || (c == '_')
+        || (c == ',')
+        || (c == '-')
+        || (c == '.')
+        || (c == '/')
+        || (c == ':')
+        || (c == '=')
+        || (c == '?')
         || (c == ' ');
   }
 
@@ -108,7 +122,7 @@ public final class IncrementalMultipartParser implements PayloadParser {
       }
       result[4 + i] = c;
     }
-    if (result[result.length-1] == ' ') {
+    if (result[result.length - 1] == ' ') {
       throw new IllegalArgumentException("boundary may not have a space at the end");
     }
     return result;
@@ -155,7 +169,7 @@ public final class IncrementalMultipartParser implements PayloadParser {
     }
 
     for (int i = 0; i < length; i++) {
-      final char c = (char) (data[offset+i] & 0xff);
+      final char c = (char) (data[offset + i] & 0xff);
       if (c == boundary[searchPosition]) {
         searchPosition++;
       } else if (c == boundary[0]) {
@@ -166,30 +180,32 @@ public final class IncrementalMultipartParser implements PayloadParser {
       boolean isBoundaryMatch = searchPosition == boundary.length;
       if (isBoundaryMatch) searchPosition = 0;
       switch (state) {
-        case PREAMBLE :
+        case PREAMBLE:
           if (isBoundaryMatch) {
             state = State.END_BOUNDARY_EXPECT_CR;
           }
           break;
-        case END_BOUNDARY :
+        case END_BOUNDARY:
           if (c == '-') {
             state = State.END_BOUNDARY_EXPECT_HYPHEN;
           } else if (c == '\r') {
             state = State.END_BOUNDARY_EXPECT_LF;
           } else {
-            error = new MalformedMultipartException("At end of boundary line: unexpected character.");
+            error =
+                new MalformedMultipartException("At end of boundary line: unexpected character.");
             return i;
           }
           break;
-        case END_BOUNDARY_EXPECT_HYPHEN :
+        case END_BOUNDARY_EXPECT_HYPHEN:
           if (c == '-') {
             state = State.EPILOGUE;
           } else {
-            error = new MalformedMultipartException("At end of boundary line: unexpected character.");
+            error =
+                new MalformedMultipartException("At end of boundary line: unexpected character.");
             return i;
           }
           break;
-        case END_BOUNDARY_EXPECT_CR :
+        case END_BOUNDARY_EXPECT_CR:
           if (c == '\r') {
             state = State.END_BOUNDARY_EXPECT_LF;
           } else if (c == ' ') {
@@ -199,20 +215,22 @@ public final class IncrementalMultipartParser implements PayloadParser {
             // ; be able to handle padding
             // ; added by message transports.
           } else {
-            error = new MalformedMultipartException("At end of boundary line: unexpected character.");
+            error =
+                new MalformedMultipartException("At end of boundary line: unexpected character.");
             return i;
           }
           break;
-        case END_BOUNDARY_EXPECT_LF :
+        case END_BOUNDARY_EXPECT_LF:
           if (c == '\n') {
             state = State.FIELD_NAME;
             partBody = new ByteArrayOutputStream();
           } else {
-            error = new MalformedMultipartException("At end of boundary line: CR not followed by LF.");
+            error =
+                new MalformedMultipartException("At end of boundary line: CR not followed by LF.");
             return i;
           }
           break;
-        case FIELD_NAME :
+        case FIELD_NAME:
           if (c == ':') {
             if (elementBuffer.length() == 0) {
               error = new MalformedMultipartException("Expected field name, but ':' found.");
@@ -221,7 +239,7 @@ public final class IncrementalMultipartParser implements PayloadParser {
             fieldName = elementBuffer.toString();
             elementBuffer.setLength(0);
             state = State.FIELD_VALUE;
-          } else if (c == '\r')  {
+          } else if (c == '\r') {
             if (elementBuffer.length() != 0) {
               error = new MalformedMultipartException("Unexpected end of line in field name.");
               return i;
@@ -234,10 +252,10 @@ public final class IncrementalMultipartParser implements PayloadParser {
             elementBuffer.append(c);
           }
           break;
-        case FIELD_VALUE :
+        case FIELD_VALUE:
           if (c == '\r') {
             int end = elementBuffer.length();
-            while ((end > 0) && (elementBuffer.charAt(end-1) == ' ')) {
+            while ((end > 0) && (elementBuffer.charAt(end - 1) == ' ')) {
               end--;
             }
             elementBuffer.setLength(end);
@@ -250,7 +268,7 @@ public final class IncrementalMultipartParser implements PayloadParser {
             elementBuffer.append(c);
           }
           break;
-        case FIELD_VALUE_EXPECT_LF :
+        case FIELD_VALUE_EXPECT_LF:
           if (c == '\n') {
             state = State.FIELD_NAME_OR_CONTINUATION_OR_END;
           } else {
@@ -270,7 +288,7 @@ public final class IncrementalMultipartParser implements PayloadParser {
             }
           }
           break;
-        case FIELD_NAME_OR_CONTINUATION_OR_END :
+        case FIELD_NAME_OR_CONTINUATION_OR_END:
           if (isSpace(c)) {
             state = State.FIELD_VALUE;
             elementBuffer.append(fieldValue);
@@ -293,15 +311,17 @@ public final class IncrementalMultipartParser implements PayloadParser {
             elementBuffer.append(c);
           }
           break;
-        case HEADERS_END_EXPECT_LF :
+        case HEADERS_END_EXPECT_LF:
           if (c == '\n') {
             state = State.PART_BODY;
           } else {
-            error = new MalformedMultipartException("At end of field definition: CR not followed by LF.");
+            error =
+                new MalformedMultipartException(
+                    "At end of field definition: CR not followed by LF.");
             return i;
           }
           break;
-        case PART_BODY :
+        case PART_BODY:
           partBody.write(c);
           if (isBoundaryMatch) {
             FormEntry entry = constructEntry();
@@ -314,7 +334,7 @@ public final class IncrementalMultipartParser implements PayloadParser {
             state = State.END_BOUNDARY;
           }
           break;
-        case EPILOGUE :
+        case EPILOGUE:
           break;
       }
     }
@@ -324,7 +344,9 @@ public final class IncrementalMultipartParser implements PayloadParser {
   private FormEntry constructEntry() {
     String contentDisposition = fields.get(MultipartHeaderName.CONTENT_DISPOSITION);
     if (contentDisposition == null) {
-      error = new MalformedMultipartException("multipart/form-data requires Content-Disposition for every entry!");
+      error =
+          new MalformedMultipartException(
+              "multipart/form-data requires Content-Disposition for every entry!");
       return null;
     }
     byte[] content = partBody.toByteArray();
@@ -332,14 +354,17 @@ public final class IncrementalMultipartParser implements PayloadParser {
       error = new MalformedMultipartException("Missing clrf after header!");
       return null;
     }
-//      System.out.println(content.length + " " + boundary.length + " X" + new String(content) + "X Y" + new String(boundary) + "Y");
+    //      System.out.println(content.length + " " + boundary.length + " X" + new String(content) +
+    // "X Y" + new String(boundary) + "Y");
     content = Arrays.copyOf(content, content.length - boundary.length);
 
     String contentType = fields.get(MultipartHeaderName.CONTENT_TYPE);
     if (contentType == null) {
       Matcher m = nameExtractorPattern.matcher(contentDisposition);
       if (!m.matches()) {
-        error = new MalformedMultipartException("multipart/form-data requires Content-Disposition with a name for every entry!");
+        error =
+            new MalformedMultipartException(
+                "multipart/form-data requires Content-Disposition with a name for every entry!");
         return null;
       }
       String name = m.group(1);
