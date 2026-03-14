@@ -3,7 +3,6 @@ package de.ofahrt.catfish.bridge;
 import static org.junit.Assert.assertEquals;
 
 import java.io.ByteArrayInputStream;
-
 import org.junit.Test;
 
 public class ServletHelperTest {
@@ -15,8 +14,14 @@ public class ServletHelperTest {
 
   @Test
   public void parseFormDataSimple() throws Exception {
-    FormData formData = parseFormData("multipart/form-data; boundary=abc",
-        "--abc\n" + "Content-Disposition: form-data; name=\"a\"\n" + "\n" + "b\n" + "--abc--\n");
+    FormData formData =
+        parseFormData(
+            "multipart/form-data; boundary=abc",
+            "--abc\n"
+                + "Content-Disposition: form-data; name=\"a\"\n"
+                + "\n"
+                + "b\n"
+                + "--abc--\n");
     assertEquals(0, formData.files.size());
     assertEquals(1, formData.data.size());
     assertEquals("b", formData.data.get("a"));

@@ -20,27 +20,29 @@ class MultiRunner {
     final AtomicInteger failCount = new AtomicInteger();
     for (int i = 0; i < actualTasks.size(); i++) {
       final Runnable runnable = actualTasks.get(i);
-      new Thread(new Runnable() {
-        @Override
-        public void run() {
-          try {
-            barrier.await();
-            runnable.run();
-          } catch (Throwable e) {
-            e.printStackTrace();
-            failCount.incrementAndGet();
-          } finally {
-            try {
-              barrier.await();
-            } catch (BrokenBarrierException e) {
-              throw new RuntimeException(e);
-            } catch (InterruptedException e) {
-              throw new RuntimeException(e);
-            }
-//              System.err.println("DONE: " + (count - done.getCount()));
-          }
-        }
-      }).start();
+      new Thread(
+              new Runnable() {
+                @Override
+                public void run() {
+                  try {
+                    barrier.await();
+                    runnable.run();
+                  } catch (Throwable e) {
+                    e.printStackTrace();
+                    failCount.incrementAndGet();
+                  } finally {
+                    try {
+                      barrier.await();
+                    } catch (BrokenBarrierException e) {
+                      throw new RuntimeException(e);
+                    } catch (InterruptedException e) {
+                      throw new RuntimeException(e);
+                    }
+                    //              System.err.println("DONE: " + (count - done.getCount()));
+                  }
+                }
+              })
+          .start();
     }
     barrier.await();
     barrier.await();

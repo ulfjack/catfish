@@ -3,7 +3,6 @@ package de.ofahrt.catfish;
 import static org.junit.Assert.assertEquals;
 
 import java.util.Arrays;
-
 import org.junit.Test;
 
 public class HashConflictGeneratorTest {

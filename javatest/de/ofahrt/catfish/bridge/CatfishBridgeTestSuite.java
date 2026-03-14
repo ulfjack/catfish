@@ -11,5 +11,4 @@ import org.junit.runners.Suite.SuiteClasses;
   RequestImplTest.class,
   SessionManagerTest.class,
 })
-public class CatfishBridgeTestSuite {
-}
+public class CatfishBridgeTestSuite {}

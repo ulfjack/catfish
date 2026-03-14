@@ -1,13 +1,13 @@
 package de.ofahrt.catfish;
 
+import de.ofahrt.catfish.bridge.FileData;
+import de.ofahrt.catfish.bridge.ServletHelper;
+import de.ofahrt.catfish.utils.MimeType;
 import java.io.IOException;
 import java.io.Writer;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import de.ofahrt.catfish.bridge.FileData;
-import de.ofahrt.catfish.bridge.ServletHelper;
-import de.ofahrt.catfish.utils.MimeType;
 
 public final class TestServlet extends HttpServlet {
   private static final long serialVersionUID = 1L;
@@ -40,7 +40,8 @@ public final class TestServlet extends HttpServlet {
     response.setStatus(HttpServletResponse.SC_OK);
     response.setContentType(MimeType.TEXT_HTML.toString());
     response.setCharacterEncoding("UTF-8");
-    @SuppressWarnings("resource") Writer out = response.getWriter();
+    @SuppressWarnings("resource")
+    Writer out = response.getWriter();
     out.write("");
   }
 }

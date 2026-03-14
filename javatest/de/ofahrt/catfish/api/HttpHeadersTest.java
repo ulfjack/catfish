@@ -4,13 +4,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import de.ofahrt.catfish.model.HttpHeaders;
 import java.util.AbstractMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 import org.junit.Test;
-import de.ofahrt.catfish.model.HttpHeaders;
 
 public class HttpHeadersTest {
   @Test

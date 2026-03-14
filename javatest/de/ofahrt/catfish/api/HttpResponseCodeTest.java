@@ -2,8 +2,8 @@ package de.ofahrt.catfish.api;
 
 import static org.junit.Assert.assertEquals;
 
-import org.junit.Test;
 import de.ofahrt.catfish.model.HttpStatusCode;
+import org.junit.Test;
 
 public class HttpResponseCodeTest {
   @Test
@@ -41,12 +41,12 @@ public class HttpResponseCodeTest {
     assertEquals("None", HttpStatusCode.getStatusMessage(999));
   }
 
-  @Test(expected=IllegalArgumentException.class)
+  @Test(expected = IllegalArgumentException.class)
   public void lowCodeThrowsIllegalArgumentException() {
     HttpStatusCode.getStatusMessage(99);
   }
 
-  @Test(expected=IllegalArgumentException.class)
+  @Test(expected = IllegalArgumentException.class)
   public void highCodeThrowsIllegalArgumentException() {
     HttpStatusCode.getStatusMessage(1000);
   }

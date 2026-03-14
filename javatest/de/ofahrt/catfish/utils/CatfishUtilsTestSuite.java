@@ -9,5 +9,4 @@ import org.junit.runners.Suite.SuiteClasses;
   HttpContentTypeTest.class,
   HttpDateTest.class,
 })
-public class CatfishUtilsTestSuite {
-}
+public class CatfishUtilsTestSuite {}

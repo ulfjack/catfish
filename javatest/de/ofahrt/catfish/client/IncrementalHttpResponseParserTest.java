@@ -3,7 +3,6 @@ package de.ofahrt.catfish.client;
 import static org.junit.Assert.assertEquals;
 
 import java.nio.charset.Charset;
-
 import org.junit.Test;
 
 public class IncrementalHttpResponseParserTest {

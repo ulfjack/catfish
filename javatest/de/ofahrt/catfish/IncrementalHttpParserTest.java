@@ -4,10 +4,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import org.junit.Test;
 import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.upload.SimpleUploadPolicy;
+import org.junit.Test;
 
 public class IncrementalHttpParserTest {
 
@@ -48,7 +48,8 @@ public class IncrementalHttpParserTest {
 
   @Test
   public void ignoreTrailingContentAfterBody() {
-    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser(new SimpleUploadPolicy(100));
+    IncrementalHttpRequestParser parser =
+        new IncrementalHttpRequestParser(new SimpleUploadPolicy(100));
     byte[] data = "GET / HTTP/1.1\r\nContent-Length: 4\r\n\r\n0123TRAILING_DATA".getBytes();
     assertEquals(data.length - 13, parser.parse(data));
     assertTrue(parser.isDone());
@@ -65,7 +66,8 @@ public class IncrementalHttpParserTest {
       parser.getRequest();
       fail();
     } catch (MalformedRequestException e) {
-      assertEquals(HttpStatusCode.URI_TOO_LONG.getStatusCode(), e.getErrorResponse().getStatusCode());
+      assertEquals(
+          HttpStatusCode.URI_TOO_LONG.getStatusCode(), e.getErrorResponse().getStatusCode());
       assertEquals("414 URI Too Long", e.getMessage());
     }
   }
@@ -73,14 +75,17 @@ public class IncrementalHttpParserTest {
   @Test
   public void disallowTooLongHeaderName() {
     IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
-    byte[] data = ("GET / HTTP/1.1\r\nHost: foo\r\n" + repeat("x", 1001) + ": unknown\r\n\r\n").getBytes();
+    byte[] data =
+        ("GET / HTTP/1.1\r\nHost: foo\r\n" + repeat("x", 1001) + ": unknown\r\n\r\n").getBytes();
     parser.parse(data);
     assertTrue(parser.isDone());
     try {
       parser.getRequest();
       fail();
     } catch (MalformedRequestException e) {
-      assertEquals(HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE.getStatusCode(), e.getErrorResponse().getStatusCode());
+      assertEquals(
+          HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE.getStatusCode(),
+          e.getErrorResponse().getStatusCode());
       assertEquals("431 Header name is too long", e.getMessage());
     }
   }
@@ -88,14 +93,17 @@ public class IncrementalHttpParserTest {
   @Test
   public void disallowTooLongHeaderValue() {
     IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
-    byte[] data = ("GET / HTTP/1.1\r\nHost: foo\r\nHeader: " + repeat("x", 10001) + "\r\n\r\n").getBytes();
+    byte[] data =
+        ("GET / HTTP/1.1\r\nHost: foo\r\nHeader: " + repeat("x", 10001) + "\r\n\r\n").getBytes();
     parser.parse(data);
     assertTrue(parser.isDone());
     try {
       parser.getRequest();
       fail();
     } catch (MalformedRequestException e) {
-      assertEquals(HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE.getStatusCode(), e.getErrorResponse().getStatusCode());
+      assertEquals(
+          HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE.getStatusCode(),
+          e.getErrorResponse().getStatusCode());
       assertEquals("431 Header value is too long", e.getMessage());
     }
   }
@@ -103,14 +111,17 @@ public class IncrementalHttpParserTest {
   @Test
   public void disallowTooManyHeaderFields() {
     IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
-    byte[] data = ("GET / HTTP/1.1\r\nHost: foo\r\n" + repeat("field: xyz\r\n", 1000) + "\r\n").getBytes();
+    byte[] data =
+        ("GET / HTTP/1.1\r\nHost: foo\r\n" + repeat("field: xyz\r\n", 1000) + "\r\n").getBytes();
     parser.parse(data);
     assertTrue(parser.isDone());
     try {
       parser.getRequest();
       fail();
     } catch (MalformedRequestException e) {
-      assertEquals(HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE.getStatusCode(), e.getErrorResponse().getStatusCode());
+      assertEquals(
+          HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE.getStatusCode(),
+          e.getErrorResponse().getStatusCode());
       assertEquals("431 Too many header fields", e.getMessage());
     }
   }

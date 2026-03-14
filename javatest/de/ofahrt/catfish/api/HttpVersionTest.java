@@ -2,8 +2,8 @@ package de.ofahrt.catfish.api;
 
 import static org.junit.Assert.assertEquals;
 
-import org.junit.Test;
 import de.ofahrt.catfish.model.HttpVersion;
+import org.junit.Test;
 
 public class HttpVersionTest {
   @Test
@@ -13,8 +13,10 @@ public class HttpVersionTest {
     assertEquals(1, HttpVersion.HTTP_1_1.compareTo(HttpVersion.HTTP_1_0));
     assertEquals(-1, HttpVersion.HTTP_1_1.compareTo(HttpVersion.HTTP_2_0));
     assertEquals(1, HttpVersion.HTTP_2_0.compareTo(HttpVersion.HTTP_1_1));
-    for (HttpVersion v : new HttpVersion[] {
-        HttpVersion.HTTP_0_9, HttpVersion.HTTP_1_0, HttpVersion.HTTP_1_1, HttpVersion.HTTP_2_0 }) {
+    for (HttpVersion v :
+        new HttpVersion[] {
+          HttpVersion.HTTP_0_9, HttpVersion.HTTP_1_0, HttpVersion.HTTP_1_1, HttpVersion.HTTP_2_0
+        }) {
       assertEquals(0, v.compareTo(v));
     }
 

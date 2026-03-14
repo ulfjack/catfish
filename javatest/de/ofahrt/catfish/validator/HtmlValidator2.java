@@ -2,11 +2,9 @@ package de.ofahrt.catfish.validator;
 
 import java.io.IOException;
 import java.io.StringReader;
-
 import nu.validator.htmlparser.common.DoctypeExpectation;
 import nu.validator.htmlparser.common.XmlViolationPolicy;
 import nu.validator.htmlparser.dom.HtmlDocumentBuilder;
-
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -24,28 +22,44 @@ public class HtmlValidator2 {
 
     builder.setXmlPolicy(XmlViolationPolicy.FATAL);
 
-    builder.setErrorHandler(new ErrorHandler() {
+    builder.setErrorHandler(
+        new ErrorHandler() {
 
-      @Override
-      public void warning(SAXParseException exception) throws SAXException {
-        System.err.println(exception.getLineNumber() + ":" + exception.getColumnNumber() + " " + exception.getMessage());
-      }
-      
-      @Override
-      public void fatalError(SAXParseException exception) throws SAXException {
-        System.err.println(exception.getLineNumber() + ":" + exception.getColumnNumber() + " " + exception.getMessage());
-        throw exception;
-      }
-      
-      @Override
-      public void error(SAXParseException exception) throws SAXException {
-        System.err.println(exception.getLineNumber() + ":" + exception.getColumnNumber() + " " + exception.getMessage());
-        throw exception;
-      }
-    });
+          @Override
+          public void warning(SAXParseException exception) throws SAXException {
+            System.err.println(
+                exception.getLineNumber()
+                    + ":"
+                    + exception.getColumnNumber()
+                    + " "
+                    + exception.getMessage());
+          }
+
+          @Override
+          public void fatalError(SAXParseException exception) throws SAXException {
+            System.err.println(
+                exception.getLineNumber()
+                    + ":"
+                    + exception.getColumnNumber()
+                    + " "
+                    + exception.getMessage());
+            throw exception;
+          }
+
+          @Override
+          public void error(SAXParseException exception) throws SAXException {
+            System.err.println(
+                exception.getLineNumber()
+                    + ":"
+                    + exception.getColumnNumber()
+                    + " "
+                    + exception.getMessage());
+            throw exception;
+          }
+        });
     Document document = builder.parse(new InputSource(new StringReader(data)));
     recursiveWalk(document, 0);
-//    System.out.println(document.getChildNodes().item(0));
+    //    System.out.println(document.getChildNodes().item(0));
   }
 
   private void recursiveWalk(Node node, int indent) {

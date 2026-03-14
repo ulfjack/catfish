@@ -5,10 +5,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import javax.servlet.http.HttpSession;
-
 import org.junit.Test;
-
-import de.ofahrt.catfish.bridge.XsrfToken;
 
 public class XsrfTokenTest {
 

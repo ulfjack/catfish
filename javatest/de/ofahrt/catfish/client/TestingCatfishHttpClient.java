@@ -1,18 +1,5 @@
 package de.ofahrt.catfish.client;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLSession;
-import javax.servlet.Servlet;
-import javax.servlet.ServletException;
 import de.ofahrt.catfish.InputStreams;
 import de.ofahrt.catfish.bridge.RequestImpl;
 import de.ofahrt.catfish.bridge.ResponseImpl;
@@ -26,6 +13,19 @@ import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.SimpleHttpResponse;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLSession;
+import javax.servlet.Servlet;
+import javax.servlet.ServletException;
 
 public abstract class TestingCatfishHttpClient {
 
@@ -50,12 +50,13 @@ public abstract class TestingCatfishHttpClient {
     } catch (URISyntaxException e) {
       throw new IOException(e);
     }
-    HttpRequest request = new SimpleHttpRequest.Builder()
-        .setVersion(HttpVersion.HTTP_1_1)
-        .setMethod(HttpMethodName.GET)
-        .setUri(uri.getRawPath())
-        .addHeader(HttpHeaderName.HOST, uri.getHost())
-        .build();
+    HttpRequest request =
+        new SimpleHttpRequest.Builder()
+            .setVersion(HttpVersion.HTTP_1_1)
+            .setMethod(HttpMethodName.GET)
+            .setUri(uri.getRawPath())
+            .addHeader(HttpHeaderName.HOST, uri.getHost())
+            .build();
     return send(uri.getScheme() + "//" + uri.getHost() + ":" + uri.getPort(), request);
   }
 
@@ -102,8 +103,8 @@ public abstract class TestingCatfishHttpClient {
     @Override
     public HttpResponse send(String schemaHostPort, HttpRequest request) throws IOException {
       BufferedHttpResponseWriter writer = new BufferedHttpResponseWriter();
-      RequestImpl servletRequest = new RequestImpl(
-          request, new Connection(null, null, false), null, writer);
+      RequestImpl servletRequest =
+          new RequestImpl(request, new Connection(null, null, false), null, writer);
       ResponseImpl servletResponse = servletRequest.getResponse();
       try {
         servlet.service(servletRequest, servletResponse);
@@ -137,14 +138,15 @@ public abstract class TestingCatfishHttpClient {
       if (isSecure) {
         HttpsURLConnection sslconnection = (HttpsURLConnection) connection;
         sslconnection.setSSLSocketFactory(TestHelper.getSSLContext().getSocketFactory());
-        sslconnection.setHostnameVerifier(new HostnameVerifier() {
-          @Override
-          public boolean verify(String hostname, SSLSession session) {
-            // TODO: Be stricter!
-            System.out.println("VERIFY: " + hostname);
-            return true;
-          }
-        });
+        sslconnection.setHostnameVerifier(
+            new HostnameVerifier() {
+              @Override
+              public boolean verify(String hostname, SSLSession session) {
+                // TODO: Be stricter!
+                System.out.println("VERIFY: " + hostname);
+                return true;
+              }
+            });
       }
 
       connection.connect();

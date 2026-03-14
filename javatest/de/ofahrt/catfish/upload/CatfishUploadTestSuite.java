@@ -8,5 +8,4 @@ import org.junit.runners.Suite.SuiteClasses;
 @SuiteClasses({
   IncrementalMultipartParserTest.class,
 })
-public class CatfishUploadTestSuite {
-}
+public class CatfishUploadTestSuite {}

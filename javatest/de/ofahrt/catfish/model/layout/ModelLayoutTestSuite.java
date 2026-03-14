@@ -8,5 +8,4 @@ import org.junit.runners.Suite.SuiteClasses;
 @SuiteClasses({
   SiteLayoutTest.class,
 })
-public class ModelLayoutTestSuite {
-}
+public class ModelLayoutTestSuite {}

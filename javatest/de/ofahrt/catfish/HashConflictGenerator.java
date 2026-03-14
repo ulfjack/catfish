@@ -37,14 +37,15 @@ public final class HashConflictGenerator {
     return new HashConflictGenerator(chars, targetString.hashCode(), targetString.length());
   }
 
-  private void generateConflictingStrings(StringListener listener, char[] sofar, int index,
-      long hashCode) {
-//    String s = new String(sofar, 0, index);
-//    System.out.println(s + " ACTUAL_HASH=" + s.hashCode() + " HASH=" + (int) hashCode + " MAXDIST=" + maxDist + " TARGET=" + (int) target);
+  private void generateConflictingStrings(
+      StringListener listener, char[] sofar, int index, long hashCode) {
+    //    String s = new String(sofar, 0, index);
+    //    System.out.println(s + " ACTUAL_HASH=" + s.hashCode() + " HASH=" + (int) hashCode + "
+    // MAXDIST=" + maxDist + " TARGET=" + (int) target);
     if (index == sofar.length) {
       String test = new String(sofar);
       if (test.hashCode() == (int) target) {
-//        System.out.println(test + " " + test.hashCode());
+        //        System.out.println(test + " " + test.hashCode());
         listener.add(test);
       }
       return;
@@ -55,13 +56,13 @@ public final class HashConflictGenerator {
       min = min * 31 + chars[0];
       max = max * 31 + chars[chars.length - 1];
     }
-//    System.out.println("MIN   =" + min);
-//    System.out.println("MAX   =" + max);
-//    System.out.println("TARGET=" + target);
+    //    System.out.println("MIN   =" + min);
+    //    System.out.println("MAX   =" + max);
+    //    System.out.println("TARGET=" + target);
     long base = (min / TWO_POW32) * TWO_POW32;
     min -= base;
     max -= base;
-//    System.out.println(min + " " + max);
+    //    System.out.println(min + " " + max);
     if ((min > target) && (max < TWO_POW32 + target)) {
       return;
     }
@@ -79,15 +80,16 @@ public final class HashConflictGenerator {
   public List<String> generateList(final int maxCount) {
     final List<String> result = new ArrayList<>();
     try {
-      generateConflictingStrings(new HashConflictGenerator.StringListener() {
-        @Override
-        public void add(String s) {
-          if ((maxCount != -1) && (result.size() + 1 > maxCount)) {
-            throw new StopException();
-          }
-          result.add(s);
-        }
-      });
+      generateConflictingStrings(
+          new HashConflictGenerator.StringListener() {
+            @Override
+            public void add(String s) {
+              if ((maxCount != -1) && (result.size() + 1 > maxCount)) {
+                throw new StopException();
+              }
+              result.add(s);
+            }
+          });
     } catch (StopException e) {
       // String generation stopped.
     }

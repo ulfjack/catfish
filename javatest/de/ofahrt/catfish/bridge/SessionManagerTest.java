@@ -7,95 +7,89 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
+import de.ofahrt.catfish.CollectionsUtils;
+import de.ofahrt.catfish.bridge.SessionManager.SessionEntry;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-
 import javax.servlet.http.HttpSession;
-
 import org.junit.Test;
-
-import de.ofahrt.catfish.CollectionsUtils;
-import de.ofahrt.catfish.bridge.Clock;
-import de.ofahrt.catfish.bridge.SessionImpl;
-import de.ofahrt.catfish.bridge.SessionManager;
-import de.ofahrt.catfish.bridge.SessionManager.SessionEntry;
 
 public class SessionManagerTest {
 
-	static class ManualClock implements Clock {
-		private long time = 0;
+  static class ManualClock implements Clock {
+    private long time = 0;
 
-		public void advanceMillis(long millis) {
-		  time += millis;
-		}
+    public void advanceMillis(long millis) {
+      time += millis;
+    }
 
-		@Override
-		public long currentTimeMillis() {
-		  return time;
-		}
-	}
+    @Override
+    public long currentTimeMillis() {
+      return time;
+    }
+  }
 
   @Test
   public void sameSessionOnRepeatedCalls() {
-  	ManualClock clock = new ManualClock();
-  	SessionManager manager = new SessionManager(clock);
-  	HttpSession session = manager.getSession(null);
-  	assertSame(session, manager.getSession(session.getId()));
+    ManualClock clock = new ManualClock();
+    SessionManager manager = new SessionManager(clock);
+    HttpSession session = manager.getSession(null);
+    assertSame(session, manager.getSession(session.getId()));
   }
 
   @Test
   public void checkCorrectTimeOut() {
     final long cookieValidity = 60 * 60 * 1000; // same as SessionManager.DEFAULT_COOKIE_VALIDITY
-  	ManualClock clock = new ManualClock();
-  	SessionManager manager = new SessionManager(clock);
-  	HttpSession session1 = manager.getSession(null);
+    ManualClock clock = new ManualClock();
+    SessionManager manager = new SessionManager(clock);
+    HttpSession session1 = manager.getSession(null);
     clock.advanceMillis(cookieValidity - 1);
     assertSame(session1, manager.getSession(session1.getId()));
-  	clock.advanceMillis(cookieValidity + 1);
-  	HttpSession session2 = manager.getSession(session1.getId());
-  	assertNotSame(session1, session2);
-  	assertFalse(session1.getId().equals(session2.getId()));
+    clock.advanceMillis(cookieValidity + 1);
+    HttpSession session2 = manager.getSession(session1.getId());
+    assertNotSame(session1, session2);
+    assertFalse(session1.getId().equals(session2.getId()));
   }
 
   @Test
   public void checkSerialization() throws Exception {
-  	Object o = new ArrayList<String>();
-  	ManualClock clock = new ManualClock();
-  	SessionManager manager = new SessionManager(clock);
-  	HttpSession session1 = manager.getSession(null);
-  	session1.setAttribute("me", o);
-  	ByteArrayOutputStream out = new ByteArrayOutputStream();
-  	manager.save(out);
+    Object o = new ArrayList<String>();
+    ManualClock clock = new ManualClock();
+    SessionManager manager = new SessionManager(clock);
+    HttpSession session1 = manager.getSession(null);
+    session1.setAttribute("me", o);
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    manager.save(out);
 
-  	manager = new SessionManager(clock);
-  	manager.load(new ByteArrayInputStream(out.toByteArray()));
-  	HttpSession session2 = manager.getSession(session1.getId());
-  	assertEquals(session1.getId(), session2.getId());
-  	assertEquals(o, session2.getAttribute("me"));
+    manager = new SessionManager(clock);
+    manager.load(new ByteArrayInputStream(out.toByteArray()));
+    HttpSession session2 = manager.getSession(session1.getId());
+    assertEquals(session1.getId(), session2.getId());
+    assertEquals(o, session2.getAttribute("me"));
   }
 
-  @Test(expected=IOException.class)
+  @Test(expected = IOException.class)
   public void checkFailedDeserialization() throws Exception {
-  	ManualClock clock = new ManualClock();
-  	ByteArrayOutputStream out = new ByteArrayOutputStream();
-  	ObjectOutputStream oout = new ObjectOutputStream(out);
-  	oout.writeObject(Integer.valueOf(1234));
-  	oout.flush();
-  	SessionManager manager = new SessionManager(clock);
-  	manager.load(new ByteArrayInputStream(out.toByteArray()));
+    ManualClock clock = new ManualClock();
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    ObjectOutputStream oout = new ObjectOutputStream(out);
+    oout.writeObject(Integer.valueOf(1234));
+    oout.flush();
+    SessionManager manager = new SessionManager(clock);
+    manager.load(new ByteArrayInputStream(out.toByteArray()));
   }
 
   @Test
   public void sessionEntry() {
-  	SessionEntry a = new SessionEntry(0, new SessionImpl("a", 0, 1));
-  	SessionEntry b = new SessionEntry(1, new SessionImpl("b", 0, 1));
+    SessionEntry a = new SessionEntry(0, new SessionImpl("a", 0, 1));
+    SessionEntry b = new SessionEntry(1, new SessionImpl("b", 0, 1));
     SessionEntry c = new SessionEntry(1, new SessionImpl("b", 0, 2));
-  	assertEquals(-1, a.compareTo(b));
-  	assertEquals(1, b.compareTo(a));
+    assertEquals(-1, a.compareTo(b));
+    assertEquals(1, b.compareTo(a));
     assertEquals(-1, a.compareTo(c));
     assertEquals(1, c.compareTo(a));
     assertEquals(-1, b.compareTo(c));

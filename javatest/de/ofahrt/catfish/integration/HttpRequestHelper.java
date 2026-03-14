@@ -1,21 +1,22 @@
 package de.ofahrt.catfish.integration;
 
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpHeaders;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpRequest.InMemoryBody;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
-import de.ofahrt.catfish.model.HttpHeaderName;
-import de.ofahrt.catfish.model.HttpHeaders;
-import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpRequest.InMemoryBody;
 
 final class HttpRequestHelper {
   private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
   private static final String CRLF = "\r\n";
 
   public static byte[] toByteArray(HttpRequest request) throws IOException {
-    byte[] body = mustHaveBody(request) ? ((InMemoryBody) request.getBody()).toByteArray() : EMPTY_BYTE_ARRAY;
+    byte[] body =
+        mustHaveBody(request) ? ((InMemoryBody) request.getBody()).toByteArray() : EMPTY_BYTE_ARRAY;
     HttpHeaders headers = request.getHeaders();
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     out.write(requestLineToByteArray(request));

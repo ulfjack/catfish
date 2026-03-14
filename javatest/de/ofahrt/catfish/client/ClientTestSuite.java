@@ -11,5 +11,5 @@ import org.junit.runners.Suite.SuiteClasses;
   IncrementalHttpResponseParserIncrementalTest.class,
 })
 public class ClientTestSuite {
-// Ok
+  // Ok
 }

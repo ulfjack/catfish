@@ -4,20 +4,17 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-
-import javax.servlet.http.HttpServletRequest;
-
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
-
 import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.upload.SimpleUploadPolicy;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import javax.servlet.http.HttpServletRequest;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 public class HttpParserIntegrationTest extends ServletEngineTest {
   private static Server server;
@@ -40,7 +37,7 @@ public class HttpParserIntegrationTest extends ServletEngineTest {
 
   @Override
   public HttpServletRequest parseLegacy(byte[] data) throws Exception {
-    HttpConnection connection = server.connect(/*ssl=*/false);
+    HttpConnection connection = server.connect(/* ssl= */ false);
     connection.write(data);
     HttpResponse response = connection.readResponse();
     connection.close();
@@ -64,7 +61,13 @@ public class HttpParserIntegrationTest extends ServletEngineTest {
 
   @Test
   public void getRequestUrlReturnsAbsoluteUrl() throws Exception {
-    assertEquals("http://localhost/", parseLegacy("GET / HTTP/1.1\nHost: localhost\n\n").getRequestURL().toString());
-    assertEquals("http://localhost/", parseLegacy("GET http://127.0.0.1/ HTTP/1.1\nHost: localhost\n\n").getRequestURL().toString());
+    assertEquals(
+        "http://localhost/",
+        parseLegacy("GET / HTTP/1.1\nHost: localhost\n\n").getRequestURL().toString());
+    assertEquals(
+        "http://localhost/",
+        parseLegacy("GET http://127.0.0.1/ HTTP/1.1\nHost: localhost\n\n")
+            .getRequestURL()
+            .toString());
   }
 }

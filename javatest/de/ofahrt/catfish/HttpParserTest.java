@@ -3,16 +3,15 @@ package de.ofahrt.catfish;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
-import org.junit.Test;
+
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.MalformedRequestException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import org.junit.Test;
 
-/**
- * Tests a parser for compliance with RFC 2616: http://www.ietf.org/rfc/rfc2616.txt
- */
+/** Tests a parser for compliance with RFC 2616: http://www.ietf.org/rfc/rfc2616.txt */
 public abstract class HttpParserTest {
   public abstract HttpRequest parse(byte[] data) throws Exception;
 
@@ -92,7 +91,12 @@ public abstract class HttpParserTest {
 
   @Test
   public void parseGetWithDuplicateHeader() throws Exception {
-    HttpRequest request = parse("GET / HTTP/1.1\nHost: localhost\nAccept: text/html\nAccept: application/xhtml+xml\n\n");
+    HttpRequest request =
+        parse(
+            "GET / HTTP/1.1\n"
+                + "Host: localhost\n"
+                + "Accept: text/html\n"
+                + "Accept: application/xhtml+xml\n\n");
     assertEquals("text/html, application/xhtml+xml", request.getHeaders().get("Accept"));
   }
 
@@ -137,7 +141,8 @@ public abstract class HttpParserTest {
 
   @Test
   public void withContent() throws Exception {
-    HttpRequest request = parse("POST / HTTP/1.1\nHost: localhost\nContent-Length: 10\n\n1234567890");
+    HttpRequest request =
+        parse("POST / HTTP/1.1\nHost: localhost\nContent-Length: 10\n\n1234567890");
     byte[] data = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
     assertEquals("1234567890", new String(data, StandardCharsets.UTF_8));
   }
@@ -148,7 +153,6 @@ public abstract class HttpParserTest {
     byte[] data = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
     assertArrayEquals(new byte[0], data);
   }
-
 
   // Catfish-specific tests:
   @Test
@@ -183,18 +187,19 @@ public abstract class HttpParserTest {
   //                 "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
   //      digit    = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" |
   //                 "8" | "9"
-//  @Test
-//  public void oddCharsInUri() throws Exception {
-//    // These aren't actually allowed unescaped:
-//    assertEquals("/%7C", parseLegacy("GET /| HTTP/1.0\n\n").getRequestURI());
-//    assertEquals("/%60", parseLegacy("GET /` HTTP/1.0\n\n").getRequestURI());
-//    assertEquals("/%5E", parseLegacy("GET /^ HTTP/1.0\n\n").getRequestURI());
-//  }
+  //  @Test
+  //  public void oddCharsInUri() throws Exception {
+  //    // These aren't actually allowed unescaped:
+  //    assertEquals("/%7C", parseLegacy("GET /| HTTP/1.0\n\n").getRequestURI());
+  //    assertEquals("/%60", parseLegacy("GET /` HTTP/1.0\n\n").getRequestURI());
+  //    assertEquals("/%5E", parseLegacy("GET /^ HTTP/1.0\n\n").getRequestURI());
+  //  }
 
   // Tests for error conditions:
   @Test
   public void badLineBreak() throws Exception {
-    checkError("400 Expected <lf> following <cr>",
+    checkError(
+        "400 Expected <lf> following <cr>",
         "GET / HTTP/1.0\r\r".getBytes(Charset.forName("ISO-8859-1")));
   }
 
@@ -231,12 +236,14 @@ public abstract class HttpParserTest {
     checkError("400 Expected header field name, but ':' found", "GET / HTTP/1.0\n: value\n\n");
     checkError("400 Unexpected end of line in header field name", "GET / HTTP/1.0\nUser-Agent\n\n");
     checkError("400 Illegal character in header field name", "GET / HTTP/1.0\nUser-Agent :\n\n");
-    checkError("400 Illegal character in header field name", "GET / HTTP/1.0\nUser-Agent: A\n{\n\n");
+    checkError(
+        "400 Illegal character in header field name", "GET / HTTP/1.0\nUser-Agent: A\n{\n\n");
   }
 
   @Test
   public void badContentLength() throws Exception {
-    checkError("400 Illegal content length value", "GET / HTTP/1.0\nContent-Length: notanumber\n\n");
+    checkError(
+        "400 Illegal content length value", "GET / HTTP/1.0\nContent-Length: notanumber\n\n");
     checkError("413 Payload Too Large", "GET / HTTP/1.0\nContent-Length: 123456789\n\n");
   }
 

@@ -8,5 +8,4 @@ import org.junit.runners.Suite.SuiteClasses;
 @SuiteClasses({
   DenyUploadPolicyTest.class,
 })
-public class ModelServerTestSuite {
-}
+public class ModelServerTestSuite {}

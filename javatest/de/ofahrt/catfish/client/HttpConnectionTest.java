@@ -1,15 +1,15 @@
 package de.ofahrt.catfish.client;
 
 import static org.junit.Assert.assertEquals;
+
+import de.ofahrt.catfish.client.legacy.HttpConnection;
+import de.ofahrt.catfish.model.HttpResponse;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.Charset;
 import java.util.concurrent.CountDownLatch;
 import org.junit.Test;
-
-import de.ofahrt.catfish.client.legacy.HttpConnection;
-import de.ofahrt.catfish.model.HttpResponse;
 
 public class HttpConnectionTest {
 
@@ -24,24 +24,26 @@ public class HttpConnectionTest {
     }
 
     public void start() {
-      new Thread(new Runnable() {
-        @Override
-        public void run() {
-          try {
-            ServerSocket serverSocket = new ServerSocket(port);
-            Socket socket = serverSocket.accept();
-            socket.getOutputStream().write(data);
-            socket.getOutputStream().flush();
-            socket.getOutputStream().close();
-            socket.close();
-            serverSocket.close();
-          } catch (IOException e) {
-            throw new RuntimeException(e);
-          } finally {
-            latch.countDown();
-          }
-        }
-      }).start();
+      new Thread(
+              new Runnable() {
+                @Override
+                public void run() {
+                  try {
+                    ServerSocket serverSocket = new ServerSocket(port);
+                    Socket socket = serverSocket.accept();
+                    socket.getOutputStream().write(data);
+                    socket.getOutputStream().flush();
+                    socket.getOutputStream().close();
+                    socket.close();
+                    serverSocket.close();
+                  } catch (IOException e) {
+                    throw new RuntimeException(e);
+                  } finally {
+                    latch.countDown();
+                  }
+                }
+              })
+          .start();
     }
 
     public void waitForStop() throws InterruptedException {
@@ -55,8 +57,7 @@ public class HttpConnectionTest {
 
   @Test
   public void doublePacket() throws Exception {
-    FakeServer server = new FakeServer(9876,
-        toBytes("HTTP/1.1 200 OK\n\nHTTP/1.1 200 OK\n\n"));
+    FakeServer server = new FakeServer(9876, toBytes("HTTP/1.1 200 OK\n\nHTTP/1.1 200 OK\n\n"));
     server.start();
     try (HttpConnection connection = HttpConnection.connect("localhost", 9876)) {
       HttpResponse response = connection.readResponse();

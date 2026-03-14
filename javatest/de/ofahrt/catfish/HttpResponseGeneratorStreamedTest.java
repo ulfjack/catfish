@@ -4,6 +4,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+
+import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
+import de.ofahrt.catfish.model.StandardResponses;
+import de.ofahrt.catfish.utils.ConnectionClosedException;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -12,9 +16,6 @@ import java.util.concurrent.Phaser;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Test;
-import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
-import de.ofahrt.catfish.model.StandardResponses;
-import de.ofahrt.catfish.utils.ConnectionClosedException;
 
 public class HttpResponseGeneratorStreamedTest {
 
@@ -45,7 +46,9 @@ public class HttpResponseGeneratorStreamedTest {
     return readUntil(generator, ContinuationToken.PAUSE);
   }
 
-  private byte[] readUntilStop(HttpResponseGeneratorStreamed generator, int bufferSize, Semaphore semaphore) throws InterruptedException {
+  private byte[] readUntilStop(
+      HttpResponseGeneratorStreamed generator, int bufferSize, Semaphore semaphore)
+      throws InterruptedException {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
     buffer.clear();
@@ -65,10 +68,11 @@ public class HttpResponseGeneratorStreamedTest {
   @Test
   public void smoke() throws Exception {
     AtomicInteger called = new AtomicInteger();
-    HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::incrementAndGet, null, StandardResponses.OK, true);
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.create(
+            called::incrementAndGet, null, StandardResponses.OK, true);
     OutputStream out = gen.getOutputStream();
-    out.write(new byte[] { 'x', 'y' });
+    out.write(new byte[] {'x', 'y'});
     out.close();
     assertEquals(1, called.get());
     String response = new String(readUntilStop(gen), StandardCharsets.UTF_8);
@@ -79,10 +83,11 @@ public class HttpResponseGeneratorStreamedTest {
   @Test
   public void noBody() throws Exception {
     AtomicInteger called = new AtomicInteger();
-    HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::incrementAndGet, null, StandardResponses.OK, /*includeBody=*/false);
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.create(
+            called::incrementAndGet, null, StandardResponses.OK, /* includeBody= */ false);
     OutputStream out = gen.getOutputStream();
-    out.write(new byte[] { 'x', 'y' });
+    out.write(new byte[] {'x', 'y'});
     out.close();
     assertEquals(1, called.get());
     String response = new String(readUntilStop(gen), StandardCharsets.UTF_8);
@@ -93,12 +98,13 @@ public class HttpResponseGeneratorStreamedTest {
   @Test
   public void callbackOnFlush() throws Exception {
     AtomicInteger called = new AtomicInteger();
-    HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::incrementAndGet, null, StandardResponses.OK, true);
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.create(
+            called::incrementAndGet, null, StandardResponses.OK, true);
 
     @SuppressWarnings("resource")
     OutputStream out = gen.getOutputStream();
-    out.write(new byte[] { 'x', 'y' });
+    out.write(new byte[] {'x', 'y'});
     out.flush();
     assertEquals(1, called.get());
     String response = new String(readUntilPause(gen), StandardCharsets.UTF_8);
@@ -109,17 +115,18 @@ public class HttpResponseGeneratorStreamedTest {
   @Test
   public void secondCallbackOnSecondFlush() throws Exception {
     AtomicInteger called = new AtomicInteger();
-    HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::incrementAndGet, null, StandardResponses.OK, true);
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.create(
+            called::incrementAndGet, null, StandardResponses.OK, true);
 
     OutputStream out = gen.getOutputStream();
-    out.write(new byte[] { 'x', 'y' });
+    out.write(new byte[] {'x', 'y'});
     out.flush();
     assertEquals(1, called.get());
     String response = new String(readUntilPause(gen), StandardCharsets.UTF_8);
     assertEquals(1, called.get());
     assertEquals("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nxy\r\n", response);
-    out.write(new byte[] { 'z', 'w' });
+    out.write(new byte[] {'z', 'w'});
     out.close();
     response = new String(readUntilStop(gen), StandardCharsets.UTF_8);
     assertEquals(2, called.get());
@@ -130,20 +137,22 @@ public class HttpResponseGeneratorStreamedTest {
   public void blocksIfBufferIsFull() throws Exception {
     Semaphore called = new Semaphore(0);
     Phaser done = new Phaser(2);
-    HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::release, null, StandardResponses.OK, true, 2);
-    Thread t = new Thread(new Runnable() {
-      @Override
-      public void run() {
-        try (OutputStream out = gen.getOutputStream()) {
-          out.write(new byte[] { 'x', 'y', 'z' });
-          done.arriveAndAwaitAdvance();
-        } catch (Exception e) {
-          e.printStackTrace();
-          fail();
-        }
-      }
-    });
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, true, 2);
+    Thread t =
+        new Thread(
+            new Runnable() {
+              @Override
+              public void run() {
+                try (OutputStream out = gen.getOutputStream()) {
+                  out.write(new byte[] {'x', 'y', 'z'});
+                  done.arriveAndAwaitAdvance();
+                } catch (Exception e) {
+                  e.printStackTrace();
+                  fail();
+                }
+              }
+            });
     t.start();
     called.acquire();
     String response = new String(readUntilPause(gen), StandardCharsets.UTF_8);
@@ -156,64 +165,84 @@ public class HttpResponseGeneratorStreamedTest {
   @Test
   public void chunked() throws Exception {
     Semaphore called = new Semaphore(0);
-    HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::release, null, StandardResponses.OK, true, 2);
-    Thread t = new Thread(new Runnable() {
-      @Override
-      public void run() {
-        try (OutputStream out = gen.getOutputStream()) {
-          out.write(new byte[] { 'x', 'y', 'z' });
-        } catch (Exception e) {
-          e.printStackTrace();
-          fail();
-        }
-      }
-    });
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, true, 2);
+    Thread t =
+        new Thread(
+            new Runnable() {
+              @Override
+              public void run() {
+                try (OutputStream out = gen.getOutputStream()) {
+                  out.write(new byte[] {'x', 'y', 'z'});
+                } catch (Exception e) {
+                  e.printStackTrace();
+                  fail();
+                }
+              }
+            });
     t.start();
     String response = new String(readUntilStop(gen, 10, called), StandardCharsets.UTF_8);
-    assertEquals("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nxy\r\n1\r\nz\r\n0\r\n\r\n", response);
+    assertEquals(
+        "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nxy\r\n1\r\nz\r\n0\r\n\r\n",
+        response);
   }
 
   @Test
   public void chunkedExactly16Bytes() throws Exception {
     Semaphore called = new Semaphore(0);
-    HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::release, null, StandardResponses.OK, true, 16);
-    Thread t = new Thread(new Runnable() {
-      @Override
-      public void run() {
-        try (OutputStream out = gen.getOutputStream()) {
-          out.write(new byte[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g' });
-        } catch (Exception e) {
-          e.printStackTrace();
-          fail();
-        }
-      }
-    });
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, true, 16);
+    Thread t =
+        new Thread(
+            new Runnable() {
+              @Override
+              public void run() {
+                try (OutputStream out = gen.getOutputStream()) {
+                  out.write(
+                      new byte[] {
+                        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e',
+                        'f', 'g'
+                      });
+                } catch (Exception e) {
+                  e.printStackTrace();
+                  fail();
+                }
+              }
+            });
     t.start();
     String response = new String(readUntilStop(gen, 100, called), StandardCharsets.UTF_8);
-    assertEquals("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n10\r\n0123456789abcdef\r\n1\r\ng\r\n0\r\n\r\n", response);
+    assertEquals(
+        "HTTP/1.1 200 OK\r\n"
+            + "Transfer-Encoding: chunked\r\n\r\n"
+            + "10\r\n"
+            + "0123456789abcdef\r\n"
+            + "1\r\n"
+            + "g\r\n"
+            + "0\r\n\r\n",
+        response);
   }
 
   @Test
   public void chunkedTooSmallForNonZeroSizedChunk() throws Exception {
     Semaphore called = new Semaphore(0);
     Semaphore released = new Semaphore(0);
-    HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::release, null, StandardResponses.OK, true, 4);
-    Thread t = new Thread(new Runnable() {
-      @Override
-      public void run() {
-        try (OutputStream out = gen.getOutputStream()) {
-          out.flush();
-          released.acquire();
-          out.write(new byte[] { '0' });
-        } catch (Exception e) {
-          e.printStackTrace();
-          fail();
-        }
-      }
-    });
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, true, 4);
+    Thread t =
+        new Thread(
+            new Runnable() {
+              @Override
+              public void run() {
+                try (OutputStream out = gen.getOutputStream()) {
+                  out.flush();
+                  released.acquire();
+                  out.write(new byte[] {'0'});
+                } catch (Exception e) {
+                  e.printStackTrace();
+                  fail();
+                }
+              }
+            });
     t.start();
     called.acquire();
     String response = new String(readUntilPause(gen), StandardCharsets.UTF_8);
@@ -233,21 +262,23 @@ public class HttpResponseGeneratorStreamedTest {
   @Test
   public void closeNotifiesWriter() throws Exception {
     Semaphore called = new Semaphore(0);
-    HttpResponseGeneratorStreamed gen = HttpResponseGeneratorStreamed.create(
-        called::release, null, StandardResponses.OK, true, 4);
-    Thread t = new Thread(new Runnable() {
-      @Override
-      public void run() {
-        try (OutputStream out = gen.getOutputStream()) {
-          out.write(new byte[] { 1, 2, 3, 4, 5 });
-        } catch (ConnectionClosedException expected) {
-          // Expected
-        } catch (Exception e) {
-          e.printStackTrace();
-          fail();
-        }
-      }
-    });
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, true, 4);
+    Thread t =
+        new Thread(
+            new Runnable() {
+              @Override
+              public void run() {
+                try (OutputStream out = gen.getOutputStream()) {
+                  out.write(new byte[] {1, 2, 3, 4, 5});
+                } catch (ConnectionClosedException expected) {
+                  // Expected
+                } catch (Exception e) {
+                  e.printStackTrace();
+                  fail();
+                }
+              }
+            });
     t.start();
     called.acquire();
     gen.close();

@@ -12,5 +12,4 @@ import org.junit.runners.Suite.SuiteClasses;
   HttpVersionTest.class,
   SimpleHttpRequestTest.class,
 })
-public class CatfishApiTestSuite {
-}
+public class CatfishApiTestSuite {}

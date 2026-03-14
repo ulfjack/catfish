@@ -20,34 +20,34 @@ final class OldCoreHelper {
   static DateFormat dateFormater3 = new SimpleDateFormat("EEE MMM d HH:mm:ss yyyy", loc);
 
   static {
-  	dateFormater1.setLenient(true);
-  	dateFormater2.setLenient(true);
-  	dateFormater3.setLenient(true);
-  	dateFormater1.setTimeZone(TimeZone.getTimeZone("GMT+0"));
-  	dateFormater2.setTimeZone(TimeZone.getTimeZone("GMT+0"));
-  	dateFormater3.setTimeZone(TimeZone.getTimeZone("GMT+0"));
+    dateFormater1.setLenient(true);
+    dateFormater2.setLenient(true);
+    dateFormater3.setLenient(true);
+    dateFormater1.setTimeZone(TimeZone.getTimeZone("GMT+0"));
+    dateFormater2.setTimeZone(TimeZone.getTimeZone("GMT+0"));
+    dateFormater3.setTimeZone(TimeZone.getTimeZone("GMT+0"));
   }
 
-  public static synchronized final String formatDate(long date) {
+  public static final synchronized String formatDate(long date) {
     return dateFormater1.format(new Date(date));
   }
 
-  public static synchronized final long unformatDate(String date) {
-  	try {
-  	  return dateFormater1.parse(date).getTime();
-  	} catch (Exception ignored) {
-  	  // Ignored
-  	}
-  	try {
-  	  return dateFormater2.parse(date).getTime();
-  	} catch (Exception e) {
+  public static final synchronized long unformatDate(String date) {
+    try {
+      return dateFormater1.parse(date).getTime();
+    } catch (Exception ignored) {
       // Ignored
-  	}
-  	try {
-  	  return dateFormater3.parse(date).getTime();
-  	} catch (Exception e) {
+    }
+    try {
+      return dateFormater2.parse(date).getTime();
+    } catch (Exception e) {
       // Ignored
-  	}
-  	throw new RuntimeException("could not parse: \""+date+"\"");
+    }
+    try {
+      return dateFormater3.parse(date).getTime();
+    } catch (Exception e) {
+      // Ignored
+    }
+    throw new RuntimeException("could not parse: \"" + date + "\"");
   }
 }

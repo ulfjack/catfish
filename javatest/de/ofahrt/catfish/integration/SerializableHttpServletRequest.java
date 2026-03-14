@@ -1,5 +1,8 @@
 package de.ofahrt.catfish.integration;
 
+import de.ofahrt.catfish.InputStreams;
+import de.ofahrt.catfish.bridge.Enumerations;
+import de.ofahrt.catfish.model.HttpHeaderName;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -15,16 +18,11 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-
 import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletInputStream;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
-
-import de.ofahrt.catfish.InputStreams;
-import de.ofahrt.catfish.bridge.Enumerations;
-import de.ofahrt.catfish.model.HttpHeaderName;
 
 @SuppressWarnings("rawtypes")
 public final class SerializableHttpServletRequest implements HttpServletRequest, Serializable {

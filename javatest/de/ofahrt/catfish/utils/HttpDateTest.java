@@ -4,8 +4,6 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
-import de.ofahrt.catfish.utils.HttpDate;
-
 public class HttpDateTest {
   private static void assertSameResult(String date) {
     long oldcorehelpertime = OldCoreHelper.unformatDate(date);
@@ -56,5 +54,4 @@ public class HttpDateTest {
     // Sun Nov  6 08:49:37 1994       ; ANSI C's asctime() format
     assertEquals(784111777000L, HttpDate.parseDate("Sun Nov  6 08:49:37 1994"));
   }
-
 }

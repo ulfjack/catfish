@@ -2,10 +2,9 @@ package de.ofahrt.catfish;
 
 import static org.junit.Assert.assertEquals;
 
-import org.junit.Test;
-
 import de.ofahrt.catfish.internal.CoreHelper;
 import de.ofahrt.catfish.utils.HttpContentTypeTest;
+import org.junit.Test;
 
 @SuppressWarnings("boxing")
 public class CoreHelperTest {
@@ -16,10 +15,11 @@ public class CoreHelperTest {
 
   @Test
   public void isTokenCharShouldAgreeWithIncrementalParser() {
-  	for (char c = 0; c < 256; c++) {
-  		assertEquals("Odd result for "+(int) c,
-  				IncrementalHttpRequestParser.isTokenCharacter(c),
-  				HttpContentTypeTest.isTokenCharacter(c));
-  	}
+    for (char c = 0; c < 256; c++) {
+      assertEquals(
+          "Odd result for " + (int) c,
+          IncrementalHttpRequestParser.isTokenCharacter(c),
+          HttpContentTypeTest.isTokenCharacter(c));
+    }
   }
 }

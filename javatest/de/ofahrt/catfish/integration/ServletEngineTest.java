@@ -2,22 +2,21 @@ package de.ofahrt.catfish.integration;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.nio.charset.Charset;
-import java.util.Enumeration;
-import javax.servlet.http.HttpServletRequest;
-import org.junit.Test;
+
 import de.ofahrt.catfish.HttpParserTest;
 import de.ofahrt.catfish.bridge.Enumerations;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.nio.charset.Charset;
+import java.util.Enumeration;
+import javax.servlet.http.HttpServletRequest;
+import org.junit.Test;
 
-/**
- * Tests a parser for compliance with RFC 2616: http://www.ietf.org/rfc/rfc2616.txt
- */
+/** Tests a parser for compliance with RFC 2616: http://www.ietf.org/rfc/rfc2616.txt */
 public abstract class ServletEngineTest extends HttpParserTest {
   public abstract HttpServletRequest parseLegacy(byte[] data) throws Exception;
 
@@ -25,9 +24,10 @@ public abstract class ServletEngineTest extends HttpParserTest {
   @Override
   public HttpRequest parse(byte[] data) throws Exception {
     HttpServletRequest request = parseLegacy(data);
-    SimpleHttpRequest.Builder builder = new SimpleHttpRequest.Builder()
-        .setMethod(request.getMethod())
-        .setUri(request.getRequestURI());
+    SimpleHttpRequest.Builder builder =
+        new SimpleHttpRequest.Builder()
+            .setMethod(request.getMethod())
+            .setUri(request.getRequestURI());
     if ("HTTP/1.0".equals(request.getProtocol())) {
       builder.setVersion(HttpVersion.HTTP_1_0);
     } else if ("HTTP/0.9".equals(request.getProtocol())) {
@@ -41,9 +41,10 @@ public abstract class ServletEngineTest extends HttpParserTest {
       String name = (String) e.nextElement();
       String[] attr = Enumerations.toArray(request.getHeaders(name), new String[0]);
       builder.addHeader(name, attr[0]);
-//      System.out.println("  " + name + "=" + Arrays.toString(attr));
+      //      System.out.println("  " + name + "=" + Arrays.toString(attr));
     }
-    if ((builder.getHeader(HttpHeaderName.CONTENT_LENGTH) != null) || (builder.getHeader(HttpHeaderName.TRANSFER_ENCODING) != null)) {
+    if ((builder.getHeader(HttpHeaderName.CONTENT_LENGTH) != null)
+        || (builder.getHeader(HttpHeaderName.TRANSFER_ENCODING) != null)) {
       try (InputStream in = request.getInputStream()) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] buffer = new byte[1024];
@@ -62,7 +63,7 @@ public abstract class ServletEngineTest extends HttpParserTest {
   }
 
   public HttpServletRequest parseLegacy(String data) throws Exception {
-  	return parseLegacy(toBytes(data));
+    return parseLegacy(toBytes(data));
   }
 
   @Override
@@ -116,7 +117,7 @@ public abstract class ServletEngineTest extends HttpParserTest {
   public void getWithGetParameterWithoutValue() throws Exception {
     HttpServletRequest request = parseLegacy("GET /?a HTTP/1.1\nHost: localhost\n\n");
     assertNull(request.getParameter("a"));
-//    assertEquals("", request.getParameter("a")); // Jetty implements this.
+    //    assertEquals("", request.getParameter("a")); // Jetty implements this.
   }
 
   @Test

@@ -13,5 +13,5 @@ import org.junit.runners.Suite.SuiteClasses;
   SslHttpParserIntegrationTest.class,
 })
 public class IntegrationTestSuite {
-// Just a test suite; no methods.
+  // Just a test suite; no methods.
 }

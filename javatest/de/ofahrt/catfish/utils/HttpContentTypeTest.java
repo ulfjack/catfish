@@ -6,8 +6,6 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
-import de.ofahrt.catfish.utils.HttpContentType;
-
 public class HttpContentTypeTest {
 
   public static boolean isTokenCharacter(char c) {
@@ -61,29 +59,27 @@ public class HttpContentTypeTest {
 
   @Test
   public void parseContentType() {
-    assertArrayEquals(
-        new String[] { "text/html" },
-        HttpContentType.parseContentType("text/html"));
+    assertArrayEquals(new String[] {"text/html"}, HttpContentType.parseContentType("text/html"));
   }
 
   @Test
   public void parseContentTypeWithParameter() {
     assertArrayEquals(
-        new String[] { "text/html", "charset", "utf-8" },
+        new String[] {"text/html", "charset", "utf-8"},
         HttpContentType.parseContentType("text/html;charset=utf-8"));
   }
 
   @Test
   public void parseContentTypeWithParameterWithQuotedEscape() {
     assertArrayEquals(
-        new String[] { "text/html", "charset", "\"" },
+        new String[] {"text/html", "charset", "\""},
         HttpContentType.parseContentType("text/html;charset=\"\\\"\""));
   }
 
   @Test
   public void parseContentTypeWithTwoParameters() {
     assertArrayEquals(
-        new String[] { "text/html", "a", "b", "c", "d" },
+        new String[] {"text/html", "a", "b", "c", "d"},
         HttpContentType.parseContentType("text/html;a=b;c=d"));
   }
 }

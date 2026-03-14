@@ -1,13 +1,11 @@
 package de.ofahrt.catfish.integration;
 
+import de.ofahrt.catfish.utils.MimeType;
 import java.io.IOException;
 import java.io.OutputStream;
-
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-
-import de.ofahrt.catfish.utils.MimeType;
 
 public class HttpRequestTestServlet extends HttpServlet {
   private static final long serialVersionUID = 1L;

@@ -3,7 +3,6 @@ package de.ofahrt.catfish;
 import static org.junit.Assert.*;
 
 import java.nio.ByteBuffer;
-
 import org.junit.Test;
 
 public class SNIParserTest {
@@ -50,15 +49,59 @@ public class SNIParserTest {
 
   @Test
   public void requestIsNotAClientHello() {
-    SNIParser.Result result = parse(new byte[] {
-        // This is technically invalid; there must be at least one cipher and one compression method
-        22, 3, 1, 0, 42, // TLS record header (indicates Handshake protocol)
-        2, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Handshake header says not a ClientHello
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0,
-    });
+    SNIParser.Result result =
+        parse(
+            new byte[] {
+              // This is technically invalid; there must be at least one cipher and one compression
+              // method
+              22,
+              3,
+              1,
+              0,
+              42, // TLS record header (indicates Handshake protocol)
+              2,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0, // Handshake header says not a ClientHello
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+            });
     assertTrue(result.isDone());
     assertFalse(result.hasError());
     assertNull(result.getName());
@@ -66,17 +109,59 @@ public class SNIParserTest {
 
   @Test
   public void completeRequestWithoutSNI() {
-    SNIParser.Result result = parse(new byte[] {
-        // This is technically invalid; there must be at least one cipher and one compression method
-        22, 3, 1, 0, 42, // TLS record header (indicates Handshake protocol)
-        1, 0, 0, 38,     // Handshake header (ClientHello + length)
-        3, 1,            // version
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random, cont.
-        0, // session_id
-        0, 0, // cipher_suites
-        0, // compression_methods
-    });
+    SNIParser.Result result =
+        parse(
+            new byte[] {
+              // This is technically invalid; there must be at least one cipher and one compression
+              // method
+              22,
+              3,
+              1,
+              0,
+              42, // TLS record header (indicates Handshake protocol)
+              1,
+              0,
+              0,
+              38, // Handshake header (ClientHello + length)
+              3,
+              1, // version
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0, // random
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0, // random, cont.
+              0, // session_id
+              0,
+              0, // cipher_suites
+              0, // compression_methods
+            });
     assertTrue(result.isDone());
     assertFalse(result.hasError());
     assertNull(result.getName());
@@ -85,16 +170,17 @@ public class SNIParserTest {
   @Test
   public void invalidRequestOverflowAnyOfSessionIdCipherOrCompression() {
     for (int i = 0; i < 4; i++) {
-      byte[] data = new byte[] {
-          22, 3, 1, 0, 42, // TLS record header (indicates Handshake protocol)
-          1, 0, 0, 38,     // Handshake header (ClientHello + length)
-          3, 1,            // version
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random, cont.
-          0, // session_id
-          0, 0, // cipher_suites
-          0, // compression_methods
-      };
+      byte[] data =
+          new byte[] {
+            22, 3, 1, 0, 42, // TLS record header (indicates Handshake protocol)
+            1, 0, 0, 38, // Handshake header (ClientHello + length)
+            3, 1, // version
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random, cont.
+            0, // session_id
+            0, 0, // cipher_suites
+            0, // compression_methods
+          };
       data[data.length - 1 - i] = (byte) 255;
       SNIParser.Result result = parse(data);
       assertTrue(result.isDone());
