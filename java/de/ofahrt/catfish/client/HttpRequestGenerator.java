@@ -1,12 +1,11 @@
 package de.ofahrt.catfish.client;
 
+import de.ofahrt.catfish.model.HttpHeaders;
+import de.ofahrt.catfish.model.HttpRequest;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
-
-import de.ofahrt.catfish.model.HttpHeaders;
-import de.ofahrt.catfish.model.HttpRequest;
 
 abstract class HttpRequestGenerator {
   protected static final byte[] EMPTY_BYTE_ARRAY = new byte[0];

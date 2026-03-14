@@ -1,20 +1,18 @@
 package de.ofahrt.catfish.client;
 
-import java.nio.ByteBuffer;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpRequest.InMemoryBody;
+import java.nio.ByteBuffer;
 
 final class HttpRequestGeneratorBuffered extends HttpRequestGenerator {
   public static HttpRequestGeneratorBuffered create(HttpRequest request) {
-    byte[] body = mustHaveBody(request) ? ((InMemoryBody) request.getBody()).toByteArray() : EMPTY_BYTE_ARRAY;
+    byte[] body =
+        mustHaveBody(request) ? ((InMemoryBody) request.getBody()).toByteArray() : EMPTY_BYTE_ARRAY;
     HttpHeaders headers = request.getHeaders();
-    byte[][] data = new byte[][] {
-      requestLineToByteArray(request),
-      headersToByteArray(headers),
-      body
-    };
+    byte[][] data =
+        new byte[][] {requestLineToByteArray(request), headersToByteArray(headers), body};
     return new HttpRequestGeneratorBuffered(request, data);
   }
 
@@ -46,7 +44,8 @@ final class HttpRequestGeneratorBuffered extends HttpRequestGenerator {
     }
     int totalBytesCopied = 0;
     while (outputBuffer.hasRemaining()) {
-      int bytesCopyCount = Math.min(outputBuffer.remaining(), data[currentBlock].length - currentIndex);
+      int bytesCopyCount =
+          Math.min(outputBuffer.remaining(), data[currentBlock].length - currentIndex);
       outputBuffer.put(data[currentBlock], currentIndex, bytesCopyCount);
       totalBytesCopied += bytesCopyCount;
       currentIndex += bytesCopyCount;
@@ -66,6 +65,5 @@ final class HttpRequestGeneratorBuffered extends HttpRequestGenerator {
   }
 
   @Override
-  public void close() {
-  }
+  public void close() {}
 }

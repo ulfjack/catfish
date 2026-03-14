@@ -1,18 +1,16 @@
 package de.ofahrt.catfish.client;
 
+import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
+import de.ofahrt.catfish.internal.network.Stage;
+import de.ofahrt.catfish.model.network.Connection;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
-
-import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
-import de.ofahrt.catfish.internal.network.Stage;
-import de.ofahrt.catfish.model.network.Connection;
 
 final class SslClientStage implements Stage {
   private final Pipeline parent;
@@ -43,9 +41,9 @@ final class SslClientStage implements Stage {
     this.sslEngine.setUseClientMode(true);
     parent.log(
         "SSL configuration: "
-        + Arrays.toString(sslEngine.getEnabledProtocols())
-        + " "
-        + Arrays.toString(sslEngine.getEnabledCipherSuites()));
+            + Arrays.toString(sslEngine.getEnabledProtocols())
+            + " "
+            + Arrays.toString(sslEngine.getEnabledCipherSuites()));
     try {
       this.sslEngine.beginHandshake();
     } catch (SSLException e) {
@@ -74,11 +72,15 @@ final class SslClientStage implements Stage {
     }
     // invariant: both netInputBuffer and inputBuffer are readable
     if (netInputBuffer.hasRemaining()) {
-      parent.log("Unwrapping: net_in=%d app_in=%d", Integer.valueOf(netInputBuffer.remaining()), Integer.valueOf(inputBuffer.remaining()));
+      parent.log(
+          "Unwrapping: net_in=%d app_in=%d",
+          Integer.valueOf(netInputBuffer.remaining()), Integer.valueOf(inputBuffer.remaining()));
       inputBuffer.compact();
       SSLEngineResult result = sslEngine.unwrap(netInputBuffer, inputBuffer);
       inputBuffer.flip();
-      parent.log("After unwrapping: net_in=%d app_in=%d", Integer.valueOf(netInputBuffer.remaining()), Integer.valueOf(inputBuffer.remaining()));
+      parent.log(
+          "After unwrapping: net_in=%d app_in=%d",
+          Integer.valueOf(netInputBuffer.remaining()), Integer.valueOf(inputBuffer.remaining()));
       parent.log("STATUS=%s", result);
       Status sslStatus = result.getStatus();
       switch (sslStatus) {
@@ -119,12 +121,18 @@ final class SslClientStage implements Stage {
     }
     ConnectionControl nextState = next.write();
     // invariant: both netOutputBuffer and outputBuffer are readable
-    if (!netOutputBuffer.hasRemaining() && (outputBuffer.hasRemaining() || sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP)) {
-      parent.log("Wrapping: app_out=%d net_out=%d", Integer.valueOf(outputBuffer.remaining()), Integer.valueOf(netOutputBuffer.remaining()));
+    if (!netOutputBuffer.hasRemaining()
+        && (outputBuffer.hasRemaining()
+            || sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP)) {
+      parent.log(
+          "Wrapping: app_out=%d net_out=%d",
+          Integer.valueOf(outputBuffer.remaining()), Integer.valueOf(netOutputBuffer.remaining()));
       netOutputBuffer.clear(); // prepare for writing
       SSLEngineResult result = sslEngine.wrap(outputBuffer, netOutputBuffer);
       netOutputBuffer.flip(); // prepare for reading
-      parent.log("After Wrapping: app_out=%d net_out=%d", Integer.valueOf(outputBuffer.remaining()), Integer.valueOf(netOutputBuffer.remaining()));
+      parent.log(
+          "After Wrapping: app_out=%d net_out=%d",
+          Integer.valueOf(outputBuffer.remaining()), Integer.valueOf(netOutputBuffer.remaining()));
       if (result.getStatus() == Status.CLOSED) {
         return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
       } else if (result.getStatus() != Status.OK) {

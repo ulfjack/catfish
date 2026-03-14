@@ -1,5 +1,10 @@
 package de.ofahrt.catfish.client.legacy;
 
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpRequest.Body;
+import de.ofahrt.catfish.model.HttpRequest.InMemoryBody;
+import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.utils.ConnectionClosedException;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
@@ -16,11 +21,6 @@ import javax.net.ssl.SNIServerName;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
-import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpRequest.Body;
-import de.ofahrt.catfish.model.HttpRequest.InMemoryBody;
-import de.ofahrt.catfish.model.HttpResponse;
-import de.ofahrt.catfish.utils.ConnectionClosedException;
 
 public final class HttpConnection implements Closeable {
   public static HttpConnection connect(String server, int port) throws IOException {
@@ -28,7 +28,8 @@ public final class HttpConnection implements Closeable {
   }
 
   @SuppressWarnings("resource")
-  public static HttpConnection connect(String server, int port, SSLContext sslContext) throws IOException {
+  public static HttpConnection connect(String server, int port, SSLContext sslContext)
+      throws IOException {
     Socket socket;
     if (sslContext != null) {
       socket = sslContext.getSocketFactory().createSocket();
@@ -70,7 +71,12 @@ public final class HttpConnection implements Closeable {
   private static byte[] requestToBytes(HttpRequest request) {
     ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     try (OutputStreamWriter out = new OutputStreamWriter(buffer, StandardCharsets.UTF_8)) {
-      out.append(request.getMethod()).append(" ").append(request.getUri()).append(" ").append(request.getVersion().toString()).append("\r\n");
+      out.append(request.getMethod())
+          .append(" ")
+          .append(request.getUri())
+          .append(" ")
+          .append(request.getVersion().toString())
+          .append("\r\n");
       for (Map.Entry<String, String> e : request.getHeaders()) {
         out.append(e.getKey()).append(": ").append(e.getValue()).append("\r\n");
       }
@@ -116,7 +122,7 @@ public final class HttpConnection implements Closeable {
           throw new ConnectionClosedException("Connection closed prematurely!");
         }
       }
-//        System.out.println(new String(buffer, 0, length));
+      //        System.out.println(new String(buffer, 0, length));
       int used = parser.parse(buffer, offset, length);
       length -= used;
       offset += used;

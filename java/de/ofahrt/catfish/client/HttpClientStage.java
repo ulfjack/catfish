@@ -1,7 +1,5 @@
 package de.ofahrt.catfish.client;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
 import de.ofahrt.catfish.client.HttpRequestGenerator.ContinuationToken;
 import de.ofahrt.catfish.internal.CoreHelper;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
@@ -11,6 +9,8 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.MalformedResponseException;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 
 final class HttpClientStage implements Stage {
   private static final boolean VERBOSE = false;
@@ -31,16 +31,17 @@ final class HttpClientStage implements Stage {
 
   public interface ResponseHandler {
     void received(HttpResponse response);
+
     void failed(Exception exception);
   }
 
-//  public interface RequestListener {
-//    void notifySent(Connection connection, HttpRequest request, HttpResponse response);
-//  }
+  //  public interface RequestListener {
+  //    void notifySent(Connection connection, HttpRequest request, HttpResponse response);
+  //  }
 
   private final Pipeline parent;
   private final ResponseHandler responseHandler;
-//  private final RequestListener requestListener;
+  //  private final RequestListener requestListener;
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
   private final IncrementalHttpResponseParser parser;
@@ -58,8 +59,7 @@ final class HttpClientStage implements Stage {
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
     this.parser = new IncrementalHttpResponseParser();
-    parent.log("%s %s %s",
-        request.getMethod(), request.getUri(), request.getVersion());
+    parent.log("%s %s %s", request.getMethod(), request.getUri(), request.getVersion());
     if (VERBOSE) {
       System.out.println(CoreHelper.requestToString(request));
     }
@@ -103,8 +103,10 @@ final class HttpClientStage implements Stage {
     ContinuationToken token = requestGenerator.generate(outputBuffer);
     outputBuffer.flip(); // prepare buffer for reading
     switch (token) {
-      case CONTINUE: return ConnectionControl.CONTINUE;
-      case PAUSE: return ConnectionControl.PAUSE;
+      case CONTINUE:
+        return ConnectionControl.CONTINUE;
+      case PAUSE:
+        return ConnectionControl.PAUSE;
       case STOP:
         parent.encourageReads();
         requestGenerator = null;
@@ -134,8 +136,11 @@ final class HttpClientStage implements Stage {
     } finally {
       parser.reset();
     }
-    parent.log("%s %d %s",
-        response.getProtocolVersion(), Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
+    parent.log(
+        "%s %d %s",
+        response.getProtocolVersion(),
+        Integer.valueOf(response.getStatusCode()),
+        response.getStatusMessage());
     if (VERBOSE) {
       System.out.println(CoreHelper.responseToString(response));
     }

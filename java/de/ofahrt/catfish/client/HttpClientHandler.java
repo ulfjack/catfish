@@ -1,16 +1,14 @@
 package de.ofahrt.catfish.client;
 
-import java.nio.ByteBuffer;
-
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.SSLParameters;
-
 import de.ofahrt.catfish.client.HttpClientStage.ResponseHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.NetworkHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.HttpRequest;
+import java.nio.ByteBuffer;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLParameters;
 
 final class HttpClientHandler implements NetworkHandler {
   private final HttpRequest request;
@@ -18,7 +16,11 @@ final class HttpClientHandler implements NetworkHandler {
   private final SSLContext sslContext;
   private final SSLParameters sslParameters;
 
-  HttpClientHandler(HttpRequest request, ResponseHandler responseHandler, SSLContext sslContext, SSLParameters sslParameters) {
+  HttpClientHandler(
+      HttpRequest request,
+      ResponseHandler responseHandler,
+      SSLContext sslContext,
+      SSLParameters sslParameters) {
     this.request = request;
     this.responseHandler = responseHandler;
     this.sslContext = sslContext;
@@ -39,12 +41,9 @@ final class HttpClientHandler implements NetworkHandler {
       decryptedInputBuffer.flip(); // prepare for reading
       decryptedOutputBuffer.clear();
       decryptedOutputBuffer.flip(); // prepare for reading
-      HttpClientStage httpStage = new HttpClientStage(
-          pipeline,
-          request,
-          responseHandler,
-          decryptedInputBuffer,
-          decryptedOutputBuffer);
+      HttpClientStage httpStage =
+          new HttpClientStage(
+              pipeline, request, responseHandler, decryptedInputBuffer, decryptedOutputBuffer);
       SSLEngine sslEngine = sslContext.createSSLEngine();
       sslEngine.setSSLParameters(sslParameters);
       return new SslClientStage(
@@ -56,12 +55,7 @@ final class HttpClientHandler implements NetworkHandler {
           decryptedInputBuffer,
           decryptedOutputBuffer);
     } else {
-      return new HttpClientStage(
-          pipeline,
-          request,
-          responseHandler,
-          inputBuffer,
-          outputBuffer);
+      return new HttpClientStage(pipeline, request, responseHandler, inputBuffer, outputBuffer);
     }
   }
 }

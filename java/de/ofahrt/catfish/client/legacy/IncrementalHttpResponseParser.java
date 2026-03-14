@@ -1,19 +1,24 @@
 package de.ofahrt.catfish.client.legacy;
 
-import java.util.Arrays;
-
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.MalformedResponseException;
 import de.ofahrt.catfish.model.SimpleHttpResponse;
+import java.util.Arrays;
 
 final class IncrementalHttpResponseParser {
 
   private static enum State {
     // Status-Line = HTTP-Version SP Status-Code SP Reason-Phrase CRLF
-    RESPONSE_VERSION_HTTP, RESPONSE_VERSION_MAJOR, RESPONSE_VERSION_MINOR, RESPONSE_CODE, RESPONSE_REASON_PHRASE,
+    RESPONSE_VERSION_HTTP,
+    RESPONSE_VERSION_MAJOR,
+    RESPONSE_VERSION_MINOR,
+    RESPONSE_CODE,
+    RESPONSE_REASON_PHRASE,
     // message-header = field-name ":" [ field-value ]
-    MESSAGE_HEADER_NAME, MESSAGE_HEADER_NAME_OR_CONTINUATION, MESSAGE_HEADER_VALUE,
+    MESSAGE_HEADER_NAME,
+    MESSAGE_HEADER_NAME_OR_CONTINUATION,
+    MESSAGE_HEADER_VALUE,
     CONTENT,
     CHUNKED_CONTENT_LENGTH,
     CHUNKED_CONTENT_DATA,
@@ -42,16 +47,31 @@ final class IncrementalHttpResponseParser {
   private static boolean isControl(char c) {
     return (c < 32) || (c == 127);
   }
-  
+
   //       separators     = "(" | ")" | "<" | ">" | "@"
   //                      | "," | ";" | ":" | "\" | <">
   //                      | "/" | "[" | "]" | "?" | "="
   //                      | "{" | "}" | SP | HT
   private static boolean isSeparator(char c) {
-    return (c == '(') || (c == ')') || (c == '<') || (c == '>') || (c == '@') ||
-           (c == ',') || (c == ';') || (c == ':') || (c =='\\') || (c == '"') ||
-           (c == '/') || (c == '[') || (c == ']') || (c == '?') || (c == '=') ||
-           (c == '{') || (c == '}') || (c == ' ') || (c == '\t');
+    return (c == '(')
+        || (c == ')')
+        || (c == '<')
+        || (c == '>')
+        || (c == '@')
+        || (c == ',')
+        || (c == ';')
+        || (c == ':')
+        || (c == '\\')
+        || (c == '"')
+        || (c == '/')
+        || (c == '[')
+        || (c == ']')
+        || (c == '?')
+        || (c == '=')
+        || (c == '{')
+        || (c == '}')
+        || (c == ' ')
+        || (c == '\t');
   }
 
   private static boolean isTokenCharacter(char c) {
@@ -69,7 +89,7 @@ final class IncrementalHttpResponseParser {
   private void trimAndAppendSpace() {
     if (elementBuffer.length() == 0) {
       // Trim all linear whitespace at the beginning.
-    } else if (elementBuffer.charAt(elementBuffer.length()-1) == ' ') {
+    } else if (elementBuffer.charAt(elementBuffer.length() - 1) == ' ') {
       // Reduce all linear whitespace to a single space.
     } else {
       elementBuffer.append(' ');
@@ -86,11 +106,11 @@ final class IncrementalHttpResponseParser {
       if (expectLineFeed) {
         expectLineFeed = false;
         if (c != '\n') {
-          throw new MalformedResponseException("Expected line feed character in state "+state);
+          throw new MalformedResponseException("Expected line feed character in state " + state);
         }
       }
       switch (state) {
-        case RESPONSE_VERSION_HTTP :
+        case RESPONSE_VERSION_HTTP:
           if ((counter == 0) && (c != 'H')) {
             throw new MalformedResponseException("Expected 'H' of response version string");
           } else if ((counter == 1) && (c != 'T')) {
@@ -110,7 +130,7 @@ final class IncrementalHttpResponseParser {
             state = State.RESPONSE_VERSION_MAJOR;
           }
           break;
-        case RESPONSE_VERSION_MAJOR :
+        case RESPONSE_VERSION_MAJOR:
           if (isDigit(c)) {
             // Leading zeros MUST be ignored by recipients.
             if ((elementBuffer.length() == 1) && (elementBuffer.charAt(0) == '0')) {
@@ -120,8 +140,7 @@ final class IncrementalHttpResponseParser {
             if (elementBuffer.length() > 9) {
               throw new MalformedResponseException("Http major version number is too long");
             }
-          }
-          else if (c == '.') {
+          } else if (c == '.') {
             if (elementBuffer.length() == 0) {
               throw new MalformedResponseException("Http major version number expected");
             }
@@ -137,7 +156,7 @@ final class IncrementalHttpResponseParser {
             throw new MalformedResponseException("Expected '.' of response version string");
           }
           break;
-        case RESPONSE_VERSION_MINOR :
+        case RESPONSE_VERSION_MINOR:
           if (isDigit(c)) {
             // Leading zeros MUST be ignored by recipients.
             if ((elementBuffer.length() == 1) && (elementBuffer.charAt(0) == '0')) {
@@ -162,7 +181,7 @@ final class IncrementalHttpResponseParser {
             throw new MalformedResponseException("Expected end of response version string");
           }
           break;
-        case RESPONSE_CODE :
+        case RESPONSE_CODE:
           if (isDigit(c)) {
             elementBuffer.append(c);
             if (elementBuffer.length() > 3) {
@@ -183,7 +202,7 @@ final class IncrementalHttpResponseParser {
             throw new MalformedResponseException("Expected status code digit");
           }
           break;
-        case RESPONSE_REASON_PHRASE :
+        case RESPONSE_REASON_PHRASE:
           if (c == '\r') {
             expectLineFeed = true;
           } else if (c == '\n') {
@@ -194,10 +213,11 @@ final class IncrementalHttpResponseParser {
             elementBuffer.append(c);
           }
           break;
-        case MESSAGE_HEADER_NAME :
+        case MESSAGE_HEADER_NAME:
           if (c == ':') {
             if (elementBuffer.length() == 0) {
-              throw new MalformedResponseException("Expected message header field name, but ':' found");
+              throw new MalformedResponseException(
+                  "Expected message header field name, but ':' found");
             }
             messageHeaderName = elementBuffer.toString();
             counter = 0;
@@ -207,7 +227,8 @@ final class IncrementalHttpResponseParser {
             expectLineFeed = true;
           } else if (c == '\n') {
             if (elementBuffer.length() != 0) {
-              throw new MalformedResponseException("Unexpected end of line in message header field name");
+              throw new MalformedResponseException(
+                  "Unexpected end of line in message header field name");
             }
             done = true;
             return i + 1;
@@ -217,12 +238,12 @@ final class IncrementalHttpResponseParser {
             throw new MalformedResponseException("Illegal character in request method");
           }
           break;
-        case MESSAGE_HEADER_VALUE :
+        case MESSAGE_HEADER_VALUE:
           if (c == '\r') {
             expectLineFeed = true;
           } else if (c == '\n') {
             int end = elementBuffer.length();
-            while ((end > 0) && (elementBuffer.charAt(end-1) == ' ')) {
+            while ((end > 0) && (elementBuffer.charAt(end - 1) == ' ')) {
               end--;
             }
             elementBuffer.setLength(end);
@@ -236,7 +257,7 @@ final class IncrementalHttpResponseParser {
             elementBuffer.append(c);
           }
           break;
-        case MESSAGE_HEADER_NAME_OR_CONTINUATION :
+        case MESSAGE_HEADER_NAME_OR_CONTINUATION:
           if (isSpace(c)) {
             state = State.MESSAGE_HEADER_VALUE;
             elementBuffer.append(messageHeaderValue);
@@ -290,7 +311,8 @@ final class IncrementalHttpResponseParser {
             throw new MalformedResponseException("Illegal character in request header name");
           }
           break;
-        case CONTENT : {
+        case CONTENT:
+          {
             int maxCopy = Math.min(length - i, content.length - contentIndex);
             System.arraycopy(input, offset + i, content, contentIndex, maxCopy);
             i += maxCopy;
@@ -302,7 +324,7 @@ final class IncrementalHttpResponseParser {
             }
           }
           break;
-        case CHUNKED_CONTENT_LENGTH :
+        case CHUNKED_CONTENT_LENGTH:
           if (c == '\r') {
             expectLineFeed = true;
           } else if (c == '\n') {
@@ -325,13 +347,16 @@ final class IncrementalHttpResponseParser {
               content = Arrays.copyOf(content, content.length + parsedChunkLength);
             }
             state = State.CHUNKED_CONTENT_DATA;
-          } else if (((c >= '0') && (c <= '9')) || ((c >= 'A') && (c <= 'F')) || ((c >= 'a') && (c <= 'f'))) {
+          } else if (((c >= '0') && (c <= '9'))
+              || ((c >= 'A') && (c <= 'F'))
+              || ((c >= 'a') && (c <= 'f'))) {
             elementBuffer.append(c);
           } else {
             throw new MalformedResponseException("Illegal character in chunked content length");
           }
           break;
-        case CHUNKED_CONTENT_DATA : {
+        case CHUNKED_CONTENT_DATA:
+          {
             int maxCopy = Math.min(length - i, content.length - contentIndex);
             System.arraycopy(input, offset + i, content, contentIndex, maxCopy);
             i += maxCopy - 1;
@@ -341,7 +366,7 @@ final class IncrementalHttpResponseParser {
             }
           }
           break;
-        case CHUNKED_CONTENT_NEXT :
+        case CHUNKED_CONTENT_NEXT:
           if (c == '\r') {
             expectLineFeed = true;
           } else if (c == '\n') {
@@ -361,7 +386,7 @@ final class IncrementalHttpResponseParser {
             throw new MalformedResponseException("Expected line break");
           }
           break;
-        default :
+        default:
           throw new RuntimeException("Not implemented!");
       }
     }
