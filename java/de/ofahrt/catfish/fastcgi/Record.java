@@ -22,8 +22,7 @@ final class Record {
   private byte[] contentData = EMPTY_DATA;
   private byte[] paddingData = EMPTY_DATA;
 
-  public Record() {
-  }
+  public Record() {}
 
   public int getType() {
     return type & 0xff;

@@ -48,8 +48,8 @@ final class FastCgiConnection implements Closeable {
     record.setType(FastCgiConstants.FCGI_GET_VALUES);
     record.setRequestId(FastCgiConstants.FCGI_NULL_REQUEST_ID);
     record.setContentAsKeys("FCGI_MAX_CONNS", "FCGI_MAX_REQS", "FCGI_MPXS_CONNS");
-//    connection.write(record);
-//    System.out.println(connection.read());
+    //    connection.write(record);
+    //    System.out.println(connection.read());
 
     record.setType(FastCgiConstants.FCGI_BEGIN_REQUEST);
     record.setRequestId(1);

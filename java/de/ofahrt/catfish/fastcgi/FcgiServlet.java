@@ -1,23 +1,21 @@
 package de.ofahrt.catfish.fastcgi;
 
+import de.ofahrt.catfish.fastcgi.IncrementalFcgiResponseParser.Callback;
+import de.ofahrt.catfish.fastcgi.IncrementalFcgiResponseParser.MalformedResponseException;
+import de.ofahrt.catfish.model.HttpHeaderName;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import de.ofahrt.catfish.fastcgi.IncrementalFcgiResponseParser.Callback;
-import de.ofahrt.catfish.fastcgi.IncrementalFcgiResponseParser.MalformedResponseException;
-import de.ofahrt.catfish.model.HttpHeaderName;
 
 public class FcgiServlet extends HttpServlet {
   private static final long serialVersionUID = 1L;
 
-  public FcgiServlet() {
-  }
+  public FcgiServlet() {}
 
   @SuppressWarnings("resource")
   @Override
@@ -51,37 +49,39 @@ public class FcgiServlet extends HttpServlet {
 
     res.setStatus(200);
     final OutputStream out = res.getOutputStream();
-    IncrementalFcgiResponseParser parser = new IncrementalFcgiResponseParser(new Callback() {
+    IncrementalFcgiResponseParser parser =
+        new IncrementalFcgiResponseParser(
+            new Callback() {
 
-      @Override
-      public void addHeader(String key, String value) {
-        key = HttpHeaderName.canonicalize(key);
-        if (HttpHeaderName.CONTENT_TYPE.equals(key)) {
-          res.setContentType(value);
-        } else {
-          System.err.println(key + "=" + value);
-        }
-      }
+              @Override
+              public void addHeader(String key, String value) {
+                key = HttpHeaderName.canonicalize(key);
+                if (HttpHeaderName.CONTENT_TYPE.equals(key)) {
+                  res.setContentType(value);
+                } else {
+                  System.err.println(key + "=" + value);
+                }
+              }
 
-      @Override
-      public void addData(byte[] data, int offset, int length) {
-        try {
-          out.write(data, offset, length);
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-      }
-    });
+              @Override
+              public void addData(byte[] data, int offset, int length) {
+                try {
+                  out.write(data, offset, length);
+                } catch (IOException e) {
+                  throw new RuntimeException(e);
+                }
+              }
+            });
     while (true) {
       record = connection.read();
-//      System.out.println(record);
+      //      System.out.println(record);
       if (record.getType() == FastCgiConstants.FCGI_STDOUT) {
         try {
           parser.parse(record.getContent());
         } catch (MalformedResponseException e) {
           throw new IOException(e);
         }
-//        out.write(record.getContent());
+        //        out.write(record.getContent());
       } else if (record.getType() == FastCgiConstants.FCGI_END_REQUEST) {
         break;
       }
