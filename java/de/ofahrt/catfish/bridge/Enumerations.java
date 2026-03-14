@@ -8,7 +8,8 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 public final class Enumerations {
-  private static final Enumeration<Object> EMPTY = new AsEnumeration<>(Collections.<Object>emptyList());
+  private static final Enumeration<Object> EMPTY =
+      new AsEnumeration<>(Collections.<Object>emptyList());
 
   @SuppressWarnings("unchecked")
   public static <T> Enumeration<T> empty() {
@@ -67,7 +68,7 @@ public final class Enumerations {
     return list.toArray(result);
   }
 
-  final static class AsEnumeration<T> implements Enumeration<T> {
+  static final class AsEnumeration<T> implements Enumeration<T> {
     private final Iterator<T> it;
 
     public AsEnumeration(Iterator<T> it) {
@@ -89,7 +90,7 @@ public final class Enumerations {
     }
   }
 
-  final static class AsIterator<T> implements Iterator<T> {
+  static final class AsIterator<T> implements Iterator<T> {
     private final Enumeration<T> e;
 
     public AsIterator(Enumeration<T> e) {

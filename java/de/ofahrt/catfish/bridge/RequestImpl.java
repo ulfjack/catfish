@@ -1,5 +1,14 @@
 package de.ofahrt.catfish.bridge;
 
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpVersion;
+import de.ofahrt.catfish.model.MalformedRequestException;
+import de.ofahrt.catfish.model.StandardResponses;
+import de.ofahrt.catfish.model.network.Connection;
+import de.ofahrt.catfish.model.server.HttpResponseWriter;
+import de.ofahrt.catfish.utils.HttpConnectionHeader;
+import de.ofahrt.catfish.utils.HttpDate;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -26,15 +35,6 @@ import javax.servlet.ServletInputStream;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
-import de.ofahrt.catfish.model.HttpHeaderName;
-import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpVersion;
-import de.ofahrt.catfish.model.MalformedRequestException;
-import de.ofahrt.catfish.model.StandardResponses;
-import de.ofahrt.catfish.model.network.Connection;
-import de.ofahrt.catfish.model.server.HttpResponseWriter;
-import de.ofahrt.catfish.utils.HttpConnectionHeader;
-import de.ofahrt.catfish.utils.HttpDate;
 
 public final class RequestImpl implements HttpServletRequest {
   private static final String DEFAULT_CHARSET = "UTF-8";
@@ -72,7 +72,7 @@ public final class RequestImpl implements HttpServletRequest {
       Connection connection,
       SessionManager sessionManager,
       HttpResponseWriter writer)
-          throws MalformedRequestException {
+      throws MalformedRequestException {
     this.request = request;
     this.unparsedUri = request.getUri();
     this.headers = new TreeMap<>();
@@ -153,10 +153,10 @@ public final class RequestImpl implements HttpServletRequest {
       // This would be a workaround for several firewalls,
       // but apparently, Norton then sometimes eats the HTTP response.
       // Bad luck for all Norton users.
-  //    temp = getHeader(HeaderKey.getInstance("~~~~~~~~~~~~~~~"));
-  //    if ("~~~~~ ~~~~~~~".equals(temp)) return true;
-  //    temp = getHeader(HeaderKey.getInstance("---------------"));
-  //    if ("----- -------".equals(temp)) return true;
+      //    temp = getHeader(HeaderKey.getInstance("~~~~~~~~~~~~~~~"));
+      //    if ("~~~~~ ~~~~~~~".equals(temp)) return true;
+      //    temp = getHeader(HeaderKey.getInstance("---------------"));
+      //    if ("----- -------".equals(temp)) return true;
     }
     return false;
   }
@@ -164,9 +164,6 @@ public final class RequestImpl implements HttpServletRequest {
   public boolean mayKeepAlive() {
     return HttpConnectionHeader.mayKeepAlive(request);
   }
-
-
-
 
   // ServletRequest API Implementation
   @Override
@@ -300,7 +297,7 @@ public final class RequestImpl implements HttpServletRequest {
   @Override
   public String[] getParameterValues(String name) {
     String result = getParameter(name);
-    return result == null ? null : new String[] { result };
+    return result == null ? null : new String[] {result};
   }
 
   @Override
@@ -312,8 +309,7 @@ public final class RequestImpl implements HttpServletRequest {
   public BufferedReader getReader() {
     // TODO: Use the correct charset.
     return new BufferedReader(
-        new InputStreamReader(
-            new ByteArrayInputStream(body), StandardCharsets.UTF_8));
+        new InputStreamReader(new ByteArrayInputStream(body), StandardCharsets.UTF_8));
   }
 
   @Override
@@ -409,10 +405,6 @@ public final class RequestImpl implements HttpServletRequest {
   public void setCharacterEncoding(String env) {
     this.charset = env;
   }
-
-
-
-
 
   // HttpServletRequest API Implementation
   @Override

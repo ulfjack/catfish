@@ -3,7 +3,6 @@ package de.ofahrt.catfish.bridge;
 import java.io.Serializable;
 import java.util.Enumeration;
 import java.util.concurrent.ConcurrentHashMap;
-
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpSession;
 import javax.servlet.http.HttpSessionContext;
@@ -18,13 +17,13 @@ final class SessionImpl implements HttpSession, Serializable {
   private volatile long timeoutInterval;
   private volatile boolean isNew = true;
   private volatile long lastAccessTime;
-  private final ConcurrentHashMap<String,Serializable> info = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, Serializable> info = new ConcurrentHashMap<>();
 
   public SessionImpl(String id, long creationTime, long timeoutInterval) {
-  	this.id = id;
-  	this.creationTime = creationTime;
-  	this.lastAccessTime = creationTime;
-  	this.timeoutInterval = timeoutInterval;
+    this.id = id;
+    this.creationTime = creationTime;
+    this.lastAccessTime = creationTime;
+    this.timeoutInterval = timeoutInterval;
   }
 
   long getTimeOut() {
@@ -44,7 +43,6 @@ final class SessionImpl implements HttpSession, Serializable {
     lastAccessTime = time;
   }
 
-
   // Implementation of the Servlet API spec for HttpSession
   @Override
   public Object getAttribute(String name) {
@@ -53,7 +51,7 @@ final class SessionImpl implements HttpSession, Serializable {
 
   @Override
   public Enumeration<?> getAttributeNames() {
-  	return Enumerations.of(info.keySet());
+    return Enumerations.of(info.keySet());
   }
 
   @Override
@@ -81,22 +79,23 @@ final class SessionImpl implements HttpSession, Serializable {
 
   @Override
   public ServletContext getServletContext() {
-  	throw new UnsupportedOperationException();
+    throw new UnsupportedOperationException();
   }
 
   @Deprecated
   @Override
   public HttpSessionContext getSessionContext() {
-  	return new HttpSessionContext() {
-  		@Override
-  		public Enumeration<?> getIds() {
-  			return Enumerations.empty();
-  		}
-  		@Override
-  		public HttpSession getSession(String arg0) {
-  		  return null;
-  		}
-  	};
+    return new HttpSessionContext() {
+      @Override
+      public Enumeration<?> getIds() {
+        return Enumerations.empty();
+      }
+
+      @Override
+      public HttpSession getSession(String arg0) {
+        return null;
+      }
+    };
   }
 
   @Deprecated
@@ -140,18 +139,18 @@ final class SessionImpl implements HttpSession, Serializable {
 
   @Override
   public void setAttribute(String name, Object value) {
-  	if (!(value instanceof Serializable)) {
-  		throw new IllegalArgumentException("value must be serializable!");
-  	}
-  	info.put(name, (Serializable) value);
+    if (!(value instanceof Serializable)) {
+      throw new IllegalArgumentException("value must be serializable!");
+    }
+    info.put(name, (Serializable) value);
   }
 
   @Override
   public void setMaxInactiveInterval(int interval) {
-  	if (interval < 0) {
-  		timeoutInterval = -1;
-  	} else {
+    if (interval < 0) {
+      timeoutInterval = -1;
+    } else {
       timeoutInterval = 1000L * interval;
-  	}
+    }
   }
 }

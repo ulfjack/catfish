@@ -10,7 +10,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.TreeSet;
 import java.util.UUID;
-
 import javax.servlet.http.HttpSession;
 
 public final class SessionManager {
@@ -20,11 +19,13 @@ public final class SessionManager {
     final long entryNumber;
     final SessionImpl session;
     long nextTimeOut;
+
     SessionEntry(long entryNumber, SessionImpl session) {
       this.entryNumber = entryNumber;
       this.session = session;
       this.nextTimeOut = session.getTimeOut();
     }
+
     @Override
     public int compareTo(SessionEntry entry) {
       if (entry == this) return 0;
@@ -34,10 +35,12 @@ public final class SessionManager {
       if (entryNumber > entry.entryNumber) return 1;
       throw new IllegalStateException("Ugh!");
     }
+
     @Override
     public boolean equals(Object other) {
       return other == this;
     }
+
     @Override
     public int hashCode() {
       return System.identityHashCode(this);
@@ -48,7 +51,7 @@ public final class SessionManager {
 
   private final Clock clock;
   private long entryNumber = 0;
-  private final HashMap<String,SessionEntry> sessions = new HashMap<>();
+  private final HashMap<String, SessionEntry> sessions = new HashMap<>();
   private final TreeSet<SessionEntry> timeOutMap = new TreeSet<>();
 
   SessionManager(Clock clock) {
@@ -75,7 +78,7 @@ public final class SessionManager {
   public synchronized HttpSession getSession(String id) {
     long time = clock.currentTimeMillis();
     checkTimeout(time);
-  
+
     SessionEntry result = sessions.get(id);
     if (result == null) {
       id = UUID.randomUUID().toString();

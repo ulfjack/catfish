@@ -1,5 +1,7 @@
 package de.ofahrt.catfish.bridge;
 
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.utils.MimeType;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -20,11 +22,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import de.ofahrt.catfish.model.HttpHeaderName;
-import de.ofahrt.catfish.utils.MimeType;
 
 public class ServletHelper {
   private static final String DEFAULT_CHARSET = "UTF-8";
@@ -33,7 +32,8 @@ public class ServletHelper {
   private static final Pattern queryPartPattern = Pattern.compile(queryPartStructure);
 
   private static final Pattern nameExtractorPattern = Pattern.compile(".* name=\"(.*)\".*");
-  private static final Pattern filenameExtractorPattern = Pattern.compile(".* name=\"(.*)\".* filename=\"(.*)\".*");
+  private static final Pattern filenameExtractorPattern =
+      Pattern.compile(".* name=\"(.*)\".* filename=\"(.*)\".*");
 
   public static final String formatText(String what, boolean fixed) {
     StringBuffer result = new StringBuffer();
@@ -43,26 +43,26 @@ public class ServletHelper {
     for (int i = 0; i < what.length(); i++) {
       char c = what.charAt(i);
       switch (c) {
-      case 13:
-        break;
-      case 10:
-        result.append("<br/>");
-        break;
-      case '<':
-        result.append("&lt;");
-        break;
-      case '>':
-        result.append("&gt;");
-        break;
-      case '&':
-        result.append("&amp;");
-        break;
-      case '"':
-        result.append("&quot;");
-        break;
-      default:
-        result.append(c);
-        break;
+        case 13:
+          break;
+        case 10:
+          result.append("<br/>");
+          break;
+        case '<':
+          result.append("&lt;");
+          break;
+        case '>':
+          result.append("&gt;");
+          break;
+        case '&':
+          result.append("&amp;");
+          break;
+        case '"':
+          result.append("&quot;");
+          break;
+        default:
+          result.append(c);
+          break;
       }
     }
     if (fixed) {
@@ -89,7 +89,8 @@ public class ServletHelper {
   // response, Generator generator) throws IOException
   // { generate(ResponseCode.OK, mimeType, response, generator); }
 
-  public static void setBodyString(HttpServletResponse response, MimeType mimeType, String s) throws IOException {
+  public static void setBodyString(HttpServletResponse response, MimeType mimeType, String s)
+      throws IOException {
     response.setContentType(mimeType.toString());
     Writer out = response.getWriter();
     out.write(s);
@@ -108,28 +109,27 @@ public class ServletHelper {
     out.close();
   }
 
-  public static void setBodyReader(HttpServletResponse response, MimeType type, Reader in) throws IOException {
+  public static void setBodyReader(HttpServletResponse response, MimeType type, Reader in)
+      throws IOException {
     response.setContentType(type.toString());
     Writer out = response.getWriter();
     int i = 0;
     char[] buffer = new char[1024];
-    while ((i = in.read(buffer)) != -1)
-      out.write(buffer, 0, i);
+    while ((i = in.read(buffer)) != -1) out.write(buffer, 0, i);
     out.close();
   }
 
-  public static void setBodyFile(HttpServletResponse response, MimeType type, String name) throws IOException {
+  public static void setBodyFile(HttpServletResponse response, MimeType type, String name)
+      throws IOException {
     File f = new File(name);
-    if (!f.canRead())
-      throw new IOException("Cannot read file \"" + name + "\"!");
+    if (!f.canRead()) throw new IOException("Cannot read file \"" + name + "\"!");
 
     FileInputStream fis = null;
     try {
       fis = new FileInputStream(name);
       setBodyInputStream(response, type, fis);
     } finally {
-      if (fis != null)
-        fis.close();
+      if (fis != null) fis.close();
     }
   }
 
@@ -199,7 +199,8 @@ public class ServletHelper {
     return ba;
   }
 
-  private static void parseFormData(FormData result, InputStream in, int expected) throws IOException {
+  private static void parseFormData(FormData result, InputStream in, int expected)
+      throws IOException {
     boolean requestFinished = false;
     int b = 0;
     String line = "";
@@ -219,26 +220,26 @@ public class ServletHelper {
       }
 
       switch (b) {
-      case -1:
-        requestFinished = true;
-        break;
-      case 0:
-        break;
-      case 10:
-        if (line.equals("")) {
+        case -1:
           requestFinished = true;
-        } else {
-          int i = line.indexOf(':');
-          // FIXME: Use canonicalizer!
-          String s1 = line.substring(0, i).trim().toLowerCase(Locale.ENGLISH);
-          String s2 = line.substring(i + 1).trim();
-          tempInfo.put(s1, s2);
-        }
-        line = "";
-        break;
-      default:
-        line += (char) b;
-        break;
+          break;
+        case 0:
+          break;
+        case 10:
+          if (line.equals("")) {
+            requestFinished = true;
+          } else {
+            int i = line.indexOf(':');
+            // FIXME: Use canonicalizer!
+            String s1 = line.substring(0, i).trim().toLowerCase(Locale.ENGLISH);
+            String s2 = line.substring(i + 1).trim();
+            tempInfo.put(s1, s2);
+          }
+          line = "";
+          break;
+        default:
+          line += (char) b;
+          break;
       }
     }
 
@@ -359,21 +360,13 @@ public class ServletHelper {
     out.append("Query Parameters:\n");
     Map<String, String> queries = parseQuery(request);
     for (Map.Entry<String, String> e : queries.entrySet()) {
-      out.append("  ")
-          .append(e.getKey())
-          .append(": ")
-          .append(e.getValue())
-          .append("\n");
+      out.append("  ").append(e.getKey()).append(": ").append(e.getValue()).append("\n");
     }
     try {
       FormData formData = parseFormData(request);
       out.append("Post Parameters:\n");
       for (Map.Entry<String, String> e : formData.data.entrySet()) {
-        out.append("  ")
-            .append(e.getKey())
-            .append(": ")
-            .append(e.getValue())
-            .append("\n");
+        out.append("  ").append(e.getKey()).append(": ").append(e.getValue()).append("\n");
       }
     } catch (IOException e) {
       out.append("Exception trying to parse post parameters:\n");

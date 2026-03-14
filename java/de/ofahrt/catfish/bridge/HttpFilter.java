@@ -1,7 +1,6 @@
 package de.ofahrt.catfish.bridge;
 
 import java.io.IOException;
-
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
 import javax.servlet.FilterConfig;
@@ -18,11 +17,14 @@ public abstract class HttpFilter implements Filter {
     // Do nothing by default.
   }
 
-  public abstract void doFilter(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws IOException, ServletException;
+  public abstract void doFilter(
+      HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+      throws IOException, ServletException;
 
   @Override
-  public void doFilter(ServletRequest request, ServletResponse response, FilterChain filterChain) throws IOException, ServletException {
-  	doFilter((HttpServletRequest) request, (HttpServletResponse) response, filterChain);
+  public void doFilter(ServletRequest request, ServletResponse response, FilterChain filterChain)
+      throws IOException, ServletException {
+    doFilter((HttpServletRequest) request, (HttpServletResponse) response, filterChain);
   }
 
   @Override

@@ -1,5 +1,14 @@
 package de.ofahrt.catfish.bridge;
 
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpHeaders;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.HttpStatusCode;
+import de.ofahrt.catfish.model.HttpVersion;
+import de.ofahrt.catfish.model.server.HttpResponseWriter;
+import de.ofahrt.catfish.utils.HttpDate;
+import de.ofahrt.catfish.utils.MimeType;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -12,15 +21,6 @@ import java.util.Locale;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletResponse;
-import de.ofahrt.catfish.model.HttpHeaderName;
-import de.ofahrt.catfish.model.HttpHeaders;
-import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpResponse;
-import de.ofahrt.catfish.model.HttpStatusCode;
-import de.ofahrt.catfish.model.HttpVersion;
-import de.ofahrt.catfish.model.server.HttpResponseWriter;
-import de.ofahrt.catfish.utils.HttpDate;
-import de.ofahrt.catfish.utils.MimeType;
 
 public final class ResponseImpl implements HttpServletResponse {
   private static final class StreamingHttpResponse implements HttpResponse {
@@ -28,7 +28,8 @@ public final class ResponseImpl implements HttpServletResponse {
     private final int committedStatus;
     private final HttpHeaders committedHeaders;
 
-    private StreamingHttpResponse(HttpVersion committedVersion, int committedStatus, HttpHeaders committedHeaders) {
+    private StreamingHttpResponse(
+        HttpVersion committedVersion, int committedStatus, HttpHeaders committedHeaders) {
       this.committedVersion = committedVersion;
       this.committedStatus = committedStatus;
       this.committedHeaders = committedHeaders;
@@ -51,7 +52,9 @@ public final class ResponseImpl implements HttpServletResponse {
   }
 
   // TODO(ulfjack): Do we need this for anything?
-  @SuppressWarnings("unused") private final HttpRequest request;
+  @SuppressWarnings("unused")
+  private final HttpRequest request;
+
   private final HttpResponseWriter responseWriter;
 
   private boolean isCommitted;
@@ -121,55 +124,56 @@ public final class ResponseImpl implements HttpServletResponse {
     }
 
     final int bufferSize = 512;
-    OutputStream internalStream = new OutputStream() {
-      private OutputStream bufferOrForward = new ByteArrayOutputStream(bufferSize);
+    OutputStream internalStream =
+        new OutputStream() {
+          private OutputStream bufferOrForward = new ByteArrayOutputStream(bufferSize);
 
-      @Override
-      public void close() throws IOException {
-        if (bufferOrForward == null) {
-          return;
-        }
-        flush();
-        bufferOrForward.close();
-        bufferOrForward = null;
-      }
-
-      @Override
-      public void flush() throws IOException {
-        if (bufferOrForward == null) {
-          throw new IOException("Output stream already closed");
-        }
-        if (isCommitted) {
-          bufferOrForward.flush();
-          return;
-        }
-        OutputStream forward = responseWriter.commitStreamed(commitResponse());
-        forward.write(((ByteArrayOutputStream) bufferOrForward).toByteArray());
-        bufferOrForward = forward;
-      }
-
-      @Override
-      public void write(int b) throws IOException {
-        if (bufferOrForward == null) {
-          throw new IOException("Output stream already closed");
-        }
-        bufferOrForward.write(b);
-      }
-
-      @Override
-      public void write(byte[] b, int off, int len) throws IOException {
-        if (bufferOrForward == null) {
-          throw new IOException("Output stream already closed");
-        }
-        if (bufferOrForward instanceof ByteArrayOutputStream) {
-          ByteArrayOutputStream buffer = (ByteArrayOutputStream) bufferOrForward;
-          if (buffer.size() + len > bufferSize) {
+          @Override
+          public void close() throws IOException {
+            if (bufferOrForward == null) {
+              return;
+            }
             flush();
+            bufferOrForward.close();
+            bufferOrForward = null;
           }
-        }
-        bufferOrForward.write(b, off, len);
-      }
-    };
+
+          @Override
+          public void flush() throws IOException {
+            if (bufferOrForward == null) {
+              throw new IOException("Output stream already closed");
+            }
+            if (isCommitted) {
+              bufferOrForward.flush();
+              return;
+            }
+            OutputStream forward = responseWriter.commitStreamed(commitResponse());
+            forward.write(((ByteArrayOutputStream) bufferOrForward).toByteArray());
+            bufferOrForward = forward;
+          }
+
+          @Override
+          public void write(int b) throws IOException {
+            if (bufferOrForward == null) {
+              throw new IOException("Output stream already closed");
+            }
+            bufferOrForward.write(b);
+          }
+
+          @Override
+          public void write(byte[] b, int off, int len) throws IOException {
+            if (bufferOrForward == null) {
+              throw new IOException("Output stream already closed");
+            }
+            if (bufferOrForward instanceof ByteArrayOutputStream) {
+              ByteArrayOutputStream buffer = (ByteArrayOutputStream) bufferOrForward;
+              if (buffer.size() + len > bufferSize) {
+                flush();
+              }
+            }
+            bufferOrForward.write(b, off, len);
+          }
+        };
 
     keepStream = internalStream;
     return keepStream;
@@ -408,8 +412,8 @@ public final class ResponseImpl implements HttpServletResponse {
     setContentType(MimeType.TEXT_HTML.toString());
     String msg =
         "<html><head><meta http-equiv=\"refresh\" content=\"1; URL="
-        + location
-        + "\"></head><body>REDIRECT</body></html>";
+            + location
+            + "\"></head><body>REDIRECT</body></html>";
     HttpResponse response = commitResponse().withBody(msg.getBytes(StandardCharsets.UTF_8));
     responseWriter.commitBuffered(response);
   }

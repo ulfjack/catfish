@@ -2,7 +2,6 @@ package de.ofahrt.catfish.bridge;
 
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
-
 import javax.servlet.http.HttpSession;
 
 public final class XsrfToken {

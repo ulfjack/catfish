@@ -1,11 +1,5 @@
 package de.ofahrt.catfish.bridge;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.Collections;
-import javax.servlet.Servlet;
 import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpStatusCode;
@@ -15,6 +9,12 @@ import de.ofahrt.catfish.model.layout.SiteLayout;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Collections;
+import javax.servlet.Servlet;
 
 public final class ServletHttpHandler implements HttpHandler {
   private final SiteLayout<HttpHandler> siteLayout;
@@ -24,7 +24,8 @@ public final class ServletHttpHandler implements HttpHandler {
   }
 
   @Override
-  public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter) throws IOException {
+  public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter)
+      throws IOException {
     if (HttpMethodName.OPTIONS.equals(request.getMethod()) && "*".equals(request.getUri())) {
       responseWriter.commitBuffered(StandardResponses.METHOD_NOT_ALLOWED);
       return;
@@ -56,7 +57,9 @@ public final class ServletHttpHandler implements HttpHandler {
     }
 
     @Override
-    public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter) throws IOException {
+    public void handle(
+        Connection connection, HttpRequest request, HttpResponseWriter responseWriter)
+        throws IOException {
       RequestImpl servletRequest;
       try {
         servletRequest = new RequestImpl(request, connection, sessionManager, responseWriter);
