@@ -66,7 +66,7 @@ public final class HttpDate {
     } catch (Exception e) {
       // Ignored
     }
-    new Exception("could not parse: \""+date+"\"").printStackTrace();
+    new Exception("could not parse: \"" + date + "\"").printStackTrace();
     return 0;
   }
 

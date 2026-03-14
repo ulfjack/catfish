@@ -1,8 +1,7 @@
 package de.ofahrt.catfish.model;
 
 public interface HttpRequest {
-  interface Body {
-  }
+  interface Body {}
 
   public static final class InMemoryBody implements Body {
     private final byte[] body;

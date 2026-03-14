@@ -23,7 +23,8 @@ public final class Connection {
     this.sslSession = null;
   }
 
-  public Connection(InetSocketAddress localAddress, InetSocketAddress remoteAddress, SSLSession sslSession) {
+  public Connection(
+      InetSocketAddress localAddress, InetSocketAddress remoteAddress, SSLSession sslSession) {
     this.id = UUID.randomUUID();
     this.startTimeMillis = System.currentTimeMillis();
     this.startTimeNanos = System.nanoTime();

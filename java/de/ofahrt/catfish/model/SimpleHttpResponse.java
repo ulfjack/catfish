@@ -14,7 +14,9 @@ public final class SimpleHttpResponse implements HttpResponse {
     this.version = HttpVersion.of(builder.majorVersion, builder.minorVersion);
     this.statusCode = builder.statusCode;
     this.statusMessage =
-        builder.reasonPhrase != null ? builder.reasonPhrase : HttpStatusCode.getStatusMessage(statusCode);
+        builder.reasonPhrase != null
+            ? builder.reasonPhrase
+            : HttpStatusCode.getStatusMessage(statusCode);
     this.headers = new HashMap<>(builder.headers);
     this.content = builder.content;
   }
@@ -98,7 +100,8 @@ public final class SimpleHttpResponse implements HttpResponse {
       if (headers.get(key) != null) {
         if (!HttpHeaderName.mayOccurMultipleTimes(key)) {
           setBadResponse("Illegal message headers: multiple occurence for non-list field");
-          throw new IllegalArgumentException("Illegal message headers: multiple occurence for non-list field");
+          throw new IllegalArgumentException(
+              "Illegal message headers: multiple occurence for non-list field");
         }
         value = headers.get(key) + ", " + value;
       }

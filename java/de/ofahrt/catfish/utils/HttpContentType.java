@@ -24,21 +24,42 @@ public class HttpContentType {
   private static final String TOKEN_CHARS = "[^\\p{Cntrl}()<>@,;:\\\\\"/?={} \t\\[\\]]";
   private static final String TOKEN = TOKEN_CHARS + "+";
 
-  private static final Pattern CONTENT_TYPE_PATTERN_EXPLICIT_MIME_TYPE = Pattern.compile("(" + TOKEN + "/" + TOKEN + ")"
-      + "((?:\\s*;\\s*" + TOKEN + "=(?:" + TOKEN + "|\"(?:\\\\[\\p{ASCII}]|[^\"\\\\])*\"))*)");
+  private static final Pattern CONTENT_TYPE_PATTERN_EXPLICIT_MIME_TYPE =
+      Pattern.compile(
+          "("
+              + TOKEN
+              + "/"
+              + TOKEN
+              + ")"
+              + "((?:\\s*;\\s*"
+              + TOKEN
+              + "=(?:"
+              + TOKEN
+              + "|\"(?:\\\\[\\p{ASCII}]|[^\"\\\\])*\"))*)");
 
-  private static final Pattern CONTENT_TYPE_PATTERN = Pattern.compile("(" + TOKEN + "/" + TOKEN + ")"
-      + "((?:\\s*;\\s*" + TOKEN + "=(?:" + TOKEN + "|\"(?:\\\\[\\p{ASCII}]|[^\"\\\\])*\"))*)");
+  private static final Pattern CONTENT_TYPE_PATTERN =
+      Pattern.compile(
+          "("
+              + TOKEN
+              + "/"
+              + TOKEN
+              + ")"
+              + "((?:\\s*;\\s*"
+              + TOKEN
+              + "=(?:"
+              + TOKEN
+              + "|\"(?:\\\\[\\p{ASCII}]|[^\"\\\\])*\"))*)");
 
-  private static final Pattern PARAMETER_PATTERN = Pattern
-      .compile("(?:\\s*;\\s*(" + TOKEN + ")=(?:(" + TOKEN + ")|\"((?:\\\\[\\p{ASCII}]|[^\"\\\\])*)\"))");
+  private static final Pattern PARAMETER_PATTERN =
+      Pattern.compile(
+          "(?:\\s*;\\s*(" + TOKEN + ")=(?:(" + TOKEN + ")|\"((?:\\\\[\\p{ASCII}]|[^\"\\\\])*)\"))");
 
   private static final Set<String> COMMON_CONTENT_TYPES = new HashSet<>(Arrays.asList("text/html"));
 
-  private static Map<String,String> CANONICALIZATION_MAP = getCanonicalizationMap();
+  private static Map<String, String> CANONICALIZATION_MAP = getCanonicalizationMap();
 
-  private static Map<String,String> getCanonicalizationMap() {
-    Map<String,String> result = new HashMap<>();
+  private static Map<String, String> getCanonicalizationMap() {
+    Map<String, String> result = new HashMap<>();
     add(result, MULTIPART_FORMDATA);
     add(result, WWW_FORM_URLENCODED);
     return result;

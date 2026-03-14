@@ -92,12 +92,14 @@ public final class SimpleHttpRequest implements HttpRequest {
       boolean mustHaveBody = hasContentLength || hasTransferEncoding;
       if (mustHaveBody) {
         if (body == null) {
-          setError(HttpStatusCode.BAD_REQUEST,
+          setError(
+              HttpStatusCode.BAD_REQUEST,
               "Requests with a Content-Length or Transfer-Encoding header must have a body");
           throw new MalformedRequestException(errorResponse);
         }
       } else if (body != null) {
-        setError(HttpStatusCode.BAD_REQUEST,
+        setError(
+            HttpStatusCode.BAD_REQUEST,
             "Requests without a Content-Length or Transfer-Encoding header must not have a body");
         throw new MalformedRequestException(errorResponse);
       }
@@ -125,7 +127,8 @@ public final class SimpleHttpRequest implements HttpRequest {
       key = HttpHeaderName.canonicalize(key);
       if (headers.get(key) != null) {
         if (!HttpHeaderName.mayOccurMultipleTimes(key)) {
-          setError(HttpStatusCode.BAD_REQUEST,
+          setError(
+              HttpStatusCode.BAD_REQUEST,
               "Illegal message headers: multiple occurence for non-list field");
           return this;
         }

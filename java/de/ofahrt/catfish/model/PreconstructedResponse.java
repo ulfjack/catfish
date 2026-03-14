@@ -8,7 +8,8 @@ final class PreconstructedResponse implements HttpResponse {
   private final HttpHeaders headers;
   private final byte[] body;
 
-  public PreconstructedResponse(HttpStatusCode statusCode, String statusMessage, HttpHeaders headers, byte[] body) {
+  public PreconstructedResponse(
+      HttpStatusCode statusCode, String statusMessage, HttpHeaders headers, byte[] body) {
     this.statusCode = statusCode.getStatusCode();
     this.statusMessage = Preconditions.checkNotNull(statusMessage);
     this.headers = Preconditions.checkNotNull(headers);

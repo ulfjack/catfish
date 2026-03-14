@@ -13,21 +13,18 @@ public interface NetworkEventListener {
    * @param connection connection if one is available, null otherwise
    * @param throwable
    */
-  default void warning(Connection connection, Throwable throwable) {
-  }
+  default void warning(Connection connection, Throwable throwable) {}
 
   /**
    * @param connection connection if one is available, null otherwise
    * @param throwable
    */
-  default void notifyInternalError(Connection connection, Throwable throwable) {
-  }
+  default void notifyInternalError(Connection connection, Throwable throwable) {}
 
   /**
    * The expectation is that implementations call System.exit in this case.
    *
    * @param throwable
    */
-  default void fatalInternalError(Throwable throwable) {
-  }
+  default void fatalInternalError(Throwable throwable) {}
 }
