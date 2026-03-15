@@ -64,3 +64,30 @@ sh_runner(
     script = _FORMAT_CHECK_SCRIPT,
     data = [":google-java-format"],
 )
+
+_COVERAGE_REPORT_SCRIPT = """#!/usr/bin/env bash
+set -euo pipefail
+DAT="${BUILD_WORKSPACE_DIRECTORY}/bazel-out/_coverage/_coverage_report.dat"
+if [[ ! -f "$DAT" ]]; then
+  echo "No coverage data found. Run first:"
+  echo "  bazelisk coverage //javatest/de/ofahrt/catfish:catfish"
+  exit 1
+fi
+awk '
+  /^SF:/          { file=substr($0,4); hits=0; total=0 }
+  /^DA:/          { total++; split($0,a,","); if (a[2]>0) hits++ }
+  /^end_of_record/ {
+    if (total>0 && file ~ /de.ofahrt.catfish/) {
+      sub(/.*\\/java\\/de\\/ofahrt\\/catfish\\//, "", file)
+      printf "%5.1f%%  %s\\n", hits*100/total, file
+    }
+  }
+' "$DAT" | sort -n
+"""
+
+# `bazel run //:coverage_report` - prints per-file line coverage, sorted ascending.
+# Run `bazelisk coverage //javatest/de/ofahrt/catfish:catfish` first.
+sh_runner(
+    name = "coverage_report",
+    script = _COVERAGE_REPORT_SCRIPT,
+)
