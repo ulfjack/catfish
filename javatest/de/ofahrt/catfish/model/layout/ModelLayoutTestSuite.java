@@ -6,6 +6,7 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
 @SuiteClasses({
+  PreconditionsTest.class,
   SiteLayoutTest.class,
 })
 public class ModelLayoutTestSuite {}

@@ -16,6 +16,7 @@ import org.junit.runners.Suite.SuiteClasses;
 @RunWith(Suite.class)
 @SuiteClasses({
   CatfishHttpServerTest.class,
+  DefaultResponsePolicyTest.class,
   CoreHelperTest.class,
   HashConflictGeneratorTest.class,
   IncrementalHttpParserIncrementalTest.class,
