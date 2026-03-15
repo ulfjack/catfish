@@ -126,6 +126,54 @@ public class IncrementalHttpParserTest {
     }
   }
 
+  @Test
+  public void versionNotSupported() {
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    parser.parse("GET / HTTP/2.0\r\n\r\n".getBytes());
+    assertTrue(parser.isDone());
+    try {
+      parser.getRequest();
+      fail();
+    } catch (MalformedRequestException e) {
+      assertEquals(
+          HttpStatusCode.VERSION_NOT_SUPPORTED.getStatusCode(),
+          e.getErrorResponse().getStatusCode());
+    }
+  }
+
+  @Test
+  public void majorVersionTooLong() {
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    parser.parse("GET / HTTP/12345678.0\r\n\r\n".getBytes());
+    assertTrue(parser.isDone());
+    try {
+      parser.getRequest();
+      fail();
+    } catch (MalformedRequestException e) {
+      assertEquals(
+          HttpStatusCode.BAD_REQUEST.getStatusCode(),
+          e.getErrorResponse().getStatusCode());
+      assertEquals("400 Http major version is too long", e.getMessage());
+    }
+  }
+
+  @Test
+  public void disallowBothContentLengthAndTransferEncoding() {
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    byte[] data =
+        "GET / HTTP/1.1\r\nHost: foo\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n"
+            .getBytes();
+    parser.parse(data);
+    assertTrue(parser.isDone());
+    try {
+      parser.getRequest();
+      fail();
+    } catch (MalformedRequestException e) {
+      assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
+      assertEquals("400 Must not set both Content-Length and Transfer-Encoding", e.getMessage());
+    }
+  }
+
   private static String repeat(String s, int count) {
     StringBuilder result = new StringBuilder();
     for (int i = 0; i < count; i++) {
