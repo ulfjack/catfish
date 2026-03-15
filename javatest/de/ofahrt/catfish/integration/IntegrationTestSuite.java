@@ -12,6 +12,7 @@ import org.junit.runners.Suite.SuiteClasses;
   HttpParserIntegrationTest.class,
   SslHttpParserIntegrationTest.class,
   CatfishHttpClientIntegrationTest.class,
+  StatefulClientIntegrationTest.class,
 })
 public class IntegrationTestSuite {
   // Just a test suite; no methods.
