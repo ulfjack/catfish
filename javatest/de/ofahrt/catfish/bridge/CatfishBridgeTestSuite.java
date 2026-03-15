@@ -7,6 +7,7 @@ import org.junit.runners.Suite.SuiteClasses;
 @RunWith(Suite.class)
 @SuiteClasses({
   FileDataTest.class,
+  HttpFilterTest.class,
   RequestImplTest.class,
   ServletHelperTest.class,
   SessionManagerTest.class,
