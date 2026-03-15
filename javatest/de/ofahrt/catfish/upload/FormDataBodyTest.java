@@ -5,6 +5,10 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpHeaders;
+import de.ofahrt.catfish.model.HttpRequest;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 import org.junit.Test;
@@ -74,5 +78,73 @@ public class FormDataBodyTest {
         new FormDataBody(
             Arrays.asList(new FormEntry("f", "image/png", new byte[] {0})));
     assertTrue(body.formDataAsMap().isEmpty());
+  }
+
+  @Test
+  public void parseFormData_nullBody_returnsEmpty() throws Exception {
+    HttpRequest request = () -> "/";
+    assertSame(FormDataBody.EMPTY, FormDataBody.parseFormData(request));
+  }
+
+  @Test
+  public void parseFormData_missingContentType_returnsEmpty() throws Exception {
+    HttpRequest request = new HttpRequest() {
+      @Override
+      public String getUri() {
+        return "/";
+      }
+
+      @Override
+      public HttpRequest.Body getBody() {
+        return new HttpRequest.InMemoryBody(new byte[0]);
+      }
+    };
+    assertSame(FormDataBody.EMPTY, FormDataBody.parseFormData(request));
+  }
+
+  @Test
+  public void parseFormData_urlEncoded_returnsParsedEntry() throws Exception {
+    byte[] bodyBytes = "key=value".getBytes(StandardCharsets.UTF_8);
+    HttpRequest request = new HttpRequest() {
+      @Override
+      public String getUri() {
+        return "/";
+      }
+
+      @Override
+      public HttpRequest.Body getBody() {
+        return new HttpRequest.InMemoryBody(bodyBytes);
+      }
+
+      @Override
+      public HttpHeaders getHeaders() {
+        return HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, "application/x-www-form-urlencoded");
+      }
+    };
+    FormDataBody body = FormDataBody.parseFormData(request);
+    Map<String, String> map = body.formDataAsMap();
+    assertEquals("value", map.get("key"));
+  }
+
+  @Test
+  public void parseFormData_unknownMimeType_returnsEmpty() throws Exception {
+    byte[] bodyBytes = "{}".getBytes(StandardCharsets.UTF_8);
+    HttpRequest request = new HttpRequest() {
+      @Override
+      public String getUri() {
+        return "/";
+      }
+
+      @Override
+      public HttpRequest.Body getBody() {
+        return new HttpRequest.InMemoryBody(bodyBytes);
+      }
+
+      @Override
+      public HttpHeaders getHeaders() {
+        return HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, "application/json");
+      }
+    };
+    assertSame(FormDataBody.EMPTY, FormDataBody.parseFormData(request));
   }
 }

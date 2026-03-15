@@ -1,0 +1,24 @@
+package de.ofahrt.catfish.ssl;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
+
+import javax.net.ssl.SSLContext;
+import org.junit.Test;
+
+public class SSLContextFactoryTest {
+
+  @Test
+  public void sslInfo_getSSLContext() throws Exception {
+    SSLContext ctx = SSLContext.getInstance("TLSv1.2");
+    SSLContextFactory.SSLInfo info = new SSLContextFactory.SSLInfo(ctx, "example.com");
+    assertSame(ctx, info.getSSLContext());
+  }
+
+  @Test
+  public void sslInfo_getCertificateCommonName() throws Exception {
+    SSLContext ctx = SSLContext.getInstance("TLSv1.2");
+    SSLContextFactory.SSLInfo info = new SSLContextFactory.SSLInfo(ctx, "example.com");
+    assertEquals("example.com", info.getCertificateCommonName());
+  }
+}

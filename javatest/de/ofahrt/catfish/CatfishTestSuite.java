@@ -6,6 +6,7 @@ import de.ofahrt.catfish.client.ClientTestSuite;
 import de.ofahrt.catfish.integration.IntegrationTestSuite;
 import de.ofahrt.catfish.internal.CatfishInternalTestSuite;
 import de.ofahrt.catfish.ssl.CatfishSslTestSuite;
+import de.ofahrt.catfish.model.ModelTestSuite;
 import de.ofahrt.catfish.model.layout.ModelLayoutTestSuite;
 import de.ofahrt.catfish.model.server.ModelServerTestSuite;
 import de.ofahrt.catfish.servlets.ServletsTestSuite;
@@ -32,6 +33,7 @@ import org.junit.runners.Suite.SuiteClasses;
   CatfishBridgeTestSuite.class,
   CatfishUploadTestSuite.class,
   CatfishUtilsTestSuite.class,
+  ModelTestSuite.class,
   ModelLayoutTestSuite.class,
   ModelServerTestSuite.class,
   ServletsTestSuite.class,

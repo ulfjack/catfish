@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.HttpStatusCode;
@@ -166,5 +167,48 @@ public class CatfishHttpServerTest {
     assertEquals(HttpStatusCode.CONTINUE.getStatusCode(), response.getStatusCode());
     assertNull(response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
     assertNull(response.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING));
+  }
+
+  @Test
+  public void traceRequestEchosRequestLine() throws Exception {
+    HttpResponse response = createResponse("TRACE / HTTP/1.1\nHost: localhost\n\n");
+    assertEquals(HttpStatusCode.OK.getStatusCode(), response.getStatusCode());
+    assertEquals("message/http", response.getHeaders().get(HttpHeaderName.CONTENT_TYPE));
+    String body = new String(response.getBody(), StandardCharsets.UTF_8);
+    assertTrue(body.contains("TRACE / HTTP/1.1"));
+  }
+
+  @Test
+  public void asteriskUriWithGetReturnsBadRequest() throws Exception {
+    HttpRequest request = new HttpRequest() {
+      @Override
+      public String getUri() {
+        return "*";
+      }
+
+      @Override
+      public String getMethod() {
+        return HttpMethodName.GET;
+      }
+    };
+    HttpResponse response = createResponse(request);
+    assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+  }
+
+  @Test
+  public void asteriskUriWithOptionsIsPassedToDelegate() throws Exception {
+    HttpRequest request = new HttpRequest() {
+      @Override
+      public String getUri() {
+        return "*";
+      }
+
+      @Override
+      public String getMethod() {
+        return HttpMethodName.OPTIONS;
+      }
+    };
+    HttpResponse response = createResponse(request);
+    assertTrue(response.getStatusCode() != HttpStatusCode.BAD_REQUEST.getStatusCode());
   }
 }
