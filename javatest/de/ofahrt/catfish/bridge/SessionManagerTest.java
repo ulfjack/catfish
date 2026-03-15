@@ -157,4 +157,10 @@ public class SessionManagerTest {
     assertEquals(-1, session.getMaxInactiveInterval());
     assertEquals(Long.MAX_VALUE, session.getTimeOut());
   }
+
+  @Test
+  public void systemClockReturnsPositiveTime() {
+    Clock.SystemClock clock = new Clock.SystemClock();
+    assertTrue(clock.currentTimeMillis() > 0);
+  }
 }

@@ -6,9 +6,11 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
 @SuiteClasses({
+  EnumerationsTest.class,
   FileDataTest.class,
   HttpFilterTest.class,
   RequestImplTest.class,
+  ResponseImplTest.class,
   ServletHelperTest.class,
   SessionManagerTest.class,
   XsrfTokenTest.class,
