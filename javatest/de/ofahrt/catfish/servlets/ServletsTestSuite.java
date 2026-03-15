@@ -7,6 +7,9 @@ import org.junit.runners.Suite.SuiteClasses;
 @RunWith(Suite.class)
 @SuiteClasses({
   CheckCompressionTest.class,
+  CheckPostTest.class,
+  DirectoryServletTest.class,
+  RedirectServletTest.class,
 })
 public class ServletsTestSuite {
   // Ok
