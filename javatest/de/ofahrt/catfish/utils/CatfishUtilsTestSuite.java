@@ -9,5 +9,6 @@ import org.junit.runners.Suite.SuiteClasses;
   HttpCacheControlTest.class,
   HttpContentTypeTest.class,
   HttpDateTest.class,
+  MimeTypeRegistryTest.class,
 })
 public class CatfishUtilsTestSuite {}
