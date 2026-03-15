@@ -6,9 +6,10 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
 @SuiteClasses({
-  ServletHelperTest.class,
-  XsrfTokenTest.class,
+  FileDataTest.class,
   RequestImplTest.class,
+  ServletHelperTest.class,
   SessionManagerTest.class,
+  XsrfTokenTest.class,
 })
 public class CatfishBridgeTestSuite {}

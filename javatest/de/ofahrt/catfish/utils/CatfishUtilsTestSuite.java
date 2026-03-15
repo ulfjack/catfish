@@ -10,5 +10,6 @@ import org.junit.runners.Suite.SuiteClasses;
   HttpContentTypeTest.class,
   HttpDateTest.class,
   MimeTypeRegistryTest.class,
+  MimeTypeTest.class,
 })
 public class CatfishUtilsTestSuite {}
