@@ -105,11 +105,7 @@ public class BasicIntegrationTest {
   public void sslUnrecognizedSni() throws Exception {
     // Connect to the HTTPS port with TLS, but present an SNI name the server doesn't recognise.
     // The server should send a fatal unrecognized_name alert and close the connection.
-    SSLSocket socket =
-        (SSLSocket)
-            TestHelper.getSSLContext()
-                .getSocketFactory()
-                .createSocket();
+    SSLSocket socket = (SSLSocket) TestHelper.getSSLContext().getSocketFactory().createSocket();
     SSLParameters params = socket.getSSLParameters();
     params.setServerNames(Collections.singletonList(new SNIHostName("unknown.example.com")));
     socket.setSSLParameters(params);

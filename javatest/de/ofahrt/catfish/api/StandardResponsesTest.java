@@ -12,12 +12,14 @@ public class StandardResponsesTest {
 
   @Test
   public void forInternalServerErrorNullReturnsConstant() {
-    assertSame(StandardResponses.INTERNAL_SERVER_ERROR, StandardResponses.forInternalServerError(null));
+    assertSame(
+        StandardResponses.INTERNAL_SERVER_ERROR, StandardResponses.forInternalServerError(null));
   }
 
   @Test
   public void forInternalServerErrorThrowableReturns500() {
-    assertEquals(500, StandardResponses.forInternalServerError(new RuntimeException()).getStatusCode());
+    assertEquals(
+        500, StandardResponses.forInternalServerError(new RuntimeException()).getStatusCode());
   }
 
   @Test
@@ -36,7 +38,9 @@ public class StandardResponsesTest {
   public void permanentRedirectAsGetToSetsLocation() {
     assertEquals(
         "/dest",
-        StandardResponses.permanentRedirectAsGetTo("/dest").getHeaders().get(HttpHeaderName.LOCATION));
+        StandardResponses.permanentRedirectAsGetTo("/dest")
+            .getHeaders()
+            .get(HttpHeaderName.LOCATION));
   }
 
   @Test

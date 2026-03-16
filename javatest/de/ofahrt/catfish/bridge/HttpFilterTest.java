@@ -26,7 +26,8 @@ public class HttpFilterTest {
   @Test
   public void untypedDoFilterDelegatesToTypedVersion() throws Exception {
     TestFilter filter = new TestFilter();
-    filter.doFilter((javax.servlet.ServletRequest) null, (javax.servlet.ServletResponse) null, null);
+    filter.doFilter(
+        (javax.servlet.ServletRequest) null, (javax.servlet.ServletResponse) null, null);
     assertTrue(filter.called);
   }
 

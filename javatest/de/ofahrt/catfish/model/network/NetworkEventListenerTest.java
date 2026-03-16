@@ -13,19 +13,35 @@ public class NetworkEventListenerTest {
     int[] capturedPort = {-1};
     boolean[] capturedSsl = {false};
 
-    NetworkEventListener listener = new NetworkEventListener() {
-      @Override public void portOpened(int port, boolean ssl) {
-        capturedPort[0] = port;
-        capturedSsl[0] = ssl;
-      }
-      @Override public void shutdown() {}
-    };
+    NetworkEventListener listener =
+        new NetworkEventListener() {
+          @Override
+          public void portOpened(int port, boolean ssl) {
+            capturedPort[0] = port;
+            capturedSsl[0] = ssl;
+          }
 
-    NetworkServer server = new NetworkServer() {
-      @Override public InetAddress address() { return null; }
-      @Override public int port()  { return 8443; }
-      @Override public boolean ssl() { return true; }
-    };
+          @Override
+          public void shutdown() {}
+        };
+
+    NetworkServer server =
+        new NetworkServer() {
+          @Override
+          public InetAddress address() {
+            return null;
+          }
+
+          @Override
+          public int port() {
+            return 8443;
+          }
+
+          @Override
+          public boolean ssl() {
+            return true;
+          }
+        };
 
     listener.portOpened(server);
     assertEquals(8443, capturedPort[0]);

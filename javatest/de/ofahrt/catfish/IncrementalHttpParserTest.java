@@ -151,8 +151,7 @@ public class IncrementalHttpParserTest {
       fail();
     } catch (MalformedRequestException e) {
       assertEquals(
-          HttpStatusCode.BAD_REQUEST.getStatusCode(),
-          e.getErrorResponse().getStatusCode());
+          HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
       assertEquals("400 Http major version is too long", e.getMessage());
     }
   }
@@ -169,7 +168,8 @@ public class IncrementalHttpParserTest {
       parser.getRequest();
       fail();
     } catch (MalformedRequestException e) {
-      assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
+      assertEquals(
+          HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
       assertEquals("400 Must not set both Content-Length and Transfer-Encoding", e.getMessage());
     }
   }

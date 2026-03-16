@@ -71,9 +71,7 @@ public class SimpleUploadPolicyTest {
   public void bothTransferEncodingAndContentLengthReturnsNull() {
     SimpleUploadPolicy policy = new SimpleUploadPolicy(1024);
     SimpleHttpRequest.Builder builder =
-        baseBuilder()
-            .addHeader("Transfer-Encoding", "chunked")
-            .addHeader("Content-Length", "50");
+        baseBuilder().addHeader("Transfer-Encoding", "chunked").addHeader("Content-Length", "50");
     PayloadParser parser = policy.accept(builder);
     assertNull(parser);
     assertTrue(builder.hasError());

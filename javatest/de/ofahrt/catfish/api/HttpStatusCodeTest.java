@@ -32,14 +32,12 @@ public class HttpStatusCodeTest {
 
   @Test
   public void getStatusMessage_codeBelowRange() {
-    assertThrows(
-        IllegalArgumentException.class, () -> HttpStatusCode.getStatusMessage(99));
+    assertThrows(IllegalArgumentException.class, () -> HttpStatusCode.getStatusMessage(99));
   }
 
   @Test
   public void getStatusMessage_codeAboveRange() {
-    assertThrows(
-        IllegalArgumentException.class, () -> HttpStatusCode.getStatusMessage(1000));
+    assertThrows(IllegalArgumentException.class, () -> HttpStatusCode.getStatusMessage(1000));
   }
 
   @Test

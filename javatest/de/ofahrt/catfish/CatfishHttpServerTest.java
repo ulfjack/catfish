@@ -180,34 +180,36 @@ public class CatfishHttpServerTest {
 
   @Test
   public void asteriskUriWithGetReturnsBadRequest() throws Exception {
-    HttpRequest request = new HttpRequest() {
-      @Override
-      public String getUri() {
-        return "*";
-      }
+    HttpRequest request =
+        new HttpRequest() {
+          @Override
+          public String getUri() {
+            return "*";
+          }
 
-      @Override
-      public String getMethod() {
-        return HttpMethodName.GET;
-      }
-    };
+          @Override
+          public String getMethod() {
+            return HttpMethodName.GET;
+          }
+        };
     HttpResponse response = createResponse(request);
     assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), response.getStatusCode());
   }
 
   @Test
   public void asteriskUriWithOptionsIsPassedToDelegate() throws Exception {
-    HttpRequest request = new HttpRequest() {
-      @Override
-      public String getUri() {
-        return "*";
-      }
+    HttpRequest request =
+        new HttpRequest() {
+          @Override
+          public String getUri() {
+            return "*";
+          }
 
-      @Override
-      public String getMethod() {
-        return HttpMethodName.OPTIONS;
-      }
-    };
+          @Override
+          public String getMethod() {
+            return HttpMethodName.OPTIONS;
+          }
+        };
     HttpResponse response = createResponse(request);
     assertTrue(response.getStatusCode() != HttpStatusCode.BAD_REQUEST.getStatusCode());
   }

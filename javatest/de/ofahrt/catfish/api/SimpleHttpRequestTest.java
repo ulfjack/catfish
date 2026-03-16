@@ -94,8 +94,7 @@ public class SimpleHttpRequestTest {
   @Test
   public void getErrorResponse_throwsWhenNoError() {
     assertThrows(
-        IllegalStateException.class,
-        () -> new SimpleHttpRequest.Builder().getErrorResponse());
+        IllegalStateException.class, () -> new SimpleHttpRequest.Builder().getErrorResponse());
   }
 
   @Test
@@ -114,9 +113,7 @@ public class SimpleHttpRequestTest {
 
   @Test
   public void addHeader_invalidHost() {
-    var builder =
-        new SimpleHttpRequest.Builder()
-            .addHeader(HttpHeaderName.HOST, "not:valid:port");
+    var builder = new SimpleHttpRequest.Builder().addHeader(HttpHeaderName.HOST, "not:valid:port");
     assertTrue(builder.hasError());
   }
 

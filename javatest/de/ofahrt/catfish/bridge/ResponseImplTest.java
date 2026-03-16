@@ -23,14 +23,20 @@ public class ResponseImplTest {
     HttpResponse committed;
     ByteArrayOutputStream streamBuffer = new ByteArrayOutputStream();
 
-    @Override public void commitBuffered(HttpResponse r) { committed = r; }
-    @Override public OutputStream commitStreamed(HttpResponse r) {
+    @Override
+    public void commitBuffered(HttpResponse r) {
+      committed = r;
+    }
+
+    @Override
+    public OutputStream commitStreamed(HttpResponse r) {
       committed = r;
       return streamBuffer;
     }
   }
 
   private static HttpRequest SIMPLE_REQUEST;
+
   static {
     try {
       SIMPLE_REQUEST = new SimpleHttpRequest.Builder().setUri("*").build();

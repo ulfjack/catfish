@@ -53,8 +53,7 @@ public class FormDataBodyTest {
   @Test
   public void formDataAsMapIncludesFieldEntries() {
     FormDataBody body =
-        new FormDataBody(
-            Arrays.asList(new FormEntry("name", "alice"), new FormEntry("age", "30")));
+        new FormDataBody(Arrays.asList(new FormEntry("name", "alice"), new FormEntry("age", "30")));
     Map<String, String> map = body.formDataAsMap();
     assertEquals("alice", map.get("name"));
     assertEquals("30", map.get("age"));
@@ -75,8 +74,7 @@ public class FormDataBodyTest {
   @Test
   public void formDataAsMapEmptyWhenOnlyFiles() {
     FormDataBody body =
-        new FormDataBody(
-            Arrays.asList(new FormEntry("f", "image/png", new byte[] {0})));
+        new FormDataBody(Arrays.asList(new FormEntry("f", "image/png", new byte[] {0})));
     assertTrue(body.formDataAsMap().isEmpty());
   }
 
@@ -88,39 +86,41 @@ public class FormDataBodyTest {
 
   @Test
   public void parseFormData_missingContentType_returnsEmpty() throws Exception {
-    HttpRequest request = new HttpRequest() {
-      @Override
-      public String getUri() {
-        return "/";
-      }
+    HttpRequest request =
+        new HttpRequest() {
+          @Override
+          public String getUri() {
+            return "/";
+          }
 
-      @Override
-      public HttpRequest.Body getBody() {
-        return new HttpRequest.InMemoryBody(new byte[0]);
-      }
-    };
+          @Override
+          public HttpRequest.Body getBody() {
+            return new HttpRequest.InMemoryBody(new byte[0]);
+          }
+        };
     assertSame(FormDataBody.EMPTY, FormDataBody.parseFormData(request));
   }
 
   @Test
   public void parseFormData_urlEncoded_returnsParsedEntry() throws Exception {
     byte[] bodyBytes = "key=value".getBytes(StandardCharsets.UTF_8);
-    HttpRequest request = new HttpRequest() {
-      @Override
-      public String getUri() {
-        return "/";
-      }
+    HttpRequest request =
+        new HttpRequest() {
+          @Override
+          public String getUri() {
+            return "/";
+          }
 
-      @Override
-      public HttpRequest.Body getBody() {
-        return new HttpRequest.InMemoryBody(bodyBytes);
-      }
+          @Override
+          public HttpRequest.Body getBody() {
+            return new HttpRequest.InMemoryBody(bodyBytes);
+          }
 
-      @Override
-      public HttpHeaders getHeaders() {
-        return HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, "application/x-www-form-urlencoded");
-      }
-    };
+          @Override
+          public HttpHeaders getHeaders() {
+            return HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, "application/x-www-form-urlencoded");
+          }
+        };
     FormDataBody body = FormDataBody.parseFormData(request);
     Map<String, String> map = body.formDataAsMap();
     assertEquals("value", map.get("key"));
@@ -129,22 +129,23 @@ public class FormDataBodyTest {
   @Test
   public void parseFormData_unknownMimeType_returnsEmpty() throws Exception {
     byte[] bodyBytes = "{}".getBytes(StandardCharsets.UTF_8);
-    HttpRequest request = new HttpRequest() {
-      @Override
-      public String getUri() {
-        return "/";
-      }
+    HttpRequest request =
+        new HttpRequest() {
+          @Override
+          public String getUri() {
+            return "/";
+          }
 
-      @Override
-      public HttpRequest.Body getBody() {
-        return new HttpRequest.InMemoryBody(bodyBytes);
-      }
+          @Override
+          public HttpRequest.Body getBody() {
+            return new HttpRequest.InMemoryBody(bodyBytes);
+          }
 
-      @Override
-      public HttpHeaders getHeaders() {
-        return HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, "application/json");
-      }
-    };
+          @Override
+          public HttpHeaders getHeaders() {
+            return HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, "application/json");
+          }
+        };
     assertSame(FormDataBody.EMPTY, FormDataBody.parseFormData(request));
   }
 }

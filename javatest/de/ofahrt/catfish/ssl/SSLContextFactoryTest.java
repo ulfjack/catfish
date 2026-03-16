@@ -28,8 +28,7 @@ public class SSLContextFactoryTest {
   public void loadPemKeyAndCrtFiles_returnsSslInfo() throws Exception {
     File keyFile = new File("javatest/de/ofahrt/catfish/ssl/test.key.pem");
     File certFile = new File("javatest/de/ofahrt/catfish/ssl/test.cert.pem");
-    SSLContextFactory.SSLInfo info =
-        SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
+    SSLContextFactory.SSLInfo info = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
     assertNotNull(info.getSSLContext());
     assertEquals("testhost", info.getCertificateCommonName());
   }

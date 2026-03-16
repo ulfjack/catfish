@@ -116,7 +116,6 @@ public class DefaultResponsePolicyTest {
   public void compressWhenGzipAmongMultipleEncodings() throws MalformedRequestException {
     DefaultResponsePolicy policy = new DefaultResponsePolicy(false, true);
     assertTrue(
-        policy.shouldCompress(
-            http11RequestWith("Accept-Encoding", "deflate, gzip"), "text/html"));
+        policy.shouldCompress(http11RequestWith("Accept-Encoding", "deflate, gzip"), "text/html"));
   }
 }

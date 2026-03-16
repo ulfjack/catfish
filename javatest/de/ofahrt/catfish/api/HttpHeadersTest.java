@@ -58,12 +58,12 @@ public class HttpHeadersTest {
 
   @Test
   public void withOverrides_mergesAndOverwrites() {
-    HttpHeaders base      = HttpHeaders.of("A", "1", "B", "old");
+    HttpHeaders base = HttpHeaders.of("A", "1", "B", "old");
     HttpHeaders overrides = HttpHeaders.of("B", "new", "C", "3");
-    HttpHeaders merged    = base.withOverrides(overrides);
-    assertEquals("1",   merged.get("A"));
+    HttpHeaders merged = base.withOverrides(overrides);
+    assertEquals("1", merged.get("A"));
     assertEquals("new", merged.get("B"));
-    assertEquals("3",   merged.get("C"));
+    assertEquals("3", merged.get("C"));
   }
 
   @Test

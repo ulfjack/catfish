@@ -28,11 +28,20 @@ public class StatefulClientIntegrationTest {
 
   @Before
   public void setUp() throws Exception {
-    server = new CatfishHttpServer(new NetworkEventListener() {
-      @Override public void shutdown() {}
-      @Override public void portOpened(int port, boolean ssl) {}
-      @Override public void notifyInternalError(Connection id, Throwable t) { t.printStackTrace(); }
-    });
+    server =
+        new CatfishHttpServer(
+            new NetworkEventListener() {
+              @Override
+              public void shutdown() {}
+
+              @Override
+              public void portOpened(int port, boolean ssl) {}
+
+              @Override
+              public void notifyInternalError(Connection id, Throwable t) {
+                t.printStackTrace();
+              }
+            });
   }
 
   @After
@@ -41,7 +50,8 @@ public class StatefulClientIntegrationTest {
   }
 
   private void startServer(de.ofahrt.catfish.model.server.HttpHandler handler) throws Exception {
-    server.addHttpHost(HOST, new SimpleUploadPolicy(1024), ResponsePolicy.KEEP_ALIVE, handler, null);
+    server.addHttpHost(
+        HOST, new SimpleUploadPolicy(1024), ResponsePolicy.KEEP_ALIVE, handler, null);
     server.listenHttpLocal(HTTP_PORT);
   }
 
@@ -62,14 +72,16 @@ public class StatefulClientIntegrationTest {
   @Test
   public void cookieIsPersisted() throws Exception {
     AtomicReference<HttpRequest> lastRequest = new AtomicReference<>();
-    startServer((conn, req, writer) -> {
-      lastRequest.set(req);
-      writer.commitBuffered(StandardResponses.OK.withHeaderOverrides(
-          HttpHeaders.of(HttpHeaderName.SET_COOKIE, "session=abc;")));
-    });
+    startServer(
+        (conn, req, writer) -> {
+          lastRequest.set(req);
+          writer.commitBuffered(
+              StandardResponses.OK.withHeaderOverrides(
+                  HttpHeaders.of(HttpHeaderName.SET_COOKIE, "session=abc;")));
+        });
     StatefulClient client = new StatefulClient(HOST, HTTP_PORT);
-    client.get("/");  // receives Set-Cookie
-    client.get("/");  // should send Cookie back
+    client.get("/"); // receives Set-Cookie
+    client.get("/"); // should send Cookie back
     assertNotNull(lastRequest.get().getHeaders().get(HttpHeaderName.COOKIE));
   }
 }

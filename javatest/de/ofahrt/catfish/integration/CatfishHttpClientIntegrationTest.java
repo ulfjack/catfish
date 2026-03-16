@@ -94,8 +94,7 @@ public class CatfishHttpClientIntegrationTest {
             .addHeader(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE)
             .build();
 
-    HttpResponse response =
-        client.send(HOST, HTTPS_PORT, sslContext, sslParameters, request).get();
+    HttpResponse response = client.send(HOST, HTTPS_PORT, sslContext, sslParameters, request).get();
     assertEquals(200, response.getStatusCode());
   }
 }

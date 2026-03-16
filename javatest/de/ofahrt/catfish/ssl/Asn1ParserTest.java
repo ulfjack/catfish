@@ -50,8 +50,7 @@ public class Asn1ParserTest {
     Asn1Parser parser =
         new Asn1Parser(
             new byte[] {
-              0x06, 0x09, 0x2a, (byte) 0x86, 0x48, (byte) 0x86, (byte) 0xf7, 0x0d, 0x01, 0x01,
-              0x01
+              0x06, 0x09, 0x2a, (byte) 0x86, 0x48, (byte) 0x86, (byte) 0xf7, 0x0d, 0x01, 0x01, 0x01
             });
     assertEquals(Event.OBJECT_IDENTIFIER, parser.nextEvent());
     ObjectIdentifier expected = new ObjectIdentifier(new int[] {1, 2, 840, 113549, 1, 1, 1});
