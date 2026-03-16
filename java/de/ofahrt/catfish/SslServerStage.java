@@ -16,8 +16,11 @@ final class SslServerStage implements Stage {
     SSLContext getSSLContext(String host);
   }
 
+  static final byte[] UNRECOGNIZED_NAME_ALERT = {0x15, 0x03, 0x01, 0x00, 0x02, 0x02, 0x70};
+
   private enum FlowStatus {
     FIND_SNI,
+    SEND_ALERT,
     HANDSHAKE,
     OPEN,
     CLOSING
@@ -70,13 +73,21 @@ final class SslServerStage implements Stage {
     if (!result.isDone()) {
       return;
     }
+    if (result.getName() == null) {
+      throw new IOException("SSL Client did not send SNI");
+    }
     parent.log("SSL Found SNI=%s", result.getName());
-    status = FlowStatus.HANDSHAKE;
     SSLContext sslContext = contextProvider.getSSLContext(result.getName());
     if (sslContext == null) {
-      // TODO: Is there any way we can return an error to the client?
-      throw new IOException("Could not find SSLContext for " + result.getName());
+      parent.log("SSL Unknown SNI=%s, sending alert", result.getName());
+      netOutputBuffer.clear();
+      netOutputBuffer.put(UNRECOGNIZED_NAME_ALERT);
+      netOutputBuffer.flip();
+      status = FlowStatus.SEND_ALERT;
+      parent.encourageWrites();
+      return;
     }
+    status = FlowStatus.HANDSHAKE;
     this.sslEngine = sslContext.createSSLEngine();
     this.sslEngine.setUseClientMode(false);
     this.sslEngine.setNeedClientAuth(false);
@@ -93,7 +104,7 @@ final class SslServerStage implements Stage {
     if (status == FlowStatus.FIND_SNI) {
       // This call may change lookingForSni as a side effect!
       findSni();
-      return ConnectionControl.CONTINUE;
+      return status == FlowStatus.SEND_ALERT ? ConnectionControl.PAUSE : ConnectionControl.CONTINUE;
     } else if (status == FlowStatus.HANDSHAKE) {
       parent.log(
           "SSL Read: HandshakeStatus=%s, net=%d",
@@ -151,7 +162,9 @@ final class SslServerStage implements Stage {
 
   @Override
   public void inputClosed() throws IOException {
-    sslEngine.closeInbound();
+    if (sslEngine != null) {
+      sslEngine.closeInbound();
+    }
     next.inputClosed();
   }
 
@@ -159,6 +172,8 @@ final class SslServerStage implements Stage {
   public ConnectionControl write() throws IOException {
     if (status == FlowStatus.FIND_SNI) {
       throw new IOException("SSL: Illegal state - write called despite finding SNI");
+    } else if (status == FlowStatus.SEND_ALERT) {
+      return ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
     } else if (status == FlowStatus.HANDSHAKE) {
       parent.log("SSL Write: HandshakeStatus=%s", sslEngine.getHandshakeStatus());
       // invariant: both netOutputBuffer and outputBuffer are readable
