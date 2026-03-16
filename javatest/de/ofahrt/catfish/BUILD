@@ -15,7 +15,6 @@ java_test(
         "//java/de/ofahrt/catfish/client",
         "//java/de/ofahrt/catfish/client/legacy",
         "//java/de/ofahrt/catfish/internal",
-        "//java/de/ofahrt/catfish/internal/network",
         "//java/de/ofahrt/catfish/model",
         "//java/de/ofahrt/catfish/model/layout",
         "//java/de/ofahrt/catfish/model/network",

@@ -27,7 +27,6 @@ import org.junit.runners.Suite.SuiteClasses;
   HttpResponseGeneratorBufferedTest.class,
   HttpResponseGeneratorStreamedTest.class,
   SNIParserTest.class,
-  SslServerStageTest.class,
   CatfishInternalTestSuite.class,
   CatfishSslTestSuite.class,
   CatfishApiTestSuite.class,

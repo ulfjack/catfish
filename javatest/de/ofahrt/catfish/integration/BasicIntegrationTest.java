@@ -3,6 +3,7 @@ package de.ofahrt.catfish.integration;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpMethodName;
@@ -13,6 +14,11 @@ import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.net.InetSocketAddress;
+import java.util.Collections;
+import javax.net.ssl.SNIHostName;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSocket;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -93,6 +99,31 @@ public class BasicIntegrationTest {
         assertEquals("Connection closed prematurely!", e.getMessage());
       }
     }
+  }
+
+  @Test
+  public void sslUnrecognizedSni() throws Exception {
+    // Connect to the HTTPS port with TLS, but present an SNI name the server doesn't recognise.
+    // The server should send a fatal unrecognized_name alert and close the connection.
+    SSLSocket socket =
+        (SSLSocket)
+            TestHelper.getSSLContext()
+                .getSocketFactory()
+                .createSocket();
+    SSLParameters params = socket.getSSLParameters();
+    params.setServerNames(Collections.singletonList(new SNIHostName("unknown.example.com")));
+    socket.setSSLParameters(params);
+    socket.connect(
+        new InetSocketAddress(LocalCatfishServer.HTTP_SERVER, LocalCatfishServer.HTTPS_PORT));
+    try {
+      socket.startHandshake();
+      fail("Expected SSLException for unrecognized SNI");
+    } catch (IOException e) {
+      // Expected: server rejected the unknown SNI hostname.
+    } finally {
+      socket.close();
+    }
+    localServer.waitForNoOpenConnections();
   }
 
   @Test
