@@ -78,21 +78,24 @@ public class CompressionIntegrationTest {
     HttpResponse response = send("GET / HTTP/1.1\nHost: localhost\n\n");
     assertEquals(200, response.getStatusCode());
     assertNull(response.getHeaders().get(HttpHeaderName.CONTENT_ENCODING));
+    assertEquals("text/plain", response.getHeaders().get(HttpHeaderName.CONTENT_TYPE));
+    assertEquals(
+        Integer.toString(LARGE_BODY.length()),
+        response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
   }
 
   @Test
-  public void withGzipAcceptEncoding_compressesResponse() throws Exception {
+  public void withGzipAcceptEncoding_correctHeadersAndDecompressibleBody() throws Exception {
     HttpResponse response = send("GET / HTTP/1.1\nHost: localhost\nAccept-Encoding: gzip\n\n");
     assertEquals(200, response.getStatusCode());
     assertEquals("gzip", response.getHeaders().get(HttpHeaderName.CONTENT_ENCODING));
-  }
+    assertEquals("text/plain", response.getHeaders().get(HttpHeaderName.CONTENT_TYPE));
 
-  @Test
-  public void withGzipAcceptEncoding_bodyIsDecompressible() throws Exception {
-    HttpResponse response = send("GET / HTTP/1.1\nHost: localhost\nAccept-Encoding: gzip\n\n");
-    assertEquals(200, response.getStatusCode());
     byte[] gzipped = response.getBody();
     assertNotNull(gzipped);
+    assertEquals(
+        Integer.toString(gzipped.length),
+        response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
     try (GZIPInputStream in = new GZIPInputStream(new ByteArrayInputStream(gzipped))) {
       String decompressed = new String(in.readAllBytes(), StandardCharsets.UTF_8);
       assertEquals(LARGE_BODY, decompressed);
