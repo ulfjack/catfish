@@ -76,6 +76,6 @@ public final class HttpHeaders implements Iterable<Map.Entry<String, String>> {
 
   @Override
   public boolean equals(Object obj) {
-    return entries.equals(obj);
+    return obj instanceof HttpHeaders && entries.equals(((HttpHeaders) obj).entries);
   }
 }

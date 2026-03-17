@@ -2,6 +2,7 @@ package de.ofahrt.catfish.api;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -78,5 +79,23 @@ public class HttpHeadersTest {
     HttpHeaders h1 = HttpHeaders.of("A", "1");
     HttpHeaders h2 = HttpHeaders.of("A", "1");
     assertEquals(h1.hashCode(), h2.hashCode());
+  }
+
+  @Test
+  public void equals_sameEntries_areEqual() {
+    HttpHeaders h1 = HttpHeaders.of("A", "1");
+    HttpHeaders h2 = HttpHeaders.of("A", "1");
+    assertEquals(h1, h2);
+  }
+
+  @Test
+  public void equals_differentEntries_areNotEqual() {
+    assertNotEquals(HttpHeaders.of("A", "1"), HttpHeaders.of("A", "2"));
+  }
+
+  @Test
+  public void equals_reflexive() {
+    HttpHeaders h = HttpHeaders.of("A", "1");
+    assertTrue(h.equals(h));
   }
 }
