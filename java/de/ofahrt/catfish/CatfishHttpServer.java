@@ -11,7 +11,7 @@ import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
-import de.ofahrt.catfish.ssl.SSLContextFactory.SSLInfo;
+import de.ofahrt.catfish.ssl.SSLInfo;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -92,11 +92,7 @@ public final class CatfishHttpServer {
       throw new IllegalArgumentException("Certificate does not cover host '" + name + "'");
     }
     addHttpHost(
-        name,
-        uploadPolicy,
-        responsePolicy,
-        handler,
-        sslInfo != null ? sslInfo.getSSLContext() : null);
+        name, uploadPolicy, responsePolicy, handler, sslInfo != null ? sslInfo.sslContext() : null);
   }
 
   public void addRequestListener(HttpServerListener l) {

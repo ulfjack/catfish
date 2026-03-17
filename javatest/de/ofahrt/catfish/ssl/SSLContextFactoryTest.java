@@ -19,27 +19,27 @@ import org.junit.Test;
 public class SSLContextFactoryTest {
 
   @Test
-  public void sslInfo_getSSLContext() throws Exception {
+  public void sslInfo_sslContext() throws Exception {
     SSLContext ctx = SSLContext.getInstance("TLS");
-    SSLContextFactory.SSLInfo info = new SSLContextFactory.SSLInfo(ctx, "example.com", null);
-    assertSame(ctx, info.getSSLContext());
+    SSLInfo info = new SSLInfo(ctx, "example.com", null);
+    assertSame(ctx, info.sslContext());
   }
 
   @Test
-  public void sslInfo_getCertificateCommonName() throws Exception {
+  public void sslInfo_certificateCommonName() throws Exception {
     SSLContext ctx = SSLContext.getInstance("TLS");
-    SSLContextFactory.SSLInfo info = new SSLContextFactory.SSLInfo(ctx, "example.com", null);
-    assertEquals("example.com", info.getCertificateCommonName());
+    SSLInfo info = new SSLInfo(ctx, "example.com", null);
+    assertEquals("example.com", info.certificateCommonName());
   }
 
   @Test
   public void loadPemKeyAndCrtFiles_returnsSslInfo() throws Exception {
     File keyFile = new File("javatest/de/ofahrt/catfish/ssl/test.key.pem");
     File certFile = new File("javatest/de/ofahrt/catfish/ssl/test.cert.pem");
-    SSLContextFactory.SSLInfo info = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
-    assertNotNull(info.getSSLContext());
-    assertEquals("testhost", info.getCertificateCommonName());
-    assertNotNull(info.getCertificate());
+    SSLInfo info = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
+    assertNotNull(info.sslContext());
+    assertEquals("testhost", info.certificateCommonName());
+    assertNotNull(info.certificate());
   }
 
   // covers() tests
@@ -49,7 +49,7 @@ public class SSLContextFactoryTest {
     // test.cert.san.pem has DNS SAN "testhost"
     File keyFile = new File("javatest/de/ofahrt/catfish/ssl/test.key.pem");
     File certFile = new File("javatest/de/ofahrt/catfish/ssl/test.cert.san.pem");
-    SSLContextFactory.SSLInfo info = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
+    SSLInfo info = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
     assertTrue(info.covers("testhost"));
   }
 
@@ -58,7 +58,7 @@ public class SSLContextFactoryTest {
     // test.cert.pem has no SANs; CN=testhost
     File keyFile = new File("javatest/de/ofahrt/catfish/ssl/test.key.pem");
     File certFile = new File("javatest/de/ofahrt/catfish/ssl/test.cert.pem");
-    SSLContextFactory.SSLInfo info = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
+    SSLInfo info = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
     assertTrue(info.covers("testhost"));
   }
 
@@ -67,7 +67,7 @@ public class SSLContextFactoryTest {
     // test.cert.wildcard.pem has DNS SAN "*.example.com"
     File keyFile = new File("javatest/de/ofahrt/catfish/ssl/test.key.pem");
     File certFile = new File("javatest/de/ofahrt/catfish/ssl/test.cert.wildcard.pem");
-    SSLContextFactory.SSLInfo info = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
+    SSLInfo info = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
     assertTrue(info.covers("foo.example.com"));
     assertTrue(info.covers("bar.example.com"));
     assertFalse(info.covers("example.com"));
@@ -79,7 +79,7 @@ public class SSLContextFactoryTest {
     // test.cert.pem has CN=testhost, no SANs
     File keyFile = new File("javatest/de/ofahrt/catfish/ssl/test.key.pem");
     File certFile = new File("javatest/de/ofahrt/catfish/ssl/test.cert.pem");
-    SSLContextFactory.SSLInfo info = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
+    SSLInfo info = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
     assertFalse(info.covers("other.com"));
     assertFalse(info.covers("nottest host"));
   }
@@ -89,7 +89,7 @@ public class SSLContextFactoryTest {
     // test.cert.pem has CN=testhost; registering "wronghost" must throw
     File keyFile = new File("javatest/de/ofahrt/catfish/ssl/test.key.pem");
     File certFile = new File("javatest/de/ofahrt/catfish/ssl/test.cert.pem");
-    SSLContextFactory.SSLInfo sslInfo = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
+    SSLInfo sslInfo = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
 
     CatfishHttpServer server =
         new CatfishHttpServer(

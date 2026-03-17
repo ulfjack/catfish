@@ -14,7 +14,7 @@ import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.ssl.SSLContextFactory;
-import de.ofahrt.catfish.ssl.SSLContextFactory.SSLInfo;
+import de.ofahrt.catfish.ssl.SSLInfo;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -42,8 +42,7 @@ public class ExampleMain {
       }
     }
     if ((sslKeyFile != null) && (sslCrtFile != null)) {
-      sslInfo =
-          SSLContextFactory.loadPemKeyAndCrtFiles(new File(sslKeyFile), new File(sslCrtFile));
+      sslInfo = SSLContextFactory.loadPemKeyAndCrtFiles(new File(sslKeyFile), new File(sslCrtFile));
     }
 
     CatfishHttpServer server =
@@ -95,7 +94,7 @@ public class ExampleMain {
     server.listenHttp(8080);
     if (sslInfo != null) {
       server.addHttpHost(
-          sslInfo.getCertificateCommonName(),
+          sslInfo.certificateCommonName(),
           UploadPolicy.DENY,
           ResponsePolicy.KEEP_ALIVE,
           handler,

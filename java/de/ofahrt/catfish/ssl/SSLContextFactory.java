@@ -17,10 +17,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.RSAPrivateKeySpec;
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collection;
-import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.net.ssl.KeyManagerFactory;
@@ -116,92 +113,6 @@ public final class SSLContextFactory {
       }
       return Base64.getDecoder()
           .decode(base64Data.toString().getBytes(StandardCharsets.ISO_8859_1));
-    }
-  }
-
-  public static class SSLInfo {
-    private final SSLContext sslContext;
-    private final String certificateCommonName;
-    private final X509Certificate certificate;
-
-    public SSLInfo(
-        SSLContext sslContext, String certificateCommonName, X509Certificate certificate) {
-      this.sslContext = sslContext;
-      this.certificateCommonName = certificateCommonName;
-      this.certificate = certificate;
-    }
-
-    public SSLContext getSSLContext() {
-      return sslContext;
-    }
-
-    public String getCertificateCommonName() {
-      return certificateCommonName;
-    }
-
-    public X509Certificate getCertificate() {
-      return certificate;
-    }
-
-    /**
-     * Returns true if this certificate covers the given hostname (RFC 2818 / RFC 6125 rules).
-     * Checks DNS Subject Alternative Names first; falls back to CN only if no DNS SANs are present.
-     */
-    public boolean covers(String hostname) {
-      if (hostname == null || certificate == null) {
-        return false;
-      }
-      String lowerHostname = hostname.toLowerCase(java.util.Locale.ROOT);
-      List<String> dnsSans = getDnsSans();
-      if (!dnsSans.isEmpty()) {
-        for (String san : dnsSans) {
-          if (matchesHostname(san.toLowerCase(java.util.Locale.ROOT), lowerHostname)) {
-            return true;
-          }
-        }
-        return false;
-      }
-      // Fall back to CN (RFC 6125 §6.4.4 legacy behaviour)
-      if (certificateCommonName != null) {
-        return matchesHostname(
-            certificateCommonName.toLowerCase(java.util.Locale.ROOT), lowerHostname);
-      }
-      return false;
-    }
-
-    private List<String> getDnsSans() {
-      List<String> result = new ArrayList<>();
-      try {
-        Collection<List<?>> sans = certificate.getSubjectAlternativeNames();
-        if (sans == null) {
-          return result;
-        }
-        for (List<?> san : sans) {
-          // type 2 = dNSName
-          if (san.size() >= 2 && Integer.valueOf(2).equals(san.get(0))) {
-            Object value = san.get(1);
-            if (value instanceof String) {
-              result.add((String) value);
-            }
-          }
-        }
-      } catch (java.security.cert.CertificateParsingException e) {
-        // ignore; treat as no SANs
-      }
-      return result;
-    }
-
-    private static boolean matchesHostname(String pattern, String hostname) {
-      if (pattern.startsWith("*.")) {
-        String suffix = pattern.substring(1); // ".example.com"
-        if (hostname.endsWith(suffix)) {
-          String left = hostname.substring(0, hostname.length() - suffix.length());
-          // Wildcard covers exactly one label (no dots in the matched part)
-          return !left.isEmpty() && left.indexOf('.') < 0;
-        }
-        return false;
-      }
-      return pattern.equals(hostname);
     }
   }
 }
