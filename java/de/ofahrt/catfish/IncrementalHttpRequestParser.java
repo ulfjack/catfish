@@ -9,6 +9,7 @@ import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.server.PayloadParser;
 import de.ofahrt.catfish.model.server.UploadPolicy;
+import de.ofahrt.catfish.upload.InMemoryEntityParser;
 import java.io.IOException;
 
 final class IncrementalHttpRequestParser {
@@ -345,14 +346,20 @@ final class IncrementalHttpRequestParser {
                 done = true;
                 return i + 1;
               }
-              payloadParser = uploadPolicy.accept(builder);
-              if (builder.hasError()) {
-                if (payloadParser != null) {
-                  throw new IllegalStateException("Cannot set error and return non-null parser");
-                }
-                done = true;
-                return 1;
+              if (transferEncodingValue != null) {
+                return setError(HttpStatusCode.NOT_IMPLEMENTED, "Unknown Transfer-Encoding");
               }
+              long contentLength;
+              try {
+                contentLength = Long.parseLong(contentLengthValue);
+              } catch (NumberFormatException e) {
+                return setBadRequest("Illegal content length value");
+              }
+              HttpRequest partialRequest = builder.buildPartialRequest();
+              if (!uploadPolicy.isAllowed(partialRequest)) {
+                return setError(HttpStatusCode.PAYLOAD_TOO_LARGE);
+              }
+              payloadParser = new InMemoryEntityParser((int) contentLength);
               state = State.PAYLOAD;
             } else {
               done = true;

@@ -1,44 +1,16 @@
 package de.ofahrt.catfish.model.server;
 
-import de.ofahrt.catfish.model.HttpHeaderName;
-import de.ofahrt.catfish.model.HttpStatusCode;
-import de.ofahrt.catfish.model.SimpleHttpRequest;
-import de.ofahrt.catfish.model.SimpleHttpRequest.Builder;
+import de.ofahrt.catfish.model.HttpRequest;
 
 public interface UploadPolicy {
-  public static final UploadPolicy DENY =
-      new UploadPolicy() {
-        @Override
-        public PayloadParser accept(Builder request) {
-          String contentLengthValue = request.getHeader(HttpHeaderName.CONTENT_LENGTH);
-          String transferEncodingValue = request.getHeader(HttpHeaderName.TRANSFER_ENCODING);
-          if (transferEncodingValue != null && contentLengthValue != null) {
-            request.setError(
-                HttpStatusCode.BAD_REQUEST,
-                "Must not set both Content-Length and Transfer-Encoding");
-            return null;
-          }
-          if (transferEncodingValue != null) {
-            request.setError(HttpStatusCode.NOT_IMPLEMENTED, "Unknown Transfer-Encoding");
-            return null;
-          }
-          if (contentLengthValue != null) {
-            try {
-              Long.parseLong(contentLengthValue);
-            } catch (NumberFormatException e) {
-              request.setError(HttpStatusCode.BAD_REQUEST, "Illegal content length value");
-              return null;
-            }
-          }
-          request.setError(HttpStatusCode.PAYLOAD_TOO_LARGE);
-          return null;
-        }
-      };
+  /** Reject all uploads. */
+  UploadPolicy DENY = request -> false;
 
   /**
-   * Returns a {@link PayloadParser} instance that can be used to process the body of the given
-   * request. If the upload is denied or the request contains an error, then this method must set an
-   * error on the given builder and return {@code null}.
+   * Returns true if the upload described by {@code request} should be accepted. Returning false
+   * causes a 413 PAYLOAD_TOO_LARGE response. When this method is called, the request has complete
+   * headers but no body yet. If a Content-Length header is present it contains a syntactically
+   * valid long.
    */
-  PayloadParser accept(SimpleHttpRequest.Builder request);
+  boolean isAllowed(HttpRequest request);
 }

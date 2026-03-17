@@ -204,13 +204,13 @@ final class HttpServerStage implements Stage {
     this.outputBuffer = outputBuffer;
     this.parser =
         new IncrementalHttpRequestParser(
-            (builder) -> {
+            (request) -> {
               HttpVirtualHost host =
-                  virtualHostLookup.apply(builder.getHeader(HttpHeaderName.HOST));
+                  virtualHostLookup.apply(request.getHeaders().get(HttpHeaderName.HOST));
               if (host == null) {
-                return UploadPolicy.DENY.accept(builder);
+                return false;
               }
-              return host.uploadPolicy().accept(builder);
+              return host.uploadPolicy().isAllowed(request);
             });
   }
 

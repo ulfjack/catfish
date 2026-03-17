@@ -67,6 +67,17 @@ public final class SimpleHttpRequest implements HttpRequest {
       errorResponse = null;
     }
 
+    /**
+     * Produces a read-only snapshot of the request for upload-policy consultation. The body field
+     * is null; all other fields are fully populated.
+     */
+    public HttpRequest buildPartialRequest() {
+      if (errorResponse != null) {
+        throw new IllegalStateException("Builder has an error");
+      }
+      return new SimpleHttpRequest(this);
+    }
+
     @SuppressWarnings("unused")
     public HttpRequest build() throws MalformedRequestException {
       if (errorResponse != null) {
