@@ -15,6 +15,7 @@ import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.upload.SimpleUploadPolicy;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.net.ssl.SSLContext;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -51,7 +52,7 @@ public class StatefulClientIntegrationTest {
 
   private void startServer(de.ofahrt.catfish.model.server.HttpHandler handler) throws Exception {
     server.addHttpHost(
-        HOST, new SimpleUploadPolicy(1024), ResponsePolicy.KEEP_ALIVE, handler, null);
+        HOST, new SimpleUploadPolicy(1024), ResponsePolicy.KEEP_ALIVE, handler, (SSLContext) null);
     server.listenHttpLocal(HTTP_PORT);
   }
 

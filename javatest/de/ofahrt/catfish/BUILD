@@ -7,6 +7,8 @@ java_test(
     data = [
         "ssl/test.key.pem",
         "ssl/test.cert.pem",
+        "ssl/test.cert.san.pem",
+        "ssl/test.cert.wildcard.pem",
     ],
     test_class = "de.ofahrt.catfish.CatfishTestSuite",
     deps = [

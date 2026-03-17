@@ -26,7 +26,7 @@ public class ExampleMain {
     String sslKeyFile = null;
     String sslCrtFile = null;
     SSLContext sslContext = null;
-    String domainName = null;
+    SSLInfo sslInfo = null;
     for (String arg : args) {
       if (arg.startsWith("--ssl=")) {
         try (InputStream sslCert = new FileInputStream(arg.substring(6))) {
@@ -42,10 +42,8 @@ public class ExampleMain {
       }
     }
     if ((sslKeyFile != null) && (sslCrtFile != null)) {
-      SSLInfo sslInfo =
+      sslInfo =
           SSLContextFactory.loadPemKeyAndCrtFiles(new File(sslKeyFile), new File(sslCrtFile));
-      sslContext = sslInfo.getSSLContext();
-      domainName = sslInfo.getCertificateCommonName();
     }
 
     CatfishHttpServer server =
@@ -92,11 +90,20 @@ public class ExampleMain {
     handler = new BasicHttpHandler(handler);
 
     // Keep-alive and compression policies must be set before adding a host.
-    server.addHttpHost("localhost", UploadPolicy.DENY, ResponsePolicy.KEEP_ALIVE, handler, null);
+    server.addHttpHost(
+        "localhost", UploadPolicy.DENY, ResponsePolicy.KEEP_ALIVE, handler, (SSLContext) null);
     server.listenHttp(8080);
-    if (sslContext != null) {
-      // TODO: This doesn't work for wildcard certificates.
-      server.addHttpHost(domainName, handler, sslContext);
+    if (sslInfo != null) {
+      server.addHttpHost(
+          sslInfo.getCertificateCommonName(),
+          UploadPolicy.DENY,
+          ResponsePolicy.KEEP_ALIVE,
+          handler,
+          sslInfo);
+      server.listenHttps(8081);
+    } else if (sslContext != null) {
+      server.addHttpHost(
+          "default", UploadPolicy.DENY, ResponsePolicy.KEEP_ALIVE, handler, sslContext);
       server.listenHttps(8081);
     }
   }
