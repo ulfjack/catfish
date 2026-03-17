@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.integration;
 
 import de.ofahrt.catfish.CatfishHttpServer;
+import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.TestServlet;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
@@ -10,7 +11,6 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.BasicHttpHandler;
-import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -70,12 +70,12 @@ final class LocalCatfishServer implements Server {
             .directory("/", new HttpRequestTestServlet())
             .build();
 
-    server.addHttpHost(
-        "localhost",
-        uploadPolicy,
-        ResponsePolicy.KEEP_ALIVE,
-        new BasicHttpHandler(handler),
-        startSsl ? TestHelper.getSSLContext() : null);
+    HttpVirtualHost host =
+        new HttpVirtualHost(new BasicHttpHandler(handler)).uploadPolicy(uploadPolicy);
+    if (startSsl) {
+      host = host.ssl(TestHelper.getSSLInfo());
+    }
+    server.addHttpHost("localhost", host);
     server.listenHttp(HTTP_PORT);
     if (startSsl) {
       server.listenHttps(HTTPS_PORT);
@@ -104,7 +104,7 @@ final class LocalCatfishServer implements Server {
       throw new IllegalStateException();
     }
     try (HttpConnection connection =
-        HttpConnection.connect(hostname, port, ssl ? TestHelper.getSSLContext() : null)) {
+        HttpConnection.connect(hostname, port, ssl ? TestHelper.getSSLInfo().sslContext() : null)) {
       connection.write(content);
       return connection.readResponse();
     }
@@ -132,6 +132,8 @@ final class LocalCatfishServer implements Server {
       throw new IllegalStateException();
     }
     return HttpConnection.connect(
-        HTTP_SERVER, ssl ? HTTPS_PORT : HTTP_PORT, ssl ? TestHelper.getSSLContext() : null);
+        HTTP_SERVER,
+        ssl ? HTTPS_PORT : HTTP_PORT,
+        ssl ? TestHelper.getSSLInfo().sslContext() : null);
   }
 }

@@ -3,38 +3,43 @@ package de.ofahrt.catfish;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
+import de.ofahrt.catfish.ssl.SSLInfo;
+import java.util.Objects;
 import javax.net.ssl.SSLContext;
 
-final class HttpVirtualHost {
-  private final HttpHandler httpHandler;
-  private final ResponsePolicy responsePolicy;
-  private final UploadPolicy uploadPolicy;
-  private final SSLContext sslContext;
-
-  HttpVirtualHost(
-      HttpHandler httpHandler,
-      ResponsePolicy responsePolicy,
-      UploadPolicy uploadPolicy,
-      SSLContext sslContext) {
-    this.httpHandler = httpHandler;
-    this.responsePolicy = responsePolicy;
-    this.uploadPolicy = uploadPolicy;
-    this.sslContext = sslContext;
+public record HttpVirtualHost(
+    HttpHandler handler,
+    UploadPolicy uploadPolicy,
+    ResponsePolicy responsePolicy,
+    SSLInfo sslInfo // null == HTTP-only
+    ) {
+  /** Validates required fields; sslInfo is intentionally nullable (absent = HTTP-only). */
+  public HttpVirtualHost {
+    Objects.requireNonNull(handler, "handler");
+    Objects.requireNonNull(uploadPolicy, "uploadPolicy");
+    Objects.requireNonNull(responsePolicy, "responsePolicy");
   }
 
-  HttpHandler getHttpHandler() {
-    return httpHandler;
+  /** Creates an HTTP-only host with default policies (DENY uploads, KEEP_ALIVE). */
+  public HttpVirtualHost(HttpHandler handler) {
+    this(handler, UploadPolicy.DENY, ResponsePolicy.KEEP_ALIVE, null);
   }
 
-  ResponsePolicy getResponsePolicy() {
-    return responsePolicy;
+  public HttpVirtualHost uploadPolicy(UploadPolicy p) {
+    return new HttpVirtualHost(handler, Objects.requireNonNull(p), responsePolicy, sslInfo);
   }
 
-  UploadPolicy getUploadPolicy() {
-    return uploadPolicy;
+  public HttpVirtualHost responsePolicy(ResponsePolicy p) {
+    return new HttpVirtualHost(handler, uploadPolicy, Objects.requireNonNull(p), sslInfo);
   }
 
-  SSLContext getSSLContext() {
-    return sslContext;
+  /** Enables HTTPS. If never called, the host remains HTTP-only. */
+  public HttpVirtualHost ssl(SSLInfo info) {
+    return new HttpVirtualHost(handler, uploadPolicy, responsePolicy, Objects.requireNonNull(info));
+  }
+
+  /** Package-private: used by CatfishHttpServer to extract the raw SSLContext for TLS. */
+  SSLContext sslContext() {
+    return sslInfo != null ? sslInfo.sslContext() : null;
   }
 }

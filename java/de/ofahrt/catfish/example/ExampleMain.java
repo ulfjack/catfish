@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.example;
 
 import de.ofahrt.catfish.CatfishHttpServer;
+import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.fastcgi.FcgiServlet;
@@ -11,26 +12,22 @@ import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.BasicHttpHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
-import de.ofahrt.catfish.model.server.ResponsePolicy;
-import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.ssl.SSLContextFactory;
 import de.ofahrt.catfish.ssl.SSLInfo;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
-import javax.net.ssl.SSLContext;
 
 public class ExampleMain {
 
   public static void main(String[] args) throws Exception {
     String sslKeyFile = null;
     String sslCrtFile = null;
-    SSLContext sslContext = null;
     SSLInfo sslInfo = null;
     for (String arg : args) {
       if (arg.startsWith("--ssl=")) {
         try (InputStream sslCert = new FileInputStream(arg.substring(6))) {
-          sslContext = SSLContextFactory.loadPkcs12(sslCert);
+          sslInfo = SSLContextFactory.loadPkcs12(sslCert);
         }
       } else if (arg.startsWith("--ssl_key=")) {
         sslKeyFile = arg.substring(10);
@@ -89,20 +86,11 @@ public class ExampleMain {
     handler = new BasicHttpHandler(handler);
 
     // Keep-alive and compression policies must be set before adding a host.
-    server.addHttpHost(
-        "localhost", UploadPolicy.DENY, ResponsePolicy.KEEP_ALIVE, handler, (SSLContext) null);
+    server.addHttpHost("localhost", new HttpVirtualHost(handler));
     server.listenHttp(8080);
     if (sslInfo != null) {
       server.addHttpHost(
-          sslInfo.certificateCommonName(),
-          UploadPolicy.DENY,
-          ResponsePolicy.KEEP_ALIVE,
-          handler,
-          sslInfo);
-      server.listenHttps(8081);
-    } else if (sslContext != null) {
-      server.addHttpHost(
-          "default", UploadPolicy.DENY, ResponsePolicy.KEEP_ALIVE, handler, sslContext);
+          sslInfo.certificateCommonName(), new HttpVirtualHost(handler).ssl(sslInfo));
       server.listenHttps(8081);
     }
   }

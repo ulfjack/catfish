@@ -9,9 +9,6 @@ import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
-import de.ofahrt.catfish.model.server.ResponsePolicy;
-import de.ofahrt.catfish.model.server.UploadPolicy;
-import de.ofahrt.catfish.ssl.SSLInfo;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -64,35 +61,11 @@ public final class CatfishHttpServer {
     this.engine = new NetworkEngine(serverListener);
   }
 
-  public void addHttpHost(String name, HttpHandler handler, SSLContext sslContext) {
-    addHttpHost(name, UploadPolicy.DENY, ResponsePolicy.KEEP_ALIVE, handler, sslContext);
-  }
-
-  public void addHttpHost(
-      String name, UploadPolicy uploadPolicy, HttpHandler handler, SSLContext sslContext) {
-    addHttpHost(name, uploadPolicy, ResponsePolicy.KEEP_ALIVE, handler, sslContext);
-  }
-
-  public void addHttpHost(
-      String name,
-      UploadPolicy uploadPolicy,
-      ResponsePolicy responsePolicy,
-      HttpHandler handler,
-      SSLContext sslContext) {
-    hosts.put(name, new HttpVirtualHost(handler, responsePolicy, uploadPolicy, sslContext));
-  }
-
-  public void addHttpHost(
-      String name,
-      UploadPolicy uploadPolicy,
-      ResponsePolicy responsePolicy,
-      HttpHandler handler,
-      SSLInfo sslInfo) {
-    if (sslInfo != null && !sslInfo.covers(name)) {
+  public void addHttpHost(String name, HttpVirtualHost host) {
+    if (host.sslInfo() != null && !host.sslInfo().covers(name)) {
       throw new IllegalArgumentException("Certificate does not cover host '" + name + "'");
     }
-    addHttpHost(
-        name, uploadPolicy, responsePolicy, handler, sslInfo != null ? sslInfo.sslContext() : null);
+    hosts.put(name, host);
   }
 
   public void addRequestListener(HttpServerListener l) {
@@ -127,7 +100,7 @@ public final class CatfishHttpServer {
 
   SSLContext getSSLContext(String host) {
     HttpVirtualHost domain = host == null ? null : hosts.get(host);
-    return domain != null ? domain.getSSLContext() : null;
+    return domain != null ? domain.sslContext() : null;
   }
 
   void queueRequest(

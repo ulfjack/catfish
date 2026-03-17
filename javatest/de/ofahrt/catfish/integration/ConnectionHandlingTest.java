@@ -3,6 +3,7 @@ package de.ofahrt.catfish.integration;
 import static org.junit.Assert.assertEquals;
 
 import de.ofahrt.catfish.CatfishHttpServer;
+import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.client.CatfishHttpClient;
 import de.ofahrt.catfish.model.HttpHeaderName;
@@ -15,8 +16,6 @@ import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.HttpHandler;
-import de.ofahrt.catfish.model.server.ResponsePolicy;
-import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -63,12 +62,11 @@ public class ConnectionHandlingTest {
                 throwable.printStackTrace();
               }
             });
-    server.addHttpHost(
-        HTTP_SERVER_NAME,
-        UploadPolicy.DENY,
-        ResponsePolicy.KEEP_ALIVE,
-        handler,
-        startSsl ? TestHelper.getSSLContext() : null);
+    HttpVirtualHost host = new HttpVirtualHost(handler);
+    if (startSsl) {
+      host = host.ssl(TestHelper.getSSLInfo());
+    }
+    server.addHttpHost(HTTP_SERVER_NAME, host);
     if (startSsl) {
       server.listenHttpsLocal(HTTPS_PORT);
     } else {

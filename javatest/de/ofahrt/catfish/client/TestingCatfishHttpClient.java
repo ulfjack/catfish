@@ -137,7 +137,7 @@ public abstract class TestingCatfishHttpClient {
       connection.setReadTimeout(500);
       if (isSecure) {
         HttpsURLConnection sslconnection = (HttpsURLConnection) connection;
-        sslconnection.setSSLSocketFactory(TestHelper.getSSLContext().getSocketFactory());
+        sslconnection.setSSLSocketFactory(TestHelper.getSSLInfo().sslContext().getSocketFactory());
         sslconnection.setHostnameVerifier(
             new HostnameVerifier() {
               @Override

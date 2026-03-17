@@ -3,6 +3,7 @@ package de.ofahrt.catfish.integration;
 import static org.junit.Assert.assertEquals;
 
 import de.ofahrt.catfish.CatfishHttpServer;
+import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.client.CatfishHttpClient;
 import de.ofahrt.catfish.model.HttpHeaderName;
@@ -14,8 +15,6 @@ import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
-import de.ofahrt.catfish.model.server.ResponsePolicy;
-import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.util.List;
 import javax.net.ssl.SNIHostName;
@@ -51,10 +50,8 @@ public class CatfishHttpClientIntegrationTest {
             });
     server.addHttpHost(
         HOST,
-        UploadPolicy.DENY,
-        ResponsePolicy.KEEP_ALIVE,
-        (conn, req, writer) -> writer.commitBuffered(StandardResponses.OK),
-        TestHelper.getSSLContext());
+        new HttpVirtualHost((conn, req, writer) -> writer.commitBuffered(StandardResponses.OK))
+            .ssl(TestHelper.getSSLInfo()));
     server.listenHttpsLocal(HTTPS_PORT);
 
     client =
@@ -81,7 +78,7 @@ public class CatfishHttpClientIntegrationTest {
 
   @Test
   public void httpsGetReturns200() throws Exception {
-    SSLContext sslContext = TestHelper.getSSLContext();
+    SSLContext sslContext = TestHelper.getSSLInfo().sslContext();
     SSLParameters sslParameters = new SSLParameters();
     sslParameters.setServerNames(List.of(new SNIHostName(HOST)));
 

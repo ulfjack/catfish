@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 import de.ofahrt.catfish.CatfishHttpServer;
+import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.client.legacy.StatefulClient;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
@@ -11,11 +12,9 @@ import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
-import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.upload.SimpleUploadPolicy;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.net.ssl.SSLContext;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -52,7 +51,7 @@ public class StatefulClientIntegrationTest {
 
   private void startServer(de.ofahrt.catfish.model.server.HttpHandler handler) throws Exception {
     server.addHttpHost(
-        HOST, new SimpleUploadPolicy(1024), ResponsePolicy.KEEP_ALIVE, handler, (SSLContext) null);
+        HOST, new HttpVirtualHost(handler).uploadPolicy(new SimpleUploadPolicy(1024)));
     server.listenHttpLocal(HTTP_PORT);
   }
 

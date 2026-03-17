@@ -206,7 +206,7 @@ final class HttpServerStage implements Stage {
               if (host == null) {
                 return UploadPolicy.DENY.accept(builder);
               }
-              return host.getUploadPolicy().accept(builder);
+              return host.uploadPolicy().accept(builder);
             });
   }
 
@@ -319,8 +319,8 @@ final class HttpServerStage implements Stage {
       startBuffered(request, StandardResponses.NOT_FOUND);
       return ConnectionControl.CONTINUE;
     } else {
-      HttpResponseWriter writer = new HttpResponseWriterImpl(request, host.getResponsePolicy());
-      requestHandler.queueRequest(host.getHttpHandler(), connection, request, writer);
+      HttpResponseWriter writer = new HttpResponseWriterImpl(request, host.responsePolicy());
+      requestHandler.queueRequest(host.handler(), connection, request, writer);
       return ConnectionControl.PAUSE;
     }
   }

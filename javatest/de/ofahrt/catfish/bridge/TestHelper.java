@@ -1,15 +1,15 @@
 package de.ofahrt.catfish.bridge;
 
 import de.ofahrt.catfish.ssl.SSLContextFactory;
+import de.ofahrt.catfish.ssl.SSLInfo;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
-import javax.net.ssl.SSLContext;
 import javax.servlet.http.HttpSession;
 
 public class TestHelper {
 
-  public static SSLContext getSSLContext() {
+  public static SSLInfo getSSLInfo() {
     try {
       return SSLContextFactory.loadPkcs12(getTestCertificate());
     } catch (IOException | GeneralSecurityException e) {

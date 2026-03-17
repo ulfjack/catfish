@@ -24,13 +24,18 @@ import javax.net.ssl.TrustManagerFactory;
 
 public final class SSLContextFactory {
 
-  public static SSLContext loadPkcs12(InputStream certificate)
+  public static SSLInfo loadPkcs12(InputStream certificate)
       throws IOException, GeneralSecurityException {
     char[] password = "".toCharArray();
     KeyStore keyStore = KeyStore.getInstance("PKCS12");
     keyStore.load(certificate, password);
     if (keyStore.size() == 0) {
       throw new RuntimeException("Could not load key");
+    }
+    String alias = keyStore.aliases().nextElement();
+    Certificate cert = keyStore.getCertificate(alias);
+    if (!(cert instanceof X509Certificate x509cert)) {
+      throw new GeneralSecurityException("Certificate is not an X.509 certificate");
     }
     KeyManagerFactory keyManagerFactory =
         KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
@@ -41,7 +46,7 @@ public final class SSLContextFactory {
 
     SSLContext context = SSLContext.getInstance("TLS");
     context.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
-    return context;
+    return new SSLInfo(context, x509cert);
   }
 
   public static SSLInfo loadPemKeyAndCrtFiles(File sslKeyFile, File sslCrtFile)
