@@ -412,7 +412,7 @@ public final class ResponseImpl implements HttpServletResponse {
     setContentType(MimeType.TEXT_HTML.toString());
     String msg =
         "<html><head><meta http-equiv=\"refresh\" content=\"1; URL="
-            + location
+            + escapeHtmlAttribute(location)
             + "\"></head><body>REDIRECT</body></html>";
     HttpResponse response = commitResponse().withBody(msg.getBytes(StandardCharsets.UTF_8));
     responseWriter.commitBuffered(response);
@@ -451,5 +451,13 @@ public final class ResponseImpl implements HttpServletResponse {
       throw new IllegalStateException();
     }
     throw new UnsupportedOperationException();
+  }
+
+  private static String escapeHtmlAttribute(String value) {
+    return value
+        .replace("&", "&amp;")
+        .replace("\"", "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;");
   }
 }

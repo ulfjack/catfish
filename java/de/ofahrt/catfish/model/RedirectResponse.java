@@ -21,9 +21,17 @@ public final class RedirectResponse {
     try (PrintWriter writer =
         new PrintWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
       writer.append("<html><head><meta http-equiv=\"refresh\" content=\"1; URL=");
-      writer.append(destinationUrl);
+      writer.append(escapeHtmlAttribute(destinationUrl));
       writer.append("\"></head><body>REDIRECT</body></html>");
     }
     return out.toByteArray();
+  }
+
+  private static String escapeHtmlAttribute(String value) {
+    return value
+        .replace("&", "&amp;")
+        .replace("\"", "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;");
   }
 }

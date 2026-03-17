@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.model;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -38,5 +39,21 @@ public class RedirectResponseTest {
   public void bodyIsNotEmpty() {
     HttpResponse response = RedirectResponse.create(HttpStatusCode.MOVED_PERMANENTLY, "/x");
     assertTrue(response.getBody().length > 0);
+  }
+
+  @Test
+  public void bodyEscapesDoubleQuoteInUrl() {
+    HttpResponse response = RedirectResponse.create(HttpStatusCode.SEE_OTHER, "/p?a=\"b\"");
+    String body = new String(response.getBody(), java.nio.charset.StandardCharsets.UTF_8);
+    assertFalse(body.contains("/p?a=\"b\""));
+    assertTrue(body.contains("/p?a=&quot;b&quot;"));
+  }
+
+  @Test
+  public void bodyEscapesAmpersandInUrl() {
+    HttpResponse response = RedirectResponse.create(HttpStatusCode.SEE_OTHER, "/p?a=1&b=2");
+    String body = new String(response.getBody(), java.nio.charset.StandardCharsets.UTF_8);
+    assertFalse(body.contains("&b"));
+    assertTrue(body.contains("&amp;"));
   }
 }
