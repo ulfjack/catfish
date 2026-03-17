@@ -9,6 +9,7 @@ import org.junit.runners.Suite.SuiteClasses;
   ConnectionHandlingTest.class,
   MultiRunnerTest.class,
   BasicIntegrationTest.class,
+  CompressionIntegrationTest.class,
   HttpParserIntegrationTest.class,
   SslHttpParserIntegrationTest.class,
   CatfishHttpClientIntegrationTest.class,

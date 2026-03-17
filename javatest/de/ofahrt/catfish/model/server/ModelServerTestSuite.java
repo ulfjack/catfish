@@ -6,6 +6,8 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
 @SuiteClasses({
+  CompressionPolicyTest.class,
   DenyUploadPolicyTest.class,
+  KeepAlivePolicyTest.class,
 })
 public class ModelServerTestSuite {}

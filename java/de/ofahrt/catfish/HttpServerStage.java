@@ -13,9 +13,10 @@ import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
+import de.ofahrt.catfish.model.server.CompressionPolicy;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
-import de.ofahrt.catfish.model.server.ResponsePolicy;
+import de.ofahrt.catfish.model.server.KeepAlivePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import de.ofahrt.catfish.utils.HttpContentType;
@@ -62,12 +63,15 @@ final class HttpServerStage implements Stage {
 
   private final class HttpResponseWriterImpl implements HttpResponseWriter {
     private final HttpRequest request;
-    private final ResponsePolicy responsePolicy;
+    private final KeepAlivePolicy keepAlivePolicy;
+    private final CompressionPolicy compressionPolicy;
     private final AtomicBoolean committed = new AtomicBoolean();
 
-    HttpResponseWriterImpl(HttpRequest request, ResponsePolicy responsePolicy) {
+    HttpResponseWriterImpl(
+        HttpRequest request, KeepAlivePolicy keepAlivePolicy, CompressionPolicy compressionPolicy) {
       this.request = request;
-      this.responsePolicy = responsePolicy;
+      this.keepAlivePolicy = keepAlivePolicy;
+      this.compressionPolicy = compressionPolicy;
     }
 
     @Override
@@ -101,11 +105,7 @@ final class HttpServerStage implements Stage {
       overrides.put(
           HttpHeaderName.CONNECTION,
           shouldKeepAlive() ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
-      if (bodyAllowed) {
-        overrides.put(HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length));
-      }
-      boolean compress = (body.length >= 512) && shouldCompress(responseToWrite);
-      if (compress) {
+      if (shouldCompress(responseToWrite)) {
         overrides.put(HttpHeaderName.CONTENT_ENCODING, GZIP_ENCODING);
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         try (GZIPOutputStream gzip = new GZIPOutputStream(buffer)) {
@@ -113,7 +113,11 @@ final class HttpServerStage implements Stage {
         }
         body = buffer.toByteArray();
       }
-      responseToWrite = responseToWrite.withHeaderOverrides(HttpHeaders.of(overrides));
+      if (bodyAllowed) {
+        overrides.put(HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length));
+      }
+      responseToWrite =
+          responseToWrite.withHeaderOverrides(HttpHeaders.of(overrides)).withBody(body);
       boolean headRequest = HttpMethodName.HEAD.equals(request.getMethod());
       HttpResponse actualResponse = responseToWrite;
       // We want to create the ResponseGenerator on the current thread.
@@ -153,7 +157,7 @@ final class HttpServerStage implements Stage {
     }
 
     private boolean shouldKeepAlive() {
-      return HttpConnectionHeader.mayKeepAlive(request) && responsePolicy.shouldKeepAlive(request);
+      return HttpConnectionHeader.mayKeepAlive(request) && keepAlivePolicy.allowsKeepAlive();
     }
 
     private boolean shouldCompress(HttpResponse responseToWrite) {
@@ -166,7 +170,7 @@ final class HttpServerStage implements Stage {
       }
       try {
         String mimeType = HttpContentType.getMimeTypeFromContentType(contentType);
-        return responsePolicy.shouldCompress(request, mimeType);
+        return compressionPolicy.shouldCompress(request, mimeType);
       } catch (IllegalArgumentException e) {
         return false;
       }
@@ -319,7 +323,8 @@ final class HttpServerStage implements Stage {
       startBuffered(request, StandardResponses.NOT_FOUND);
       return ConnectionControl.CONTINUE;
     } else {
-      HttpResponseWriter writer = new HttpResponseWriterImpl(request, host.responsePolicy());
+      HttpResponseWriter writer =
+          new HttpResponseWriterImpl(request, host.keepAlivePolicy(), host.compressionPolicy());
       requestHandler.queueRequest(host.handler(), connection, request, writer);
       return ConnectionControl.PAUSE;
     }
