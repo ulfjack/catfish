@@ -96,11 +96,15 @@ public final class CatfishHttpServer {
   }
 
   public void addRequestListener(HttpServerListener l) {
-    listeners.add(l);
+    synchronized (listeners) {
+      listeners.add(l);
+    }
   }
 
   public void removeRequestListener(HttpServerListener l) {
-    listeners.remove(l);
+    synchronized (listeners) {
+      listeners.remove(l);
+    }
   }
 
   public String getServerName() {
@@ -108,8 +112,11 @@ public final class CatfishHttpServer {
   }
 
   void notifySent(Connection connection, HttpRequest request, HttpResponse response, int amount) {
-    for (int i = 0; i < listeners.size(); i++) {
-      HttpServerListener l = listeners.get(i);
+    HttpServerListener[] snapshot;
+    synchronized (listeners) {
+      snapshot = listeners.toArray(new HttpServerListener[0]);
+    }
+    for (HttpServerListener l : snapshot) {
       try {
         l.notifySent(connection, request, response, amount);
       } catch (Throwable error) {
