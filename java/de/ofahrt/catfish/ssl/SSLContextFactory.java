@@ -58,7 +58,10 @@ public final class SSLContextFactory {
     try (InputStream in = new FileInputStream(sslCrtFile)) {
       cert = readCertificate(in);
     }
-    X509Certificate x509cert = (cert instanceof X509Certificate) ? (X509Certificate) cert : null;
+    if (!(cert instanceof X509Certificate)) {
+      throw new GeneralSecurityException("Certificate is not an X.509 certificate");
+    }
+    X509Certificate x509cert = (X509Certificate) cert;
     KeyStore keyStore = KeyStore.getInstance("PKCS12");
     keyStore.load(null, null);
     keyStore.setKeyEntry("xyz", privateKey, "no-password".toCharArray(), new Certificate[] {cert});

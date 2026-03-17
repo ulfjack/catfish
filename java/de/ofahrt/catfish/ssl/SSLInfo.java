@@ -6,19 +6,22 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.net.ssl.SSLContext;
 
 public record SSLInfo(SSLContext sslContext, X509Certificate certificate) {
 
+  public SSLInfo {
+    Objects.requireNonNull(sslContext, "sslContext");
+    Objects.requireNonNull(certificate, "certificate");
+  }
+
   private static final Pattern CN_PATTERN = Pattern.compile("CN=([^,]+),");
 
   /** Returns the CN from the certificate's subject, or null if absent or no certificate. */
   public String certificateCommonName() {
-    if (certificate == null) {
-      return null;
-    }
     Matcher matcher = CN_PATTERN.matcher(certificate.getSubjectX500Principal().toString());
     return matcher.find() ? matcher.group(1) : null;
   }
@@ -28,7 +31,7 @@ public record SSLInfo(SSLContext sslContext, X509Certificate certificate) {
    * DNS Subject Alternative Names first; falls back to CN only if no DNS SANs are present.
    */
   public boolean covers(String hostname) {
-    if (hostname == null || certificate == null) {
+    if (hostname == null) {
       return false;
     }
     String lowerHostname = hostname.toLowerCase(Locale.ROOT);

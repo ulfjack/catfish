@@ -3,7 +3,6 @@ package de.ofahrt.catfish.ssl;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -13,23 +12,9 @@ import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.ResponsePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import java.io.File;
-import javax.net.ssl.SSLContext;
 import org.junit.Test;
 
 public class SSLContextFactoryTest {
-
-  @Test
-  public void sslInfo_sslContext() throws Exception {
-    SSLContext ctx = SSLContext.getInstance("TLS");
-    SSLInfo info = new SSLInfo(ctx, null);
-    assertSame(ctx, info.sslContext());
-  }
-
-  @Test
-  public void sslInfo_certificateCommonName_nullCert() throws Exception {
-    SSLInfo info = new SSLInfo(null, null);
-    assertEquals(null, info.certificateCommonName());
-  }
 
   @Test
   public void loadPemKeyAndCrtFiles_returnsSslInfo() throws Exception {
