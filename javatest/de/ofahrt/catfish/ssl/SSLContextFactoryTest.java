@@ -21,15 +21,14 @@ public class SSLContextFactoryTest {
   @Test
   public void sslInfo_sslContext() throws Exception {
     SSLContext ctx = SSLContext.getInstance("TLS");
-    SSLInfo info = new SSLInfo(ctx, "example.com", null);
+    SSLInfo info = new SSLInfo(ctx, null);
     assertSame(ctx, info.sslContext());
   }
 
   @Test
-  public void sslInfo_certificateCommonName() throws Exception {
-    SSLContext ctx = SSLContext.getInstance("TLS");
-    SSLInfo info = new SSLInfo(ctx, "example.com", null);
-    assertEquals("example.com", info.certificateCommonName());
+  public void sslInfo_certificateCommonName_nullCert() throws Exception {
+    SSLInfo info = new SSLInfo(null, null);
+    assertEquals(null, info.certificateCommonName());
   }
 
   @Test

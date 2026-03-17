@@ -18,8 +18,6 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.RSAPrivateKeySpec;
 import java.util.Base64;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
@@ -46,8 +44,6 @@ public final class SSLContextFactory {
     return context;
   }
 
-  private static final Pattern CN_PATTERN = Pattern.compile("CN=([^,]+),");
-
   public static SSLInfo loadPemKeyAndCrtFiles(File sslKeyFile, File sslCrtFile)
       throws IOException, GeneralSecurityException {
     byte[] keyData;
@@ -63,13 +59,6 @@ public final class SSLContextFactory {
       cert = readCertificate(in);
     }
     X509Certificate x509cert = (cert instanceof X509Certificate) ? (X509Certificate) cert : null;
-    String certificateCommonName = null;
-    if (x509cert != null) {
-      Matcher matcher = CN_PATTERN.matcher(x509cert.getSubjectX500Principal().toString());
-      if (matcher.find()) {
-        certificateCommonName = matcher.group(1);
-      }
-    }
     KeyStore keyStore = KeyStore.getInstance("PKCS12");
     keyStore.load(null, null);
     keyStore.setKeyEntry("xyz", privateKey, "no-password".toCharArray(), new Certificate[] {cert});
@@ -82,7 +71,7 @@ public final class SSLContextFactory {
     SSLContext sslContext = SSLContext.getInstance("TLS");
     sslContext.init(
         keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
-    return new SSLInfo(sslContext, certificateCommonName, x509cert);
+    return new SSLInfo(sslContext, x509cert);
   }
 
   private static Certificate readCertificate(InputStream in)
