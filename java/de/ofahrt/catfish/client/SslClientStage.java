@@ -148,7 +148,7 @@ final class SslClientStage implements Stage {
     if (sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP) {
       return ConnectionControl.CONTINUE;
     }
-    return nextState;
+    return outputBuffer.hasRemaining() ? ConnectionControl.CONTINUE : nextState;
   }
 
   @Override

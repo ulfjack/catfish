@@ -34,12 +34,14 @@ public final class SSLContextFactory {
     if (keyStore.size() == 0) {
       throw new RuntimeException("Could not load key");
     }
-    KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance("SunX509");
+    KeyManagerFactory keyManagerFactory =
+        KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
     keyManagerFactory.init(keyStore, password);
-    TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance("SunX509");
+    TrustManagerFactory trustManagerFactory =
+        TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
     trustManagerFactory.init(keyStore);
 
-    SSLContext context = SSLContext.getInstance("TLSv1.2");
+    SSLContext context = SSLContext.getInstance("TLS");
     context.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
     return context;
   }
@@ -71,11 +73,13 @@ public final class SSLContextFactory {
     KeyStore keyStore = KeyStore.getInstance("PKCS12");
     keyStore.load(null, null);
     keyStore.setKeyEntry("xyz", privateKey, "no-password".toCharArray(), new Certificate[] {cert});
-    KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance("SunX509");
+    KeyManagerFactory keyManagerFactory =
+        KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
     keyManagerFactory.init(keyStore, "no-password".toCharArray());
-    TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance("SunX509");
+    TrustManagerFactory trustManagerFactory =
+        TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
     trustManagerFactory.init(keyStore);
-    SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
+    SSLContext sslContext = SSLContext.getInstance("TLS");
     sslContext.init(
         keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
     return new SSLInfo(sslContext, certificateCommonName);
