@@ -20,8 +20,8 @@ final class LocalCatfishServer implements Server {
   private static final boolean DEBUG = false;
 
   public static final String HTTP_SERVER = "localhost";
-  public static final int HTTP_PORT = 8080;
-  public static final int HTTPS_PORT = 8081;
+  public static final int HTTP_PORT = 9080;
+  public static final int HTTPS_PORT = 9081;
   public static final String HTTP_ROOT = "http://localhost:" + HTTP_PORT;
   public static final String HTTPS_ROOT = "https://localhost:" + HTTPS_PORT;
 

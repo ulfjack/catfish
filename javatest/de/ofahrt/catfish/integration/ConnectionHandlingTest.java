@@ -36,8 +36,8 @@ public class ConnectionHandlingTest {
   private static final boolean DEBUG = false;
 
   private static final String HTTP_SERVER_NAME = "localhost";
-  private static final int HTTP_PORT = 8080;
-  private static final int HTTPS_PORT = 8081;
+  private static final int HTTP_PORT = 9080;
+  private static final int HTTPS_PORT = 9081;
 
   private CatfishHttpServer server;
 
