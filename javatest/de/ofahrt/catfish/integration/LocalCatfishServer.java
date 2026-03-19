@@ -51,8 +51,7 @@ final class LocalCatfishServer implements Server {
   private boolean startSsl;
   private UploadPolicy uploadPolicy = UploadPolicy.DENY;
 
-  public LocalCatfishServer() throws IOException {
-  }
+  public LocalCatfishServer() throws IOException {}
 
   public LocalCatfishServer setUploadPolicy(UploadPolicy uploadPolicy) {
     this.uploadPolicy = uploadPolicy;

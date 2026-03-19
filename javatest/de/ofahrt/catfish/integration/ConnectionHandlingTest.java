@@ -91,20 +91,17 @@ public class ConnectionHandlingTest {
         new CatfishHttpServer(
             new NetworkEventListener() {
               @Override
-              public void shutdown() {
-              }
+              public void shutdown() {}
 
               @Override
-              public void portOpened(int port, boolean ssl) {
-              }
+              public void portOpened(int port, boolean ssl) {}
 
               @Override
               public void notifyInternalError(Connection id, Throwable throwable) {
                 throwable.printStackTrace();
               }
             });
-    HttpVirtualHost host =
-        new HttpVirtualHost(handler).uploadPolicy(uploadPolicy);
+    HttpVirtualHost host = new HttpVirtualHost(handler).uploadPolicy(uploadPolicy);
     server.addHttpHost(HTTP_SERVER_NAME, host);
     server.listenHttpLocal(HTTP_PORT);
   }
@@ -131,12 +128,10 @@ public class ConnectionHandlingTest {
         new CatfishHttpClient(
             new NetworkEventListener() {
               @Override
-              public void portOpened(int port, boolean ssl) {
-              }
+              public void portOpened(int port, boolean ssl) {}
 
               @Override
-              public void shutdown() {
-              }
+              public void shutdown() {}
 
               @Override
               public void notifyInternalError(Connection id, Throwable throwable) {

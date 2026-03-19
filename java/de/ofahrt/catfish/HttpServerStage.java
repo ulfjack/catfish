@@ -19,12 +19,14 @@ import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.KeepAlivePolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import de.ofahrt.catfish.utils.HttpContentType;
+import de.ofahrt.catfish.utils.HttpDate;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -43,8 +45,8 @@ final class HttpServerStage implements Stage {
 
   /**
    * A minimal response generator that writes a {@code 100 Continue} preliminary response. This
-   * generator does not represent a final response, so {@link #getRequest()} and
-   * {@link #getResponse()} both return null.
+   * generator does not represent a final response, so {@link #getRequest()} and {@link
+   * #getResponse()} both return null.
    */
   private static final class ContinueResponseGenerator extends HttpResponseGenerator {
 
@@ -71,8 +73,7 @@ final class HttpServerStage implements Stage {
     }
 
     @Override
-    public void close() {
-    }
+    public void close() {}
 
     @Override
     public boolean keepAlive() {
@@ -153,6 +154,7 @@ final class HttpServerStage implements Stage {
       overrides.put(
           HttpHeaderName.CONNECTION,
           shouldKeepAlive() ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
+      overrides.put(HttpHeaderName.DATE, HttpDate.formatDate(Instant.now()));
       if (shouldCompress(responseToWrite)) {
         overrides.put(HttpHeaderName.CONTENT_ENCODING, GZIP_ENCODING);
         overrides.put(HttpHeaderName.VARY, HttpHeaderName.ACCEPT_ENCODING);
@@ -192,6 +194,7 @@ final class HttpServerStage implements Stage {
       overrides.put(
           HttpHeaderName.CONNECTION,
           shouldKeepAlive() ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
+      overrides.put(HttpHeaderName.DATE, HttpDate.formatDate(Instant.now()));
       boolean compress = shouldCompress(responseToWrite);
       if (compress) {
         overrides.put(HttpHeaderName.CONTENT_ENCODING, GZIP_ENCODING);
@@ -448,7 +451,7 @@ final class HttpServerStage implements Stage {
         .withBody(baos.toByteArray());
   }
 
-  private final void startStreamed(HttpResponseGeneratorStreamed gen) {
+  private void startStreamed(HttpResponseGeneratorStreamed gen) {
     this.responseGenerator = gen;
     this.keepAlive = responseGenerator.keepAlive();
     HttpResponse response = responseGenerator.getResponse();
@@ -474,11 +477,13 @@ final class HttpServerStage implements Stage {
                 HttpHeaderName.CONNECTION,
                 HttpConnectionHeader.CLOSE,
                 HttpHeaderName.CONTENT_LENGTH,
-                Integer.toString(body.length)));
+                Integer.toString(body.length),
+                HttpHeaderName.DATE,
+                HttpDate.formatDate(Instant.now())));
     startBuffered(HttpResponseGeneratorBuffered.createWithBody(request, response));
   }
 
-  private final void startBuffered(HttpResponseGeneratorBuffered gen) {
+  private void startBuffered(HttpResponseGeneratorBuffered gen) {
     this.responseGenerator = gen;
     this.keepAlive = responseGenerator.keepAlive();
     HttpResponse response = responseGenerator.getResponse();

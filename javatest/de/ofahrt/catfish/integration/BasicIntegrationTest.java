@@ -107,6 +107,32 @@ public class BasicIntegrationTest {
   }
 
   @Test
+  public void dateHeaderPresentOnCoreResponse() throws IOException {
+    // Core startBuffered path: GET * is rejected by HttpServerStage before reaching a handler.
+    HttpResponse response = localServer.send("GET * HTTP/1.1\nHost: localhost\n\n");
+    assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+    assertNotNull(response.getHeaders().get(HttpHeaderName.DATE));
+  }
+
+  @Test
+  public void dateHeaderPresentOnBufferedResponse() throws IOException {
+    // commitBuffered path: DELETE is not implemented by the servlet, so the default
+    // HttpServlet.doDelete() calls response.sendError(405) -> ResponseImpl.sendError()
+    // -> responseWriter.commitBuffered().
+    HttpResponse response = localServer.send("DELETE / HTTP/1.1\nHost: localhost\n\n");
+    assertEquals(HttpStatusCode.METHOD_NOT_ALLOWED.getStatusCode(), response.getStatusCode());
+    assertNotNull(response.getHeaders().get(HttpHeaderName.DATE));
+  }
+
+  @Test
+  public void dateHeaderPresentOnStreamedResponse() throws IOException {
+    // commitStreamed path: HttpRequestTestServlet uses getOutputStream().
+    HttpResponse response = localServer.send("GET / HTTP/1.1\nHost: localhost\n\n");
+    assertEquals(HttpStatusCode.OK.getStatusCode(), response.getStatusCode());
+    assertNotNull(response.getHeaders().get(HttpHeaderName.DATE));
+  }
+
+  @Test
   public void doubleGetInOnePacket() throws Exception {
     try (HttpConnection connection = localServer.connect(/* ssl= */ false)) {
       connection.write(
