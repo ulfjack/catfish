@@ -6,9 +6,10 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
 @SuiteClasses({
+  BasicIntegrationTest.class,
+  ChunkedBodyIntegrationTest.class,
   ConnectionHandlingTest.class,
   MultiRunnerTest.class,
-  BasicIntegrationTest.class,
   CompressionIntegrationTest.class,
   HttpParserIntegrationTest.class,
   SslHttpParserIntegrationTest.class,

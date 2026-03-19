@@ -6,6 +6,8 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
 @SuiteClasses({
+  ChunkedBodyParserTest.class,
+  ChunkedBodyParserIncrementalTest.class,
   FormDataBodyTest.class,
   FormEntryTest.class,
   IncrementalMultipartParserTest.class,

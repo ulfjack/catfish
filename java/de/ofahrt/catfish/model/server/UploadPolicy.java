@@ -6,6 +6,9 @@ public interface UploadPolicy {
   /** Reject all uploads. */
   UploadPolicy DENY = request -> false;
 
+  /** Accept all uploads. */
+  UploadPolicy ALLOW = request -> true;
+
   /**
    * Returns true if the upload described by {@code request} should be accepted. Returning false
    * causes a 413 PAYLOAD_TOO_LARGE response. When this method is called, the request has complete
