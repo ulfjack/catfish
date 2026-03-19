@@ -6,6 +6,7 @@ import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.client.CatfishHttpClient;
+import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -16,7 +17,6 @@ import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.HttpHandler;
-import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -150,10 +150,10 @@ public class ConnectionHandlingTest {
                 }
               });
         });
-    try (HttpConnection conn =
-        HttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT, null)) {
-      conn.write(("GET / HTTP/1.1\r\nHost: " + HTTP_SERVER_NAME + "\r\nConnection: close\r\n\r\n")
-          .getBytes("ISO-8859-1"));
+    try (HttpConnection conn = HttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT, null)) {
+      conn.write(
+          ("GET / HTTP/1.1\r\nHost: " + HTTP_SERVER_NAME + "\r\nConnection: close\r\n\r\n")
+              .getBytes("ISO-8859-1"));
       HttpResponse response = conn.readResponse();
       assertEquals(200, response.getStatusCode());
     }

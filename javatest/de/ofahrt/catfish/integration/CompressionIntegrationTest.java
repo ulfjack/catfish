@@ -94,8 +94,7 @@ public class CompressionIntegrationTest {
     byte[] gzipped = response.getBody();
     assertNotNull(gzipped);
     assertEquals(
-        Integer.toString(gzipped.length),
-        response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
+        Integer.toString(gzipped.length), response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
     try (GZIPInputStream in = new GZIPInputStream(new ByteArrayInputStream(gzipped))) {
       String decompressed = new String(in.readAllBytes(), StandardCharsets.UTF_8);
       assertEquals(LARGE_BODY, decompressed);
