@@ -33,7 +33,8 @@ public final class DirectoryHandler implements HttpHandler {
   public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter)
       throws IOException {
     if (!HttpMethodName.GET.equals(request.getMethod())) {
-      responseWriter.commitBuffered(StandardResponses.METHOD_NOT_ALLOWED);
+      responseWriter.commitBuffered(
+          StandardResponses.methodNotAllowed().allowing(HttpMethodName.GET));
       return;
     }
 

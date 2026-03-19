@@ -57,4 +57,36 @@ public class StandardResponsesTest {
   public void permanentRedirectUnmodifiedToReturns308() {
     assertEquals(308, StandardResponses.permanentRedirectUnmodifiedTo("/dest").getStatusCode());
   }
+
+  @Test
+  public void methodNotAllowedReturns405() {
+    assertEquals(405, StandardResponses.methodNotAllowed().allowing("GET").getStatusCode());
+  }
+
+  @Test
+  public void methodNotAllowedSetsAllowHeaderSingleMethod() {
+    assertEquals(
+        "GET",
+        StandardResponses.methodNotAllowed()
+            .allowing("GET")
+            .getHeaders()
+            .get(HttpHeaderName.ALLOW));
+  }
+
+  @Test
+  public void methodNotAllowedSetsAllowHeaderMultipleMethods() {
+    assertEquals(
+        "GET, POST",
+        StandardResponses.methodNotAllowed()
+            .allowing("GET", "POST")
+            .getHeaders()
+            .get(HttpHeaderName.ALLOW));
+  }
+
+  @Test
+  public void methodNotAllowedReturnsDifferentInstancePerCall() {
+    assertNotSame(
+        StandardResponses.methodNotAllowed().allowing("GET"),
+        StandardResponses.methodNotAllowed().allowing("GET"));
+  }
 }

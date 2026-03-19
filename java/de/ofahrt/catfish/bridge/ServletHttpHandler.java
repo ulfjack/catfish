@@ -27,7 +27,8 @@ public final class ServletHttpHandler implements HttpHandler {
   public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter)
       throws IOException {
     if (HttpMethodName.OPTIONS.equals(request.getMethod()) && "*".equals(request.getUri())) {
-      responseWriter.commitBuffered(StandardResponses.METHOD_NOT_ALLOWED);
+      responseWriter.commitBuffered(
+          StandardResponses.methodNotAllowed().allowing(HttpMethodName.GET, HttpMethodName.POST));
       return;
     }
     String path = getPath(request);

@@ -23,9 +23,20 @@ public final class StandardResponses {
       new PreconstructedResponse(HttpStatusCode.FORBIDDEN); // 403
   public static final HttpResponse NOT_FOUND =
       new PreconstructedResponse(HttpStatusCode.NOT_FOUND); // 404
-  // TODO: According to the spec, a list of allowed methods must be provided.
-  public static final HttpResponse METHOD_NOT_ALLOWED =
-      new PreconstructedResponse(HttpStatusCode.METHOD_NOT_ALLOWED); // 405
+
+  public static MethodNotAllowedBuilder methodNotAllowed() {
+    return new MethodNotAllowedBuilder();
+  }
+
+  public static final class MethodNotAllowedBuilder {
+    private MethodNotAllowedBuilder() {}
+
+    public HttpResponse allowing(String... allowedMethods) {
+      HttpHeaders headers = HttpHeaders.of(HttpHeaderName.ALLOW, String.join(", ", allowedMethods));
+      return new PreconstructedResponse(HttpStatusCode.METHOD_NOT_ALLOWED, headers);
+    }
+  }
+
   public static final HttpResponse NOT_ACCEPTABLE =
       new PreconstructedResponse(HttpStatusCode.NOT_ACCEPTABLE); // 406
   public static final HttpResponse PROXY_AUTH_REQUIRED =
