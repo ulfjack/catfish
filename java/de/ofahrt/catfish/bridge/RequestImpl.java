@@ -19,6 +19,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.security.Principal;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -433,7 +434,8 @@ public final class RequestImpl implements HttpServletRequest {
     if (value == null) {
       return -1;
     }
-    return HttpDate.parseDate(value);
+    Instant instant = HttpDate.parseDate(value);
+    return instant != null ? instant.toEpochMilli() : -1;
   }
 
   @Override

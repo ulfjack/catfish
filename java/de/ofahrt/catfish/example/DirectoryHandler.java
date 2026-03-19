@@ -17,6 +17,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
+import java.time.Instant;
 import java.net.URISyntaxException;
 
 public final class DirectoryHandler implements HttpHandler {
@@ -51,7 +52,7 @@ public final class DirectoryHandler implements HttpHandler {
       return;
     }
 
-    long lastModified = f.lastModified();
+    Instant lastModified = Instant.ofEpochMilli(f.lastModified());
     HttpHeaders headers =
         HttpHeaders.of(
             HttpHeaderName.LAST_MODIFIED, HttpDate.formatDate(lastModified),
@@ -59,8 +60,8 @@ public final class DirectoryHandler implements HttpHandler {
 
     String ifModifiedSinceText = request.getHeaders().get(HttpHeaderName.IF_MODIFIED_SINCE);
     if (ifModifiedSinceText != null) {
-      long ifModifiedSince = HttpDate.parseDate(ifModifiedSinceText);
-      if (ifModifiedSince >= lastModified) {
+      Instant ifModifiedSince = HttpDate.parseDate(ifModifiedSinceText);
+      if (ifModifiedSince != null && !ifModifiedSince.isBefore(lastModified)) {
         HttpResponse response = StandardResponses.NOT_MODIFIED.withHeaderOverrides(headers);
         responseWriter.commitBuffered(response);
         return;

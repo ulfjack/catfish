@@ -15,6 +15,7 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.Charset;
+import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Locale;
@@ -335,7 +336,7 @@ public final class ResponseImpl implements HttpServletResponse {
     if (isCommitted) {
       throw new IllegalStateException();
     }
-    addHeader(canonicalize(name), HttpDate.formatDate(date));
+    addHeader(canonicalize(name), HttpDate.formatDate(Instant.ofEpochMilli(date)));
   }
 
   @Override
@@ -420,7 +421,7 @@ public final class ResponseImpl implements HttpServletResponse {
 
   @Override
   public void setDateHeader(String name, long date) {
-    setHeaderInternal(name, HttpDate.formatDate(date));
+    setHeaderInternal(name, HttpDate.formatDate(Instant.ofEpochMilli(date)));
   }
 
   @Override
