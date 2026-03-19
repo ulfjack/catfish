@@ -2,9 +2,10 @@ package de.ofahrt.catfish.model.server;
 
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.utils.HttpAcceptEncoding;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Locale;
+import java.util.List;
 import java.util.Set;
 
 public interface CompressionPolicy {
@@ -38,7 +39,8 @@ public interface CompressionPolicy {
             return false;
           }
           String acceptEncoding = request.getHeaders().get(HttpHeaderName.ACCEPT_ENCODING);
-          return acceptEncoding != null && acceptEncoding.toLowerCase(Locale.US).contains("gzip");
+          return acceptEncoding != null
+              && HttpAcceptEncoding.parse(acceptEncoding).recommend(List.of("gzip")).isPresent();
         }
       };
 

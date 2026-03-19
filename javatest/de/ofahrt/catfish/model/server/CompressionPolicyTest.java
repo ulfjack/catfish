@@ -77,4 +77,18 @@ public class CompressionPolicyTest {
         CompressionPolicy.COMPRESS.shouldCompress(
             requestWith("Accept-Encoding", "deflate, gzip"), "text/html"));
   }
+
+  @Test
+  public void compress_gzipQ0_doesNotCompress() throws MalformedRequestException {
+    assertFalse(
+        CompressionPolicy.COMPRESS.shouldCompress(
+            requestWith("Accept-Encoding", "gzip;q=0"), "text/html"));
+  }
+
+  @Test
+  public void compress_wildcardAcceptEncoding_compresses() throws MalformedRequestException {
+    assertTrue(
+        CompressionPolicy.COMPRESS.shouldCompress(
+            requestWith("Accept-Encoding", "*"), "text/html"));
+  }
 }
