@@ -31,7 +31,7 @@ public final class CatfishHttpServer {
   private final ArrayList<HttpServerListener> listeners = new ArrayList<>();
   private final NetworkEngine engine;
 
-  private final ThreadPoolExecutor executor =
+  final ThreadPoolExecutor executor =
       new ThreadPoolExecutor(
           8,
           8,

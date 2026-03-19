@@ -40,6 +40,7 @@ final class HttpServerHandler implements NetworkHandler {
           pipeline,
           httpStage,
           server::getSSLContext,
+          server.executor,
           inputBuffer,
           outputBuffer,
           decryptedInputBuffer,

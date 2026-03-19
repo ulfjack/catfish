@@ -5,6 +5,7 @@ import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.network.Connection;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.Executor;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
@@ -27,6 +28,7 @@ final class SslServerStage implements Stage {
   }
 
   private final SSLContextProvider contextProvider;
+  private final Executor taskExecutor;
   private final Pipeline parent;
   private final Stage next;
   private final ByteBuffer netInputBuffer;
@@ -36,16 +38,19 @@ final class SslServerStage implements Stage {
   private InitialConnectionState postHandshakeState;
   private FlowStatus status = FlowStatus.FIND_SNI;
   private SSLEngine sslEngine;
+  private volatile boolean taskPending = false;
 
   public SslServerStage(
       Pipeline parent,
       Stage next,
       SSLContextProvider contextProvider,
+      Executor taskExecutor,
       ByteBuffer netInputBuffer,
       ByteBuffer netOutputBuffer,
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer) {
     this.contextProvider = contextProvider;
+    this.taskExecutor = taskExecutor;
     this.parent = parent;
     this.next = next;
     this.netInputBuffer = netInputBuffer;
@@ -62,9 +67,21 @@ final class SslServerStage implements Stage {
 
   private void checkStatus() {
     if (sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_TASK) {
-      parent.log("SSL running task");
-      sslEngine.getDelegatedTask().run();
-      parent.log("SSL task done -> %s", sslEngine.getHandshakeStatus());
+      Runnable task = sslEngine.getDelegatedTask();
+      taskPending = true;
+      parent.log("SSL scheduling task");
+      taskExecutor.execute(
+          () -> {
+            task.run();
+            taskPending = false;
+            HandshakeStatus hs = sslEngine.getHandshakeStatus();
+            parent.log("SSL task done -> %s", hs);
+            if (hs == HandshakeStatus.NEED_WRAP) {
+              parent.encourageWrites();
+            } else {
+              parent.encourageReads();
+            }
+          });
     }
   }
 
@@ -106,6 +123,7 @@ final class SslServerStage implements Stage {
       findSni();
       return status == FlowStatus.SEND_ALERT ? ConnectionControl.PAUSE : ConnectionControl.CONTINUE;
     } else if (status == FlowStatus.HANDSHAKE) {
+      if (taskPending) return ConnectionControl.PAUSE;
       parent.log(
           "SSL Read: HandshakeStatus=%s, net=%d",
           sslEngine.getHandshakeStatus(), Integer.valueOf(netInputBuffer.remaining()));
