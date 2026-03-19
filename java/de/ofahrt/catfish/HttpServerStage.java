@@ -98,7 +98,7 @@ final class HttpServerStage implements Stage {
         body = EMPTY_BODY;
       }
       if (body == null) {
-        throw new IllegalArgumentException("Buffered responses must have a non-null body");
+        body = EMPTY_BODY;
       }
 
       Map<String, String> overrides = new HashMap<>();

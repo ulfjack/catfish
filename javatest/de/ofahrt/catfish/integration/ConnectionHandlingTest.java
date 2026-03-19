@@ -16,6 +16,7 @@ import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.HttpHandler;
+import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -135,6 +136,27 @@ public class ConnectionHandlingTest {
     }
     assertEquals(136, statusCounts[2]); // 128 buffered + 8 threads = 136 OK
     assertEquals(64, statusCounts[5]); // 64 Internal Server Error
+  }
+
+  @Test
+  public void commitBufferedWithNullBody() throws Exception {
+    startServer(
+        (connection, request, responseWriter) -> {
+          responseWriter.commitBuffered(
+              new HttpResponse() {
+                @Override
+                public int getStatusCode() {
+                  return 200;
+                }
+              });
+        });
+    try (HttpConnection conn =
+        HttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT, null)) {
+      conn.write(("GET / HTTP/1.1\r\nHost: " + HTTP_SERVER_NAME + "\r\nConnection: close\r\n\r\n")
+          .getBytes("ISO-8859-1"));
+      HttpResponse response = conn.readResponse();
+      assertEquals(200, response.getStatusCode());
+    }
   }
 
   public static int getStatusGroup(int code) {
