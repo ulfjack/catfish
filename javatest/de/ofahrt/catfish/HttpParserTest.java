@@ -48,14 +48,13 @@ public abstract class HttpParserTest {
 
   @Test
   public void zeroMajorVersion() throws Exception {
-    HttpRequest request = parse("GET / HTTP/0.7\nHost: localhost\n\n");
-    assertEquals(HttpVersion.of(0, 7), request.getVersion());
+    checkError("505 Http version not supported", "GET / HTTP/0.7\n\n");
   }
 
   @Test // Leading zeros MUST be ignored by recipients.
   public void ignoreLeadingZerosInMajorVersion() throws Exception {
-    HttpRequest request = parse("GET / HTTP/01.0\nHost: localhost\n\n");
-    assertEquals(HttpVersion.HTTP_1_0, request.getVersion());
+    HttpRequest request = parse("GET / HTTP/01.1\nHost: localhost\n\n");
+    assertEquals(HttpVersion.HTTP_1_1, request.getVersion());
   }
 
   @Test
@@ -157,7 +156,7 @@ public abstract class HttpParserTest {
   // Catfish-specific tests:
   @Test
   public void starIsValidUriForOptions() throws Exception {
-    HttpRequest request = parse("OPTIONS * HTTP/1.0\n\n");
+    HttpRequest request = parse("OPTIONS * HTTP/1.1\nHost: localhost\n\n");
     assertEquals("*", request.getUri());
   }
 
@@ -200,7 +199,7 @@ public abstract class HttpParserTest {
   public void badLineBreak() throws Exception {
     checkError(
         "400 Expected <lf> following <cr>",
-        "GET / HTTP/1.0\r\r".getBytes(Charset.forName("ISO-8859-1")));
+        "GET / HTTP/1.1\r\r".getBytes(Charset.forName("ISO-8859-1")));
   }
 
   @Test
@@ -217,7 +216,7 @@ public abstract class HttpParserTest {
 
   @Test
   public void badUriSyntax() throws Exception {
-    checkError("400 Malformed URI", "GET 12:/path HTTP/1.0\n\n");
+    checkError("400 Malformed URI", "GET 12:/path HTTP/1.1\n\n");
   }
 
   @Test
@@ -229,22 +228,24 @@ public abstract class HttpParserTest {
     checkError("400 Http major version is too long", "GET / HTTP/12345678.1\n\n");
     checkError("400 Http minor version is too long", "GET / HTTP/1.12345678\n\n");
     checkError("505 Http version not supported", "GET / HTTP/2.0\n\n");
+    checkError("505 Http version not supported", "GET / HTTP/1.0\n\n");
+    checkError("505 Http version not supported", "GET / HTTP/0.9\n\n");
   }
 
   @Test
   public void badHeader() throws Exception {
-    checkError("400 Expected header field name, but ':' found", "GET / HTTP/1.0\n: value\n\n");
-    checkError("400 Unexpected end of line in header field name", "GET / HTTP/1.0\nUser-Agent\n\n");
-    checkError("400 Illegal character in header field name", "GET / HTTP/1.0\nUser-Agent :\n\n");
+    checkError("400 Expected header field name, but ':' found", "GET / HTTP/1.1\n: value\n\n");
+    checkError("400 Unexpected end of line in header field name", "GET / HTTP/1.1\nUser-Agent\n\n");
+    checkError("400 Illegal character in header field name", "GET / HTTP/1.1\nUser-Agent :\n\n");
     checkError(
-        "400 Illegal character in header field name", "GET / HTTP/1.0\nUser-Agent: A\n{\n\n");
+        "400 Illegal character in header field name", "GET / HTTP/1.1\nUser-Agent: A\n{\n\n");
   }
 
   @Test
   public void badContentLength() throws Exception {
     checkError(
-        "400 Illegal content length value", "GET / HTTP/1.0\nContent-Length: notanumber\n\n");
-    checkError("413 Payload Too Large", "GET / HTTP/1.0\nContent-Length: 123456789\n\n");
+        "400 Illegal content length value", "GET / HTTP/1.1\nContent-Length: notanumber\n\n");
+    checkError("413 Payload Too Large", "GET / HTTP/1.1\nContent-Length: 123456789\n\n");
   }
 
   @Test

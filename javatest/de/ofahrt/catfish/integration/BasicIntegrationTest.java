@@ -137,8 +137,7 @@ public class BasicIntegrationTest {
   @Test
   public void upwardsUrl() throws Exception {
     HttpResponse response = localServer.send("GET ../ HTTP/1.0\n\n");
-    // No Host header → no matching virtual host → 421. Ideally this would be 400 (malformed URI).
-    assertEquals(HttpStatusCode.MISDIRECTED_REQUEST.getStatusCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.VERSION_NOT_SUPPORTED.getStatusCode(), response.getStatusCode());
   }
 
   @Test

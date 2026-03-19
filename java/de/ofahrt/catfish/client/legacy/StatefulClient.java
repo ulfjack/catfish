@@ -4,6 +4,7 @@ import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.IOException;
@@ -50,6 +51,7 @@ public final class StatefulClient {
 
   public HttpResponse get(String url) throws IOException {
     SimpleHttpRequest.Builder requestBuilder = new SimpleHttpRequest.Builder();
+    requestBuilder.setVersion(HttpVersion.HTTP_1_1);
     requestBuilder.setMethod(HttpMethodName.GET);
     requestBuilder.setUri(url);
     requestBuilder.addHeader(HttpHeaderName.HOST, hostname);
@@ -62,6 +64,7 @@ public final class StatefulClient {
 
   public HttpResponse post(String url, Map<String, String> postData) throws IOException {
     SimpleHttpRequest.Builder requestBuilder = new SimpleHttpRequest.Builder();
+    requestBuilder.setVersion(HttpVersion.HTTP_1_1);
     requestBuilder.setMethod(HttpMethodName.POST);
     requestBuilder.setUri(url);
     requestBuilder.addHeader(HttpHeaderName.HOST, hostname);

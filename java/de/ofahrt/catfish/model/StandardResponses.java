@@ -70,6 +70,8 @@ public final class StandardResponses {
       new PreconstructedResponse(HttpStatusCode.INTERNAL_SERVER_ERROR); // 500
   public static final HttpResponse NOT_IMPLEMENTED =
       new PreconstructedResponse(HttpStatusCode.NOT_IMPLEMENTED); // 501
+  public static final HttpResponse VERSION_NOT_SUPPORTED =
+      new PreconstructedResponse(HttpStatusCode.VERSION_NOT_SUPPORTED); // 505
   public static final HttpResponse SERVICE_UNAVAILABLE =
       new PreconstructedResponse(HttpStatusCode.SERVICE_UNAVAILABLE); // 503
 

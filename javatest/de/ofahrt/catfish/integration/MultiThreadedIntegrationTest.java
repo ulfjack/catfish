@@ -39,7 +39,7 @@ public class MultiThreadedIntegrationTest {
             public void run() {
               try {
                 Thread.sleep((int) (Math.random() * 1400));
-                HttpResponse response = localServer.send("GET / HTTP/1.0\n\n");
+                HttpResponse response = localServer.send("GET / HTTP/1.1\nHost: localhost\n\n");
                 assertEquals(200, response.getStatusCode());
               } catch (Throwable e) {
                 throw new RuntimeException(e);

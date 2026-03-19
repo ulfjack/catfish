@@ -348,7 +348,6 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
           response.withHeaderOverrides(
               HttpHeaders.of(HttpHeaderName.CONTENT_LENGTH, Integer.toString(contentLength)));
     } else {
-      // TODO: Only HTTP 1.1 clients support chunked encoding.
       response =
           response.withHeaderOverrides(HttpHeaders.of(HttpHeaderName.TRANSFER_ENCODING, "chunked"));
       useChunking = true;

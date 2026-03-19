@@ -34,6 +34,8 @@ public abstract class ServletEngineTest extends HttpParserTest {
       builder.setVersion(HttpVersion.HTTP_0_9);
     } else if ("HTTP/0.7".equals(request.getProtocol())) {
       builder.setVersion(HttpVersion.of(0, 7));
+    } else if ("HTTP/1.1".equals(request.getProtocol())) {
+      builder.setVersion(HttpVersion.HTTP_1_1);
     } else if ("HTTP/1.8".equals(request.getProtocol())) {
       builder.setVersion(HttpVersion.of(1, 8));
     }

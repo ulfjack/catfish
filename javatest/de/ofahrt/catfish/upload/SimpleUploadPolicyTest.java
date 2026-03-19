@@ -12,7 +12,7 @@ public class SimpleUploadPolicyTest {
 
   private static HttpRequest buildRequest(String contentLength) {
     return new SimpleHttpRequest.Builder()
-        .setVersion(HttpVersion.HTTP_1_0)
+        .setVersion(HttpVersion.HTTP_1_1)
         .setMethod("POST")
         .setUri("/upload")
         .addHeader("Content-Length", contentLength)

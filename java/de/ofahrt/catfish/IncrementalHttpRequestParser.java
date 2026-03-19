@@ -227,7 +227,7 @@ final class IncrementalHttpRequestParser {
               return setBadRequest("Http major version is too long");
             }
             String majorVersionString = elementBuffer.toString();
-            if (!"0".equals(majorVersionString) && !"1".equals(majorVersionString)) {
+            if (!"1".equals(majorVersionString)) {
               return setError(HttpStatusCode.VERSION_NOT_SUPPORTED, "Http version not supported");
             }
             majorVersion = Integer.parseInt(majorVersionString);
@@ -256,6 +256,9 @@ final class IncrementalHttpRequestParser {
             }
             int minorVersion = Integer.parseInt(elementBuffer.toString());
             builder.setVersion(HttpVersion.of(majorVersion, minorVersion));
+            if (minorVersion < 1) {
+              return setError(HttpStatusCode.VERSION_NOT_SUPPORTED, "Http version not supported");
+            }
             counter = 0;
             elementBuffer.setLength(0);
             state = State.MESSAGE_HEADER_NAME;
