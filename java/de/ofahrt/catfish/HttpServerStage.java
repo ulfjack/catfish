@@ -23,6 +23,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -33,6 +34,45 @@ final class HttpServerStage implements Stage {
   private static final boolean VERBOSE = false;
   private static final byte[] EMPTY_BODY = new byte[0];
   private static final String GZIP_ENCODING = "gzip";
+  private static final byte[] CONTINUE_RESPONSE_BYTES =
+      "HTTP/1.1 100 Continue\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+
+  /**
+   * A minimal response generator that writes a {@code 100 Continue} preliminary response. This
+   * generator does not represent a final response, so {@link #getRequest()} and {@link
+   * #getResponse()} both return null.
+   */
+  private static final class ContinueResponseGenerator extends HttpResponseGenerator {
+    private int offset = 0;
+
+    @Override
+    public HttpRequest getRequest() {
+      return null;
+    }
+
+    @Override
+    public HttpResponse getResponse() {
+      return null;
+    }
+
+    @Override
+    public ContinuationToken generate(ByteBuffer buffer) {
+      int bytesToCopy = Math.min(buffer.remaining(), CONTINUE_RESPONSE_BYTES.length - offset);
+      buffer.put(CONTINUE_RESPONSE_BYTES, offset, bytesToCopy);
+      offset += bytesToCopy;
+      return offset >= CONTINUE_RESPONSE_BYTES.length
+          ? ContinuationToken.STOP
+          : ContinuationToken.CONTINUE;
+    }
+
+    @Override
+    public void close() {}
+
+    @Override
+    public boolean keepAlive() {
+      return true;
+    }
+  }
 
   // Incoming data:
   // Socket -> SSL Stage -> HTTP Stage -> Request Queue
@@ -227,6 +267,11 @@ final class HttpServerStage implements Stage {
       inputBuffer.position(inputBuffer.position() + consumed);
     }
     if (parser.isDone()) {
+      if (parser.needsContinue()) {
+        responseGenerator = new ContinueResponseGenerator();
+        parent.encourageWrites();
+        return ConnectionControl.PAUSE;
+      }
       return processRequest();
     }
     return ConnectionControl.CONTINUE;
@@ -259,6 +304,28 @@ final class HttpServerStage implements Stage {
       case PAUSE:
         return ConnectionControl.PAUSE;
       case STOP:
+        if (responseGenerator instanceof ContinueResponseGenerator) {
+          responseGenerator = null;
+          parser.resumeAfterContinue();
+          parent.log("Sent 100 Continue, resuming body read");
+          ConnectionControl continueControl = read();
+          switch (continueControl) {
+            case CONTINUE:
+            case NEED_MORE_DATA:
+              parent.encourageReads();
+              break;
+            case PAUSE:
+              break;
+            case CLOSE_CONNECTION_AFTER_FLUSH:
+              throw new IllegalStateException();
+            case CLOSE_INPUT:
+              throw new IllegalStateException();
+            case CLOSE_OUTPUT_AFTER_FLUSH:
+            case CLOSE_CONNECTION_IMMEDIATELY:
+              return continueControl;
+          }
+          return ConnectionControl.PAUSE;
+        }
         requestListener.notifySent(
             connection, responseGenerator.getRequest(), responseGenerator.getResponse());
         responseGenerator = null;

@@ -12,8 +12,8 @@ import java.util.Locale;
 /**
  * Parses and formats HTTP date values as defined by RFC 7231 §7.1.1.1.
  *
- * <p>All three historical date formats are accepted on input; output always uses
- * the RFC 7231 preferred format: {@code "Sun, 06 Nov 1994 08:49:37 GMT"}.
+ * <p>All three historical date formats are accepted on input; output always uses the RFC 7231
+ * preferred format: {@code "Sun, 06 Nov 1994 08:49:37 GMT"}.
  *
  * <p>All methods are thread-safe.
  */
@@ -43,7 +43,9 @@ public final class HttpDate {
   private static final DateTimeFormatter FORMAT_ASCTIME =
       new DateTimeFormatterBuilder()
           .appendPattern("EEE MMM ")
-          .optionalStart().appendLiteral(' ').optionalEnd()
+          .optionalStart()
+          .appendLiteral(' ')
+          .optionalEnd()
           .appendValue(ChronoField.DAY_OF_MONTH, 1, 2, SignStyle.NORMAL)
           .appendPattern(" HH:mm:ss yyyy")
           .toFormatter(Locale.US)
@@ -57,8 +59,9 @@ public final class HttpDate {
           .withZone(ZoneOffset.UTC);
 
   // Tried in order: RFC1123 is most common; RFC850 and asctime are legacy formats.
-  private static final DateTimeFormatter[] PARSE_FORMATTERS =
-      {FORMAT_RFC1123, FORMAT_RFC850, FORMAT_ASCTIME};
+  private static final DateTimeFormatter[] PARSE_FORMATTERS = {
+    FORMAT_RFC1123, FORMAT_RFC850, FORMAT_ASCTIME
+  };
 
   /**
    * Formats an instant as an HTTP date string.
@@ -76,10 +79,11 @@ public final class HttpDate {
    * Parses an HTTP date string and returns the corresponding instant.
    *
    * <p>Accepts all three formats defined by RFC 7231 §7.1.1.1:
+   *
    * <ul>
    *   <li>RFC 1123: {@code "Sun, 06 Nov 1994 08:49:37 GMT"}
-   *   <li>RFC 850:  {@code "Sunday, 06-Nov-94 08:49:37 GMT"}
-   *   <li>asctime:  {@code "Sun Nov  6 08:49:37 1994"}
+   *   <li>RFC 850: {@code "Sunday, 06-Nov-94 08:49:37 GMT"}
+   *   <li>asctime: {@code "Sun Nov 6 08:49:37 1994"}
    * </ul>
    *
    * @param date the date string to parse
@@ -89,7 +93,8 @@ public final class HttpDate {
     for (DateTimeFormatter fmt : PARSE_FORMATTERS) {
       try {
         return Instant.from(fmt.parse(date));
-      } catch (DateTimeParseException ignored) {}
+      } catch (DateTimeParseException ignored) {
+      }
     }
     new Exception("could not parse: \"" + date + "\"").printStackTrace();
     return null;

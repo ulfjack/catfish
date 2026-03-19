@@ -21,7 +21,8 @@ public class HttpDateTest {
 
   @Test
   public void formatWithRandomExample() {
-    assertEquals("Thu, 18 Sep 2008 22:12:49 GMT", HttpDate.formatDate(Instant.ofEpochMilli(1221775969597L)));
+    assertEquals(
+        "Thu, 18 Sep 2008 22:12:49 GMT", HttpDate.formatDate(Instant.ofEpochMilli(1221775969597L)));
   }
 
   @Test

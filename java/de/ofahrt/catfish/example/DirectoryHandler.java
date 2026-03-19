@@ -17,8 +17,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
-import java.time.Instant;
 import java.net.URISyntaxException;
+import java.time.Instant;
 
 public final class DirectoryHandler implements HttpHandler {
   private final String internalPath;

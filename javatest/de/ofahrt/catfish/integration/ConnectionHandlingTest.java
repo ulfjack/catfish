@@ -11,12 +11,15 @@ import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
+import de.ofahrt.catfish.model.server.BasicHttpHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
+import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -77,6 +80,28 @@ public class ConnectionHandlingTest {
 
   public void startServer(HttpHandler handler) throws Exception {
     startServer(false, handler);
+  }
+
+  public void startServerWithUploadPolicy(HttpHandler handler, UploadPolicy uploadPolicy)
+      throws Exception {
+    server =
+        new CatfishHttpServer(
+            new NetworkEventListener() {
+              @Override
+              public void shutdown() {}
+
+              @Override
+              public void portOpened(int port, boolean ssl) {}
+
+              @Override
+              public void notifyInternalError(Connection id, Throwable throwable) {
+                throwable.printStackTrace();
+              }
+            });
+    HttpVirtualHost host =
+        new HttpVirtualHost(new BasicHttpHandler(handler)).uploadPolicy(uploadPolicy);
+    server.addHttpHost(HTTP_SERVER_NAME, host);
+    server.listenHttpLocal(HTTP_PORT);
   }
 
   @After
@@ -235,5 +260,62 @@ public class ConnectionHandlingTest {
     }
     buffer.append(CRLF);
     return buffer.toString().getBytes(StandardCharsets.UTF_8);
+  }
+
+  @Test
+  public void expect100Continue() throws Exception {
+    byte[] body = "hello".getBytes(StandardCharsets.UTF_8);
+    startServerWithUploadPolicy(
+        (connection, request, responseWriter) ->
+            responseWriter.commitBuffered(StandardResponses.OK),
+        request -> true);
+    try (HttpConnection connection = HttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT)) {
+      // Send headers only, with Expect: 100-continue.
+      String headers =
+          "POST / HTTP/1.1\r\n"
+              + "Host: localhost\r\n"
+              + "Content-Length: "
+              + body.length
+              + "\r\n"
+              + "Expect: 100-continue\r\n"
+              + "\r\n";
+      connection.write(headers.getBytes(StandardCharsets.UTF_8));
+
+      // Server should respond with 100 Continue before we send the body.
+      HttpResponse continueResponse = connection.readResponse();
+      assertEquals(100, continueResponse.getStatusCode());
+
+      // Now send the body.
+      connection.write(body);
+
+      // Server should respond with the final 200 OK.
+      HttpResponse finalResponse = connection.readResponse();
+      assertEquals(200, finalResponse.getStatusCode());
+    }
+  }
+
+  @Test
+  public void expect100ContinueDeniedByUploadPolicy() throws Exception {
+    // When the upload policy rejects the body, the server must send the final error response
+    // immediately — without sending 100 Continue and without reading the body. This is the
+    // primary purpose of Expect: 100-continue: the client learns the server won't accept the
+    // body before wasting bandwidth sending it.
+    startServerWithUploadPolicy(
+        (connection, request, responseWriter) ->
+            responseWriter.commitBuffered(StandardResponses.OK),
+        UploadPolicy.DENY);
+    try (HttpConnection connection = HttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT)) {
+      String headers =
+          "POST / HTTP/1.1\r\n"
+              + "Host: localhost\r\n"
+              + "Content-Length: 1000\r\n"
+              + "Expect: 100-continue\r\n"
+              + "\r\n";
+      connection.write(headers.getBytes(StandardCharsets.UTF_8));
+
+      // Server should send 413 directly, never 100 Continue.
+      HttpResponse response = connection.readResponse();
+      assertEquals(HttpStatusCode.PAYLOAD_TOO_LARGE.getStatusCode(), response.getStatusCode());
+    }
   }
 }

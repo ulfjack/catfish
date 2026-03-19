@@ -43,6 +43,7 @@ final class IncrementalHttpRequestParser {
   private int headerFieldCount;
 
   private boolean done;
+  private boolean needsContinue;
 
   private int majorVersion;
   private String messageHeaderName;
@@ -68,6 +69,7 @@ final class IncrementalHttpRequestParser {
     headerFieldCount = 0;
 
     done = false;
+    needsContinue = false;
     builder.reset();
 
     majorVersion = 0;
@@ -360,6 +362,12 @@ final class IncrementalHttpRequestParser {
                 return setError(HttpStatusCode.PAYLOAD_TOO_LARGE);
               }
               payloadParser = new InMemoryEntityParser((int) contentLength);
+              String expectValue = partialRequest.getHeaders().get(HttpHeaderName.EXPECT);
+              if ("100-continue".equalsIgnoreCase(expectValue)) {
+                needsContinue = true;
+                done = true;
+                return i + 1;
+              }
               state = State.PAYLOAD;
             } else {
               done = true;
@@ -413,6 +421,24 @@ final class IncrementalHttpRequestParser {
 
   public boolean isDone() {
     return done;
+  }
+
+  /** Returns true if the server should send a {@code 100 Continue} response before the body. */
+  public boolean needsContinue() {
+    return needsContinue;
+  }
+
+  /**
+   * Resumes body parsing after a {@code 100 Continue} response has been sent. Must only be called
+   * when {@link #needsContinue()} returns true.
+   */
+  public void resumeAfterContinue() {
+    if (!needsContinue) {
+      throw new IllegalStateException("Not waiting for continue");
+    }
+    needsContinue = false;
+    done = false;
+    state = State.PAYLOAD;
   }
 
   public HttpRequest getRequest() throws MalformedRequestException {

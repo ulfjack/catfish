@@ -24,7 +24,8 @@ public final class BasicHttpHandler implements HttpHandler {
   @Override
   public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter)
       throws IOException {
-    if (request.getHeaders().get(HttpHeaderName.EXPECT) != null) {
+    String expectValue = request.getHeaders().get(HttpHeaderName.EXPECT);
+    if (expectValue != null && !"100-continue".equalsIgnoreCase(expectValue)) {
       responseWriter.commitBuffered(StandardResponses.EXPECTATION_FAILED);
     } else if (request.getHeaders().get(HttpHeaderName.CONTENT_ENCODING) != null) {
       responseWriter.commitBuffered(StandardResponses.UNSUPPORTED_MEDIA_TYPE);

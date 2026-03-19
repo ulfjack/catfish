@@ -129,9 +129,17 @@ public class CatfishHttpServerTest {
   }
 
   @Test
-  public void expect() throws Exception {
+  public void expect100ContinuePassesThrough() throws Exception {
+    // 100-continue is not an error; the request is routed normally.
     HttpResponse response =
         createResponse("GET / HTTP/1.1\nHost: localhost\nExpect: 100-continue\n\n");
+    assertEquals(HttpStatusCode.NOT_FOUND.getStatusCode(), response.getStatusCode());
+  }
+
+  @Test
+  public void unknownExpectValueReturns417() throws Exception {
+    HttpResponse response =
+        createResponse("GET / HTTP/1.1\nHost: localhost\nExpect: some-unknown-extension\n\n");
     assertEquals(HttpStatusCode.EXPECTATION_FAILED.getStatusCode(), response.getStatusCode());
   }
 
