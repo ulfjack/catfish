@@ -100,17 +100,17 @@ completes.
 
 ## Coverage Reports
 
-Run this to collect coverage data:
+Collect coverage data first:
 ```
 bazel coverage //javatest/...
 ```
 
-Run this to generate an HTML report:
-```
-genhtml --prefix "$(pwd)" --ignore-errors unsupported,inconsistent,source --synthesize-missing --branch-coverage -o .coverage/ bazel-out/_coverage/_coverage_report.dat
-```
-
-Or this to run a simplified text report:
+Text summary (per-file percentages, sorted ascending):
 ```
 bazel run :coverage_report
+```
+
+HTML report written to `.coverage/index.html` (requires `lcov`):
+```
+bazel run :coverage_html
 ```

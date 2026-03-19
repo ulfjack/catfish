@@ -86,8 +86,33 @@ awk '
 """
 
 # `bazel run //:coverage_report` - prints per-file line coverage, sorted ascending.
-# Run `bazelisk coverage //javatest/de/ofahrt/catfish:catfish` first.
+# Run `bazel coverage //javatest/...` first.
 sh_runner(
     name = "coverage_report",
     script = _COVERAGE_REPORT_SCRIPT,
+)
+
+_COVERAGE_HTML_SCRIPT = """#!/usr/bin/env bash
+set -euo pipefail
+DAT="${BUILD_WORKSPACE_DIRECTORY}/bazel-out/_coverage/_coverage_report.dat"
+if [[ ! -f "$DAT" ]]; then
+  echo "No coverage data found. Run first:"
+  echo "  bazel coverage //javatest/de/ofahrt/catfish:catfish"
+  exit 1
+fi
+if ! command -v genhtml &>/dev/null; then
+  echo "genhtml not found. Install lcov (e.g. apt install lcov)."
+  exit 1
+fi
+OUT="${BUILD_WORKSPACE_DIRECTORY}/.coverage"
+genhtml --prefix "$(pwd)" --ignore-errors unsupported,inconsistent,source \\
+  --synthesize-missing --branch-coverage -o "$OUT" "$DAT"
+echo "Report written to $OUT/index.html"
+"""
+
+# `bazel run //:coverage_html` - generates an HTML coverage report in .coverage/.
+# Run `bazel coverage //javatest/...` first.
+sh_runner(
+    name = "coverage_html",
+    script = _COVERAGE_HTML_SCRIPT,
 )
