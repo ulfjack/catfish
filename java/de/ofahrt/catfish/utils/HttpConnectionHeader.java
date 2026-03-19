@@ -9,11 +9,11 @@ public final class HttpConnectionHeader {
   public static final String KEEP_ALIVE = "keep-alive";
 
   public static boolean isKeepAlive(HttpHeaders headers) {
-    return !CLOSE.equals(headers.get(HttpHeaderName.CONNECTION));
+    return !CLOSE.equalsIgnoreCase(headers.get(HttpHeaderName.CONNECTION));
   }
 
   public static boolean mayKeepAlive(HttpRequest request) {
-    return !CLOSE.equals(request.getHeaders().get(HttpHeaderName.CONNECTION));
+    return !CLOSE.equalsIgnoreCase(request.getHeaders().get(HttpHeaderName.CONNECTION));
   }
 
   private HttpConnectionHeader() {

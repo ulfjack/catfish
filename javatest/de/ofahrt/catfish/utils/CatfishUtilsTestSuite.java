@@ -7,6 +7,7 @@ import org.junit.runners.Suite.SuiteClasses;
 @RunWith(Suite.class)
 @SuiteClasses({
   HttpCacheControlTest.class,
+  HttpConnectionHeaderTest.class,
   HttpContentTypeTest.class,
   HttpDateTest.class,
   MimeTypeRegistryTest.class,
