@@ -318,11 +318,7 @@ final class IncrementalHttpRequestParser {
           break;
         case MESSAGE_HEADER_NAME_OR_CONTINUATION:
           if (isSpace(c)) {
-            state = State.MESSAGE_HEADER_VALUE;
-            elementBuffer.append(messageHeaderValue);
-            trimAndAppendSpace();
-            break;
-            // return setBadRequest("Line folding is obsolete and illegal");
+            return setBadRequest("Line folding is obsolete and illegal (RFC 7230 s3.2.4)");
           }
 
           if (c == '\r') {

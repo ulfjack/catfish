@@ -84,8 +84,9 @@ public abstract class HttpParserTest {
 
   @Test
   public void parseGetWithContinuation() throws Exception {
-    HttpRequest request = parse("GET / HTTP/1.1\nHost: localhost\nUser-Agent: A/1\n B/2\n\n");
-    assertEquals("A/1 B/2", request.getHeaders().get("User-Agent"));
+    checkError(
+        "400 Line folding is obsolete and illegal (RFC 7230 s3.2.4)",
+        "GET / HTTP/1.1\nHost: localhost\nUser-Agent: A/1\n B/2\n\n");
   }
 
   @Test
@@ -107,8 +108,9 @@ public abstract class HttpParserTest {
 
   @Test
   public void headerWithTrailingContinuation() throws Exception {
-    HttpRequest request = parse("GET / HTTP/1.1\nHost: localhost\nUser-Agent: A/1\n  \n\n");
-    assertEquals("A/1", request.getHeaders().get("User-Agent"));
+    checkError(
+        "400 Line folding is obsolete and illegal (RFC 7230 s3.2.4)",
+        "GET / HTTP/1.1\nHost: localhost\nUser-Agent: A/1\n  \n\n");
   }
 
   private void checkHeader(String headerName, String expectedValue, String data) throws Exception {

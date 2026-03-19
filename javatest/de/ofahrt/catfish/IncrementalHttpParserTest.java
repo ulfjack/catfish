@@ -157,6 +157,20 @@ public class IncrementalHttpParserTest {
   }
 
   @Test
+  public void headerLineFoldingIsRejected() {
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    parser.parse("GET / HTTP/1.1\r\nHost: foo\r\n bar\r\n\r\n".getBytes());
+    assertTrue(parser.isDone());
+    try {
+      parser.getRequest();
+      fail();
+    } catch (MalformedRequestException e) {
+      assertEquals(
+          HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
+    }
+  }
+
+  @Test
   public void disallowBothContentLengthAndTransferEncoding() {
     IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
     byte[] data =
