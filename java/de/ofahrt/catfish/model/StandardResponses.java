@@ -1,6 +1,8 @@
 package de.ofahrt.catfish.model;
 
-public interface StandardResponses {
+public final class StandardResponses {
+  private StandardResponses() {}
+
   // 200
   public static final HttpResponse OK = new PreconstructedResponse(HttpStatusCode.OK);
   public static final HttpResponse NO_CONTENT =
