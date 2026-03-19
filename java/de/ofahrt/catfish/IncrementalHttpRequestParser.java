@@ -360,6 +360,12 @@ final class IncrementalHttpRequestParser {
               } catch (NumberFormatException e) {
                 return setBadRequest("Illegal content length value");
               }
+              if (contentLength < 0) {
+                return setBadRequest("Illegal content length value");
+              }
+              if (contentLength > Integer.MAX_VALUE) {
+                return setError(HttpStatusCode.PAYLOAD_TOO_LARGE);
+              }
               HttpRequest partialRequest = builder.buildPartialRequest();
               if (!uploadPolicy.isAllowed(partialRequest)) {
                 return setError(HttpStatusCode.PAYLOAD_TOO_LARGE);

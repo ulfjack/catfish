@@ -245,6 +245,8 @@ public abstract class HttpParserTest {
   public void badContentLength() throws Exception {
     checkError(
         "400 Illegal content length value", "GET / HTTP/1.1\nContent-Length: notanumber\n\n");
+    checkError("400 Illegal content length value", "GET / HTTP/1.1\nContent-Length: -1\n\n");
+    checkError("413 Payload Too Large", "GET / HTTP/1.1\nContent-Length: 2147483648\n\n");
     checkError("413 Payload Too Large", "GET / HTTP/1.1\nContent-Length: 123456789\n\n");
   }
 
