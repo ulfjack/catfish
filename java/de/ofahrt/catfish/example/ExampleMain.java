@@ -9,7 +9,6 @@ import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
-import de.ofahrt.catfish.model.server.BasicHttpHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.ssl.SSLContextFactory;
@@ -83,7 +82,6 @@ public class ExampleMain {
             .exact("/large", new LargeResponseHandler(16536))
             .directory("/public/", new DirectoryHandler("/tmp/public/"))
             .build();
-    handler = new BasicHttpHandler(handler);
 
     // Keep-alive and compression policies must be set before adding a host.
     server.addHttpHost("localhost", new HttpVirtualHost(handler));

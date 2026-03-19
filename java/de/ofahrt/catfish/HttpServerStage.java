@@ -22,6 +22,7 @@ import de.ofahrt.catfish.utils.HttpContentType;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -31,18 +32,22 @@ import java.util.function.Function;
 import java.util.zip.GZIPOutputStream;
 
 final class HttpServerStage implements Stage {
+
   private static final boolean VERBOSE = false;
   private static final byte[] EMPTY_BODY = new byte[0];
   private static final String GZIP_ENCODING = "gzip";
   private static final byte[] CONTINUE_RESPONSE_BYTES =
       "HTTP/1.1 100 Continue\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+  private static final HttpHeaders OPTIONS_STAR_HEADERS =
+      HttpHeaders.of(HttpHeaderName.ALLOW, "GET, HEAD, POST, PUT, DELETE, OPTIONS, TRACE");
 
   /**
    * A minimal response generator that writes a {@code 100 Continue} preliminary response. This
-   * generator does not represent a final response, so {@link #getRequest()} and {@link
-   * #getResponse()} both return null.
+   * generator does not represent a final response, so {@link #getRequest()} and
+   * {@link #getResponse()} both return null.
    */
   private static final class ContinueResponseGenerator extends HttpResponseGenerator {
+
     private int offset = 0;
 
     @Override
@@ -66,7 +71,8 @@ final class HttpServerStage implements Stage {
     }
 
     @Override
-    public void close() {}
+    public void close() {
+    }
 
     @Override
     public boolean keepAlive() {
@@ -89,6 +95,7 @@ final class HttpServerStage implements Stage {
   // - AsyncBuffer blocks when the buffer is full
 
   public interface RequestQueue {
+
     void queueRequest(
         HttpHandler httpHandler,
         Connection connection,
@@ -97,10 +104,12 @@ final class HttpServerStage implements Stage {
   }
 
   public interface RequestListener {
+
     void notifySent(Connection connection, HttpRequest request, HttpResponse response);
   }
 
   private final class HttpResponseWriterImpl implements HttpResponseWriter {
+
     private final HttpRequest request;
     private final KeepAlivePolicy keepAlivePolicy;
     private final CompressionPolicy compressionPolicy;
@@ -371,7 +380,7 @@ final class HttpServerStage implements Stage {
     }
   }
 
-  private final ConnectionControl processRequest() {
+  private ConnectionControl processRequest() {
     if (processing) {
       return ConnectionControl.PAUSE;
     }
@@ -394,11 +403,49 @@ final class HttpServerStage implements Stage {
       startBuffered(request, StandardResponses.MISDIRECTED_REQUEST);
       return ConnectionControl.CONTINUE;
     } else {
-      HttpResponseWriter writer =
-          new HttpResponseWriterImpl(request, host.keepAlivePolicy(), host.compressionPolicy());
-      requestHandler.queueRequest(host.handler(), connection, request, writer);
-      return ConnectionControl.PAUSE;
+      String expectValue = request.getHeaders().get(HttpHeaderName.EXPECT);
+      if (expectValue != null && !"100-continue".equalsIgnoreCase(expectValue)) {
+        startBuffered(request, StandardResponses.EXPECTATION_FAILED);
+      } else if (request.getHeaders().get(HttpHeaderName.CONTENT_ENCODING) != null) {
+        startBuffered(request, StandardResponses.UNSUPPORTED_MEDIA_TYPE);
+      } else if (HttpMethodName.TRACE.equals(request.getMethod())) {
+        startBuffered(request, buildTraceResponse(request));
+      } else if ("*".equals(request.getUri())) {
+        if (HttpMethodName.OPTIONS.equals(request.getMethod())) {
+          startBuffered(request, StandardResponses.OK.withHeaderOverrides(OPTIONS_STAR_HEADERS));
+        } else {
+          startBuffered(request, StandardResponses.BAD_REQUEST);
+        }
+      } else {
+        HttpResponseWriter writer =
+            new HttpResponseWriterImpl(request, host.keepAlivePolicy(), host.compressionPolicy());
+        requestHandler.queueRequest(host.handler(), connection, request, writer);
+        return ConnectionControl.PAUSE;
+      }
+      return ConnectionControl.CONTINUE;
     }
+  }
+
+  private static HttpResponse buildTraceResponse(HttpRequest request) {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    try (OutputStreamWriter writer = new OutputStreamWriter(baos, StandardCharsets.UTF_8)) {
+      writer
+          .append(request.getMethod())
+          .append(" ")
+          .append(request.getUri())
+          .append(" ")
+          .append(request.getVersion().toString());
+      writer.append("\r\n");
+      for (Map.Entry<String, String> e : request.getHeaders()) {
+        writer.append(e.getKey()).append(": ").append(e.getValue());
+        writer.append("\r\n");
+      }
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+    return StandardResponses.OK
+        .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, "message/http"))
+        .withBody(baos.toByteArray());
   }
 
   private final void startStreamed(HttpResponseGeneratorStreamed gen) {

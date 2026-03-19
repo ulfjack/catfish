@@ -10,7 +10,6 @@ import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
-import de.ofahrt.catfish.model.server.BasicHttpHandler;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -30,14 +29,17 @@ final class LocalCatfishServer implements Server {
           new NetworkEventListener() {
             @Override
             public void shutdown() {
-              if (DEBUG) System.out.println("[CATFISH] Server stopped.");
+              if (DEBUG) {
+                System.out.println("[CATFISH] Server stopped.");
+              }
             }
 
             @Override
             public void portOpened(int port, boolean ssl) {
-              if (DEBUG)
+              if (DEBUG) {
                 System.out.println(
                     "[CATFISH] Opening socket on port " + port + (ssl ? " (ssl)" : ""));
+              }
             }
 
             @Override
@@ -49,7 +51,8 @@ final class LocalCatfishServer implements Server {
   private boolean startSsl;
   private UploadPolicy uploadPolicy = UploadPolicy.DENY;
 
-  public LocalCatfishServer() throws IOException {}
+  public LocalCatfishServer() throws IOException {
+  }
 
   public LocalCatfishServer setUploadPolicy(UploadPolicy uploadPolicy) {
     this.uploadPolicy = uploadPolicy;
@@ -70,8 +73,7 @@ final class LocalCatfishServer implements Server {
             .directory("/", new HttpRequestTestServlet())
             .build();
 
-    HttpVirtualHost host =
-        new HttpVirtualHost(new BasicHttpHandler(handler)).uploadPolicy(uploadPolicy);
+    HttpVirtualHost host = new HttpVirtualHost(handler).uploadPolicy(uploadPolicy);
     if (startSsl) {
       host = host.ssl(TestHelper.getSSLInfo());
     }

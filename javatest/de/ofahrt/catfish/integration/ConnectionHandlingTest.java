@@ -17,7 +17,6 @@ import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
-import de.ofahrt.catfish.model.server.BasicHttpHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
@@ -37,6 +36,7 @@ import org.junit.After;
 import org.junit.Test;
 
 public class ConnectionHandlingTest {
+
   private static final boolean DEBUG = false;
 
   private static final String HTTP_SERVER_NAME = "localhost";
@@ -51,14 +51,17 @@ public class ConnectionHandlingTest {
             new NetworkEventListener() {
               @Override
               public void shutdown() {
-                if (DEBUG) System.out.println("[CATFISH] Server stopped.");
+                if (DEBUG) {
+                  System.out.println("[CATFISH] Server stopped.");
+                }
               }
 
               @Override
               public void portOpened(int port, boolean ssl) {
-                if (DEBUG)
+                if (DEBUG) {
                   System.out.println(
                       "[CATFISH] Opening socket on port " + port + (ssl ? " (ssl)" : ""));
+                }
               }
 
               @Override
@@ -88,10 +91,12 @@ public class ConnectionHandlingTest {
         new CatfishHttpServer(
             new NetworkEventListener() {
               @Override
-              public void shutdown() {}
+              public void shutdown() {
+              }
 
               @Override
-              public void portOpened(int port, boolean ssl) {}
+              public void portOpened(int port, boolean ssl) {
+              }
 
               @Override
               public void notifyInternalError(Connection id, Throwable throwable) {
@@ -99,7 +104,7 @@ public class ConnectionHandlingTest {
               }
             });
     HttpVirtualHost host =
-        new HttpVirtualHost(new BasicHttpHandler(handler)).uploadPolicy(uploadPolicy);
+        new HttpVirtualHost(handler).uploadPolicy(uploadPolicy);
     server.addHttpHost(HTTP_SERVER_NAME, host);
     server.listenHttpLocal(HTTP_PORT);
   }
@@ -126,10 +131,12 @@ public class ConnectionHandlingTest {
         new CatfishHttpClient(
             new NetworkEventListener() {
               @Override
-              public void portOpened(int port, boolean ssl) {}
+              public void portOpened(int port, boolean ssl) {
+              }
 
               @Override
-              public void shutdown() {}
+              public void shutdown() {
+              }
 
               @Override
               public void notifyInternalError(Connection id, Throwable throwable) {

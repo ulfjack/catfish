@@ -1,6 +1,8 @@
 package de.ofahrt.catfish.integration;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import de.ofahrt.catfish.bridge.TestHelper;
@@ -57,8 +59,51 @@ public class BasicIntegrationTest {
   @Test
   public void optionsStar() throws IOException {
     HttpResponse response = localServer.send("OPTIONS * HTTP/1.1\nHost: localhost\n\n");
-    assertEquals(HttpStatusCode.METHOD_NOT_ALLOWED.getStatusCode(), response.getStatusCode());
-    assertEquals("0", response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
+    assertEquals(HttpStatusCode.OK.getStatusCode(), response.getStatusCode());
+    assertNotNull(response.getHeaders().get(HttpHeaderName.ALLOW));
+  }
+
+  @Test
+  public void traceRequest() throws IOException {
+    HttpResponse response = localServer.send("TRACE / HTTP/1.1\nHost: localhost\n\n");
+    assertEquals(HttpStatusCode.OK.getStatusCode(), response.getStatusCode());
+    assertEquals("message/http", response.getHeaders().get(HttpHeaderName.CONTENT_TYPE));
+    assertNotNull(response.getBody());
+    assertTrue(response.getBody().length > 0);
+  }
+
+  @Test
+  public void starUriNonOptions() throws IOException {
+    HttpResponse response = localServer.send("GET * HTTP/1.1\nHost: localhost\n\n");
+    assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+  }
+
+  @Test
+  public void contentEncodingInRequest() throws IOException {
+    HttpRequest request =
+        new SimpleHttpRequest.Builder()
+            .setVersion(HttpVersion.HTTP_1_1)
+            .setMethod(HttpMethodName.GET)
+            .setUri("/")
+            .addHeader(HttpHeaderName.HOST, "localhost")
+            .addHeader(HttpHeaderName.CONTENT_ENCODING, "gzip")
+            .build();
+    HttpResponse response = localServer.send(HttpRequestHelper.toByteArray(request));
+    assertEquals(HttpStatusCode.UNSUPPORTED_MEDIA_TYPE.getStatusCode(), response.getStatusCode());
+  }
+
+  @Test
+  public void unknownExpect() throws IOException {
+    HttpRequest request =
+        new SimpleHttpRequest.Builder()
+            .setVersion(HttpVersion.HTTP_1_1)
+            .setMethod(HttpMethodName.GET)
+            .setUri("/")
+            .addHeader(HttpHeaderName.HOST, "localhost")
+            .addHeader(HttpHeaderName.EXPECT, "unknown-extension")
+            .build();
+    HttpResponse response = localServer.send(HttpRequestHelper.toByteArray(request));
+    assertEquals(HttpStatusCode.EXPECTATION_FAILED.getStatusCode(), response.getStatusCode());
   }
 
   @Test
