@@ -1,6 +1,6 @@
 package de.ofahrt.catfish.upload;
 
-import de.ofahrt.catfish.model.server.PayloadParser;
+import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
 import de.ofahrt.catfish.utils.HttpContentType;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -12,7 +12,7 @@ import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public final class IncrementalMultipartParser implements PayloadParser {
+public final class IncrementalMultipartParser implements HttpRequestBodyParser {
   private static final Pattern nameExtractorPattern = Pattern.compile(".* name=\"([^\"]*)\".*");
 
   private static enum State {

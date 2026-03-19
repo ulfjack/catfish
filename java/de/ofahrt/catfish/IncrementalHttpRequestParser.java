@@ -7,7 +7,7 @@ import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
-import de.ofahrt.catfish.model.server.PayloadParser;
+import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.upload.InMemoryEntityParser;
 import java.io.IOException;
@@ -48,7 +48,7 @@ final class IncrementalHttpRequestParser {
   private String messageHeaderName;
   private String messageHeaderValue;
 
-  private PayloadParser payloadParser;
+  private HttpRequestBodyParser payloadParser;
 
   public IncrementalHttpRequestParser(UploadPolicy uploadPolicy) {
     this.uploadPolicy = uploadPolicy;

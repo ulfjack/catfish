@@ -2,9 +2,9 @@ package de.ofahrt.catfish.upload;
 
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpRequest.Body;
-import de.ofahrt.catfish.model.server.PayloadParser;
+import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
 
-public final class InMemoryEntityParser implements PayloadParser {
+public final class InMemoryEntityParser implements HttpRequestBodyParser {
   private final byte[] content;
   private int contentIndex;
 
