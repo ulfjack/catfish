@@ -67,7 +67,8 @@ sh_runner(
 
 _COVERAGE_REPORT_SCRIPT = """#!/usr/bin/env bash
 set -euo pipefail
-DAT="${BUILD_WORKSPACE_DIRECTORY}/bazel-out/_coverage/_coverage_report.dat"
+cd "${BUILD_WORKSPACE_DIRECTORY}"
+DAT="./bazel-out/_coverage/_coverage_report.dat"
 if [[ ! -f "$DAT" ]]; then
   echo "No coverage data found. Run first:"
   echo "  bazelisk coverage //javatest/de/ofahrt/catfish:catfish"
@@ -94,7 +95,8 @@ sh_runner(
 
 _COVERAGE_HTML_SCRIPT = """#!/usr/bin/env bash
 set -euo pipefail
-DAT="${BUILD_WORKSPACE_DIRECTORY}/bazel-out/_coverage/_coverage_report.dat"
+cd "${BUILD_WORKSPACE_DIRECTORY}"
+DAT="./bazel-out/_coverage/_coverage_report.dat"
 if [[ ! -f "$DAT" ]]; then
   echo "No coverage data found. Run first:"
   echo "  bazel coverage //javatest/de/ofahrt/catfish:catfish"
@@ -104,7 +106,7 @@ if ! command -v genhtml &>/dev/null; then
   echo "genhtml not found. Install lcov (e.g. apt install lcov)."
   exit 1
 fi
-OUT="${BUILD_WORKSPACE_DIRECTORY}/.coverage"
+OUT="./.coverage"
 genhtml --prefix "$(pwd)" --ignore-errors unsupported,inconsistent,source \\
   --synthesize-missing --branch-coverage -o "$OUT" "$DAT"
 echo "Report written to $OUT/index.html"
