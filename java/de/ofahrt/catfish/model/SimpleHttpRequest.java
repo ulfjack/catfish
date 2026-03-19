@@ -88,7 +88,11 @@ public final class SimpleHttpRequest implements HttpRequest {
         throw new MalformedRequestException(errorResponse);
       }
       try {
-        new URI(unparsedUri);
+        URI parsed = new URI(unparsedUri);
+        if (!unparsedUri.equals("*") && !parsed.isAbsolute() && !unparsedUri.startsWith("/")) {
+          setError(HttpStatusCode.BAD_REQUEST, "Malformed URI");
+          throw new MalformedRequestException(errorResponse);
+        }
       } catch (URISyntaxException e) {
         setError(HttpStatusCode.BAD_REQUEST, "Malformed URI");
         throw new MalformedRequestException(errorResponse);

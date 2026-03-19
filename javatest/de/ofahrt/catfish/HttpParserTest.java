@@ -217,6 +217,9 @@ public abstract class HttpParserTest {
   @Test
   public void badUriSyntax() throws Exception {
     checkError("400 Malformed URI", "GET 12:/path HTTP/1.1\n\n");
+    checkError("400 Malformed URI", "GET ../ HTTP/1.1\nHost: localhost\n\n");
+    checkError("400 Malformed URI", "GET ./ HTTP/1.1\nHost: localhost\n\n");
+    checkError("400 Malformed URI", "GET foo HTTP/1.1\nHost: localhost\n\n");
   }
 
   @Test

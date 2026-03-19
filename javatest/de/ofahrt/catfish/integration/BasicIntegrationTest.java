@@ -141,6 +141,12 @@ public class BasicIntegrationTest {
   }
 
   @Test
+  public void upwardsUrlHttp11() throws Exception {
+    HttpResponse response = localServer.send("GET ../ HTTP/1.1\nHost: localhost\n\n");
+    assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+  }
+
+  @Test
   public void unknownTransferEncoding() throws Exception {
     HttpRequest request =
         new SimpleHttpRequest.Builder()
