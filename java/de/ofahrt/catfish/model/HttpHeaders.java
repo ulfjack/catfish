@@ -31,6 +31,23 @@ public final class HttpHeaders implements Iterable<Map.Entry<String, String>> {
     return new HttpHeaders(sortedCopy);
   }
 
+  public static HttpHeaders of(
+      String key0,
+      String value0,
+      String key1,
+      String value1,
+      String key2,
+      String value2,
+      String key3,
+      String value3) {
+    TreeMap<String, String> sortedCopy = new TreeMap<>();
+    sortedCopy.put(key0, value0);
+    sortedCopy.put(key1, value1);
+    sortedCopy.put(key2, value2);
+    sortedCopy.put(key3, value3);
+    return new HttpHeaders(sortedCopy);
+  }
+
   public static HttpHeaders of(Map<String, String> map) {
     return new HttpHeaders(new TreeMap<>(map));
   }

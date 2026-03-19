@@ -51,6 +51,12 @@ public class HttpHeadersTest {
   }
 
   @Test
+  public void ofFourPairs() {
+    HttpHeaders h = HttpHeaders.of("A", "1", "B", "2", "C", "3", "D", "4");
+    assertEquals("4", h.get("D"));
+  }
+
+  @Test
   public void none_isEmpty() {
     assertNull(HttpHeaders.NONE.get("X"));
     assertFalse(HttpHeaders.NONE.containsKey("X"));
