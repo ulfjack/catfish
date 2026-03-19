@@ -137,8 +137,8 @@ public class BasicIntegrationTest {
   @Test
   public void upwardsUrl() throws Exception {
     HttpResponse response = localServer.send("GET ../ HTTP/1.0\n\n");
-    // TODO: This should be an error code!
-    assertEquals(404, response.getStatusCode());
+    // No Host header → no matching virtual host → 421. Ideally this would be 400 (malformed URI).
+    assertEquals(HttpStatusCode.MISDIRECTED_REQUEST.getStatusCode(), response.getStatusCode());
   }
 
   @Test
@@ -154,6 +154,12 @@ public class BasicIntegrationTest {
             .build();
     HttpResponse response = localServer.send(HttpRequestHelper.toByteArray(request));
     assertEquals(HttpStatusCode.NOT_IMPLEMENTED.getStatusCode(), response.getStatusCode());
+  }
+
+  @Test
+  public void unknownVirtualHostReturnsMisdirectedRequest() throws Exception {
+    HttpResponse response = localServer.send("GET / HTTP/1.1\nHost: unknown.example.com\n\n");
+    assertEquals(HttpStatusCode.MISDIRECTED_REQUEST.getStatusCode(), response.getStatusCode());
   }
 
   @Test

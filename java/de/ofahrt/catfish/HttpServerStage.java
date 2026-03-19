@@ -247,6 +247,9 @@ final class HttpServerStage implements Stage {
               HttpVirtualHost host =
                   virtualHostLookup.apply(request.getHeaders().get(HttpHeaderName.HOST));
               if (host == null) {
+                // Unknown virtual host; deny the upload. This produces 413 rather than the
+                // correct 421, but UploadPolicy only returns boolean. The no-body case is
+                // handled in processRequest().
                 return false;
               }
               return host.uploadPolicy().isAllowed(request);
@@ -386,7 +389,7 @@ final class HttpServerStage implements Stage {
     }
     HttpVirtualHost host = virtualHostLookup.apply(request.getHeaders().get(HttpHeaderName.HOST));
     if (host == null) {
-      startBuffered(request, StandardResponses.NOT_FOUND);
+      startBuffered(request, StandardResponses.MISDIRECTED_REQUEST);
       return ConnectionControl.CONTINUE;
     } else {
       HttpResponseWriter writer =

@@ -60,6 +60,8 @@ public final class StandardResponses {
       new PreconstructedResponse(HttpStatusCode.RANGE_NOT_SATISFIABLE); // 416
   public static final HttpResponse EXPECTATION_FAILED =
       new PreconstructedResponse(HttpStatusCode.EXPECTATION_FAILED); // 417
+  public static final HttpResponse MISDIRECTED_REQUEST =
+      new PreconstructedResponse(HttpStatusCode.MISDIRECTED_REQUEST); // 421
   public static final HttpResponse UPGRADE_REQUIRED =
       new PreconstructedResponse(HttpStatusCode.UPGRADE_REQUIRED); // 426
 
