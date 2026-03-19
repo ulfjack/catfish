@@ -3,6 +3,7 @@ package de.ofahrt.catfish.bridge;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 import de.ofahrt.catfish.CollectionsUtils;
@@ -14,6 +15,7 @@ import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.network.Connection;
 import java.io.InputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.List;
@@ -192,6 +194,86 @@ public class RequestImplTest {
             null,
             null);
     assertEquals("https://host/", request.getRequestURL().toString());
+  }
+
+  @Test
+  public void getRemoteAddr_returnsNumericIp() throws Exception {
+    InetAddress addr = InetAddress.getByAddress("my-host", new byte[] {1, 2, 3, 4});
+    RequestImpl req =
+        new RequestImpl(
+            new SimpleHttpRequest.Builder().setUri("*").build(),
+            new Connection(null, new InetSocketAddress(addr, 5678), false),
+            null,
+            null);
+    assertEquals("1.2.3.4", req.getRemoteAddr());
+  }
+
+  @Test
+  public void getRemoteHost_returnsHostname() throws Exception {
+    InetAddress addr = InetAddress.getByAddress("my-host", new byte[] {1, 2, 3, 4});
+    RequestImpl req =
+        new RequestImpl(
+            new SimpleHttpRequest.Builder().setUri("*").build(),
+            new Connection(null, new InetSocketAddress(addr, 5678), false),
+            null,
+            null);
+    assertEquals("my-host", req.getRemoteHost());
+  }
+
+  @Test
+  public void getLocalAddr_returnsNumericIpWithoutSlash() throws Exception {
+    InetAddress addr = InetAddress.getByAddress("local-host", new byte[] {127, 0, 0, 1});
+    RequestImpl req =
+        new RequestImpl(
+            new SimpleHttpRequest.Builder().setUri("*").build(),
+            new Connection(new InetSocketAddress(addr, 8080), null, false),
+            null,
+            null);
+    assertEquals("127.0.0.1", req.getLocalAddr());
+  }
+
+  @Test
+  public void getIntHeader_returnsNegativeOneWhenAbsent() throws Exception {
+    assertEquals(-1, empty().getIntHeader("X-Missing"));
+  }
+
+  @Test
+  public void getIntHeader_returnsValueWhenPresent() throws Exception {
+    assertEquals(42, requestForHeader("X-Count", "42").getIntHeader("X-Count"));
+  }
+
+  @Test
+  public void getIntHeader_throwsNumberFormatExceptionForNonNumeric() throws Exception {
+    assertThrows(
+        NumberFormatException.class,
+        () -> requestForHeader("X-Count", "bad").getIntHeader("X-Count"));
+  }
+
+  @Test
+  public void getReader_withNullBody() throws Exception {
+    RequestImpl req = toRequestImpl(new SimpleHttpRequest.Builder().setUri("*"));
+    assertNotNull(req.getReader());
+    assertNull(req.getReader().readLine());
+  }
+
+  @Test
+  public void getContentLength_returnsNegativeOneWhenAbsent() throws Exception {
+    assertEquals(-1, empty().getContentLength());
+  }
+
+  @Test
+  public void getContentLength_returnsNegativeOneForMalformedHeader() throws Exception {
+    RequestImpl req =
+        new RequestImpl(
+            new SimpleHttpRequest.Builder()
+                .setUri("*")
+                .addHeader(HttpHeaderName.CONTENT_LENGTH, "not-a-number")
+                .setBody(new HttpRequest.InMemoryBody(new byte[0]))
+                .build(),
+            new Connection(null, null, false),
+            null,
+            null);
+    assertEquals(-1, req.getContentLength());
   }
 
   // Only use lower-case letters to circumvent the canonicalizer.

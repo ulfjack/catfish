@@ -184,7 +184,11 @@ public final class RequestImpl implements HttpServletRequest {
   @Override
   public int getContentLength() {
     String cl = getHeader(HttpHeaderName.CONTENT_LENGTH);
-    return cl == null ? -1 : Integer.parseInt(cl);
+    try {
+      return cl == null ? -1 : Integer.parseInt(cl);
+    } catch (NumberFormatException e) {
+      return -1;
+    }
   }
 
   @Override
@@ -223,7 +227,7 @@ public final class RequestImpl implements HttpServletRequest {
 
   @Override
   public String getLocalAddr() {
-    return localAddress.getAddress().toString();
+    return localAddress.getAddress().getHostAddress();
   }
 
   @Override
@@ -308,8 +312,9 @@ public final class RequestImpl implements HttpServletRequest {
   @Override
   public BufferedReader getReader() {
     // TODO: Use the correct charset.
+    final byte[] data = body != null ? body : new byte[0];
     return new BufferedReader(
-        new InputStreamReader(new ByteArrayInputStream(body), StandardCharsets.UTF_8));
+        new InputStreamReader(new ByteArrayInputStream(data), StandardCharsets.UTF_8));
   }
 
   @Override
@@ -320,12 +325,12 @@ public final class RequestImpl implements HttpServletRequest {
 
   @Override
   public String getRemoteAddr() {
-    return clientAddress.getHostName();
+    return clientAddress.getAddress().getHostAddress();
   }
 
   @Override
   public String getRemoteHost() {
-    return clientAddress.getAddress().getHostAddress();
+    return clientAddress.getHostName();
   }
 
   @Override
@@ -463,7 +468,9 @@ public final class RequestImpl implements HttpServletRequest {
 
   @Override
   public int getIntHeader(String name) {
-    return Integer.parseInt(getHeader(name));
+    String value = getHeader(name);
+    if (value == null) return -1;
+    return Integer.parseInt(value);
   }
 
   @Override
