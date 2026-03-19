@@ -78,6 +78,7 @@ public class CompressionIntegrationTest {
     HttpResponse response = send("GET / HTTP/1.1\nHost: localhost\n\n");
     assertEquals(200, response.getStatusCode());
     assertNull(response.getHeaders().get(HttpHeaderName.CONTENT_ENCODING));
+    assertNull(response.getHeaders().get(HttpHeaderName.VARY));
     assertEquals("text/plain", response.getHeaders().get(HttpHeaderName.CONTENT_TYPE));
     assertEquals(
         Integer.toString(LARGE_BODY.length()),
@@ -89,6 +90,7 @@ public class CompressionIntegrationTest {
     HttpResponse response = send("GET / HTTP/1.1\nHost: localhost\nAccept-Encoding: gzip\n\n");
     assertEquals(200, response.getStatusCode());
     assertEquals("gzip", response.getHeaders().get(HttpHeaderName.CONTENT_ENCODING));
+    assertEquals("Accept-Encoding", response.getHeaders().get(HttpHeaderName.VARY));
     assertEquals("text/plain", response.getHeaders().get(HttpHeaderName.CONTENT_TYPE));
 
     byte[] gzipped = response.getBody();

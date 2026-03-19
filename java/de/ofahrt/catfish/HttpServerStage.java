@@ -146,6 +146,7 @@ final class HttpServerStage implements Stage {
           shouldKeepAlive() ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
       if (shouldCompress(responseToWrite)) {
         overrides.put(HttpHeaderName.CONTENT_ENCODING, GZIP_ENCODING);
+        overrides.put(HttpHeaderName.VARY, HttpHeaderName.ACCEPT_ENCODING);
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         try (GZIPOutputStream gzip = new GZIPOutputStream(buffer)) {
           gzip.write(body);
@@ -185,6 +186,7 @@ final class HttpServerStage implements Stage {
       boolean compress = shouldCompress(responseToWrite);
       if (compress) {
         overrides.put(HttpHeaderName.CONTENT_ENCODING, GZIP_ENCODING);
+        overrides.put(HttpHeaderName.VARY, HttpHeaderName.ACCEPT_ENCODING);
       }
       responseToWrite = responseToWrite.withHeaderOverrides(HttpHeaders.of(overrides));
       boolean headRequest = HttpMethodName.HEAD.equals(request.getMethod());
