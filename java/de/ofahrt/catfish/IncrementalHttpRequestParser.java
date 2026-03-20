@@ -161,6 +161,12 @@ final class IncrementalHttpRequestParser {
             counter = 0;
             elementBuffer.setLength(0);
             state = State.REQUEST_URI;
+          } else if (elementBuffer.length() == 0 && (c == '\r' || c == '\n')) {
+            // RFC 7230 §3.5: a server SHOULD ignore at least one empty line before the
+            // request-line for robustness.
+            if (c == '\r') {
+              expectLineFeed = true;
+            }
           } else if (isTokenCharacter(c)) {
             elementBuffer.append(c);
           } else {

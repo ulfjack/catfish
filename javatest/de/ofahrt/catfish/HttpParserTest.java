@@ -281,4 +281,14 @@ public abstract class HttpParserTest {
         "400 Illegal character in header field value",
         "GET / HTTP/1.1\r\nHost: foo\0bar\r\n\r\n".getBytes(Charset.forName("ISO-8859-1")));
   }
+
+  // Conformance test #32: leading CRLF before the request-line must be tolerated (RFC 7230 §3.5).
+  @Test
+  public void leadingCrlfIgnored() throws Exception {
+    HttpRequest request =
+        parse(
+            "\r\nGET / HTTP/1.1\r\nHost: localhost\r\n\r\n"
+                .getBytes(Charset.forName("ISO-8859-1")));
+    assertEquals("GET", request.getMethod());
+  }
 }
