@@ -125,10 +125,14 @@ final class HttpServerStage implements Stage {
 
     @Override
     public void commitBuffered(HttpResponse responseToWrite) throws IOException {
+      if (responseToWrite.getHeaders().containsKey(HttpHeaderName.CONTENT_LENGTH)
+          && responseToWrite.getHeaders().containsKey(HttpHeaderName.TRANSFER_ENCODING)) {
+        throw new IllegalArgumentException(
+            "Response must not contain both Content-Length and Transfer-Encoding");
+      }
       if (!committed.compareAndSet(false, true)) {
         throw new IllegalStateException("This response is already committed");
       }
-
       byte[] body = responseToWrite.getBody();
       boolean bodyAllowed = HttpStatusCode.mayHaveBody(responseToWrite.getStatusCode());
       if (!bodyAllowed) {
@@ -138,12 +142,12 @@ final class HttpServerStage implements Stage {
                   "Responses with status code %d are not allowed to have a body",
                   Integer.valueOf(responseToWrite.getStatusCode())));
         }
-        if (responseToWrite.getHeaders().get(HttpHeaderName.CONTENT_LENGTH) != null) {
-          throw new IllegalArgumentException(
-              String.format(
-                  "Responses with status code %d are not allowed to have a content length",
-                  Integer.valueOf(responseToWrite.getStatusCode())));
-        }
+        // Silently strip Content-Length and Transfer-Encoding: they are meaningless for
+        // responses that must not have a body.
+        responseToWrite =
+            responseToWrite
+                .withoutHeader(HttpHeaderName.CONTENT_LENGTH)
+                .withoutHeader(HttpHeaderName.TRANSFER_ENCODING);
         body = EMPTY_BODY;
       }
       if (body == null) {
@@ -179,15 +183,19 @@ final class HttpServerStage implements Stage {
 
     @Override
     public OutputStream commitStreamed(HttpResponse responseToWrite) throws IOException {
-      if (!committed.compareAndSet(false, true)) {
-        throw new IllegalStateException("This response is already committed");
+      if (responseToWrite.getHeaders().containsKey(HttpHeaderName.CONTENT_LENGTH)
+          && responseToWrite.getHeaders().containsKey(HttpHeaderName.TRANSFER_ENCODING)) {
+        throw new IllegalArgumentException(
+            "Response must not contain both Content-Length and Transfer-Encoding");
       }
-
       if (!HttpStatusCode.mayHaveBody(responseToWrite.getStatusCode())) {
         throw new IllegalArgumentException(
             String.format(
                 "Responses with status code %d are not allowed to have a body",
                 Integer.valueOf(responseToWrite.getStatusCode())));
+      }
+      if (!committed.compareAndSet(false, true)) {
+        throw new IllegalStateException("This response is already committed");
       }
 
       Map<String, String> overrides = new HashMap<>();

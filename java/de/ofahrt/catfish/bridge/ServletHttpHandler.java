@@ -77,11 +77,12 @@ public final class ServletHttpHandler implements HttpHandler {
       } catch (Exception e) {
         e.printStackTrace();
         response.sendError(HttpStatusCode.INTERNAL_SERVER_ERROR.getStatusCode());
-      }
-      try {
-        response.close();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
+      } finally {
+        try {
+          response.close();
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
       }
     }
   }

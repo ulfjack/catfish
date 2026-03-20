@@ -8,46 +8,28 @@ public class HttpResponseValidatorTest {
 
   private final HttpResponseValidator validator = new HttpResponseValidator();
 
+  // ── 405 must include Allow (#68) ─────────────────────────────────────────────
+
   @Test
-  public void transferEncodingAndContentLengthThrows() throws Exception {
+  public void methodNotAllowedWithoutAllowThrows() throws Exception {
     HttpResponse response =
         new SimpleHttpResponse.Builder()
-            .setStatusCode(200)
-            .addHeader(HttpHeaderName.TRANSFER_ENCODING, "chunked")
-            .addHeader(HttpHeaderName.CONTENT_LENGTH, "0")
+            .setStatusCode(HttpStatusCode.METHOD_NOT_ALLOWED.getStatusCode())
             .build();
     assertThrows(MalformedResponseException.class, () -> validator.validate(response));
   }
 
   @Test
-  public void noContentWithTransferEncodingThrows() throws Exception {
+  public void methodNotAllowedWithAllowDoesNotThrow() throws Exception {
     HttpResponse response =
         new SimpleHttpResponse.Builder()
-            .setStatusCode(HttpStatusCode.NO_CONTENT.getStatusCode())
-            .addHeader(HttpHeaderName.TRANSFER_ENCODING, "chunked")
+            .setStatusCode(HttpStatusCode.METHOD_NOT_ALLOWED.getStatusCode())
+            .addHeader(HttpHeaderName.ALLOW, "GET, POST")
             .build();
-    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+    validator.validate(response);
   }
 
-  @Test
-  public void notModifiedWithContentLengthThrows() throws Exception {
-    HttpResponse response =
-        new SimpleHttpResponse.Builder()
-            .setStatusCode(HttpStatusCode.NOT_MODIFIED.getStatusCode())
-            .addHeader(HttpHeaderName.CONTENT_LENGTH, "42")
-            .build();
-    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
-  }
-
-  @Test
-  public void resetContentWithContentLengthThrows() throws Exception {
-    HttpResponse response =
-        new SimpleHttpResponse.Builder()
-            .setStatusCode(HttpStatusCode.RESET_CONTENT.getStatusCode())
-            .addHeader(HttpHeaderName.CONTENT_LENGTH, "42")
-            .build();
-    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
-  }
+  // ── Valid response does not throw ────────────────────────────────────────────
 
   @Test
   public void validResponseDoesNotThrow() throws Exception {

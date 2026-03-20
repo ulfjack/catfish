@@ -148,7 +148,8 @@ public final class ResponseImpl implements HttpServletResponse {
               bufferOrForward.flush();
               return;
             }
-            OutputStream forward = responseWriter.commitStreamed(commitResponse());
+            OutputStream forward = responseWriter.commitStreamed(buildResponse());
+            isCommitted = true;
             forward.write(((ByteArrayOutputStream) bufferOrForward).toByteArray());
             bufferOrForward = forward;
           }
@@ -184,11 +185,10 @@ public final class ResponseImpl implements HttpServletResponse {
     return name.startsWith("text/");
   }
 
-  private HttpResponse commitResponse() {
+  private HttpResponse buildResponse() {
     if (isCommitted) {
       throw new IllegalStateException();
     }
-    isCommitted = true;
     // The servlet specification requires writing out the content-language.
     // But locale.toString is clearly not correct.
     // if ((locale != null) && containsHeader(HttpFieldName.CONTENT_TYPE))
@@ -392,14 +392,18 @@ public final class ResponseImpl implements HttpServletResponse {
     if (isCommitted) {
       throw new IllegalStateException();
     }
+    // Clear headers that could prevent committing the error response.
+    header.remove(HttpHeaderName.CONTENT_LENGTH);
+    header.remove(HttpHeaderName.TRANSFER_ENCODING);
     setStatus(statusCode);
     if (msg == null) {
       msg = HttpStatusCode.getStatusMessage(statusCode);
     }
     // TODO: This should be text/html according to the spec.
     setContentType(MimeType.TEXT_PLAIN.toString());
-    HttpResponse response = commitResponse().withBody(msg.getBytes(StandardCharsets.UTF_8));
+    HttpResponse response = buildResponse().withBody(msg.getBytes(StandardCharsets.UTF_8));
     responseWriter.commitBuffered(response);
+    isCommitted = true;
   }
 
   @Override
@@ -415,8 +419,9 @@ public final class ResponseImpl implements HttpServletResponse {
         "<html><head><meta http-equiv=\"refresh\" content=\"1; URL="
             + escapeHtmlAttribute(location)
             + "\"></head><body>REDIRECT</body></html>";
-    HttpResponse response = commitResponse().withBody(msg.getBytes(StandardCharsets.UTF_8));
+    HttpResponse response = buildResponse().withBody(msg.getBytes(StandardCharsets.UTF_8));
     responseWriter.commitBuffered(response);
+    isCommitted = true;
   }
 
   @Override

@@ -86,6 +86,15 @@ public final class HttpHeaders implements Iterable<Map.Entry<String, String>> {
     return new HttpHeaders(mergedMap);
   }
 
+  public HttpHeaders without(String key) {
+    if (!entries.containsKey(key)) {
+      return this;
+    }
+    TreeMap<String, String> copy = new TreeMap<>(entries);
+    copy.remove(key);
+    return new HttpHeaders(copy);
+  }
+
   @Override
   public int hashCode() {
     return entries.hashCode();

@@ -78,6 +78,36 @@ public interface HttpResponse {
     };
   }
 
+  default HttpResponse withoutHeader(String key) {
+    HttpHeaders updated = HttpResponse.this.getHeaders().without(key);
+    return new HttpResponse() {
+      @Override
+      public HttpVersion getProtocolVersion() {
+        return HttpResponse.this.getProtocolVersion();
+      }
+
+      @Override
+      public int getStatusCode() {
+        return HttpResponse.this.getStatusCode();
+      }
+
+      @Override
+      public String getStatusMessage() {
+        return HttpResponse.this.getStatusMessage();
+      }
+
+      @Override
+      public HttpHeaders getHeaders() {
+        return updated;
+      }
+
+      @Override
+      public byte[] getBody() {
+        return HttpResponse.this.getBody();
+      }
+    };
+  }
+
   default HttpResponse withBody(byte[] body) {
     return new HttpResponse() {
       @Override
