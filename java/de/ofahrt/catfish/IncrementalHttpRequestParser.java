@@ -310,6 +310,9 @@ final class IncrementalHttpRequestParser {
           } else if (isSpace(c)) {
             trimAndAppendSpace();
           } else {
+            if (isControl(c)) {
+              return setBadRequest("Illegal character in header field value");
+            }
             if (elementBuffer.length() >= MAX_HEADER_VALUE_LENGTH) {
               return setError(
                   HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Header value is too long");

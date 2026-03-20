@@ -127,6 +127,13 @@ final class LocalCatfishServer implements Server {
     return send(toBytes(content));
   }
 
+  public HttpResponse sendHead(String content) throws IOException {
+    try (HttpConnection connection = connect(false)) {
+      connection.write(toBytes(content));
+      return connection.readHeadResponse();
+    }
+  }
+
   @Override
   public HttpConnection connect(boolean ssl) throws IOException {
     if (ssl && !startSsl) {

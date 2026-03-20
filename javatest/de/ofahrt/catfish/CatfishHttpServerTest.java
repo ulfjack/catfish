@@ -159,4 +159,14 @@ public class CatfishHttpServerTest {
     assertNull(response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
     assertNull(response.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING));
   }
+
+  // Conformance test #61: 205 Reset Content must not have a body (RFC 7231 §6.3.6).
+  @Test
+  public void resetContentContainsNoBody() throws Exception {
+    HttpResponse response =
+        createResponse("GET /index HTTP/1.1\nHost: localhost\nX-Reply-With: 205\n\n");
+    assertEquals(HttpStatusCode.RESET_CONTENT.getStatusCode(), response.getStatusCode());
+    assertNull(response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
+    assertNull(response.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING));
+  }
 }

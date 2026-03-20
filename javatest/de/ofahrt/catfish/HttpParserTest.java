@@ -266,4 +266,19 @@ public abstract class HttpParserTest {
         "400 Must not set both Content-Length and Transfer-Encoding",
         "GET / HTTP/1.1\nContent-Length: 4\nTransfer-Encoding: unknown\n\nfoobar");
   }
+
+  // Conformance test #2: CR or NUL in a header field value must be rejected (RFC 7230 §3.2.6).
+  @Test
+  public void crInHeaderValue() throws Exception {
+    checkError(
+        "400 Expected <lf> following <cr>",
+        "GET / HTTP/1.1\r\nHost: foo\rbar\r\n\r\n".getBytes(Charset.forName("ISO-8859-1")));
+  }
+
+  @Test
+  public void nulInHeaderValue() throws Exception {
+    checkError(
+        "400 Illegal character in header field value",
+        "GET / HTTP/1.1\r\nHost: foo\0bar\r\n\r\n".getBytes(Charset.forName("ISO-8859-1")));
+  }
 }

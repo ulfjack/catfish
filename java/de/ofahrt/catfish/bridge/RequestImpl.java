@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.bridge;
 
 import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.MalformedRequestException;
@@ -477,6 +478,12 @@ public final class RequestImpl implements HttpServletRequest {
 
   @Override
   public String getMethod() {
+    // For HEAD requests, report "GET" to the servlet so that doGet() is invoked directly.
+    // catfish handles body suppression at the network layer (HttpServerStage), so the servlet
+    // should produce a full response to allow correct Content-Length computation.
+    if (HttpMethodName.HEAD.equals(request.getMethod())) {
+      return HttpMethodName.GET;
+    }
     return request.getMethod();
   }
 

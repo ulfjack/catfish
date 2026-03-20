@@ -102,12 +102,25 @@ public final class HttpConnection implements Closeable {
   }
 
   public HttpResponse readResponse() throws IOException {
+    return readResponse(false);
+  }
+
+  /**
+   * Reads an HTTP response without reading a body. Use this for HEAD responses where the server
+   * sends status + headers only, even if Content-Length is non-zero.
+   */
+  public HttpResponse readHeadResponse() throws IOException {
+    return readResponse(true);
+  }
+
+  private HttpResponse readResponse(boolean noBody) throws IOException {
     if (in == null) {
       in = socket.getInputStream();
       buffer = new byte[1024];
     }
 
     IncrementalHttpResponseParser parser = new IncrementalHttpResponseParser();
+    parser.setNoBody(noBody);
     while (!parser.isDone()) {
       if (length == 0) {
         length = in.read(buffer);

@@ -40,6 +40,16 @@ public class HttpResponseValidatorTest {
   }
 
   @Test
+  public void resetContentWithContentLengthThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(HttpStatusCode.RESET_CONTENT.getStatusCode())
+            .addHeader(HttpHeaderName.CONTENT_LENGTH, "42")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
   public void validResponseDoesNotThrow() throws Exception {
     HttpResponse response =
         new SimpleHttpResponse.Builder()

@@ -8,6 +8,7 @@ public class HttpResponseValidator {
           "Response must not contain both Transfer-Encoding and Content-Length");
     }
     if (response.getStatusCode() == HttpStatusCode.NO_CONTENT.getStatusCode()
+        || response.getStatusCode() == HttpStatusCode.RESET_CONTENT.getStatusCode()
         || response.getStatusCode() == HttpStatusCode.NOT_MODIFIED.getStatusCode()) {
       if (response.getHeaders().containsKey(HttpHeaderName.TRANSFER_ENCODING)
           || response.getHeaders().containsKey(HttpHeaderName.CONTENT_LENGTH)) {

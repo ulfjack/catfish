@@ -33,6 +33,7 @@ final class IncrementalHttpResponseParser {
   private State state = State.RESPONSE_VERSION_HTTP;
   private int counter = 0;
   private boolean expectLineFeed;
+  private boolean noBody;
 
   private String messageHeaderName;
   private String messageHeaderValue;
@@ -41,6 +42,14 @@ final class IncrementalHttpResponseParser {
   private int contentIndex;
 
   private boolean done;
+
+  /**
+   * When set, the parser stops after headers without reading a body. Use this for HEAD responses,
+   * where the server sends headers but no body even if Content-Length is non-zero.
+   */
+  public void setNoBody(boolean noBody) {
+    this.noBody = noBody;
+  }
 
   //       CTL            = <any US-ASCII control character
   //                        (octets 0 - 31) and DEL (127)>
@@ -275,6 +284,10 @@ final class IncrementalHttpResponseParser {
           messageHeaderValue = null;
 
           if (c == '\n') {
+            if (noBody) {
+              done = true;
+              return i + 1;
+            }
             String contentLengthValue = response.getHeader(HttpHeaderName.CONTENT_LENGTH);
             if (contentLengthValue != null) {
               long contentLength;

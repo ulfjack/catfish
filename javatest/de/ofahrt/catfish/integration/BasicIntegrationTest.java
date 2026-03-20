@@ -238,6 +238,29 @@ public class BasicIntegrationTest {
     assertEquals(HttpStatusCode.MISDIRECTED_REQUEST.getStatusCode(), response.getStatusCode());
   }
 
+  // Conformance test #27: unknown HTTP method must return 501 Not Implemented (RFC 7231 §4.1).
+  @Test
+  public void unknownMethodReturns501() throws IOException {
+    HttpResponse response =
+        localServer.send("FOO / HTTP/1.1\r\nHost: localhost\r\n\r\n".getBytes("ISO-8859-1"));
+    assertEquals(HttpStatusCode.NOT_IMPLEMENTED.getStatusCode(), response.getStatusCode());
+  }
+
+  // Conformance tests #8 and #31: HEAD response headers (including Content-Length) must match GET.
+  @Test
+  public void headMatchesGet() throws Exception {
+    HttpResponse get = localServer.send("GET / HTTP/1.1\nHost: localhost\n\n");
+    HttpResponse head = localServer.sendHead("HEAD / HTTP/1.1\nHost: localhost\n\n");
+    assertEquals(get.getStatusCode(), head.getStatusCode());
+    assertEquals(
+        get.getHeaders().get(HttpHeaderName.CONTENT_LENGTH),
+        head.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
+    assertEquals(
+        get.getHeaders().get(HttpHeaderName.CONTENT_TYPE),
+        head.getHeaders().get(HttpHeaderName.CONTENT_TYPE));
+    assertEquals(0, head.getBody().length);
+  }
+
   @Test
   public void contentLengthWithoutHostShouldNotCrash() throws Exception {
     HttpRequest request =
