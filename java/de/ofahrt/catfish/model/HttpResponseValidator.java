@@ -2,9 +2,15 @@ package de.ofahrt.catfish.model;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.List;
 import java.util.Locale;
 
 public class HttpResponseValidator {
+  private static final List<String> COEP_TOKENS =
+      List.of("unsafe-none", "require-corp", "credentialless");
+  private static final List<String> COOP_TOKENS =
+      List.of("unsafe-none", "same-origin-allow-popups", "same-origin");
+
   private static boolean mayHaveBody(int status) {
     return status >= 200 && status != 204 && status != 205;
   }
@@ -327,6 +333,27 @@ public class HttpResponseValidator {
     String contentLanguage = headers.get(HttpHeaderName.CONTENT_LANGUAGE);
     if (contentLanguage != null && !isValidContentLanguage(contentLanguage)) {
       throw new MalformedResponseException("Content-Language is invalid, got: " + contentLanguage);
+    }
+
+    // Cross-Origin-Resource-Policy must be "same-site", "same-origin", or "cross-origin".
+    // Conformance test #71 (Fetch spec).
+    String corp = headers.get(HttpHeaderName.CROSS_ORIGIN_RESOURCE_POLICY);
+    if (corp != null && !isValidCrossOriginResourcePolicy(corp)) {
+      throw new MalformedResponseException("Cross-Origin-Resource-Policy is invalid, got: " + corp);
+    }
+
+    // Cross-Origin-Embedder-Policy must be a known token with optional report-to parameter.
+    // Conformance test #70 (HTML spec).
+    String coep = headers.get(HttpHeaderName.CROSS_ORIGIN_EMBEDDER_POLICY);
+    if (coep != null && !isValidCrossOriginEmbedderPolicy(coep)) {
+      throw new MalformedResponseException("Cross-Origin-Embedder-Policy is invalid, got: " + coep);
+    }
+
+    // Cross-Origin-Opener-Policy must be a known token with optional report-to parameter.
+    // Conformance test #78 (HTML spec).
+    String coop = headers.get(HttpHeaderName.CROSS_ORIGIN_OPENER_POLICY);
+    if (coop != null && !isValidCrossOriginOpenerPolicy(coop)) {
+      throw new MalformedResponseException("Cross-Origin-Opener-Policy is invalid, got: " + coop);
     }
   }
 
@@ -706,7 +733,37 @@ public class HttpResponseValidator {
     return hasTag;
   }
 
+  /** Returns true if {@code value} is a valid {@code Cross-Origin-Resource-Policy} value. */
+  public static boolean isValidCrossOriginResourcePolicy(String value) {
+    String v = value.trim().toLowerCase(Locale.US);
+    return v.equals("same-site") || v.equals("same-origin") || v.equals("cross-origin");
+  }
+
+  /** Returns true if {@code value} is a valid {@code Cross-Origin-Embedder-Policy} value. */
+  public static boolean isValidCrossOriginEmbedderPolicy(String value) {
+    return isValidCrossOriginPolicy(value, COEP_TOKENS);
+  }
+
+  /** Returns true if {@code value} is a valid {@code Cross-Origin-Opener-Policy} value. */
+  public static boolean isValidCrossOriginOpenerPolicy(String value) {
+    return isValidCrossOriginPolicy(value, COOP_TOKENS);
+  }
+
   // ── Private helpers ──────────────────────────────────────────────────────────
+
+  private static boolean isValidCrossOriginPolicy(String value, List<String> validTokens) {
+    String s = value.trim();
+    int semiIdx = s.indexOf(';');
+    String policyToken = (semiIdx < 0 ? s : s.substring(0, semiIdx)).trim().toLowerCase(Locale.US);
+    if (!validTokens.contains(policyToken)) return false;
+    if (semiIdx < 0) return true;
+    // optional: report-to = "report-to" OWS "=" OWS quoted-string
+    String param = s.substring(semiIdx + 1).trim();
+    if (!param.toLowerCase(Locale.US).startsWith("report-to")) return false;
+    String after = param.substring("report-to".length()).trim();
+    if (after.isEmpty() || after.charAt(0) != '=') return false;
+    return isValidQuotedString(after.substring(1).trim());
+  }
 
   /**
    * Validates the quoted-string beginning at {@code start} per RFC 9110 §5.6.4 and returns the

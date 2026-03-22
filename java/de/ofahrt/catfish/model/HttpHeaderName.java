@@ -35,6 +35,9 @@ public final class HttpHeaderName {
   public static final String CONTENT_SECURITY_POLICY = "Content-Security-Policy";
   public static final String CONTENT_TYPE = "Content-Type";
   public static final String COOKIE = "Cookie";
+  public static final String CROSS_ORIGIN_EMBEDDER_POLICY = "Cross-Origin-Embedder-Policy";
+  public static final String CROSS_ORIGIN_OPENER_POLICY = "Cross-Origin-Opener-Policy";
+  public static final String CROSS_ORIGIN_RESOURCE_POLICY = "Cross-Origin-Resource-Policy";
   public static final String DATE = "Date";
   public static final String ETAG = "ETag";
   public static final String EXPECT = "Expect";

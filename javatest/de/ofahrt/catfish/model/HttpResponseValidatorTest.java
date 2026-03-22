@@ -2181,4 +2181,264 @@ public class HttpResponseValidatorTest {
   public void isValidContentLanguageTrailingHyphenReturnsFalse() {
     assertFalse(HttpResponseValidator.isValidContentLanguage("en-"));
   }
+
+  // ── Cross-Origin-Resource-Policy integration tests (#71) ─────────────────────
+
+  @Test
+  public void corpSameSiteDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CROSS_ORIGIN_RESOURCE_POLICY, "same-site")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void corpSameOriginDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CROSS_ORIGIN_RESOURCE_POLICY, "same-origin")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void corpCrossOriginDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CROSS_ORIGIN_RESOURCE_POLICY, "cross-origin")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void corpInvalidThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CROSS_ORIGIN_RESOURCE_POLICY, "invalid-value")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // ── Cross-Origin-Embedder-Policy integration tests (#70) ─────────────────────
+
+  @Test
+  public void coepRequireCorpDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CROSS_ORIGIN_EMBEDDER_POLICY, "require-corp")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void coepUnsafeNoneDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CROSS_ORIGIN_EMBEDDER_POLICY, "unsafe-none")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void coepCredentiallessDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CROSS_ORIGIN_EMBEDDER_POLICY, "credentialless")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void coepWithReportToDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(
+                HttpHeaderName.CROSS_ORIGIN_EMBEDDER_POLICY, "require-corp; report-to=\"endpoint\"")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void coepInvalidThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CROSS_ORIGIN_EMBEDDER_POLICY, "invalid")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void coepUnquotedReportToThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(
+                HttpHeaderName.CROSS_ORIGIN_EMBEDDER_POLICY, "require-corp; report-to=unquoted")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // ── Cross-Origin-Opener-Policy integration tests (#78) ───────────────────────
+
+  @Test
+  public void coopSameOriginDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CROSS_ORIGIN_OPENER_POLICY, "same-origin")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void coopUnsafeNoneDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CROSS_ORIGIN_OPENER_POLICY, "unsafe-none")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void coopSameOriginAllowPopupsDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CROSS_ORIGIN_OPENER_POLICY, "same-origin-allow-popups")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void coopWithReportToDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(
+                HttpHeaderName.CROSS_ORIGIN_OPENER_POLICY, "same-origin; report-to=\"endpoint\"")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void coopInvalidThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CROSS_ORIGIN_OPENER_POLICY, "invalid")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // ── isValidCrossOriginResourcePolicy unit tests (#71) ────────────────────────
+
+  @Test
+  public void isValidCorpSameSiteReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCrossOriginResourcePolicy("same-site"));
+  }
+
+  @Test
+  public void isValidCorpSameOriginReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCrossOriginResourcePolicy("same-origin"));
+  }
+
+  @Test
+  public void isValidCorpCrossOriginReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCrossOriginResourcePolicy("cross-origin"));
+  }
+
+  @Test
+  public void isValidCorpCaseInsensitiveReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCrossOriginResourcePolicy("Same-Origin"));
+  }
+
+  @Test
+  public void isValidCorpInvalidReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidCrossOriginResourcePolicy("invalid"));
+  }
+
+  // ── isValidCrossOriginEmbedderPolicy unit tests (#70) ────────────────────────
+
+  @Test
+  public void isValidCoepRequireCorpReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCrossOriginEmbedderPolicy("require-corp"));
+  }
+
+  @Test
+  public void isValidCoepUnsafeNoneReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCrossOriginEmbedderPolicy("unsafe-none"));
+  }
+
+  @Test
+  public void isValidCoepCredentiallessReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCrossOriginEmbedderPolicy("credentialless"));
+  }
+
+  @Test
+  public void isValidCoepWithReportToReturnsTrue() {
+    assertTrue(
+        HttpResponseValidator.isValidCrossOriginEmbedderPolicy(
+            "require-corp; report-to=\"endpoint\""));
+  }
+
+  @Test
+  public void isValidCoepCaseInsensitiveReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCrossOriginEmbedderPolicy("Require-Corp"));
+  }
+
+  @Test
+  public void isValidCoepInvalidReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidCrossOriginEmbedderPolicy("invalid"));
+  }
+
+  @Test
+  public void isValidCoepUnquotedReportToReturnsFalse() {
+    assertFalse(
+        HttpResponseValidator.isValidCrossOriginEmbedderPolicy("require-corp; report-to=unquoted"));
+  }
+
+  // ── isValidCrossOriginOpenerPolicy unit tests (#78) ──────────────────────────
+
+  @Test
+  public void isValidCoopSameOriginReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCrossOriginOpenerPolicy("same-origin"));
+  }
+
+  @Test
+  public void isValidCoopUnsafeNoneReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCrossOriginOpenerPolicy("unsafe-none"));
+  }
+
+  @Test
+  public void isValidCoopSameOriginAllowPopupsReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCrossOriginOpenerPolicy("same-origin-allow-popups"));
+  }
+
+  @Test
+  public void isValidCoopWithReportToReturnsTrue() {
+    assertTrue(
+        HttpResponseValidator.isValidCrossOriginOpenerPolicy(
+            "same-origin; report-to=\"endpoint\""));
+  }
+
+  @Test
+  public void isValidCoopCaseInsensitiveReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCrossOriginOpenerPolicy("Same-Origin"));
+  }
+
+  @Test
+  public void isValidCoopInvalidReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidCrossOriginOpenerPolicy("invalid"));
+  }
 }
