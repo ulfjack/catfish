@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpVirtualHost;
+import de.ofahrt.catfish.ValidatingHttpHandler;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.client.legacy.HttpConnection;
@@ -90,12 +91,60 @@ public class HttpResponseValidationIntegrationTest {
           }
         };
 
+    // ValidatingHttpHandler: 426 without Upgrade header → validator catches it → 500.
+    HttpHandler upgradeRequiredWithoutUpgradeHandler =
+        (Connection conn, HttpRequest req, HttpResponseWriter writer) -> {
+          HttpResponse response =
+              StandardResponses.UPGRADE_REQUIRED.withHeaderOverrides(
+                  HttpHeaders.of(HttpHeaderName.CONTENT_LENGTH, "0"));
+          writer.commitBuffered(response);
+        };
+
+    // ValidatingHttpHandler: valid 426 with Upgrade header → passes through.
+    HttpHandler upgradeRequiredWithUpgradeHandler =
+        (Connection conn, HttpRequest req, HttpResponseWriter writer) -> {
+          HttpResponse response =
+              StandardResponses.UPGRADE_REQUIRED.withHeaderOverrides(
+                  HttpHeaders.of(HttpHeaderName.UPGRADE, "HTTP/2.0"));
+          writer.commitBuffered(response);
+        };
+
+    // ValidatingHttpHandler: 401 without WWW-Authenticate header → validator catches it → 500.
+    HttpHandler unauthorizedWithoutWwwAuthHandler =
+        (Connection conn, HttpRequest req, HttpResponseWriter writer) ->
+            writer.commitBuffered(StandardResponses.UNAUTHORIZED);
+
+    // ValidatingHttpHandler: invalid X-Content-Type-Options → validator catches it → 500.
+    HttpHandler badXctoHandler =
+        (Connection conn, HttpRequest req, HttpResponseWriter writer) -> {
+          HttpResponse response =
+              StandardResponses.OK.withHeaderOverrides(
+                  HttpHeaders.of(HttpHeaderName.X_CONTENT_TYPE_OPTIONS, "sniff"));
+          writer.commitBuffered(response);
+        };
+
+    // ValidatingHttpHandler: valid response → passes through unchanged.
+    HttpHandler validResponseHandler =
+        (Connection conn, HttpRequest req, HttpResponseWriter writer) ->
+            writer.commitBuffered(StandardResponses.OK);
+
     ServletHttpHandler handler =
         new ServletHttpHandler.Builder()
             .withSessionManager(new SessionManager())
             .exact("/bad-servlet", conflictingHeadersServlet)
             .exact("/bad-buffered", conflictingBufferedHandler)
             .exact("/bad-streamed", conflictingStreamedHandler)
+            .exact(
+                "/validating/bad-upgrade-required",
+                new ValidatingHttpHandler(upgradeRequiredWithoutUpgradeHandler))
+            .exact(
+                "/validating/good-upgrade-required",
+                new ValidatingHttpHandler(upgradeRequiredWithUpgradeHandler))
+            .exact(
+                "/validating/bad-unauthorized",
+                new ValidatingHttpHandler(unauthorizedWithoutWwwAuthHandler))
+            .exact("/validating/bad-xcto", new ValidatingHttpHandler(badXctoHandler))
+            .exact("/validating/good", new ValidatingHttpHandler(validResponseHandler))
             .build();
     server.addHttpHost(HOST, new HttpVirtualHost(handler));
     server.listenHttpLocal(HTTP_PORT);
@@ -114,6 +163,8 @@ public class HttpResponseValidationIntegrationTest {
     }
   }
 
+  // ── Existing framework-level validation tests ────────────────────────────────
+
   @Test
   public void servletBridge_contentLengthAndTransferEncodingYields500() throws IOException {
     assertEquals(
@@ -130,5 +181,40 @@ public class HttpResponseValidationIntegrationTest {
   public void httpHandler_commitStreamedWithConflictingHeadersYields500() throws IOException {
     assertEquals(
         HttpStatusCode.INTERNAL_SERVER_ERROR.getStatusCode(), get("/bad-streamed").getStatusCode());
+  }
+
+  // ── ValidatingHttpHandler tests ──────────────────────────────────────────────
+
+  @Test
+  public void validatingHandler_upgradeRequiredWithoutUpgradeYields500() throws IOException {
+    assertEquals(
+        HttpStatusCode.INTERNAL_SERVER_ERROR.getStatusCode(),
+        get("/validating/bad-upgrade-required").getStatusCode());
+  }
+
+  @Test
+  public void validatingHandler_upgradeRequiredWithUpgradeYields426() throws IOException {
+    assertEquals(
+        HttpStatusCode.UPGRADE_REQUIRED.getStatusCode(),
+        get("/validating/good-upgrade-required").getStatusCode());
+  }
+
+  @Test
+  public void validatingHandler_unauthorizedWithoutWwwAuthYields500() throws IOException {
+    assertEquals(
+        HttpStatusCode.INTERNAL_SERVER_ERROR.getStatusCode(),
+        get("/validating/bad-unauthorized").getStatusCode());
+  }
+
+  @Test
+  public void validatingHandler_badXContentTypeOptionsYields500() throws IOException {
+    assertEquals(
+        HttpStatusCode.INTERNAL_SERVER_ERROR.getStatusCode(),
+        get("/validating/bad-xcto").getStatusCode());
+  }
+
+  @Test
+  public void validatingHandler_validResponsePassesThrough() throws IOException {
+    assertEquals(HttpStatusCode.OK.getStatusCode(), get("/validating/good").getStatusCode());
   }
 }

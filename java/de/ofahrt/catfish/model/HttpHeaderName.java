@@ -15,6 +15,8 @@ public final class HttpHeaderName {
   public static final String ACCEPT_ENCODING = "Accept-Encoding";
   public static final String ACCEPT_LANGUAGE = "Accept-Language";
   public static final String ACCEPT_RANGES = "Accept-Ranges";
+  public static final String ACCESS_CONTROL_ALLOW_CREDENTIALS = "Access-Control-Allow-Credentials";
+  public static final String ACCESS_CONTROL_MAX_AGE = "Access-Control-Max-Age";
   public static final String AGE = "Age";
   public static final String ALLOW = "Allow";
   public static final String AUTHORIZATION = "Authorization";
@@ -51,6 +53,7 @@ public final class HttpHeaderName {
   public static final String RETRY_AFTER = "Retry-After";
   public static final String SERVER = "Server";
   public static final String SET_COOKIE = "Set-Cookie";
+  public static final String STRICT_TRANSPORT_SECURITY = "Strict-Transport-Security";
   public static final String TE = "TE";
   public static final String TRAILER = "Trailer";
   public static final String TRANSFER_ENCODING = "Transfer-Encoding";
@@ -60,6 +63,8 @@ public final class HttpHeaderName {
   public static final String VIA = "Via";
   public static final String WARNING = "Warning";
   public static final String WWW_AUTHENTICATE = "WWW-Authenticate";
+  public static final String X_CONTENT_TYPE_OPTIONS = "X-Content-Type-Options";
+  public static final String X_FRAME_OPTIONS = "X-Frame-Options";
 
   private static final HashSet<String> MULTIPLE_OCCURANCE_BLACKLIST =
       new HashSet<>(Arrays.asList(HOST));
