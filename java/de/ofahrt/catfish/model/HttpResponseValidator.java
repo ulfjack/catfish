@@ -321,6 +321,13 @@ public class HttpResponseValidator {
     if (contentRange != null && !isValidContentRange(contentRange)) {
       throw new MalformedResponseException("Content-Range is invalid, got: " + contentRange);
     }
+
+    // Content-Language must be a comma-separated list of RFC 5646 language tags.
+    // Conformance test #98.
+    String contentLanguage = headers.get(HttpHeaderName.CONTENT_LANGUAGE);
+    if (contentLanguage != null && !isValidContentLanguage(contentLanguage)) {
+      throw new MalformedResponseException("Content-Language is invalid, got: " + contentLanguage);
+    }
   }
 
   // ── Tier 1: Format primitives ────────────────────────────────────────────────
@@ -671,6 +678,34 @@ public class HttpResponseValidator {
     return true;
   }
 
+  /**
+   * Returns true if {@code value} is a valid {@code Content-Language} field value per RFC 9110 §8.5
+   * and RFC 5646 §2.1.
+   *
+   * <pre>
+   * Content-Language = #language-tag
+   * language-tag     = subtag *( "-" subtag )
+   * subtag           = 1*8(ALPHA / DIGIT)
+   * </pre>
+   *
+   * <p>This uses the simplified subtag grammar from RFC 5646: each subtag is 1–8 ASCII alphanumeric
+   * characters. Empty list items are silently ignored per RFC 9110 §5.6.1.
+   */
+  public static boolean isValidContentLanguage(String value) {
+    boolean hasTag = false;
+    for (String item : value.split(",", -1)) {
+      String tag = item.trim();
+      if (tag.isEmpty()) {
+        continue; // RFC 9110 §5.6.1: silently ignore empty list items
+      }
+      if (!isValidLanguageTag(tag)) {
+        return false;
+      }
+      hasTag = true;
+    }
+    return hasTag;
+  }
+
   // ── Private helpers ──────────────────────────────────────────────────────────
 
   /**
@@ -719,6 +754,22 @@ public class HttpResponseValidator {
     for (int i = start; i < end; i++) {
       if (s.charAt(i) == '"') {
         return false;
+      }
+    }
+    return true;
+  }
+
+  /** Returns true if {@code tag} is a valid RFC 5646 language tag (simplified subtag check). */
+  private static boolean isValidLanguageTag(String tag) {
+    String[] subtags = tag.split("-", -1);
+    for (String subtag : subtags) {
+      int len = subtag.length();
+      if (len == 0 || len > 8) return false;
+      for (int i = 0; i < len; i++) {
+        char c = subtag.charAt(i);
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))) {
+          return false;
+        }
       }
     }
     return true;

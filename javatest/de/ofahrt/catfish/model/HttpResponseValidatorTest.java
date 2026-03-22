@@ -2042,4 +2042,143 @@ public class HttpResponseValidatorTest {
   public void isValidContentRangeNonDigitCompleteLengthReturnsFalse() {
     assertFalse(HttpResponseValidator.isValidContentRange("bytes 0-99/abc"));
   }
+
+  // ── Content-Language integration tests (#98) ──────────────────────────────────
+
+  @Test
+  public void contentLanguageSimpleDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_LANGUAGE, "en")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void contentLanguageWithRegionDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_LANGUAGE, "en-US")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void contentLanguageListDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_LANGUAGE, "en, fr")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void contentLanguagePrivateUseDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_LANGUAGE, "x-private")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void contentLanguageEmptyThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_LANGUAGE, "")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void contentLanguageEmptySubtagThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_LANGUAGE, "en--US")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void contentLanguageTooLongSubtagThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_LANGUAGE, "en-toolongsubtag")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // ── isValidContentLanguage unit tests (#98) ───────────────────────────────────
+
+  @Test
+  public void isValidContentLanguageSimpleReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentLanguage("en"));
+  }
+
+  @Test
+  public void isValidContentLanguageWithRegionReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentLanguage("en-US"));
+  }
+
+  @Test
+  public void isValidContentLanguageThreePartReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentLanguage("zh-Hans-CN"));
+  }
+
+  @Test
+  public void isValidContentLanguageListReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentLanguage("en, fr"));
+  }
+
+  @Test
+  public void isValidContentLanguagePrivateUseReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentLanguage("x-private"));
+  }
+
+  @Test
+  public void isValidContentLanguageNumericSubtagReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentLanguage("de-1901"));
+  }
+
+  @Test
+  public void isValidContentLanguageEmptyReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentLanguage(""));
+  }
+
+  @Test
+  public void isValidContentLanguageOnlyCommasReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentLanguage(",,,"));
+  }
+
+  @Test
+  public void isValidContentLanguageEmptySubtagReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentLanguage("en--US"));
+  }
+
+  @Test
+  public void isValidContentLanguageTooLongSubtagReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentLanguage("en-toolongsubtag"));
+  }
+
+  @Test
+  public void isValidContentLanguageNonAlphanumSubtagReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentLanguage("en-US!"));
+  }
+
+  @Test
+  public void isValidContentLanguageLeadingHyphenReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentLanguage("-en"));
+  }
+
+  @Test
+  public void isValidContentLanguageTrailingHyphenReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentLanguage("en-"));
+  }
 }
