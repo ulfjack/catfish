@@ -316,12 +316,13 @@ public class HttpResponseValidator {
       }
     }
 
-    // Strict-Transport-Security must contain a max-age directive if present.
-    // Conformance test #21 (RFC 6797 §6.1).
+    // Strict-Transport-Security must have a valid max-age=<digits> directive; includeSubDomains and
+    // preload must have no value; unknown directives are tolerated (RFC 6797 §6.1).
+    // Conformance tests #21, #76.
     String sts = headers.get(HttpHeaderName.STRICT_TRANSPORT_SECURITY);
-    if (sts != null && !containsMaxAgeDirective(sts)) {
+    if (sts != null && !isValidSts(sts)) {
       throw new MalformedResponseException(
-          "Strict-Transport-Security must contain a max-age directive, got: " + sts);
+          "Strict-Transport-Security is invalid (must contain max-age=<digits>), got: " + sts);
     }
 
     // Cache-Control: max-age and s-maxage directive values must not be quoted-strings.
@@ -444,14 +445,42 @@ public class HttpResponseValidator {
         || c == '~';
   }
 
-  /** Returns true if the STS header value contains a {@code max-age} directive. */
-  private static boolean containsMaxAgeDirective(String sts) {
+  /**
+   * Returns true if {@code sts} is a valid Strict-Transport-Security header value per RFC 6797
+   * §6.1: must contain exactly the directives {@code max-age=<digits>} (required), {@code
+   * includeSubDomains} (optional, no value), and {@code preload} (optional, no value). Unknown
+   * directives are tolerated per the RFC.
+   */
+  private static boolean isValidSts(String sts) {
+    boolean hasMaxAge = false;
     for (String directive : sts.split(";", -1)) {
-      if (directive.trim().toLowerCase(Locale.US).startsWith("max-age")) {
-        return true;
+      String trimmed = directive.trim();
+      if (trimmed.isEmpty()) {
+        continue;
+      }
+      int eqIdx = trimmed.indexOf('=');
+      String name =
+          (eqIdx >= 0 ? trimmed.substring(0, eqIdx).trim() : trimmed).toLowerCase(Locale.US);
+      String value = eqIdx >= 0 ? trimmed.substring(eqIdx + 1).trim() : null;
+      switch (name) {
+        case "max-age":
+          if (value == null || !isNonNegativeInteger(value)) {
+            return false;
+          }
+          hasMaxAge = true;
+          break;
+        case "includesubdomains":
+        case "preload":
+          if (value != null) {
+            return false;
+          }
+          break;
+        default:
+          // Unknown directives MUST be ignored per RFC 6797 §6.1.
+          break;
       }
     }
-    return false;
+    return hasMaxAge;
   }
 
   /**

@@ -1032,7 +1032,7 @@ public class HttpResponseValidatorTest {
     assertThrows(MalformedResponseException.class, () -> validator.validate(response));
   }
 
-  // ── Strict-Transport-Security max-age (#21) ──────────────────────────────────
+  // ── Strict-Transport-Security full grammar (#21, #76) ────────────────────────
 
   @Test
   public void stsWithMaxAgeDoesNotThrow() throws Exception {
@@ -1040,6 +1040,16 @@ public class HttpResponseValidatorTest {
         new SimpleHttpResponse.Builder()
             .setStatusCode(200)
             .addHeader(HttpHeaderName.STRICT_TRANSPORT_SECURITY, "max-age=31536000")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void stsWithZeroMaxAgeDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.STRICT_TRANSPORT_SECURITY, "max-age=0")
             .build();
     validator.validate(response);
   }
@@ -1056,11 +1066,54 @@ public class HttpResponseValidatorTest {
   }
 
   @Test
+  public void stsWithPreloadDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(
+                HttpHeaderName.STRICT_TRANSPORT_SECURITY,
+                "max-age=31536000; includeSubDomains; preload")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
   public void stsWithoutMaxAgeThrows() throws Exception {
     HttpResponse response =
         new SimpleHttpResponse.Builder()
             .setStatusCode(200)
             .addHeader(HttpHeaderName.STRICT_TRANSPORT_SECURITY, "includeSubDomains")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void stsWithQuotedMaxAgeThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.STRICT_TRANSPORT_SECURITY, "max-age=\"31536000\"")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void stsWithMaxAgeNoValueThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.STRICT_TRANSPORT_SECURITY, "max-age")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void stsWithIncludeSubdomainsValueThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(
+                HttpHeaderName.STRICT_TRANSPORT_SECURITY, "max-age=3600; includeSubDomains=true")
             .build();
     assertThrows(MalformedResponseException.class, () -> validator.validate(response));
   }
