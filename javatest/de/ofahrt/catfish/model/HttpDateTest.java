@@ -8,15 +8,14 @@ import org.junit.Test;
 public class HttpDateTest {
   private static final Instant HTTP_SPEC_INSTANT = Instant.ofEpochMilli(784111777000L);
 
-  private static void assertSameResult(String date) {
-    Instant expected = Instant.ofEpochMilli(OldCoreHelper.unformatDate(date));
-    assertEquals(expected, HttpDate.parseDate(date));
-  }
-
   @Test
   public void weird() {
-    assertSameResult("Wed, 31 May 2006 19:33:30 GMT+00:00");
-    assertSameResult("Mon, 20 Nov 2006 18:32:04 GMT+00:00");
+    assertEquals(
+        Instant.ofEpochMilli(1149104010000L),
+        HttpDate.parseDate("Wed, 31 May 2006 19:33:30 GMT+00:00"));
+    assertEquals(
+        Instant.ofEpochMilli(1164047524000L),
+        HttpDate.parseDate("Mon, 20 Nov 2006 18:32:04 GMT+00:00"));
   }
 
   @Test
@@ -37,12 +36,13 @@ public class HttpDateTest {
 
   @Test
   public void tomcatVersusCatfishHttpRandomExample() {
-    assertSameResult("Thu, 18 Sep 2008 22:12:49 GMT");
+    assertEquals(
+        Instant.ofEpochMilli(1221775969000L), HttpDate.parseDate("Thu, 18 Sep 2008 22:12:49 GMT"));
   }
 
   @Test
   public void tomcatVersusCatfishHttpSpecExample() {
-    assertSameResult("Sun, 06 Nov 1994 08:49:37 GMT");
+    assertEquals(HTTP_SPEC_INSTANT, HttpDate.parseDate("Sun, 06 Nov 1994 08:49:37 GMT"));
   }
 
   @Test
