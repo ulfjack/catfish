@@ -314,6 +314,13 @@ public class HttpResponseValidator {
     if (contentType != null && !isValidContentType(contentType)) {
       throw new MalformedResponseException("Content-Type is invalid, got: " + contentType);
     }
+
+    // Content-Range must follow the RFC 9110 §14.4 grammar.
+    // Conformance test #96.
+    String contentRange = headers.get(HttpHeaderName.CONTENT_RANGE);
+    if (contentRange != null && !isValidContentRange(contentRange)) {
+      throw new MalformedResponseException("Content-Range is invalid, got: " + contentRange);
+    }
   }
 
   // ── Tier 1: Format primitives ────────────────────────────────────────────────
@@ -594,6 +601,73 @@ public class HttpResponseValidator {
         if (i == start) return false;
       }
     }
+    return true;
+  }
+
+  /**
+   * Returns true if {@code value} is a valid {@code Content-Range} field value per RFC 9110 §14.4.
+   *
+   * <pre>
+   * Content-Range     = range-unit SP ( range-resp / unsatisfied-range )
+   * range-unit        = token
+   * range-resp        = incl-range "/" ( complete-length / "*" )
+   * incl-range        = first-pos "-" last-pos
+   * unsatisfied-range = "&#42;/" complete-length
+   * first-pos         = 1*DIGIT
+   * last-pos          = 1*DIGIT
+   * complete-length   = 1*DIGIT
+   * </pre>
+   *
+   * <p>For the {@code bytes} range-unit, first-pos must be &lt;= last-pos per RFC 9110 §14.1.2.
+   */
+  public static boolean isValidContentRange(String value) {
+    String s = value.trim();
+
+    // range-unit = token
+    int spIdx = s.indexOf(' ');
+    if (spIdx <= 0) return false;
+    String rangeUnit = s.substring(0, spIdx);
+    if (!isToken(rangeUnit)) return false;
+
+    String rest = s.substring(spIdx + 1);
+    if (rest.isEmpty()) return false;
+
+    if (rest.startsWith("*/")) {
+      // unsatisfied-range: "*/" complete-length
+      String completeLength = rest.substring(2);
+      return !completeLength.isEmpty() && isNonNegativeInteger(completeLength);
+    }
+
+    // range-resp: incl-range "/" ( complete-length / "*" )
+    int slashIdx = rest.lastIndexOf('/');
+    if (slashIdx < 0) return false;
+
+    String inclRange = rest.substring(0, slashIdx);
+    String completeLengthOrStar = rest.substring(slashIdx + 1);
+
+    // incl-range: first-pos "-" last-pos
+    int dashIdx = inclRange.indexOf('-');
+    if (dashIdx <= 0) return false;
+    String firstPosStr = inclRange.substring(0, dashIdx);
+    String lastPosStr = inclRange.substring(dashIdx + 1);
+    if (!isNonNegativeInteger(firstPosStr) || !isNonNegativeInteger(lastPosStr)) return false;
+
+    // complete-length or "*"
+    if (completeLengthOrStar.isEmpty()) return false;
+    if (!completeLengthOrStar.equals("*") && !isNonNegativeInteger(completeLengthOrStar))
+      return false;
+
+    // For "bytes" range-unit: first-pos <= last-pos (RFC 9110 §14.1.2)
+    if (rangeUnit.equalsIgnoreCase("bytes")) {
+      try {
+        long firstPos = Long.parseLong(firstPosStr);
+        long lastPos = Long.parseLong(lastPosStr);
+        if (firstPos > lastPos) return false;
+      } catch (NumberFormatException e) {
+        return false; // overflow (astronomically large number)
+      }
+    }
+
     return true;
   }
 

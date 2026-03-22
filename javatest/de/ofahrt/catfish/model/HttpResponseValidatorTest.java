@@ -1878,4 +1878,168 @@ public class HttpResponseValidatorTest {
   public void isValidContentTypeUnclosedQuotedStringReturnsFalse() {
     assertFalse(HttpResponseValidator.isValidContentType("text/html; charset=\"unclosed"));
   }
+
+  // ── Content-Range integration tests (#96) ────────────────────────────────────
+
+  @Test
+  public void contentRangeWithCompleteLengthDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(206)
+            .addHeader(HttpHeaderName.CONTENT_RANGE, "bytes 0-99/1000")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void contentRangeWithStarLengthDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(206)
+            .addHeader(HttpHeaderName.CONTENT_RANGE, "bytes 0-99/*")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void contentRangeUnsatisfiedDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(416)
+            .addHeader(HttpHeaderName.CONTENT_RANGE, "bytes */1000")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void contentRangeSingleByteDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(206)
+            .addHeader(HttpHeaderName.CONTENT_RANGE, "bytes 0-0/1")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void contentRangeNoSlashThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(206)
+            .addHeader(HttpHeaderName.CONTENT_RANGE, "bytes 0-99")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void contentRangeMissingRangeUnitThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(206)
+            .addHeader(HttpHeaderName.CONTENT_RANGE, "0-99/1000")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void contentRangeFirstGtLastThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(206)
+            .addHeader(HttpHeaderName.CONTENT_RANGE, "bytes 100-99/1000")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void contentRangeUnsatisfiedMissingLengthThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(416)
+            .addHeader(HttpHeaderName.CONTENT_RANGE, "bytes */")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // ── isValidContentRange unit tests (#96) ─────────────────────────────────────
+
+  @Test
+  public void isValidContentRangeBytesWithCompleteLengthReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentRange("bytes 0-99/1000"));
+  }
+
+  @Test
+  public void isValidContentRangeBytesWithStarLengthReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentRange("bytes 0-99/*"));
+  }
+
+  @Test
+  public void isValidContentRangeBytesUnsatisfiedReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentRange("bytes */1000"));
+  }
+
+  @Test
+  public void isValidContentRangeBytesSingleByteReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentRange("bytes 0-0/1"));
+  }
+
+  @Test
+  public void isValidContentRangeBytesLargeRangeReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentRange("bytes 500-999/1234"));
+  }
+
+  @Test
+  public void isValidContentRangeNonBytesUnitReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentRange("items 0-9/100"));
+  }
+
+  @Test
+  public void isValidContentRangeNoSlashReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentRange("bytes 0-99"));
+  }
+
+  @Test
+  public void isValidContentRangeNoRangeUnitReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentRange("0-99/1000"));
+  }
+
+  @Test
+  public void isValidContentRangeNoSpaceAfterUnitReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentRange("bytes0-99/1000"));
+  }
+
+  @Test
+  public void isValidContentRangeFirstGtLastReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentRange("bytes 100-99/1000"));
+  }
+
+  @Test
+  public void isValidContentRangeMissingFirstPosReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentRange("bytes -99/1000"));
+  }
+
+  @Test
+  public void isValidContentRangeMissingLastPosReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentRange("bytes 0-/1000"));
+  }
+
+  @Test
+  public void isValidContentRangeEmptyCompleteLengthReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentRange("bytes 0-99/"));
+  }
+
+  @Test
+  public void isValidContentRangeUnsatisfiedMissingLengthReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentRange("bytes */"));
+  }
+
+  @Test
+  public void isValidContentRangeStarNoSlashReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentRange("bytes *"));
+  }
+
+  @Test
+  public void isValidContentRangeNonDigitCompleteLengthReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentRange("bytes 0-99/abc"));
+  }
 }
