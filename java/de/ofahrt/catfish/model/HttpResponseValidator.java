@@ -177,6 +177,56 @@ public class HttpResponseValidator {
           "Access-Control-Max-Age must be a non-negative integer, got: " + acma);
     }
 
+    // Access-Control-Allow-Origin must be "*", "null", or a serialized origin.
+    // Conformance test #79 (Fetch §3.2.3).
+    String acao = headers.get(HttpHeaderName.ACCESS_CONTROL_ALLOW_ORIGIN);
+    if (acao != null) {
+      String acaoTrimmed = acao.trim();
+      if (!acaoTrimmed.equals("*") && !acaoTrimmed.equals("null") && !isValidOrigin(acaoTrimmed)) {
+        throw new MalformedResponseException(
+            "Access-Control-Allow-Origin must be \"*\", \"null\", or a valid origin, got: " + acao);
+      }
+    }
+
+    // Access-Control-Expose-Headers must be "*" or a comma-separated list of field-names.
+    // Conformance test #81 (Fetch §3.2.3).
+    String aceh = headers.get(HttpHeaderName.ACCESS_CONTROL_EXPOSE_HEADERS);
+    if (aceh != null) {
+      String acehTrimmed = aceh.trim();
+      if (!acehTrimmed.equals("*") && !isValidTokenList(acehTrimmed)) {
+        throw new MalformedResponseException(
+            "Access-Control-Expose-Headers must be \"*\" or a comma-separated list of"
+                + " field-names, got: "
+                + aceh);
+      }
+    }
+
+    // Access-Control-Allow-Methods must be "*" or a comma-separated list of method tokens.
+    // Conformance test #83 (Fetch §3.2.3).
+    String acam = headers.get(HttpHeaderName.ACCESS_CONTROL_ALLOW_METHODS);
+    if (acam != null) {
+      String acamTrimmed = acam.trim();
+      if (!acamTrimmed.equals("*") && !isValidTokenList(acamTrimmed)) {
+        throw new MalformedResponseException(
+            "Access-Control-Allow-Methods must be \"*\" or a comma-separated list of method"
+                + " tokens, got: "
+                + acam);
+      }
+    }
+
+    // Access-Control-Allow-Headers must be "*" or a comma-separated list of field-names.
+    // Conformance test #84 (Fetch §3.2.3).
+    String acah = headers.get(HttpHeaderName.ACCESS_CONTROL_ALLOW_HEADERS);
+    if (acah != null) {
+      String acahTrimmed = acah.trim();
+      if (!acahTrimmed.equals("*") && !isValidTokenList(acahTrimmed)) {
+        throw new MalformedResponseException(
+            "Access-Control-Allow-Headers must be \"*\" or a comma-separated list of"
+                + " field-names, got: "
+                + acah);
+      }
+    }
+
     // Age must be a non-negative integer.
     // Conformance test #85 (RFC 9111 §5.1).
     String ageHeader = headers.get(HttpHeaderName.AGE);
@@ -320,6 +370,23 @@ public class HttpResponseValidator {
       }
     }
     return true;
+  }
+
+  /**
+   * Returns true if {@code s} is a serialized origin: a URI with a scheme and host but no path,
+   * query, or fragment (e.g. {@code https://example.com} or {@code https://example.com:8080}).
+   */
+  private static boolean isValidOrigin(String s) {
+    try {
+      URI uri = new URI(s);
+      return uri.getScheme() != null
+          && uri.getHost() != null
+          && (uri.getPath() == null || uri.getPath().isEmpty())
+          && uri.getQuery() == null
+          && uri.getFragment() == null;
+    } catch (URISyntaxException e) {
+      return false;
+    }
   }
 
   /**

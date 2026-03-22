@@ -533,6 +533,165 @@ public class HttpResponseValidatorTest {
     assertThrows(MalformedResponseException.class, () -> validator.validate(response));
   }
 
+  // ── Access-Control-Allow-Origin (#79) ────────────────────────────────────────
+
+  @Test
+  public void accessControlAllowOriginWildcardDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void accessControlAllowOriginNullDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCESS_CONTROL_ALLOW_ORIGIN, "null")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void accessControlAllowOriginValidDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCESS_CONTROL_ALLOW_ORIGIN, "https://example.com")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void accessControlAllowOriginWithPortDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCESS_CONTROL_ALLOW_ORIGIN, "https://example.com:8080")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void accessControlAllowOriginInvalidThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCESS_CONTROL_ALLOW_ORIGIN, "not-an-origin")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void accessControlAllowOriginWithPathThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCESS_CONTROL_ALLOW_ORIGIN, "https://example.com/path")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // ── Access-Control-Expose-Headers (#81) ──────────────────────────────────────
+
+  @Test
+  public void accessControlExposeHeadersWildcardDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCESS_CONTROL_EXPOSE_HEADERS, "*")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void accessControlExposeHeadersValidDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(
+                HttpHeaderName.ACCESS_CONTROL_EXPOSE_HEADERS, "X-Custom-Header, Content-Length")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void accessControlExposeHeadersInvalidThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCESS_CONTROL_EXPOSE_HEADERS, "invalid header!")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // ── Access-Control-Allow-Methods (#83) ───────────────────────────────────────
+
+  @Test
+  public void accessControlAllowMethodsWildcardDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCESS_CONTROL_ALLOW_METHODS, "*")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void accessControlAllowMethodsValidDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, PUT")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void accessControlAllowMethodsInvalidThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCESS_CONTROL_ALLOW_METHODS, "GET, ")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // ── Access-Control-Allow-Headers (#84) ───────────────────────────────────────
+
+  @Test
+  public void accessControlAllowHeadersWildcardDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCESS_CONTROL_ALLOW_HEADERS, "*")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void accessControlAllowHeadersValidDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type, Authorization")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void accessControlAllowHeadersInvalidThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCESS_CONTROL_ALLOW_HEADERS, ",Authorization")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
   // ── Age (#85) ────────────────────────────────────────────────────────────────
 
   @Test
