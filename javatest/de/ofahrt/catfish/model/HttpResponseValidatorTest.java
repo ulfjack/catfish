@@ -1120,7 +1120,37 @@ public class HttpResponseValidatorTest {
     assertThrows(MalformedResponseException.class, () -> validator.validate(response));
   }
 
-  // ── Cache-Control max-age/s-maxage not quoted (#44, #45) ─────────────────────
+  // ── Cache-Control full grammar (#44, #45, #86) ───────────────────────────────
+
+  @Test
+  public void cacheControlNoCacheDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CACHE_CONTROL, "no-cache")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void cacheControlMultipleDirectivesDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CACHE_CONTROL, "no-cache, max-age=3600")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void cacheControlQuotedStringValueDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CACHE_CONTROL, "no-cache=\"accept-encoding\"")
+            .build();
+    validator.validate(response);
+  }
 
   @Test
   public void cacheControlMaxAgeIntegerDoesNotThrow() throws Exception {
@@ -1158,6 +1188,36 @@ public class HttpResponseValidatorTest {
         new SimpleHttpResponse.Builder()
             .setStatusCode(200)
             .addHeader(HttpHeaderName.CACHE_CONTROL, "s-maxage=\"600\"")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void cacheControlInvalidDirectiveNameThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CACHE_CONTROL, "no cache")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void cacheControlEmptyValueAfterEqualsThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CACHE_CONTROL, "max-age=")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void cacheControlUnclosedQuotedStringThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CACHE_CONTROL, "no-cache=\"abc")
             .build();
     assertThrows(MalformedResponseException.class, () -> validator.validate(response));
   }
@@ -1548,5 +1608,93 @@ public class HttpResponseValidatorTest {
   @Test
   public void isValidXFrameOptionsAllowFromReturnsFalse() {
     assertFalse(HttpResponseValidator.isValidXFrameOptions("ALLOW-FROM https://example.com"));
+  }
+
+  // ── isValidCacheControl static tests ─────────────────────────────────────────
+
+  @Test
+  public void isValidCacheControlNoCacheReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCacheControl("no-cache"));
+  }
+
+  @Test
+  public void isValidCacheControlMultipleDirectivesReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCacheControl("no-store, no-cache, max-age=0"));
+  }
+
+  @Test
+  public void isValidCacheControlEmptyCommaItemsIgnoredReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCacheControl("no-cache,,max-age=3600"));
+  }
+
+  @Test
+  public void isValidCacheControlTrailingCommaIgnoredReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCacheControl("no-cache,"));
+  }
+
+  @Test
+  public void isValidCacheControlLeadingCommaIgnoredReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCacheControl(",no-cache"));
+  }
+
+  @Test
+  public void isValidCacheControlTokenValueReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCacheControl("private=set-cookie"));
+  }
+
+  @Test
+  public void isValidCacheControlQuotedStringValueReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCacheControl("no-cache=\"accept-encoding\""));
+  }
+
+  @Test
+  public void isValidCacheControlQuotedStringWithEscapeReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCacheControl("x-custom=\"a\\\"b\""));
+  }
+
+  @Test
+  public void isValidCacheControlMaxAgeIntegerReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCacheControl("max-age=3600"));
+  }
+
+  @Test
+  public void isValidCacheControlSMaxAgeIntegerReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidCacheControl("s-maxage=600"));
+  }
+
+  @Test
+  public void isValidCacheControlMaxAgeQuotedReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidCacheControl("max-age=\"3600\""));
+  }
+
+  @Test
+  public void isValidCacheControlSMaxAgeQuotedReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidCacheControl("s-maxage=\"600\""));
+  }
+
+  @Test
+  public void isValidCacheControlInvalidDirectiveNameReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidCacheControl("no cache"));
+  }
+
+  @Test
+  public void isValidCacheControlEmptyValueAfterEqualsReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidCacheControl("max-age="));
+  }
+
+  @Test
+  public void isValidCacheControlUnclosedQuotedStringReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidCacheControl("no-cache=\"abc"));
+  }
+
+  @Test
+  public void isValidCacheControlQuotedStringWithControlCharReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidCacheControl("x=\"\u0001\""));
+  }
+
+  @Test
+  public void isValidCacheControlBackslashAtEndOfQuotedStringReturnsFalse() {
+    // Backslash must not be the last content character (it would consume the closing DQUOTE)
+    assertFalse(HttpResponseValidator.isValidCacheControl("x=\"\\\""));
   }
 }

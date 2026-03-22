@@ -300,12 +300,12 @@ public class HttpResponseValidator {
           "Strict-Transport-Security is invalid (must contain max-age=<digits>), got: " + sts);
     }
 
-    // Cache-Control: max-age and s-maxage directive values must not be quoted-strings.
-    // Conformance tests #44, #45 (RFC 9111 §5.2).
+    // Cache-Control must follow the RFC 9111 §5.2 grammar; max-age and s-maxage must not use
+    // quoted-string values.
+    // Conformance tests #44, #45, #86 (RFC 9111 §5.2).
     String cacheControl = headers.get(HttpHeaderName.CACHE_CONTROL);
-    if (cacheControl != null) {
-      checkCacheControlDirectiveNotQuoted(cacheControl, "max-age");
-      checkCacheControlDirectiveNotQuoted(cacheControl, "s-maxage");
+    if (cacheControl != null && !isValidCacheControl(cacheControl)) {
+      throw new MalformedResponseException("Cache-Control is invalid, got: " + cacheControl);
     }
   }
 
@@ -482,7 +482,91 @@ public class HttpResponseValidator {
     return xfo.equals("DENY") || xfo.equals("SAMEORIGIN");
   }
 
+  /**
+   * Returns true if {@code value} is a valid {@code Cache-Control} field value per RFC 9111 §5.2.
+   *
+   * <pre>
+   * Cache-Control   = #cache-directive
+   * cache-directive = token [ "=" ( token / quoted-string ) ]
+   * </pre>
+   *
+   * <p>Empty list items are silently ignored per RFC 9110 §5.6.1. The directives {@code max-age}
+   * and {@code s-maxage} must not use a quoted-string value.
+   */
+  public static boolean isValidCacheControl(String value) {
+    for (String item : value.split(",", -1)) {
+      String directive = item.trim();
+      if (directive.isEmpty()) {
+        continue; // RFC 9110 §5.6.1: silently ignore empty list items
+      }
+      int eqIdx = directive.indexOf('=');
+      if (eqIdx < 0) {
+        if (!isToken(directive)) {
+          return false;
+        }
+      } else {
+        String name = directive.substring(0, eqIdx).trim();
+        String val = directive.substring(eqIdx + 1).trim();
+        if (!isToken(name)) {
+          return false;
+        }
+        if (val.startsWith("\"")) {
+          if (!isValidQuotedString(val)) {
+            return false;
+          }
+          String nameLower = name.toLowerCase(Locale.US);
+          if (nameLower.equals("max-age") || nameLower.equals("s-maxage")) {
+            return false;
+          }
+        } else {
+          if (!isToken(val)) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
   // ── Private helpers ──────────────────────────────────────────────────────────
+
+  /**
+   * Returns true if {@code s} is a valid HTTP quoted-string per RFC 9110 §5.6.4.
+   *
+   * <pre>
+   * quoted-string = DQUOTE *( qdtext / quoted-pair ) DQUOTE
+   * qdtext        = HTAB / SP / %x21 / %x23-5B / %x5D-7E
+   * quoted-pair   = "\" ( HTAB / SP / VCHAR )
+   * </pre>
+   */
+  private static boolean isValidQuotedString(String s) {
+    int len = s.length();
+    if (len < 2 || s.charAt(0) != '"' || s.charAt(len - 1) != '"') {
+      return false;
+    }
+    int i = 1;
+    while (i < len - 1) {
+      char c = s.charAt(i);
+      if (c == '\\') {
+        // quoted-pair: backslash followed by HTAB / SP / VCHAR (%x21-7E)
+        if (i + 1 >= len - 1) {
+          return false; // backslash consumes the closing DQUOTE
+        }
+        char next = s.charAt(i + 1);
+        if (next != '\t' && next != ' ' && (next < 0x21 || next > 0x7e)) {
+          return false;
+        }
+        i += 2;
+      } else {
+        // qdtext: HTAB / SP / %x21 / %x23-5B / %x5D-7E (any VCHAR except DQUOTE and backslash)
+        if (c != '\t' && (c < 0x20 || c > 0x7e || c == '"' || c == '\\')) {
+          return false;
+        }
+        i++;
+      }
+    }
+    return true;
+  }
 
   /** Checks that the ETag opaque-tag characters contain no unescaped quotes. */
   private static boolean isValidETagContent(String s, int start, int end) {
@@ -547,27 +631,6 @@ public class HttpResponseValidator {
       }
     }
     return hasMaxAge;
-  }
-
-  /**
-   * Throws {@link MalformedResponseException} if the named Cache-Control directive is present with
-   * a quoted-string value rather than a delta-seconds integer.
-   */
-  private static void checkCacheControlDirectiveNotQuoted(String cacheControl, String directiveName)
-      throws MalformedResponseException {
-    for (String directive : cacheControl.split(",", -1)) {
-      String trimmed = directive.trim();
-      int eqIdx = trimmed.indexOf('=');
-      if (eqIdx < 0) {
-        continue;
-      }
-      String name = trimmed.substring(0, eqIdx).trim().toLowerCase(Locale.US);
-      String value = trimmed.substring(eqIdx + 1).trim();
-      if (name.equals(directiveName) && value.startsWith("\"")) {
-        throw new MalformedResponseException(
-            "Cache-Control " + directiveName + " value must not be a quoted-string, got: " + value);
-      }
-    }
   }
 
   /**
