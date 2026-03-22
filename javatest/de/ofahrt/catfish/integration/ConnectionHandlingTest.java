@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.integration;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpVirtualHost;
@@ -19,6 +20,7 @@ import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.UploadPolicy;
+import de.ofahrt.catfish.utils.ConnectionClosedException;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -262,6 +264,24 @@ public class ConnectionHandlingTest {
     }
     buffer.append(CRLF);
     return buffer.toString().getBytes(StandardCharsets.UTF_8);
+  }
+
+  // Conformance test #35: server must close the connection after the response when
+  // the request includes Connection: close (RFC 7230 §6.3).
+  @Test
+  public void connectionCloseRespectsHeader() throws Exception {
+    startServer(
+        (connection, request, responseWriter) ->
+            responseWriter.commitBuffered(StandardResponses.OK));
+    try (HttpConnection conn = HttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT)) {
+      conn.write(
+          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.UTF_8));
+      HttpResponse response = conn.readResponse();
+      assertEquals(200, response.getStatusCode());
+      // Server must have closed the connection; next read attempt must fail with EOF.
+      assertThrows(ConnectionClosedException.class, conn::readResponse);
+    }
   }
 
   @Test

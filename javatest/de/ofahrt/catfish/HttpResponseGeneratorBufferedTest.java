@@ -9,6 +9,8 @@ import de.ofahrt.catfish.model.StandardResponses;
 import java.io.ByteArrayOutputStream;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import org.junit.Assert;
 import org.junit.Test;
 
 public class HttpResponseGeneratorBufferedTest {
@@ -60,5 +62,25 @@ public class HttpResponseGeneratorBufferedTest {
     HttpResponseGeneratorBuffered generator =
         HttpResponseGeneratorBuffered.create(null, response, false);
     assertEquals("HTTP/1.1 200 OK\r\n\r\n", toString(generator));
+  }
+
+  // Conformance test #36: all line terminators in an HTTP response must be CRLF (RFC 7230 §3.5).
+  @Test
+  public void responsesUseCrlfLineTerminators() throws Exception {
+    HttpResponse response =
+        StandardResponses.OK
+            .withVersion(HttpVersion.HTTP_1_1)
+            .withBody("hello".getBytes(StandardCharsets.UTF_8));
+    HttpResponseGeneratorBuffered generator =
+        HttpResponseGeneratorBuffered.create(null, response, true);
+    byte[] bytes = readFully(generator);
+    for (int i = 0; i < bytes.length; i++) {
+      if (bytes[i] == '\r') {
+        Assert.assertTrue("bare CR at index " + i, i + 1 < bytes.length && bytes[i + 1] == '\n');
+      }
+      if (bytes[i] == '\n') {
+        Assert.assertTrue("bare LF at index " + i, i > 0 && bytes[i - 1] == '\r');
+      }
+    }
   }
 }

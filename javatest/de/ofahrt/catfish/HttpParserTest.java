@@ -260,6 +260,14 @@ public abstract class HttpParserTest {
     checkError("400 Missing 'Host' field", "GET / HTTP/1.1\n\n");
   }
 
+  // Conformance test #10: duplicate Host header must be rejected with 400 (RFC 7230 §5.4).
+  @Test
+  public void duplicateHostReturns400() throws Exception {
+    checkError(
+        "400 Illegal message headers: multiple occurence for non-list field",
+        "GET / HTTP/1.1\nHost: foo\nHost: bar\n\n");
+  }
+
   @Test
   public void disallowBothContentLengthAndTransferEncoding() throws Exception {
     checkError(

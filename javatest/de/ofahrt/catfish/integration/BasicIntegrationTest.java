@@ -106,6 +106,13 @@ public class BasicIntegrationTest {
     assertEquals(HttpStatusCode.EXPECTATION_FAILED.getStatusCode(), response.getStatusCode());
   }
 
+  // Conformance test #28: server returns 405 for known methods not supported by the resource.
+  @Test
+  public void deleteNotAllowedReturns405() throws IOException {
+    HttpResponse response = localServer.send("DELETE / HTTP/1.1\nHost: localhost\n\n");
+    assertEquals(HttpStatusCode.METHOD_NOT_ALLOWED.getStatusCode(), response.getStatusCode());
+  }
+
   @Test
   public void dateHeaderPresentOnCoreResponse() throws IOException {
     // Core startBuffered path: GET * is rejected by HttpServerStage before reaching a handler.
