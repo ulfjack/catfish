@@ -7,6 +7,7 @@ import static org.junit.Assert.fail;
 import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.upload.SimpleUploadPolicy;
+import de.ofahrt.catfish.utils.HttpContentTypeTest;
 import org.junit.Test;
 
 public class IncrementalHttpParserTest {
@@ -185,6 +186,17 @@ public class IncrementalHttpParserTest {
       assertEquals(
           HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
       assertEquals("400 Must not set both Content-Length and Transfer-Encoding", e.getMessage());
+    }
+  }
+
+  @SuppressWarnings("boxing")
+  @Test
+  public void isTokenCharShouldAgreeWithIncrementalParser() {
+    for (char c = 0; c < 256; c++) {
+      assertEquals(
+          "Odd result for " + (int) c,
+          IncrementalHttpRequestParser.isTokenCharacter(c),
+          HttpContentTypeTest.isTokenCharacter(c));
     }
   }
 

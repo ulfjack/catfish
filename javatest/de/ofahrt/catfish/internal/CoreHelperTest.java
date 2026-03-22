@@ -14,6 +14,12 @@ import org.junit.Test;
 
 public class CoreHelperTest {
 
+  @SuppressWarnings("boxing")
+  @Test
+  public void encodeControlChar() {
+    assertEquals("%7F", CoreHelper.encode('\u007f'));
+  }
+
   @Test
   public void encodeAsciiChar() {
     assertEquals("%41", CoreHelper.encode('A'));

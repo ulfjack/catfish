@@ -41,6 +41,31 @@ public class HttpStatusCodeTest {
   }
 
   @Test
+  public void getStatusMessage_knownCode100() {
+    assertEquals("Continue", HttpStatusCode.getStatusMessage(100));
+  }
+
+  @Test
+  public void getStatusMessage_unknown2xx() {
+    assertEquals("Success", HttpStatusCode.getStatusMessage(299));
+  }
+
+  @Test
+  public void getStatusMessage_unknown4xx() {
+    assertEquals("Client Error", HttpStatusCode.getStatusMessage(499));
+  }
+
+  @Test
+  public void getStatusMessage_unknown5xx() {
+    assertEquals("Server Error", HttpStatusCode.getStatusMessage(599));
+  }
+
+  @Test
+  public void getStatusMessage_unknownAbove5xx() {
+    assertEquals("None", HttpStatusCode.getStatusMessage(999));
+  }
+
+  @Test
   public void getStatusMessage_codeAbove599() {
     assertEquals("None", HttpStatusCode.getStatusMessage(600));
   }

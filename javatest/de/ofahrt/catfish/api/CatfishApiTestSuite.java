@@ -12,7 +12,6 @@ import org.junit.runners.Suite.SuiteClasses;
 @SuiteClasses({
   HttpHeaderNameTest.class,
   HttpHeadersTest.class,
-  HttpResponseCodeTest.class,
   HttpResponseValidatorTest.class,
   HttpStatusCodeTest.class,
   HttpVersionTest.class,
