@@ -1,5 +1,6 @@
 package de.ofahrt.catfish.bridge;
 
+import de.ofahrt.catfish.model.HttpDate;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -7,7 +8,6 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
-import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.MimeType;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

@@ -2,42 +2,9 @@ package de.ofahrt.catfish.model;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
-import java.time.format.DateTimeParseException;
-import java.time.format.SignStyle;
-import java.time.temporal.ChronoField;
 import java.util.Locale;
 
 public class HttpResponseValidator {
-  // RFC 1123 / RFC 822: "Sun, 06 Nov 1994 08:49:37 GMT"
-  private static final DateTimeFormatter FORMAT_RFC1123 =
-      DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss z", Locale.US)
-          .withZone(ZoneOffset.UTC);
-
-  // RFC 850 (obsoleted by RFC 1036): "Sunday, 06-Nov-94 08:49:37 GMT"
-  private static final DateTimeFormatter FORMAT_RFC850 =
-      new DateTimeFormatterBuilder()
-          .appendPattern("EEEE, dd-MMM-")
-          .appendValueReduced(ChronoField.YEAR, 2, 2, 1970)
-          .appendPattern(" HH:mm:ss z")
-          .toFormatter(Locale.US)
-          .withZone(ZoneOffset.UTC);
-
-  // ANSI C asctime(): "Sun Nov  6 08:49:37 1994"
-  private static final DateTimeFormatter FORMAT_ASCTIME =
-      new DateTimeFormatterBuilder()
-          .appendPattern("EEE MMM ")
-          .optionalStart()
-          .appendLiteral(' ')
-          .optionalEnd()
-          .appendValue(ChronoField.DAY_OF_MONTH, 1, 2, SignStyle.NORMAL)
-          .appendPattern(" HH:mm:ss yyyy")
-          .toFormatter(Locale.US)
-          .withZone(ZoneOffset.UTC);
-
   private static boolean mayHaveBody(int status) {
     return status >= 200 && status != 204 && status != 205;
   }
@@ -222,7 +189,7 @@ public class HttpResponseValidator {
     String retryAfter = headers.get(HttpHeaderName.RETRY_AFTER);
     if (retryAfter != null) {
       String trimmed = retryAfter.trim();
-      if (!isNonNegativeInteger(trimmed) && parseHttpDate(trimmed) == null) {
+      if (!isNonNegativeInteger(trimmed) && HttpDate.parseDate(trimmed) == null) {
         throw new MalformedResponseException(
             "Retry-After must be an HTTP-date or non-negative integer, got: " + retryAfter);
       }
@@ -242,7 +209,7 @@ public class HttpResponseValidator {
     // Last-Modified must be a valid HTTP-date.
     // Conformance test #91 (RFC 9110 §8.8.2).
     String lastModified = headers.get(HttpHeaderName.LAST_MODIFIED);
-    if (lastModified != null && parseHttpDate(lastModified.trim()) == null) {
+    if (lastModified != null && HttpDate.parseDate(lastModified.trim()) == null) {
       throw new MalformedResponseException(
           "Last-Modified must be a valid HTTP-date, got: " + lastModified);
     }
@@ -250,7 +217,7 @@ public class HttpResponseValidator {
     // Expires must be a valid HTTP-date.
     // Conformance test #92 (RFC 9111 §5.3).
     String expiresHeader = headers.get(HttpHeaderName.EXPIRES);
-    if (expiresHeader != null && parseHttpDate(expiresHeader.trim()) == null) {
+    if (expiresHeader != null && HttpDate.parseDate(expiresHeader.trim()) == null) {
       throw new MalformedResponseException(
           "Expires must be a valid HTTP-date, got: " + expiresHeader);
     }
@@ -317,22 +284,6 @@ public class HttpResponseValidator {
   }
 
   // ── Helper methods ──────────────────────────────────────────────────────────
-
-  /**
-   * Parses an HTTP date string (RFC 9110 §5.6.7 / RFC 7231 §7.1.1.1). Returns the parsed instant,
-   * or {@code null} if the string does not match any recognised format.
-   */
-  private static Instant parseHttpDate(String date) {
-    for (DateTimeFormatter fmt :
-        new DateTimeFormatter[] {FORMAT_RFC1123, FORMAT_RFC850, FORMAT_ASCTIME}) {
-      try {
-        return Instant.from(fmt.parse(date));
-      } catch (DateTimeParseException ignored) {
-        // try next format
-      }
-    }
-    return null;
-  }
 
   private static boolean isNonNegativeInteger(String s) {
     if (s.isEmpty()) {

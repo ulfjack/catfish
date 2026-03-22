@@ -7,6 +7,7 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
 @SuiteClasses({
+  HttpDateTest.class,
   HttpRequestTest.class,
   HttpResponseValidatorTest.class,
   InternalServerErrorResponseTest.class,

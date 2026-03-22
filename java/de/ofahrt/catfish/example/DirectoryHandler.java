@@ -1,5 +1,6 @@
 package de.ofahrt.catfish.example;
 
+import de.ofahrt.catfish.model.HttpDate;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpMethodName;
@@ -9,7 +10,6 @@ import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
-import de.ofahrt.catfish.utils.HttpDate;
 import de.ofahrt.catfish.utils.MimeType;
 import de.ofahrt.catfish.utils.MimeTypeRegistry;
 import java.io.File;

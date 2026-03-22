@@ -1,4 +1,4 @@
-package de.ofahrt.catfish.utils;
+package de.ofahrt.catfish.model;
 
 import java.time.Instant;
 import java.time.ZoneOffset;
