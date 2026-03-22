@@ -307,6 +307,13 @@ public class HttpResponseValidator {
     if (cacheControl != null && !isValidCacheControl(cacheControl)) {
       throw new MalformedResponseException("Cache-Control is invalid, got: " + cacheControl);
     }
+
+    // Content-Type must follow the RFC 9110 §8.3 media-type grammar.
+    // Conformance test #95.
+    String contentType = headers.get(HttpHeaderName.CONTENT_TYPE);
+    if (contentType != null && !isValidContentType(contentType)) {
+      throw new MalformedResponseException("Content-Type is invalid, got: " + contentType);
+    }
   }
 
   // ── Tier 1: Format primitives ────────────────────────────────────────────────
@@ -528,7 +535,96 @@ public class HttpResponseValidator {
     return true;
   }
 
+  /**
+   * Returns true if {@code value} is a valid {@code Content-Type} field value per RFC 9110 §8.3.
+   *
+   * <pre>
+   * Content-Type    = media-type
+   * media-type      = type "/" subtype *( OWS ";" OWS parameter )
+   * type            = token
+   * subtype         = token
+   * parameter       = parameter-name "=" parameter-value
+   * parameter-value = token / quoted-string
+   * </pre>
+   */
+  public static boolean isValidContentType(String value) {
+    String s = value.trim();
+    int len = s.length();
+    int i = 0;
+
+    // type = token
+    int start = i;
+    while (i < len && isTokenChar(s.charAt(i))) i++;
+    if (i == start) return false;
+
+    // "/"
+    if (i >= len || s.charAt(i) != '/') return false;
+    i++;
+
+    // subtype = token
+    start = i;
+    while (i < len && isTokenChar(s.charAt(i))) i++;
+    if (i == start) return false;
+
+    // *( OWS ";" OWS parameter )
+    while (i < len) {
+      // OWS
+      while (i < len && (s.charAt(i) == ' ' || s.charAt(i) == '\t')) i++;
+      if (i >= len) break;
+      // ";"
+      if (s.charAt(i) != ';') return false;
+      i++;
+      // OWS
+      while (i < len && (s.charAt(i) == ' ' || s.charAt(i) == '\t')) i++;
+      // parameter-name = token
+      start = i;
+      while (i < len && isTokenChar(s.charAt(i))) i++;
+      if (i == start) return false;
+      // "="
+      if (i >= len || s.charAt(i) != '=') return false;
+      i++;
+      // parameter-value = token / quoted-string
+      if (i >= len) return false;
+      if (s.charAt(i) == '"') {
+        i = consumeQuotedString(s, i);
+        if (i < 0) return false;
+      } else {
+        start = i;
+        while (i < len && isTokenChar(s.charAt(i))) i++;
+        if (i == start) return false;
+      }
+    }
+    return true;
+  }
+
   // ── Private helpers ──────────────────────────────────────────────────────────
+
+  /**
+   * Validates the quoted-string beginning at {@code start} per RFC 9110 §5.6.4 and returns the
+   * index of the character after the closing DQUOTE, or -1 if malformed.
+   */
+  private static int consumeQuotedString(String s, int start) {
+    int len = s.length();
+    int i = start + 1; // skip opening DQUOTE
+    while (i < len) {
+      char c = s.charAt(i);
+      if (c == '"') {
+        return i + 1; // past closing DQUOTE
+      } else if (c == '\\') {
+        // quoted-pair: HTAB / SP / VCHAR (%x21-7E)
+        i++;
+        if (i >= len) return -1;
+        char next = s.charAt(i);
+        if (next != '\t' && next != ' ' && (next < 0x21 || next > 0x7e)) return -1;
+        i++;
+      } else if (c == '\t' || (c >= 0x20 && c != 0x7f && c != '\\')) {
+        i++; // valid qdtext
+      } else {
+        return -1;
+      }
+    }
+    return -1; // unclosed
+  }
 
   /**
    * Returns true if {@code s} is a valid HTTP quoted-string per RFC 9110 §5.6.4.
@@ -540,32 +636,8 @@ public class HttpResponseValidator {
    * </pre>
    */
   private static boolean isValidQuotedString(String s) {
-    int len = s.length();
-    if (len < 2 || s.charAt(0) != '"' || s.charAt(len - 1) != '"') {
-      return false;
-    }
-    int i = 1;
-    while (i < len - 1) {
-      char c = s.charAt(i);
-      if (c == '\\') {
-        // quoted-pair: backslash followed by HTAB / SP / VCHAR (%x21-7E)
-        if (i + 1 >= len - 1) {
-          return false; // backslash consumes the closing DQUOTE
-        }
-        char next = s.charAt(i + 1);
-        if (next != '\t' && next != ' ' && (next < 0x21 || next > 0x7e)) {
-          return false;
-        }
-        i += 2;
-      } else {
-        // qdtext: HTAB / SP / %x21 / %x23-5B / %x5D-7E (any VCHAR except DQUOTE and backslash)
-        if (c != '\t' && (c < 0x20 || c > 0x7e || c == '"' || c == '\\')) {
-          return false;
-        }
-        i++;
-      }
-    }
-    return true;
+    if (s.length() < 2 || s.charAt(0) != '"') return false;
+    return consumeQuotedString(s, 0) == s.length();
   }
 
   /** Checks that the ETag opaque-tag characters contain no unescaped quotes. */

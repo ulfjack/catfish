@@ -1697,4 +1697,185 @@ public class HttpResponseValidatorTest {
     // Backslash must not be the last content character (it would consume the closing DQUOTE)
     assertFalse(HttpResponseValidator.isValidCacheControl("x=\"\\\""));
   }
+
+  // ── Content-Type integration tests (#95) ─────────────────────────────────────
+
+  @Test
+  public void contentTypeSimpleDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_TYPE, "text/html")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void contentTypeWithTokenParamDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_TYPE, "text/html; charset=utf-8")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void contentTypeWithQuotedParamDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_TYPE, "text/html; charset=\"utf-8\"")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void contentTypeMultipartDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_TYPE, "multipart/form-data; boundary=----Boundary")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void contentTypeMultipleParamsDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_TYPE, "text/plain; charset=utf-8; format=flowed")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void contentTypeNoSlashThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_TYPE, "texthtml")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void contentTypeEmptySubtypeThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_TYPE, "text/")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void contentTypeTrailingSemicolonThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_TYPE, "text/html;")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void contentTypeDoubleSemicolonThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_TYPE, "text/html;;charset=utf-8")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // ── isValidContentType unit tests (#95) ──────────────────────────────────────
+
+  @Test
+  public void isValidContentTypeSimpleReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentType("text/html"));
+  }
+
+  @Test
+  public void isValidContentTypeApplicationJsonReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentType("application/json"));
+  }
+
+  @Test
+  public void isValidContentTypeWithTokenParamReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentType("text/html; charset=utf-8"));
+  }
+
+  @Test
+  public void isValidContentTypeWithQuotedParamReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentType("text/html; charset=\"utf-8\""));
+  }
+
+  @Test
+  public void isValidContentTypeMultipartReturnsTrue() {
+    assertTrue(
+        HttpResponseValidator.isValidContentType("multipart/form-data; boundary=----Boundary"));
+  }
+
+  @Test
+  public void isValidContentTypeMultipleParamsReturnsTrue() {
+    assertTrue(
+        HttpResponseValidator.isValidContentType("text/plain; charset=utf-8; format=flowed"));
+  }
+
+  @Test
+  public void isValidContentTypeOwsBeforeSemicolonReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentType("text/html ; charset=utf-8"));
+  }
+
+  @Test
+  public void isValidContentTypeSemicolonInsideQuotedParamReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentType("application/x-custom; p=\"a;b\""));
+  }
+
+  @Test
+  public void isValidContentTypeEscapedQuoteInParamReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentType("application/x-custom; p=\"a\\\"b\""));
+  }
+
+  @Test
+  public void isValidContentTypeNoSlashReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentType("texthtml"));
+  }
+
+  @Test
+  public void isValidContentTypeEmptyTypeReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentType("/html"));
+  }
+
+  @Test
+  public void isValidContentTypeEmptySubtypeReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentType("text/"));
+  }
+
+  @Test
+  public void isValidContentTypeTrailingSemicolonReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentType("text/html;"));
+  }
+
+  @Test
+  public void isValidContentTypeDoubleSemicolonReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentType("text/html;;charset=utf-8"));
+  }
+
+  @Test
+  public void isValidContentTypeEmptyParamNameReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentType("text/html; =utf-8"));
+  }
+
+  @Test
+  public void isValidContentTypeEmptyParamValueReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentType("text/html; charset="));
+  }
+
+  @Test
+  public void isValidContentTypeUnclosedQuotedStringReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentType("text/html; charset=\"unclosed"));
+  }
 }
