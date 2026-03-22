@@ -145,7 +145,7 @@ public class HttpResponseValidator {
     // X-Content-Type-Options must equal "nosniff" (case-insensitive).
     // Conformance test #75.
     String xContentTypeOptions = headers.get(HttpHeaderName.X_CONTENT_TYPE_OPTIONS);
-    if (xContentTypeOptions != null && !xContentTypeOptions.trim().equalsIgnoreCase("nosniff")) {
+    if (xContentTypeOptions != null && !isValidXContentTypeOptions(xContentTypeOptions)) {
       throw new MalformedResponseException(
           "X-Content-Type-Options must be \"nosniff\", got: " + xContentTypeOptions);
     }
@@ -153,18 +153,15 @@ public class HttpResponseValidator {
     // X-Frame-Options must be "DENY" or "SAMEORIGIN" (case-insensitive).
     // Conformance test #77.
     String xFrameOptions = headers.get(HttpHeaderName.X_FRAME_OPTIONS);
-    if (xFrameOptions != null) {
-      String xfo = xFrameOptions.trim().toUpperCase(Locale.US);
-      if (!xfo.equals("DENY") && !xfo.equals("SAMEORIGIN")) {
-        throw new MalformedResponseException(
-            "X-Frame-Options must be \"DENY\" or \"SAMEORIGIN\", got: " + xFrameOptions);
-      }
+    if (xFrameOptions != null && !isValidXFrameOptions(xFrameOptions)) {
+      throw new MalformedResponseException(
+          "X-Frame-Options must be \"DENY\" or \"SAMEORIGIN\", got: " + xFrameOptions);
     }
 
     // Access-Control-Allow-Credentials must be literal "true".
     // Conformance test #80.
     String acac = headers.get(HttpHeaderName.ACCESS_CONTROL_ALLOW_CREDENTIALS);
-    if (acac != null && !acac.trim().equals("true")) {
+    if (acac != null && !isValidAccessControlAllowCredentials(acac)) {
       throw new MalformedResponseException(
           "Access-Control-Allow-Credentials must be \"true\", got: " + acac);
     }
@@ -172,7 +169,7 @@ public class HttpResponseValidator {
     // Access-Control-Max-Age must be a non-negative integer.
     // Conformance test #82.
     String acma = headers.get(HttpHeaderName.ACCESS_CONTROL_MAX_AGE);
-    if (acma != null && !isNonNegativeInteger(acma.trim())) {
+    if (acma != null && !isValidAccessControlMaxAge(acma)) {
       throw new MalformedResponseException(
           "Access-Control-Max-Age must be a non-negative integer, got: " + acma);
     }
@@ -180,86 +177,67 @@ public class HttpResponseValidator {
     // Access-Control-Allow-Origin must be "*", "null", or a serialized origin.
     // Conformance test #79 (Fetch §3.2.3).
     String acao = headers.get(HttpHeaderName.ACCESS_CONTROL_ALLOW_ORIGIN);
-    if (acao != null) {
-      String acaoTrimmed = acao.trim();
-      if (!acaoTrimmed.equals("*") && !acaoTrimmed.equals("null") && !isValidOrigin(acaoTrimmed)) {
-        throw new MalformedResponseException(
-            "Access-Control-Allow-Origin must be \"*\", \"null\", or a valid origin, got: " + acao);
-      }
+    if (acao != null && !isValidAccessControlAllowOrigin(acao)) {
+      throw new MalformedResponseException(
+          "Access-Control-Allow-Origin must be \"*\", \"null\", or a valid origin, got: " + acao);
     }
 
     // Access-Control-Expose-Headers must be "*" or a comma-separated list of field-names.
     // Conformance test #81 (Fetch §3.2.3).
     String aceh = headers.get(HttpHeaderName.ACCESS_CONTROL_EXPOSE_HEADERS);
-    if (aceh != null) {
-      String acehTrimmed = aceh.trim();
-      if (!acehTrimmed.equals("*") && !isValidTokenList(acehTrimmed)) {
-        throw new MalformedResponseException(
-            "Access-Control-Expose-Headers must be \"*\" or a comma-separated list of"
-                + " field-names, got: "
-                + aceh);
-      }
+    if (aceh != null && !isValidAccessControlExposeHeaders(aceh)) {
+      throw new MalformedResponseException(
+          "Access-Control-Expose-Headers must be \"*\" or a comma-separated list of"
+              + " field-names, got: "
+              + aceh);
     }
 
     // Access-Control-Allow-Methods must be "*" or a comma-separated list of method tokens.
     // Conformance test #83 (Fetch §3.2.3).
     String acam = headers.get(HttpHeaderName.ACCESS_CONTROL_ALLOW_METHODS);
-    if (acam != null) {
-      String acamTrimmed = acam.trim();
-      if (!acamTrimmed.equals("*") && !isValidTokenList(acamTrimmed)) {
-        throw new MalformedResponseException(
-            "Access-Control-Allow-Methods must be \"*\" or a comma-separated list of method"
-                + " tokens, got: "
-                + acam);
-      }
+    if (acam != null && !isValidAccessControlAllowMethods(acam)) {
+      throw new MalformedResponseException(
+          "Access-Control-Allow-Methods must be \"*\" or a comma-separated list of method"
+              + " tokens, got: "
+              + acam);
     }
 
     // Access-Control-Allow-Headers must be "*" or a comma-separated list of field-names.
     // Conformance test #84 (Fetch §3.2.3).
     String acah = headers.get(HttpHeaderName.ACCESS_CONTROL_ALLOW_HEADERS);
-    if (acah != null) {
-      String acahTrimmed = acah.trim();
-      if (!acahTrimmed.equals("*") && !isValidTokenList(acahTrimmed)) {
-        throw new MalformedResponseException(
-            "Access-Control-Allow-Headers must be \"*\" or a comma-separated list of"
-                + " field-names, got: "
-                + acah);
-      }
+    if (acah != null && !isValidAccessControlAllowHeaders(acah)) {
+      throw new MalformedResponseException(
+          "Access-Control-Allow-Headers must be \"*\" or a comma-separated list of"
+              + " field-names, got: "
+              + acah);
     }
 
     // Age must be a non-negative integer.
     // Conformance test #85 (RFC 9111 §5.1).
     String ageHeader = headers.get(HttpHeaderName.AGE);
-    if (ageHeader != null && !isNonNegativeInteger(ageHeader.trim())) {
+    if (ageHeader != null && !isValidAge(ageHeader)) {
       throw new MalformedResponseException("Age must be a non-negative integer, got: " + ageHeader);
     }
 
     // Retry-After must be an HTTP-date or non-negative integer.
     // Conformance test #88 (RFC 9110 §10.2.3).
     String retryAfter = headers.get(HttpHeaderName.RETRY_AFTER);
-    if (retryAfter != null) {
-      String trimmed = retryAfter.trim();
-      if (!isNonNegativeInteger(trimmed) && HttpDate.parseDate(trimmed) == null) {
-        throw new MalformedResponseException(
-            "Retry-After must be an HTTP-date or non-negative integer, got: " + retryAfter);
-      }
+    if (retryAfter != null && !isValidRetryAfter(retryAfter)) {
+      throw new MalformedResponseException(
+          "Retry-After must be an HTTP-date or non-negative integer, got: " + retryAfter);
     }
 
     // Location must parse as a URI.
     // Conformance test #90 (RFC 9110 §10.2.2).
     String location = headers.get(HttpHeaderName.LOCATION);
-    if (location != null) {
-      try {
-        new URI(location.trim());
-      } catch (URISyntaxException e) {
-        throw new MalformedResponseException("Location must be a valid URI, got: " + location);
-      }
+    if (location != null && !isValidLocation(location)) {
+      throw new MalformedResponseException("Location must be a valid URI, got: " + location);
     }
 
     // Last-Modified must be a valid HTTP-date.
     // Conformance test #91 (RFC 9110 §8.8.2).
     String lastModified = headers.get(HttpHeaderName.LAST_MODIFIED);
-    if (lastModified != null && HttpDate.parseDate(lastModified.trim()) == null) {
+    if (lastModified != null && !isValidLastModified(lastModified)) {
       throw new MalformedResponseException(
           "Last-Modified must be a valid HTTP-date, got: " + lastModified);
     }
@@ -267,7 +245,7 @@ public class HttpResponseValidator {
     // Expires must be a valid HTTP-date.
     // Conformance test #92 (RFC 9111 §5.3).
     String expiresHeader = headers.get(HttpHeaderName.EXPIRES);
-    if (expiresHeader != null && HttpDate.parseDate(expiresHeader.trim()) == null) {
+    if (expiresHeader != null && !isValidExpires(expiresHeader)) {
       throw new MalformedResponseException(
           "Expires must be a valid HTTP-date, got: " + expiresHeader);
     }
@@ -275,7 +253,7 @@ public class HttpResponseValidator {
     // ETag must match quoted-string or W/"..." format.
     // Conformance test #93 (RFC 9110 §8.8.3).
     String etag = headers.get(HttpHeaderName.ETAG);
-    if (etag != null && !isValidETag(etag.trim())) {
+    if (etag != null && !isValidETag(etag)) {
       throw new MalformedResponseException(
           "ETag must be a quoted-string or weak ETag (W/\"...\"), got: " + etag);
     }
@@ -283,7 +261,7 @@ public class HttpResponseValidator {
     // Content-Length must be a non-negative integer string.
     // Conformance test #97 (RFC 9110 §8.6).
     String contentLength = headers.get(HttpHeaderName.CONTENT_LENGTH);
-    if (contentLength != null && !isNonNegativeInteger(contentLength.trim())) {
+    if (contentLength != null && !isValidContentLength(contentLength)) {
       throw new MalformedResponseException(
           "Content-Length must be a non-negative integer, got: " + contentLength);
     }
@@ -291,7 +269,7 @@ public class HttpResponseValidator {
     // Allow must be comma-separated HTTP method tokens.
     // Conformance test #101 (RFC 9110 §10.2.1).
     String allow = headers.get(HttpHeaderName.ALLOW);
-    if (allow != null && !isValidTokenList(allow)) {
+    if (allow != null && !isValidAllow(allow)) {
       throw new MalformedResponseException(
           "Allow must be a comma-separated list of HTTP method tokens, got: " + allow);
     }
@@ -299,7 +277,7 @@ public class HttpResponseValidator {
     // Transfer-Encoding must be comma-separated coding tokens with no empty tokens.
     // Conformance test #105 (RFC 9112 §6.1).
     String transferEncoding = headers.get(HttpHeaderName.TRANSFER_ENCODING);
-    if (transferEncoding != null && !isValidTokenList(transferEncoding)) {
+    if (transferEncoding != null && !isValidTransferEncoding(transferEncoding)) {
       throw new MalformedResponseException(
           "Transfer-Encoding must be a comma-separated list of transfer coding tokens, got: "
               + transferEncoding);
@@ -308,19 +286,16 @@ public class HttpResponseValidator {
     // Vary must be "*" or comma-separated field-names.
     // Conformance test #106 (RFC 9110 §12.5.5).
     String vary = headers.get(HttpHeaderName.VARY);
-    if (vary != null) {
-      String varyTrimmed = vary.trim();
-      if (!varyTrimmed.equals("*") && !isValidTokenList(varyTrimmed)) {
-        throw new MalformedResponseException(
-            "Vary must be \"*\" or a comma-separated list of field-names, got: " + vary);
-      }
+    if (vary != null && !isValidVary(vary)) {
+      throw new MalformedResponseException(
+          "Vary must be \"*\" or a comma-separated list of field-names, got: " + vary);
     }
 
     // Strict-Transport-Security must have a valid max-age=<digits> directive; includeSubDomains and
     // preload must have no value; unknown directives are tolerated (RFC 6797 §6.1).
     // Conformance tests #21, #76.
     String sts = headers.get(HttpHeaderName.STRICT_TRANSPORT_SECURITY);
-    if (sts != null && !isValidSts(sts)) {
+    if (sts != null && !isValidStrictTransportSecurity(sts)) {
       throw new MalformedResponseException(
           "Strict-Transport-Security is invalid (must contain max-age=<digits>), got: " + sts);
     }
@@ -334,9 +309,53 @@ public class HttpResponseValidator {
     }
   }
 
-  // ── Helper methods ──────────────────────────────────────────────────────────
+  // ── Tier 1: Format primitives ────────────────────────────────────────────────
 
-  private static boolean isNonNegativeInteger(String s) {
+  /** Returns true if {@code value} is a valid HTTP-date. */
+  public static boolean isValidHttpDate(String value) {
+    return HttpDate.parseDate(value) != null;
+  }
+
+  /** Returns true if {@code value} parses as a valid URI. */
+  public static boolean isValidUri(String value) {
+    try {
+      new URI(value);
+      return true;
+    } catch (URISyntaxException e) {
+      return false;
+    }
+  }
+
+  /** Returns true if {@code s} is a valid HTTP token (RFC 9110 §5.6.2). */
+  public static boolean isToken(String s) {
+    if (s.isEmpty()) {
+      return false;
+    }
+    for (int i = 0; i < s.length(); i++) {
+      if (!isTokenChar(s.charAt(i))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Returns true if {@code s} is a valid comma-separated list of tokens with no empty items. Allows
+   * optional whitespace around commas per HTTP list syntax.
+   */
+  public static boolean isValidTokenList(String s) {
+    String[] parts = s.split(",", -1);
+    for (String part : parts) {
+      String token = part.trim();
+      if (token.isEmpty() || !isToken(token)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** Returns true if {@code s} consists entirely of ASCII decimal digits (no sign). */
+  public static boolean isNonNegativeInteger(String s) {
     if (s.isEmpty()) {
       return false;
     }
@@ -349,11 +368,63 @@ public class HttpResponseValidator {
     return true;
   }
 
+  // ── Tier 2: Per-header semantic validators ───────────────────────────────────
+
+  /** Returns true if {@code value} is a valid {@code Access-Control-Allow-Credentials} value. */
+  public static boolean isValidAccessControlAllowCredentials(String value) {
+    return value.trim().equals("true");
+  }
+
+  /** Returns true if {@code value} is a valid {@code Access-Control-Allow-Headers} value. */
+  public static boolean isValidAccessControlAllowHeaders(String value) {
+    String trimmed = value.trim();
+    return trimmed.equals("*") || isValidTokenList(trimmed);
+  }
+
+  /** Returns true if {@code value} is a valid {@code Access-Control-Allow-Methods} value. */
+  public static boolean isValidAccessControlAllowMethods(String value) {
+    String trimmed = value.trim();
+    return trimmed.equals("*") || isValidTokenList(trimmed);
+  }
+
+  /** Returns true if {@code value} is a valid {@code Access-Control-Allow-Origin} value. */
+  public static boolean isValidAccessControlAllowOrigin(String value) {
+    String trimmed = value.trim();
+    return trimmed.equals("*") || trimmed.equals("null") || isValidOrigin(trimmed);
+  }
+
+  /** Returns true if {@code value} is a valid {@code Access-Control-Expose-Headers} value. */
+  public static boolean isValidAccessControlExposeHeaders(String value) {
+    String trimmed = value.trim();
+    return trimmed.equals("*") || isValidTokenList(trimmed);
+  }
+
+  /** Returns true if {@code value} is a valid {@code Access-Control-Max-Age} value. */
+  public static boolean isValidAccessControlMaxAge(String value) {
+    return isNonNegativeInteger(value.trim());
+  }
+
+  /** Returns true if {@code value} is a valid {@code Age} value. */
+  public static boolean isValidAge(String value) {
+    return isNonNegativeInteger(value.trim());
+  }
+
+  /** Returns true if {@code value} is a valid {@code Allow} value. */
+  public static boolean isValidAllow(String value) {
+    return isValidTokenList(value.trim());
+  }
+
+  /** Returns true if {@code value} is a valid {@code Content-Length} value. */
+  public static boolean isValidContentLength(String value) {
+    return isNonNegativeInteger(value.trim());
+  }
+
   /**
-   * Returns true if {@code s} is a valid ETag: either a strong ETag ({@code "..."}) or a weak ETag
-   * ({@code W/"..."}).
+   * Returns true if {@code value} is a valid {@code ETag} value: either a strong ETag ({@code
+   * "..."}) or a weak ETag ({@code W/"..."}).
    */
-  private static boolean isValidETag(String s) {
+  public static boolean isValidETag(String value) {
+    String s = value.trim();
     if (s.startsWith("W/\"") && s.endsWith("\"") && s.length() >= 4) {
       return isValidETagContent(s, 3, s.length() - 1);
     }
@@ -362,6 +433,56 @@ public class HttpResponseValidator {
     }
     return false;
   }
+
+  /** Returns true if {@code value} is a valid {@code Expires} value. */
+  public static boolean isValidExpires(String value) {
+    return isValidHttpDate(value.trim());
+  }
+
+  /** Returns true if {@code value} is a valid {@code Last-Modified} value. */
+  public static boolean isValidLastModified(String value) {
+    return isValidHttpDate(value.trim());
+  }
+
+  /** Returns true if {@code value} is a valid {@code Location} value. */
+  public static boolean isValidLocation(String value) {
+    return isValidUri(value.trim());
+  }
+
+  /** Returns true if {@code value} is a valid {@code Retry-After} value. */
+  public static boolean isValidRetryAfter(String value) {
+    String trimmed = value.trim();
+    return isNonNegativeInteger(trimmed) || isValidHttpDate(trimmed);
+  }
+
+  /** Returns true if {@code value} is a valid {@code Strict-Transport-Security} value. */
+  public static boolean isValidStrictTransportSecurity(String value) {
+    return isValidSts(value);
+  }
+
+  /** Returns true if {@code value} is a valid {@code Transfer-Encoding} value. */
+  public static boolean isValidTransferEncoding(String value) {
+    return isValidTokenList(value.trim());
+  }
+
+  /** Returns true if {@code value} is a valid {@code Vary} value. */
+  public static boolean isValidVary(String value) {
+    String trimmed = value.trim();
+    return trimmed.equals("*") || isValidTokenList(trimmed);
+  }
+
+  /** Returns true if {@code value} is a valid {@code X-Content-Type-Options} value. */
+  public static boolean isValidXContentTypeOptions(String value) {
+    return value.trim().equalsIgnoreCase("nosniff");
+  }
+
+  /** Returns true if {@code value} is a valid {@code X-Frame-Options} value. */
+  public static boolean isValidXFrameOptions(String value) {
+    String xfo = value.trim().toUpperCase(Locale.US);
+    return xfo.equals("DENY") || xfo.equals("SAMEORIGIN");
+  }
+
+  // ── Private helpers ──────────────────────────────────────────────────────────
 
   /** Checks that the ETag opaque-tag characters contain no unescaped quotes. */
   private static boolean isValidETagContent(String s, int start, int end) {
@@ -388,61 +509,6 @@ public class HttpResponseValidator {
     } catch (URISyntaxException e) {
       return false;
     }
-  }
-
-  /**
-   * Returns true if {@code s} is a valid comma-separated list of tokens with no empty items. Allows
-   * optional whitespace around commas per HTTP list syntax.
-   */
-  private static boolean isValidTokenList(String s) {
-    String[] parts = s.split(",", -1);
-    for (String part : parts) {
-      String token = part.trim();
-      if (token.isEmpty() || !isToken(token)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /** Returns true if {@code s} is a valid HTTP token (RFC 9110 §5.6.2). */
-  private static boolean isToken(String s) {
-    if (s.isEmpty()) {
-      return false;
-    }
-    for (int i = 0; i < s.length(); i++) {
-      if (!isTokenChar(s.charAt(i))) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /**
-   * Returns true if {@code c} is a valid HTTP token character (RFC 9110 §5.6.2).
-   *
-   * <p>tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." / "^" / "_" / "`" / "|" /
-   * "~" / DIGIT / ALPHA
-   */
-  private static boolean isTokenChar(char c) {
-    return (c >= 'a' && c <= 'z')
-        || (c >= 'A' && c <= 'Z')
-        || (c >= '0' && c <= '9')
-        || c == '!'
-        || c == '#'
-        || c == '$'
-        || c == '%'
-        || c == '&'
-        || c == '\''
-        || c == '*'
-        || c == '+'
-        || c == '-'
-        || c == '.'
-        || c == '^'
-        || c == '_'
-        || c == '`'
-        || c == '|'
-        || c == '~';
   }
 
   /**
@@ -502,5 +568,32 @@ public class HttpResponseValidator {
             "Cache-Control " + directiveName + " value must not be a quoted-string, got: " + value);
       }
     }
+  }
+
+  /**
+   * Returns true if {@code c} is a valid HTTP token character (RFC 9110 §5.6.2).
+   *
+   * <p>tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." / "^" / "_" / "`" / "|" /
+   * "~" / DIGIT / ALPHA
+   */
+  private static boolean isTokenChar(char c) {
+    return (c >= 'a' && c <= 'z')
+        || (c >= 'A' && c <= 'Z')
+        || (c >= '0' && c <= '9')
+        || c == '!'
+        || c == '#'
+        || c == '$'
+        || c == '%'
+        || c == '&'
+        || c == '\''
+        || c == '*'
+        || c == '+'
+        || c == '-'
+        || c == '.'
+        || c == '^'
+        || c == '_'
+        || c == '`'
+        || c == '|'
+        || c == '~';
   }
 }

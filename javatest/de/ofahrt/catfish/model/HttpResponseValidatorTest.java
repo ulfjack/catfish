@@ -1,6 +1,8 @@
 package de.ofahrt.catfish.model;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -1170,5 +1172,381 @@ public class HttpResponseValidatorTest {
             .addHeader(HttpHeaderName.CONTENT_LENGTH, "0")
             .build();
     validator.validate(response);
+  }
+
+  // ── Tier 1 static primitives ─────────────────────────────────────────────────
+
+  @Test
+  public void isValidHttpDateValidReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidHttpDate("Sun, 06 Nov 1994 08:49:37 GMT"));
+  }
+
+  @Test
+  public void isValidHttpDateInvalidReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidHttpDate("yesterday"));
+  }
+
+  @Test
+  public void isValidUriValidReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidUri("https://example.com/path?q=1"));
+  }
+
+  @Test
+  public void isValidUriRelativeReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidUri("/relative/path"));
+  }
+
+  @Test
+  public void isValidUriInvalidReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidUri("htt ps://bad url"));
+  }
+
+  @Test
+  public void isTokenValidReturnsTrue() {
+    assertTrue(HttpResponseValidator.isToken("GET"));
+    assertTrue(HttpResponseValidator.isToken("chunked"));
+    assertTrue(HttpResponseValidator.isToken("max-age"));
+  }
+
+  @Test
+  public void isTokenEmptyReturnsFalse() {
+    assertFalse(HttpResponseValidator.isToken(""));
+  }
+
+  @Test
+  public void isTokenWithSpaceReturnsFalse() {
+    assertFalse(HttpResponseValidator.isToken("not valid"));
+  }
+
+  @Test
+  public void isValidTokenListValidReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidTokenList("GET, POST, HEAD"));
+    assertTrue(HttpResponseValidator.isValidTokenList("chunked"));
+  }
+
+  @Test
+  public void isValidTokenListEmptyItemReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidTokenList("GET,,POST"));
+  }
+
+  @Test
+  public void isValidTokenListTrailingCommaReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidTokenList("GET, "));
+  }
+
+  @Test
+  public void isNonNegativeIntegerZeroReturnsTrue() {
+    assertTrue(HttpResponseValidator.isNonNegativeInteger("0"));
+  }
+
+  @Test
+  public void isNonNegativeIntegerPositiveReturnsTrue() {
+    assertTrue(HttpResponseValidator.isNonNegativeInteger("3600"));
+  }
+
+  @Test
+  public void isNonNegativeIntegerEmptyReturnsFalse() {
+    assertFalse(HttpResponseValidator.isNonNegativeInteger(""));
+  }
+
+  @Test
+  public void isNonNegativeIntegerNegativeReturnsFalse() {
+    assertFalse(HttpResponseValidator.isNonNegativeInteger("-1"));
+  }
+
+  @Test
+  public void isNonNegativeIntegerNonDigitReturnsFalse() {
+    assertFalse(HttpResponseValidator.isNonNegativeInteger("1.5"));
+  }
+
+  // ── Tier 2 per-header static validators ──────────────────────────────────────
+
+  @Test
+  public void isValidAccessControlAllowCredentialsTrueReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidAccessControlAllowCredentials("true"));
+  }
+
+  @Test
+  public void isValidAccessControlAllowCredentialsFalseReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidAccessControlAllowCredentials("false"));
+  }
+
+  @Test
+  public void isValidAccessControlAllowCredentialsCaseReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidAccessControlAllowCredentials("TRUE"));
+  }
+
+  @Test
+  public void isValidAccessControlAllowHeadersWildcardReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidAccessControlAllowHeaders("*"));
+  }
+
+  @Test
+  public void isValidAccessControlAllowHeadersTokenListReturnsTrue() {
+    assertTrue(
+        HttpResponseValidator.isValidAccessControlAllowHeaders("Content-Type, Authorization"));
+  }
+
+  @Test
+  public void isValidAccessControlAllowHeadersEmptyTokenReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidAccessControlAllowHeaders(",Authorization"));
+  }
+
+  @Test
+  public void isValidAccessControlAllowMethodsWildcardReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidAccessControlAllowMethods("*"));
+  }
+
+  @Test
+  public void isValidAccessControlAllowMethodsTokenListReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidAccessControlAllowMethods("GET, POST, PUT"));
+  }
+
+  @Test
+  public void isValidAccessControlAllowMethodsTrailingCommaReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidAccessControlAllowMethods("GET, "));
+  }
+
+  @Test
+  public void isValidAccessControlAllowOriginWildcardReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidAccessControlAllowOrigin("*"));
+  }
+
+  @Test
+  public void isValidAccessControlAllowOriginNullLiteralReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidAccessControlAllowOrigin("null"));
+  }
+
+  @Test
+  public void isValidAccessControlAllowOriginValidOriginReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidAccessControlAllowOrigin("https://example.com"));
+    assertTrue(HttpResponseValidator.isValidAccessControlAllowOrigin("https://example.com:8080"));
+  }
+
+  @Test
+  public void isValidAccessControlAllowOriginWithPathReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidAccessControlAllowOrigin("https://example.com/path"));
+  }
+
+  @Test
+  public void isValidAccessControlAllowOriginInvalidReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidAccessControlAllowOrigin("not-an-origin"));
+  }
+
+  @Test
+  public void isValidAccessControlExposeHeadersWildcardReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidAccessControlExposeHeaders("*"));
+  }
+
+  @Test
+  public void isValidAccessControlExposeHeadersTokenListReturnsTrue() {
+    assertTrue(
+        HttpResponseValidator.isValidAccessControlExposeHeaders("X-Custom-Header, Content-Length"));
+  }
+
+  @Test
+  public void isValidAccessControlExposeHeadersInvalidReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidAccessControlExposeHeaders("invalid header!"));
+  }
+
+  @Test
+  public void isValidAccessControlMaxAgeZeroReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidAccessControlMaxAge("0"));
+  }
+
+  @Test
+  public void isValidAccessControlMaxAgeNegativeReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidAccessControlMaxAge("-1"));
+  }
+
+  @Test
+  public void isValidAgeZeroReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidAge("0"));
+  }
+
+  @Test
+  public void isValidAgeNegativeReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidAge("-1"));
+  }
+
+  @Test
+  public void isValidAgeNonIntegerReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidAge("old"));
+  }
+
+  @Test
+  public void isValidAllowValidReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidAllow("GET, POST, HEAD"));
+  }
+
+  @Test
+  public void isValidAllowEmptyTokenReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidAllow("GET,,POST"));
+  }
+
+  @Test
+  public void isValidAllowInvalidTokenReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidAllow("GET (POST)"));
+  }
+
+  @Test
+  public void isValidContentLengthZeroReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentLength("0"));
+  }
+
+  @Test
+  public void isValidContentLengthNegativeReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentLength("-1"));
+  }
+
+  @Test
+  public void isValidContentLengthNonIntegerReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentLength("big"));
+  }
+
+  @Test
+  public void isValidETagStrongReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidETag("\"abc123\""));
+  }
+
+  @Test
+  public void isValidETagWeakReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidETag("W/\"abc123\""));
+  }
+
+  @Test
+  public void isValidETagEmptyStrongReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidETag("\"\""));
+  }
+
+  @Test
+  public void isValidETagUnquotedReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidETag("abc123"));
+  }
+
+  @Test
+  public void isValidETagWeakNoQuotesReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidETag("W/abc"));
+  }
+
+  @Test
+  public void isValidExpiresValidDateReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidExpires("Sun, 06 Nov 1994 08:49:37 GMT"));
+  }
+
+  @Test
+  public void isValidExpiresInvalidReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidExpires("never"));
+  }
+
+  @Test
+  public void isValidLastModifiedValidDateReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidLastModified("Sun, 06 Nov 1994 08:49:37 GMT"));
+  }
+
+  @Test
+  public void isValidLastModifiedInvalidReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidLastModified("yesterday"));
+  }
+
+  @Test
+  public void isValidLocationValidUriReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidLocation("https://example.com/path?q=1"));
+  }
+
+  @Test
+  public void isValidLocationRelativeReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidLocation("/new/path"));
+  }
+
+  @Test
+  public void isValidLocationInvalidReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidLocation("htt ps://bad url"));
+  }
+
+  @Test
+  public void isValidRetryAfterIntegerReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidRetryAfter("120"));
+  }
+
+  @Test
+  public void isValidRetryAfterHttpDateReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidRetryAfter("Sun, 06 Nov 1994 08:49:37 GMT"));
+  }
+
+  @Test
+  public void isValidRetryAfterInvalidReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidRetryAfter("tomorrow"));
+  }
+
+  @Test
+  public void isValidStrictTransportSecurityValidReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidStrictTransportSecurity("max-age=31536000"));
+    assertTrue(
+        HttpResponseValidator.isValidStrictTransportSecurity(
+            "max-age=31536000; includeSubDomains"));
+  }
+
+  @Test
+  public void isValidStrictTransportSecurityMissingMaxAgeReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidStrictTransportSecurity("includeSubDomains"));
+  }
+
+  @Test
+  public void isValidStrictTransportSecurityQuotedMaxAgeReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidStrictTransportSecurity("max-age=\"31536000\""));
+  }
+
+  @Test
+  public void isValidTransferEncodingValidReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidTransferEncoding("chunked"));
+    assertTrue(HttpResponseValidator.isValidTransferEncoding("gzip, chunked"));
+  }
+
+  @Test
+  public void isValidTransferEncodingEmptyTokenReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidTransferEncoding("gzip,,chunked"));
+  }
+
+  @Test
+  public void isValidVaryStarReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidVary("*"));
+  }
+
+  @Test
+  public void isValidVaryFieldNamesReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidVary("Accept-Encoding, Accept-Language"));
+  }
+
+  @Test
+  public void isValidVaryEmptyTokenReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidVary("Accept,,Accept-Language"));
+  }
+
+  @Test
+  public void isValidXContentTypeOptionsNosniffReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidXContentTypeOptions("nosniff"));
+    assertTrue(HttpResponseValidator.isValidXContentTypeOptions("NOSNIFF"));
+  }
+
+  @Test
+  public void isValidXContentTypeOptionsInvalidReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidXContentTypeOptions("sniff"));
+  }
+
+  @Test
+  public void isValidXFrameOptionsDenyReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidXFrameOptions("DENY"));
+  }
+
+  @Test
+  public void isValidXFrameOptionsSameoriginReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidXFrameOptions("SAMEORIGIN"));
+    assertTrue(HttpResponseValidator.isValidXFrameOptions("sameorigin"));
+  }
+
+  @Test
+  public void isValidXFrameOptionsAllowFromReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidXFrameOptions("ALLOW-FROM https://example.com"));
   }
 }
