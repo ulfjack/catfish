@@ -33,6 +33,8 @@ public final class HttpHeaderName {
   public static final String CONTENT_MD5 = "Content-MD5";
   public static final String CONTENT_RANGE = "Content-Range";
   public static final String CONTENT_SECURITY_POLICY = "Content-Security-Policy";
+  public static final String CONTENT_SECURITY_POLICY_REPORT_ONLY =
+      "Content-Security-Policy-Report-Only";
   public static final String CONTENT_TYPE = "Content-Type";
   public static final String COOKIE = "Cookie";
   public static final String CROSS_ORIGIN_EMBEDDER_POLICY = "Cross-Origin-Embedder-Policy";

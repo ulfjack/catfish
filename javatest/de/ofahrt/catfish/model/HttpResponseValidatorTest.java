@@ -2582,4 +2582,144 @@ public class HttpResponseValidatorTest {
   public void isValidCoopInvalidReturnsFalse() {
     assertFalse(HttpResponseValidator.isValidCrossOriginOpenerPolicy("invalid"));
   }
+
+  // ── Content-Security-Policy integration tests (#72) ──────────────────────────
+
+  @Test
+  public void cspDefaultSrcSelfDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_SECURITY_POLICY, "default-src 'self'")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void cspMultipleDirectivesDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(
+                HttpHeaderName.CONTENT_SECURITY_POLICY, "script-src 'none'; object-src 'none'")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void cspMultiplePoliciesDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_SECURITY_POLICY, "default-src 'self', script-src *")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void cspTrailingSemicolonDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_SECURITY_POLICY, "default-src 'self';")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void cspEmptyThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_SECURITY_POLICY, "")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void cspEmptyPolicyInListThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_SECURITY_POLICY, "default-src 'self',,")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // ── Content-Security-Policy-Report-Only integration tests (#73) ──────────────
+
+  @Test
+  public void cspReportOnlyDefaultSrcSelfDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_SECURITY_POLICY_REPORT_ONLY, "default-src 'self'")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void cspReportOnlyInvalidThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_SECURITY_POLICY_REPORT_ONLY, "@invalid")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // ── isValidContentSecurityPolicy unit tests (#72) ────────────────────────────
+
+  @Test
+  public void isValidCspDefaultSrcSelfReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentSecurityPolicy("default-src 'self'"));
+  }
+
+  @Test
+  public void isValidCspMultipleDirectivesReturnsTrue() {
+    assertTrue(
+        HttpResponseValidator.isValidContentSecurityPolicy("script-src 'none'; object-src 'none'"));
+  }
+
+  @Test
+  public void isValidCspWildcardSourcesReturnsTrue() {
+    assertTrue(
+        HttpResponseValidator.isValidContentSecurityPolicy("default-src *; img-src data: https:"));
+  }
+
+  @Test
+  public void isValidCspMultiplePoliciesReturnsTrue() {
+    assertTrue(
+        HttpResponseValidator.isValidContentSecurityPolicy("default-src 'self', script-src *"));
+  }
+
+  @Test
+  public void isValidCspTrailingSemicolonReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentSecurityPolicy("default-src 'self';"));
+  }
+
+  @Test
+  public void isValidCspBareDirectiveNameReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidContentSecurityPolicy("sandbox"));
+  }
+
+  @Test
+  public void isValidCspEmptyReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentSecurityPolicy(""));
+  }
+
+  @Test
+  public void isValidCspEmptyPolicyInListReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentSecurityPolicy("default-src 'self',,policy2"));
+  }
+
+  @Test
+  public void isValidCspInvalidDirectiveNameCharReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentSecurityPolicy("@invalid"));
+  }
+
+  @Test
+  public void isValidCspControlCharInValueReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidContentSecurityPolicy("default-src\u0001value"));
+  }
 }

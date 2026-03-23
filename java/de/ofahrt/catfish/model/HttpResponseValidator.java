@@ -363,6 +363,21 @@ public class HttpResponseValidator {
       throw new MalformedResponseException(
           "Permissions-Policy is invalid, got: " + permissionsPolicy);
     }
+
+    // Content-Security-Policy must follow CSP ABNF.
+    // Conformance test #72 (W3C CSP Level 3).
+    String csp = headers.get(HttpHeaderName.CONTENT_SECURITY_POLICY);
+    if (csp != null && !isValidContentSecurityPolicy(csp)) {
+      throw new MalformedResponseException("Content-Security-Policy is invalid, got: " + csp);
+    }
+
+    // Content-Security-Policy-Report-Only uses the same grammar.
+    // Conformance test #73 (W3C CSP Level 3).
+    String cspro = headers.get(HttpHeaderName.CONTENT_SECURITY_POLICY_REPORT_ONLY);
+    if (cspro != null && !isValidContentSecurityPolicyReportOnly(cspro)) {
+      throw new MalformedResponseException(
+          "Content-Security-Policy-Report-Only is invalid, got: " + cspro);
+    }
   }
 
   // ── Tier 1: Format primitives ────────────────────────────────────────────────
@@ -781,6 +796,19 @@ public class HttpResponseValidator {
     return true;
   }
 
+  /** Returns true if {@code value} is a valid {@code Content-Security-Policy} field value. */
+  public static boolean isValidContentSecurityPolicy(String value) {
+    return isValidCspPolicyList(value);
+  }
+
+  /**
+   * Returns true if {@code value} is a valid {@code Content-Security-Policy-Report-Only} field
+   * value (identical grammar to Content-Security-Policy).
+   */
+  public static boolean isValidContentSecurityPolicyReportOnly(String value) {
+    return isValidCspPolicyList(value);
+  }
+
   /** Returns true if {@code value} is a valid {@code Cross-Origin-Resource-Policy} value. */
   public static boolean isValidCrossOriginResourcePolicy(String value) {
     String v = value.trim().toLowerCase(Locale.US);
@@ -798,6 +826,41 @@ public class HttpResponseValidator {
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────────
+
+  private static boolean isValidCspPolicyList(String value) {
+    String s = value.trim();
+    if (s.isEmpty()) return false;
+    for (String policy : s.split(",", -1)) {
+      if (!isValidCspPolicy(policy)) return false;
+    }
+    return true;
+  }
+
+  private static boolean isValidCspPolicy(String policy) {
+    boolean hasDirective = false;
+    for (String directive : policy.split(";", -1)) {
+      String d = directive.trim();
+      if (d.isEmpty()) continue; // trailing semicolons OK
+      // directive-name = 1*( ALPHA / DIGIT / "-" )
+      int i = 0;
+      while (i < d.length() && isCspDirectiveNameChar(d.charAt(i))) i++;
+      if (i == 0) return false; // empty or invalid name
+      // directive-value: optional, preceded by 1*WSP
+      if (i < d.length()) {
+        if (d.charAt(i) != ' ' && d.charAt(i) != '\t') return false;
+        for (int j = i; j < d.length(); j++) {
+          char c = d.charAt(j);
+          if (c != ' ' && c != '\t' && (c < 0x21 || c > 0x7e)) return false;
+        }
+      }
+      hasDirective = true;
+    }
+    return hasDirective; // at least one directive required
+  }
+
+  private static boolean isCspDirectiveNameChar(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-';
+  }
 
   private static boolean isValidCrossOriginPolicy(String value, List<String> validTokens) {
     String s = value.trim();
@@ -1110,7 +1173,7 @@ public class HttpResponseValidator {
     return c == ' ' || c == '\t';
   }
 
-   /**
+  /**
    * Returns true if {@code c} is a valid HTTP token character (RFC 9110 §5.6.2).
    *
    * <p>tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." / "^" / "_" / "`" / "|" /
