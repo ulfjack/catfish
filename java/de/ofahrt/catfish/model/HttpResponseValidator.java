@@ -355,6 +355,14 @@ public class HttpResponseValidator {
     if (coop != null && !isValidCrossOriginOpenerPolicy(coop)) {
       throw new MalformedResponseException("Cross-Origin-Opener-Policy is invalid, got: " + coop);
     }
+
+    // Permissions-Policy must be a valid sf-dictionary (RFC 8941 §3.2).
+    // Conformance test #74 (Permissions Policy spec).
+    String permissionsPolicy = headers.get(HttpHeaderName.PERMISSIONS_POLICY);
+    if (permissionsPolicy != null && !isValidPermissionsPolicy(permissionsPolicy)) {
+      throw new MalformedResponseException(
+          "Permissions-Policy is invalid, got: " + permissionsPolicy);
+    }
   }
 
   // ── Tier 1: Format primitives ────────────────────────────────────────────────
@@ -733,6 +741,46 @@ public class HttpResponseValidator {
     return hasTag;
   }
 
+  /**
+   * Returns true if {@code value} is a valid {@code Permissions-Policy} field value.
+   *
+   * <p>Permissions-Policy is an sf-dictionary (RFC 8941 §3.2). Each entry maps an sf-key (feature
+   * name) to a member-value (sf-item or inner-list) or is a bare key (implicit boolean {@code
+   * true}).
+   */
+  public static boolean isValidPermissionsPolicy(String value) {
+    String s = value.trim();
+    if (s.isEmpty()) return false;
+    int len = s.length();
+    int i = 0;
+    boolean first = true;
+    while (i < len) {
+      if (!first) {
+        // OWS "," OWS
+        while (i < len && isSfOws(s.charAt(i))) i++;
+        if (i >= len || s.charAt(i) != ',') return false;
+        i++;
+        while (i < len && isSfOws(s.charAt(i))) i++;
+        if (i >= len) return false; // trailing comma
+      }
+      first = false;
+      // member-key
+      i = consumeSfKey(s, i);
+      if (i < 0) return false;
+      // "=" member-value, or parameters (bare member = boolean true)
+      if (i < len && s.charAt(i) == '=') {
+        i++;
+        if (i >= len) return false;
+        i = (s.charAt(i) == '(') ? consumeSfInnerList(s, i) : consumeSfItem(s, i);
+        if (i < 0) return false;
+      } else {
+        i = consumeSfParameters(s, i);
+        if (i < 0) return false;
+      }
+    }
+    return true;
+  }
+
   /** Returns true if {@code value} is a valid {@code Cross-Origin-Resource-Policy} value. */
   public static boolean isValidCrossOriginResourcePolicy(String value) {
     String v = value.trim().toLowerCase(Locale.US);
@@ -887,7 +935,182 @@ public class HttpResponseValidator {
     return hasMaxAge;
   }
 
+  // ── SF (RFC 8941) helpers ─────────────────────────────────────────────────────
+
+  /** Returns the index after an sf-key, or -1 if invalid. */
+  private static int consumeSfKey(String s, int i) {
+    if (i >= s.length()) return -1;
+    char c = s.charAt(i);
+    if (!((c >= 'a' && c <= 'z') || c == '*')) return -1;
+    i++;
+    while (i < s.length()) {
+      char ch = s.charAt(i);
+      if ((ch >= 'a' && ch <= 'z')
+          || (ch >= '0' && ch <= '9')
+          || ch == '_'
+          || ch == '-'
+          || ch == '.'
+          || ch == '*') i++;
+      else break;
+    }
+    return i;
+  }
+
   /**
+   * Returns the index after an sf-inner-list (including its trailing parameters), or -1.
+   *
+   * <pre>
+   * inner-list = "(" *SP [ inner-list-member *( 1*SP inner-list-member ) *SP ] ")" parameters
+   * </pre>
+   */
+  private static int consumeSfInnerList(String s, int i) {
+    if (i >= s.length() || s.charAt(i) != '(') return -1;
+    i++;
+    while (i < s.length() && s.charAt(i) == ' ') i++; // *SP
+    while (i < s.length() && s.charAt(i) != ')') {
+      i = consumeSfItem(s, i); // inner-list-member = sf-item
+      if (i < 0) return -1;
+      if (i < s.length() && s.charAt(i) != ')') {
+        if (s.charAt(i) != ' ') return -1; // 1*SP required between members
+        while (i < s.length() && s.charAt(i) == ' ') i++;
+      }
+    }
+    if (i >= s.length()) return -1; // unclosed
+    i++; // consume ')'
+    return consumeSfParameters(s, i);
+  }
+
+  /** Returns the index after an sf-item (bare-item + parameters), or -1. */
+  private static int consumeSfItem(String s, int i) {
+    i = consumeSfBareItem(s, i);
+    if (i < 0) return -1;
+    return consumeSfParameters(s, i);
+  }
+
+  /** Returns the index after an sf-bare-item (any type), or -1. */
+  private static int consumeSfBareItem(String s, int i) {
+    if (i >= s.length()) return -1;
+    char c = s.charAt(i);
+    if (c == '"') return consumeSfString(s, i);
+    if (c == '?') {
+      if (i + 1 >= s.length()) return -1;
+      char d = s.charAt(i + 1);
+      return (d == '0' || d == '1') ? i + 2 : -1;
+    }
+    if (c == ':') return consumeSfBinary(s, i);
+    if (c == '-' || (c >= '0' && c <= '9')) return consumeSfNumber(s, i);
+    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '*') return consumeSfToken(s, i);
+    return -1;
+  }
+
+  /**
+   * Returns the index after an sf-string, or -1.
+   *
+   * <pre>
+   * sf-string = DQUOTE *chr DQUOTE
+   * chr       = unescaped / "\" DQUOTE / "\" "\"
+   * unescaped = %x20-21 / %x23-5B / %x5D-7E
+   * </pre>
+   */
+  private static int consumeSfString(String s, int i) {
+    if (i >= s.length() || s.charAt(i) != '"') return -1;
+    i++;
+    while (i < s.length()) {
+      char c = s.charAt(i);
+      if (c == '"') return i + 1;
+      if (c == '\\') {
+        i++;
+        if (i >= s.length()) return -1;
+        char next = s.charAt(i);
+        if (next != '"' && next != '\\') return -1;
+        i++;
+      } else if ((c >= 0x20 && c <= 0x21) || (c >= 0x23 && c <= 0x5B) || (c >= 0x5D && c <= 0x7E)) {
+        i++;
+      } else {
+        return -1;
+      }
+    }
+    return -1; // unclosed
+  }
+
+  /**
+   * Returns the index after an sf-token, or -1.
+   *
+   * <pre>
+   * sf-token = ( ALPHA / "*" ) *( tchar / ":" / "/" )
+   * </pre>
+   */
+  private static int consumeSfToken(String s, int i) {
+    if (i >= s.length()) return -1;
+    char c = s.charAt(i);
+    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '*')) return -1;
+    i++;
+    while (i < s.length() && (isTokenChar(s.charAt(i)) || s.charAt(i) == ':' || s.charAt(i) == '/'))
+      i++;
+    return i;
+  }
+
+  /** Returns the index after an sf-integer or sf-decimal, or -1. */
+  private static int consumeSfNumber(String s, int i) {
+    if (i < s.length() && s.charAt(i) == '-') i++;
+    int start = i;
+    while (i < s.length() && s.charAt(i) >= '0' && s.charAt(i) <= '9') i++;
+    if (i == start) return -1;
+    if (i < s.length() && s.charAt(i) == '.') { // decimal
+      i++;
+      start = i;
+      while (i < s.length() && s.charAt(i) >= '0' && s.charAt(i) <= '9') i++;
+      if (i == start) return -1;
+    }
+    return i;
+  }
+
+  /** Returns the index after an sf-binary {@code :base64:}, or -1. */
+  private static int consumeSfBinary(String s, int i) {
+    if (i >= s.length() || s.charAt(i) != ':') return -1;
+    i++;
+    while (i < s.length()) {
+      char c = s.charAt(i);
+      if (c == ':') return i + 1;
+      if ((c >= 'A' && c <= 'Z')
+          || (c >= 'a' && c <= 'z')
+          || (c >= '0' && c <= '9')
+          || c == '+'
+          || c == '/'
+          || c == '=') i++;
+      else return -1;
+    }
+    return -1; // unclosed
+  }
+
+  /**
+   * Returns the index after sf-parameters, or -1.
+   *
+   * <pre>
+   * parameters = *( ";" OWS param )
+   * param      = param-key [ "=" bare-item ]
+   * </pre>
+   */
+  private static int consumeSfParameters(String s, int i) {
+    while (i < s.length() && s.charAt(i) == ';') {
+      i++;
+      while (i < s.length() && isSfOws(s.charAt(i))) i++;
+      i = consumeSfKey(s, i); // param-key
+      if (i < 0) return -1;
+      if (i < s.length() && s.charAt(i) == '=') {
+        i++;
+        i = consumeSfBareItem(s, i);
+        if (i < 0) return -1;
+      }
+    }
+    return i;
+  }
+
+  private static boolean isSfOws(char c) {
+    return c == ' ' || c == '\t';
+  }
+
+   /**
    * Returns true if {@code c} is a valid HTTP token character (RFC 9110 §5.6.2).
    *
    * <p>tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." / "^" / "_" / "`" / "|" /

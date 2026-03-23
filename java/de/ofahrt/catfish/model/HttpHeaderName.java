@@ -52,6 +52,7 @@ public final class HttpHeaderName {
   public static final String LAST_MODIFIED = "Last-Modified";
   public static final String LOCATION = "Location";
   public static final String MAX_FORWARDS = "Max-Forwards";
+  public static final String PERMISSIONS_POLICY = "Permissions-Policy";
   public static final String PRAGMA = "Pragma";
   public static final String PROXY_AUTHENTICATE = "Proxy-Authenticate";
   public static final String PROXY_AUTHORIZATION = "Proxy-Authorization";

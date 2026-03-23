@@ -2182,6 +2182,147 @@ public class HttpResponseValidatorTest {
     assertFalse(HttpResponseValidator.isValidContentLanguage("en-"));
   }
 
+  // ── Permissions-Policy integration tests (#74) ───────────────────────────────
+
+  @Test
+  public void permissionsPolicyAllowAllDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.PERMISSIONS_POLICY, "camera=*")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void permissionsPolicyDenyAllDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.PERMISSIONS_POLICY, "camera=()")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void permissionsPolicyWithOriginDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.PERMISSIONS_POLICY, "camera=(\"https://example.com\")")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void permissionsPolicyMultipleEntriesDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.PERMISSIONS_POLICY, "camera=*, microphone=()")
+            .build();
+    validator.validate(response);
+  }
+
+  @Test
+  public void permissionsPolicyEmptyThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.PERMISSIONS_POLICY, "")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void permissionsPolicyUppercaseKeyThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.PERMISSIONS_POLICY, "Camera=*")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void permissionsPolicyTrailingCommaThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.PERMISSIONS_POLICY, "camera=*,")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // ── isValidPermissionsPolicy unit tests (#74) ─────────────────────────────────
+
+  @Test
+  public void isValidPermissionsPolicyAllowAllReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidPermissionsPolicy("camera=*"));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyDenyAllReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidPermissionsPolicy("camera=()"));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyWithOriginReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidPermissionsPolicy("camera=(\"https://example.com\")"));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyMultipleOriginsReturnsTrue() {
+    assertTrue(
+        HttpResponseValidator.isValidPermissionsPolicy(
+            "camera=(\"https://a.com\" \"https://b.com\")"));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyMultipleEntriesReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidPermissionsPolicy("camera=*, microphone=()"));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyBareKeyReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidPermissionsPolicy("camera"));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyWithParameterReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidPermissionsPolicy("camera=*;report-to=default"));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyEmptyReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidPermissionsPolicy(""));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyUppercaseKeyReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidPermissionsPolicy("Camera=*"));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyMissingValueReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidPermissionsPolicy("camera="));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyTrailingCommaReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidPermissionsPolicy("camera=*,"));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyUnclosedInnerListReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidPermissionsPolicy("camera=(\"https://example.com\""));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyUnclosedStringReturnsFalse() {
+    assertFalse(HttpResponseValidator.isValidPermissionsPolicy("camera=(\"unclosed)"));
+  }
+
   // ── Cross-Origin-Resource-Policy integration tests (#71) ─────────────────────
 
   @Test
