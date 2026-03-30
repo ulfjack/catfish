@@ -6,6 +6,7 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
+import de.ofahrt.catfish.model.server.ConnectPolicy;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
@@ -150,12 +151,14 @@ public final class CatfishHttpServer {
     engine.shutdown();
   }
 
-  public void listenConnectProxy(int port) throws IOException, InterruptedException {
-    engine.listenAll(port, new ConnectTunnelServerHandler(executor));
+  public void listenConnectProxy(int port, ConnectPolicy policy)
+      throws IOException, InterruptedException {
+    engine.listenAll(port, new ConnectTunnelServerHandler(executor, policy));
   }
 
-  public void listenConnectProxyLocal(int port) throws IOException, InterruptedException {
-    engine.listenLocalhost(port, new ConnectTunnelServerHandler(executor));
+  public void listenConnectProxyLocal(int port, ConnectPolicy policy)
+      throws IOException, InterruptedException {
+    engine.listenLocalhost(port, new ConnectTunnelServerHandler(executor, policy));
   }
 
   public void listenHttpLocal(int port) throws IOException, InterruptedException {

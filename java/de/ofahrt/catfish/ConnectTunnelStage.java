@@ -4,6 +4,8 @@ import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.network.Connection;
+import de.ofahrt.catfish.model.server.ConnectPolicy;
+import de.ofahrt.catfish.model.server.ConnectTarget;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -19,21 +21,26 @@ final class ConnectTunnelStage implements Stage {
   private enum TunnelState {
     READING_CONNECT,
     CONNECTING,
-    SENDING_200,
+    SENDING_RESPONSE,
     FORWARDING
   }
 
   private static final byte[] RESPONSE_200 =
       "HTTP/1.1 200 Connection Established\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+  private static final byte[] RESPONSE_403 =
+      "HTTP/1.1 403 Forbidden\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
   private final Pipeline parent;
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
   private final Executor executor;
+  private final ConnectPolicy policy;
   private final IncrementalHttpRequestParser connectParser = new IncrementalHttpRequestParser();
 
   private TunnelState state = TunnelState.READING_CONNECT;
+  private byte[] pendingResponseBytes;
   private int responseOffset;
+  private boolean closeAfterSend;
 
   private Socket targetSocket;
   private OutputStream targetOut;
@@ -44,11 +51,16 @@ final class ConnectTunnelStage implements Stage {
   private volatile boolean targetClosed;
 
   ConnectTunnelStage(
-      Pipeline parent, ByteBuffer inputBuffer, ByteBuffer outputBuffer, Executor executor) {
+      Pipeline parent,
+      ByteBuffer inputBuffer,
+      ByteBuffer outputBuffer,
+      Executor executor,
+      ConnectPolicy policy) {
     this.parent = parent;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
     this.executor = executor;
+    this.policy = policy;
   }
 
   @Override
@@ -78,26 +90,32 @@ final class ConnectTunnelStage implements Stage {
           if (colonIdx < 0) {
             return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
           }
-          String targetHost = uri.substring(0, colonIdx);
-          int targetPort;
+          String parsedHost = uri.substring(0, colonIdx);
+          int parsedPort;
           try {
-            targetPort = Integer.parseInt(uri.substring(colonIdx + 1));
+            parsedPort = Integer.parseInt(uri.substring(colonIdx + 1));
           } catch (NumberFormatException e) {
             return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
           }
           state = TunnelState.CONNECTING;
           executor.execute(
               () -> {
+                ConnectTarget target;
                 try {
-                  Socket sock = new Socket(targetHost, targetPort);
+                  target = policy.apply(parsedHost, parsedPort);
+                } catch (Exception e) {
+                  parent.queue(() -> startResponse(RESPONSE_403, /* closeAfterSend= */ true));
+                  return;
+                }
+                if (!target.isAllowed()) {
+                  parent.queue(() -> startResponse(RESPONSE_403, /* closeAfterSend= */ true));
+                  return;
+                }
+                try {
+                  Socket sock = new Socket(target.getHost(), target.getPort());
                   targetSocket = sock;
                   targetOut = sock.getOutputStream();
-                  parent.queue(
-                      () -> {
-                        state = TunnelState.SENDING_200;
-                        responseOffset = 0;
-                        parent.encourageWrites();
-                      });
+                  parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
                 } catch (IOException e) {
                   parent.queue(parent::close);
                 }
@@ -105,7 +123,7 @@ final class ConnectTunnelStage implements Stage {
           return ConnectionControl.PAUSE;
         }
       case CONNECTING:
-      case SENDING_200:
+      case SENDING_RESPONSE:
         return ConnectionControl.PAUSE;
       case FORWARDING:
         {
@@ -127,6 +145,14 @@ final class ConnectTunnelStage implements Stage {
     throw new IllegalStateException();
   }
 
+  private void startResponse(byte[] bytes, boolean closeAfterSend) {
+    this.pendingResponseBytes = bytes;
+    this.closeAfterSend = closeAfterSend;
+    this.responseOffset = 0;
+    this.state = TunnelState.SENDING_RESPONSE;
+    parent.encourageWrites();
+  }
+
   @Override
   public void inputClosed() {
     closeTargetSocket();
@@ -135,15 +161,18 @@ final class ConnectTunnelStage implements Stage {
   @Override
   public ConnectionControl write() {
     switch (state) {
-      case SENDING_200:
+      case SENDING_RESPONSE:
         {
           outputBuffer.compact();
-          int bytesToCopy =
-              Math.min(outputBuffer.remaining(), RESPONSE_200.length - responseOffset);
-          outputBuffer.put(RESPONSE_200, responseOffset, bytesToCopy);
-          responseOffset += bytesToCopy;
+          int toCopy =
+              Math.min(outputBuffer.remaining(), pendingResponseBytes.length - responseOffset);
+          outputBuffer.put(pendingResponseBytes, responseOffset, toCopy);
+          responseOffset += toCopy;
           outputBuffer.flip();
-          if (responseOffset >= RESPONSE_200.length) {
+          if (responseOffset >= pendingResponseBytes.length) {
+            if (closeAfterSend) {
+              return ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
+            }
             executor.execute(this::readFromTarget);
             state = TunnelState.FORWARDING;
             parent.encourageReads();
@@ -172,7 +201,9 @@ final class ConnectTunnelStage implements Stage {
           }
           outputBuffer.flip();
           boolean hasMore = currentChunk != null || !fromTarget.isEmpty();
-          return hasMore ? ConnectionControl.CONTINUE : ConnectionControl.PAUSE;
+          if (hasMore) return ConnectionControl.CONTINUE;
+          if (targetClosed) return ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
+          return ConnectionControl.PAUSE;
         }
       default:
         return ConnectionControl.PAUSE;
@@ -197,7 +228,7 @@ final class ConnectTunnelStage implements Stage {
       // ignore on close
     } finally {
       targetClosed = true;
-      parent.queue(parent::close);
+      parent.queue(parent::encourageWrites);
     }
   }
 
