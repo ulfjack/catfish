@@ -150,6 +150,14 @@ public final class CatfishHttpServer {
     engine.shutdown();
   }
 
+  public void listenConnectProxy(int port) throws IOException, InterruptedException {
+    engine.listenAll(port, new ConnectTunnelServerHandler(executor));
+  }
+
+  public void listenConnectProxyLocal(int port) throws IOException, InterruptedException {
+    engine.listenLocalhost(port, new ConnectTunnelServerHandler(executor));
+  }
+
   public void listenHttpLocal(int port) throws IOException, InterruptedException {
     engine.listenLocalhost(port, new HttpServerHandler(this, /* ssl= */ false));
   }
