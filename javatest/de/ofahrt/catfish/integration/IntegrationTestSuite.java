@@ -8,6 +8,7 @@ import org.junit.runners.Suite.SuiteClasses;
 @SuiteClasses({
   BasicIntegrationTest.class,
   ConnectTunnelIntegrationTest.class,
+  MitmConnectIntegrationTest.class,
   ChunkedBodyIntegrationTest.class,
   ConnectionHandlingTest.class,
   MultiRunnerTest.class,

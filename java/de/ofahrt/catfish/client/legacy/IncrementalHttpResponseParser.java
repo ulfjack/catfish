@@ -6,7 +6,7 @@ import de.ofahrt.catfish.model.MalformedResponseException;
 import de.ofahrt.catfish.model.SimpleHttpResponse;
 import java.util.Arrays;
 
-final class IncrementalHttpResponseParser {
+public final class IncrementalHttpResponseParser {
 
   private static enum State {
     // Status-Line = HTTP-Version SP Status-Code SP Reason-Phrase CRLF

@@ -10,6 +10,7 @@ import de.ofahrt.catfish.model.server.ConnectPolicy;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
+import de.ofahrt.catfish.ssl.CertificateAuthority;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -20,6 +21,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
 
 /** A <code>CatfishHttpServer</code> manages a HTTP-Server. */
 public final class CatfishHttpServer {
@@ -159,6 +161,26 @@ public final class CatfishHttpServer {
   public void listenConnectProxyLocal(int port, ConnectPolicy policy)
       throws IOException, InterruptedException {
     engine.listenLocalhost(port, new ConnectTunnelServerHandler(executor, policy));
+  }
+
+  public void listenMitmConnectProxy(int port, ConnectPolicy policy, CertificateAuthority ca)
+      throws IOException, InterruptedException {
+    engine.listenAll(
+        port,
+        new MitmConnectTunnelServerHandler(
+            executor, policy, ca, (SSLSocketFactory) SSLSocketFactory.getDefault()));
+  }
+
+  public void listenMitmConnectProxyLocal(int port, ConnectPolicy policy, CertificateAuthority ca)
+      throws IOException, InterruptedException {
+    listenMitmConnectProxyLocal(port, policy, ca, (SSLSocketFactory) SSLSocketFactory.getDefault());
+  }
+
+  public void listenMitmConnectProxyLocal(
+      int port, ConnectPolicy policy, CertificateAuthority ca, SSLSocketFactory originFactory)
+      throws IOException, InterruptedException {
+    engine.listenLocalhost(
+        port, new MitmConnectTunnelServerHandler(executor, policy, ca, originFactory));
   }
 
   public void listenHttpLocal(int port) throws IOException, InterruptedException {
