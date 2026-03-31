@@ -21,6 +21,7 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -152,22 +153,25 @@ final class MitmConnectStage implements Stage {
       return;
     }
 
-    SSLContext ctx;
-    try {
-      ctx = ca.getOrCreate(host);
-    } catch (Exception e) {
-      parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
-      return;
-    }
-
+    // Connect to origin first so we can mirror its real certificate in the fake leaf cert.
     SSLSocket socket;
+    X509Certificate originCert;
     try {
       socket = (SSLSocket) originSocketFactory.createSocket(target.getHost(), target.getPort());
       SSLParameters params = socket.getSSLParameters();
       params.setServerNames(List.of(new SNIHostName(target.getHost())));
       socket.setSSLParameters(params);
       socket.startHandshake();
+      originCert = (X509Certificate) socket.getSession().getPeerCertificates()[0];
     } catch (IOException e) {
+      parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
+      return;
+    }
+
+    SSLContext ctx;
+    try {
+      ctx = ca.getOrCreate(host, originCert);
+    } catch (Exception e) {
       parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
       return;
     }

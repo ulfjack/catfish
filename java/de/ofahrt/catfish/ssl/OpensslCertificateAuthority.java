@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.cert.X509Certificate;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.net.ssl.SSLContext;
 
@@ -20,7 +21,7 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
   }
 
   @Override
-  public SSLContext getOrCreate(String hostname) throws Exception {
+  public SSLContext getOrCreate(String hostname, X509Certificate originCert) throws Exception {
     SSLContext cached = cache.get(hostname);
     if (cached != null) {
       return cached;
