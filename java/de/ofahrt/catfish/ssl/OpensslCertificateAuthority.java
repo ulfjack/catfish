@@ -9,6 +9,7 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class OpensslCertificateAuthority implements CertificateAuthority {
@@ -42,10 +43,11 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
   }
 
   private SSLInfo generate(String hostname, X509Certificate originCert) throws Exception {
-    Path extFile = workDir.resolve(hostname + ".ext");
-    Path keyFile = workDir.resolve(hostname + ".key");
-    Path csrFile = workDir.resolve(hostname + ".csr");
-    Path crtFile = workDir.resolve(hostname + ".crt");
+    String id = UUID.randomUUID().toString();
+    Path extFile = workDir.resolve(id + ".ext");
+    Path keyFile = workDir.resolve(id + ".key");
+    Path csrFile = workDir.resolve(id + ".csr");
+    Path crtFile = workDir.resolve(id + ".crt");
 
     // Mirror the origin cert's SANs so the fake cert covers the same names.
     List<String> sanEntries = extractSanEntries(originCert);
@@ -61,40 +63,47 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
       cn = hostname;
     }
 
-    runCommand(
-        "openssl", "genpkey",
-        "-algorithm", "RSA",
-        "-pkeyopt", "rsa_keygen_bits:2048",
-        "-out", keyFile.toString());
-    runCommand(
-        "openssl",
-        "req",
-        "-new",
-        "-key",
-        keyFile.toString(),
-        "-subj",
-        "/CN=" + cn,
-        "-out",
-        csrFile.toString());
-    runCommand(
-        "openssl",
-        "x509",
-        "-req",
-        "-in",
-        csrFile.toString(),
-        "-CA",
-        caCert.toString(),
-        "-CAkey",
-        caKey.toString(),
-        "-CAcreateserial",
-        "-out",
-        crtFile.toString(),
-        "-days",
-        "365",
-        "-extfile",
-        extFile.toString());
+    try {
+      runCommand(
+          "openssl", "genpkey",
+          "-algorithm", "RSA",
+          "-pkeyopt", "rsa_keygen_bits:2048",
+          "-out", keyFile.toString());
+      runCommand(
+          "openssl",
+          "req",
+          "-new",
+          "-key",
+          keyFile.toString(),
+          "-subj",
+          "/CN=" + cn,
+          "-out",
+          csrFile.toString());
+      runCommand(
+          "openssl",
+          "x509",
+          "-req",
+          "-in",
+          csrFile.toString(),
+          "-CA",
+          caCert.toString(),
+          "-CAkey",
+          caKey.toString(),
+          "-CAcreateserial",
+          "-out",
+          crtFile.toString(),
+          "-days",
+          "365",
+          "-extfile",
+          extFile.toString());
 
-    return SSLContextFactory.loadPemKeyAndCrtFiles(keyFile.toFile(), crtFile.toFile());
+      return SSLContextFactory.loadPemKeyAndCrtFiles(keyFile.toFile(), crtFile.toFile());
+    } finally {
+      Files.deleteIfExists(extFile);
+      Files.deleteIfExists(keyFile);
+      Files.deleteIfExists(csrFile);
+      Files.deleteIfExists(crtFile);
+    }
   }
 
   /** Extracts DNS and IP SANs from the certificate in openssl ext-file format. */
