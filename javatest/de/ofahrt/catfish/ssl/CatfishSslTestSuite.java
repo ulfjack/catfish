@@ -7,6 +7,7 @@ import org.junit.runners.Suite.SuiteClasses;
 @RunWith(Suite.class)
 @SuiteClasses({
   Asn1ParserTest.class,
+  OpensslCertificateAuthorityTest.class,
   PKCS1Test.class,
   SSLContextFactoryTest.class,
 })
