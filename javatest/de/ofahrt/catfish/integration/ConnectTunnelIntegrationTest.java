@@ -143,6 +143,9 @@ public class ConnectTunnelIntegrationTest {
         assertTrue(
             "Expected 403 response, got: " + response,
             response.toString().startsWith("HTTP/1.1 403"));
+        assertTrue(
+            "Expected Connection: close header, got: " + response,
+            response.toString().contains("Connection: close"));
 
         // Connection should be closed after the 403.
         assertTrue("Expected connection to be closed", in.read() == -1);

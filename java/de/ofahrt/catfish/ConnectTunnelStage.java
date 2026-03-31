@@ -28,7 +28,7 @@ final class ConnectTunnelStage implements Stage {
   private static final byte[] RESPONSE_200 =
       "HTTP/1.1 200 Connection Established\r\n\r\n".getBytes(StandardCharsets.UTF_8);
   private static final byte[] RESPONSE_403 =
-      "HTTP/1.1 403 Forbidden\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+      "HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
   private final Pipeline parent;
   private final ByteBuffer inputBuffer;
