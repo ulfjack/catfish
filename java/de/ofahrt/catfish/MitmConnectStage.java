@@ -170,7 +170,7 @@ final class MitmConnectStage implements Stage {
 
     SSLContext ctx;
     try {
-      ctx = ca.getOrCreate(host, originCert);
+      ctx = ca.getOrCreate(host, originCert).sslContext();
     } catch (Exception e) {
       parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
       return;

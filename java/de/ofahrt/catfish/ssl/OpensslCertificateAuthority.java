@@ -4,15 +4,18 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.net.ssl.SSLContext;
 
 public final class OpensslCertificateAuthority implements CertificateAuthority {
   private final Path caKey;
   private final Path caCert;
   private final Path workDir;
-  private final ConcurrentHashMap<String, SSLContext> cache = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, SSLInfo> cache = new ConcurrentHashMap<>();
 
   public OpensslCertificateAuthority(Path caKey, Path caCert, Path workDir) {
     this.caKey = caKey;
@@ -21,8 +24,8 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
   }
 
   @Override
-  public SSLContext getOrCreate(String hostname, X509Certificate originCert) throws Exception {
-    SSLContext cached = cache.get(hostname);
+  public SSLInfo getOrCreate(String hostname, X509Certificate originCert) throws Exception {
+    SSLInfo cached = cache.get(hostname);
     if (cached != null) {
       return cached;
     }
@@ -32,19 +35,31 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
       if (cached != null) {
         return cached;
       }
-      SSLContext ctx = generate(hostname);
-      cache.put(hostname, ctx);
-      return ctx;
+      SSLInfo info = generate(hostname, originCert);
+      cache.put(hostname, info);
+      return info;
     }
   }
 
-  private SSLContext generate(String hostname) throws Exception {
+  private SSLInfo generate(String hostname, X509Certificate originCert) throws Exception {
     Path extFile = workDir.resolve(hostname + ".ext");
     Path keyFile = workDir.resolve(hostname + ".key");
     Path csrFile = workDir.resolve(hostname + ".csr");
     Path crtFile = workDir.resolve(hostname + ".crt");
 
-    Files.writeString(extFile, "subjectAltName=DNS:" + hostname, StandardCharsets.UTF_8);
+    // Mirror the origin cert's SANs so the fake cert covers the same names.
+    List<String> sanEntries = extractSanEntries(originCert);
+    if (sanEntries.isEmpty()) {
+      sanEntries = List.of("DNS:" + hostname);
+    }
+    Files.writeString(
+        extFile, "subjectAltName=" + String.join(",", sanEntries), StandardCharsets.UTF_8);
+
+    // Mirror the origin cert's CN; fall back to the hostname if absent.
+    String cn = extractCn(originCert);
+    if (cn == null) {
+      cn = hostname;
+    }
 
     runCommand(
         "openssl", "genpkey",
@@ -58,7 +73,7 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
         "-key",
         keyFile.toString(),
         "-subj",
-        "/CN=" + hostname,
+        "/CN=" + cn,
         "-out",
         csrFile.toString());
     runCommand(
@@ -79,8 +94,42 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
         "-extfile",
         extFile.toString());
 
-    SSLInfo sslInfo = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile.toFile(), crtFile.toFile());
-    return sslInfo.sslContext();
+    return SSLContextFactory.loadPemKeyAndCrtFiles(keyFile.toFile(), crtFile.toFile());
+  }
+
+  /** Extracts DNS and IP SANs from the certificate in openssl ext-file format. */
+  private static List<String> extractSanEntries(X509Certificate cert) {
+    List<String> result = new ArrayList<>();
+    try {
+      Collection<List<?>> sans = cert.getSubjectAlternativeNames();
+      if (sans == null) {
+        return result;
+      }
+      for (List<?> san : sans) {
+        int type = (Integer) san.get(0);
+        String value = (String) san.get(1);
+        if (type == 2) { // dNSName
+          result.add("DNS:" + value);
+        } else if (type == 7) { // iPAddress
+          result.add("IP:" + value);
+        }
+      }
+    } catch (CertificateParsingException e) {
+      // ignore; caller will fall back to hostname
+    }
+    return result;
+  }
+
+  /** Extracts the CN from the certificate's subject DN, or null if absent. */
+  private static String extractCn(X509Certificate cert) {
+    // getSubjectX500Principal().getName() returns RFC 2253 format: CN=example.com,O=Org,...
+    for (String part : cert.getSubjectX500Principal().getName().split(",")) {
+      part = part.trim();
+      if (part.startsWith("CN=")) {
+        return part.substring(3);
+      }
+    }
+    return null;
   }
 
   private static void runCommand(String... args) throws IOException, InterruptedException {

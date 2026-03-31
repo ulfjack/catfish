@@ -1,7 +1,9 @@
 package de.ofahrt.catfish.ssl;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
 import java.io.File;
@@ -9,7 +11,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.cert.X509Certificate;
-import javax.net.ssl.SSLContext;
+import java.util.Collection;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -75,24 +79,80 @@ public class OpensslCertificateAuthorityTest {
   @Test
   public void getOrCreate_returnsNonNullContext() throws Exception {
     OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
-    SSLContext ctx = ca.getOrCreate("localhost", originCert);
-    assertNotNull(ctx);
+    SSLInfo info = ca.getOrCreate("localhost", originCert);
+    assertNotNull(info.sslContext());
   }
 
   @Test
   public void getOrCreate_cacheHit_returnsSameInstance() throws Exception {
     OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
-    SSLContext first = ca.getOrCreate("localhost", originCert);
-    SSLContext second = ca.getOrCreate("localhost", originCert);
+    SSLInfo first = ca.getOrCreate("localhost", originCert);
+    SSLInfo second = ca.getOrCreate("localhost", originCert);
     assertSame("Second call should return cached instance", first, second);
   }
 
   @Test
   public void getOrCreate_differentHostnames_returnsDifferentContexts() throws Exception {
     OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
-    SSLContext ctx1 = ca.getOrCreate("host1.example.com", originCert);
-    SSLContext ctx2 = ca.getOrCreate("host2.example.com", originCert);
-    assertNotNull(ctx1);
-    assertNotNull(ctx2);
+    SSLInfo info1 = ca.getOrCreate("host1.example.com", originCert);
+    SSLInfo info2 = ca.getOrCreate("host2.example.com", originCert);
+    assertNotNull(info1.sslContext());
+    assertNotNull(info2.sslContext());
+  }
+
+  @Test
+  public void getOrCreate_mirrorsCnFromOriginCert() throws Exception {
+    OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
+    SSLInfo info = ca.getOrCreate("localhost", originCert);
+    assertEquals("testhost", extractCn(info.certificate()));
+  }
+
+  @Test
+  public void getOrCreate_mirrorsSansFromOriginCert() throws Exception {
+    OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
+    SSLInfo info = ca.getOrCreate("localhost", originCert);
+
+    Collection<List<?>> sans = info.certificate().getSubjectAlternativeNames();
+    assertNotNull("Generated cert must have SANs", sans);
+    List<String> dnsNames =
+        sans.stream()
+            .filter(san -> (Integer) san.get(0) == 2) // dNSName
+            .map(san -> (String) san.get(1))
+            .collect(Collectors.toList());
+    assertTrue("Generated cert must contain DNS:testhost", dnsNames.contains("testhost"));
+  }
+
+  @Test
+  public void getOrCreate_noSanOriginCert_fallsBackToHostname() throws Exception {
+    // Use a cert with no SANs: load the plain test cert (test.cert.pem has no SAN extension).
+    SSLInfo noSanInfo =
+        SSLContextFactory.loadPemKeyAndCrtFiles(
+            new File("javatest/de/ofahrt/catfish/ssl/test.key.pem"),
+            new File("javatest/de/ofahrt/catfish/ssl/test.cert.pem"));
+    X509Certificate noSanCert = noSanInfo.certificate();
+
+    OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
+    SSLInfo info = ca.getOrCreate("fallback.example.com", noSanCert);
+
+    Collection<List<?>> sans = info.certificate().getSubjectAlternativeNames();
+    assertNotNull("Generated cert must have SANs", sans);
+    List<String> dnsNames =
+        sans.stream()
+            .filter(san -> (Integer) san.get(0) == 2)
+            .map(san -> (String) san.get(1))
+            .collect(Collectors.toList());
+    assertTrue(
+        "Generated cert must fall back to DNS:fallback.example.com",
+        dnsNames.contains("fallback.example.com"));
+  }
+
+  private static String extractCn(X509Certificate cert) {
+    for (String part : cert.getSubjectX500Principal().getName().split(",")) {
+      part = part.trim();
+      if (part.startsWith("CN=")) {
+        return part.substring(3);
+      }
+    }
+    return null;
   }
 }
