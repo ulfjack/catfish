@@ -349,20 +349,23 @@ final class MitmProxyStage implements Stage {
 
       OutputStream genOut = gen.getOutputStream();
 
-      // Write already-buffered body bytes first.
-      if (leftoverLen > 0) {
-        genOut.write(readBuf, leftoverStart, leftoverLen);
-      }
-
-      // Stream the rest of the response body.
-      if (responseCl != null) {
+      // Stream the response body. Each branch is responsible for handling leftover bytes
+      // (bytes already read from origin beyond the blank line) before reading more from origin.
+      if (responseTe != null && "chunked".equalsIgnoreCase(responseTe)) {
+        // streamChunkedResponse handles leftover bytes internally via CombinedInputStream.
+        streamChunkedResponse(originIn, genOut, readBuf, leftoverStart, leftoverLen);
+      } else if (responseCl != null) {
         long remaining;
         try {
           remaining = Long.parseLong(responseCl);
         } catch (NumberFormatException e) {
           remaining = 0;
         }
-        remaining -= leftoverLen;
+        // Write leftover bytes first, then read the rest from origin.
+        if (leftoverLen > 0) {
+          genOut.write(readBuf, leftoverStart, leftoverLen);
+          remaining -= leftoverLen;
+        }
         while (remaining > 0) {
           int n = originIn.read(readBuf, 0, (int) Math.min(readBuf.length, remaining));
           if (n < 0) {
@@ -371,10 +374,11 @@ final class MitmProxyStage implements Stage {
           genOut.write(readBuf, 0, n);
           remaining -= n;
         }
-      } else if (responseTe != null && "chunked".equalsIgnoreCase(responseTe)) {
-        streamChunkedResponse(originIn, genOut, readBuf, leftoverStart, leftoverLen);
       } else {
-        // Read until origin closes.
+        // Read until origin closes. Write leftover bytes first.
+        if (leftoverLen > 0) {
+          genOut.write(readBuf, leftoverStart, leftoverLen);
+        }
         int n;
         while ((n = originIn.read(readBuf)) >= 0) {
           genOut.write(readBuf, 0, n);
@@ -495,7 +499,7 @@ final class MitmProxyStage implements Stage {
       // Read chunk data.
       long remaining = chunkSize;
       while (remaining > 0) {
-        int n = in.read(buf, 0, (int) Math.min(buf.length, remaining));
+        int n = combined.read(buf, 0, (int) Math.min(buf.length, remaining));
         if (n < 0) {
           throw new IOException("EOF reading chunked response data");
         }
@@ -591,13 +595,14 @@ final class MitmProxyStage implements Stage {
     boolean savedChunkedDone = chunkedDone;
 
     int result = advanceChunkedScanner(arr, off, len);
+    boolean foundEnd = chunkedDone; // capture before restoring state
 
     chunkedScanState = savedScanState;
     currentChunkSize = savedChunkSize;
     chunkDataLeft = savedChunkDataLeft;
     chunkedDone = savedChunkedDone;
 
-    return chunkedDone ? result : -1;
+    return foundEnd ? result : -1;
   }
 
   /**

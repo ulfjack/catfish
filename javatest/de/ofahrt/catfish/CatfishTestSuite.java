@@ -24,6 +24,7 @@ import org.junit.runners.Suite.SuiteClasses;
   IncrementalHttpParserTest.class,
   HttpResponseGeneratorBufferedTest.class,
   HttpResponseGeneratorStreamedTest.class,
+  PipeBufferTest.class,
   SNIParserTest.class,
   CatfishInternalTestSuite.class,
   CatfishSslTestSuite.class,
