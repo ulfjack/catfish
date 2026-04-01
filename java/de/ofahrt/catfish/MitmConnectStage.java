@@ -67,7 +67,8 @@ final class MitmConnectStage implements Stage {
   private boolean closeAfterSend;
 
   private SSLContext fakeCtx;
-  private SSLSocket originSocket;
+  private String originHost;
+  private int originPort;
   private Connection connection;
 
   private Stage delegate;
@@ -180,8 +181,14 @@ final class MitmConnectStage implements Stage {
       return;
     }
 
+    try {
+      socket.close();
+    } catch (IOException ignored) {
+    }
+
     fakeCtx = ctx;
-    originSocket = socket;
+    originHost = target.getHost();
+    originPort = target.getPort();
     parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
   }
 
@@ -198,7 +205,6 @@ final class MitmConnectStage implements Stage {
     if (delegate != null) {
       delegate.inputClosed();
     }
-    closeOriginSocket();
   }
 
   @Override
@@ -237,11 +243,12 @@ final class MitmConnectStage implements Stage {
     decryptedOut.clear();
     decryptedOut.flip();
 
-    SSLSocket capturedOrigin = originSocket;
+    String capturedHost = originHost;
+    int capturedPort = originPort;
     HttpVirtualHost proxyHost =
         new HttpVirtualHost(
             (conn, request, responseWriter) ->
-                forwardRequest(capturedOrigin, request, responseWriter),
+                forwardRequest(capturedHost, capturedPort, request, responseWriter),
             UploadPolicy.ALLOW,
             KeepAlivePolicy.KEEP_ALIVE,
             CompressionPolicy.NONE,
@@ -285,39 +292,54 @@ final class MitmConnectStage implements Stage {
   }
 
   private void forwardRequest(
-      SSLSocket origin,
+      String host,
+      int port,
       HttpRequest request,
       de.ofahrt.catfish.model.server.HttpResponseWriter responseWriter)
       throws IOException {
-    OutputStream out = origin.getOutputStream();
-    out.write(requestToBytes(request));
-    out.flush();
+    SSLSocket socket = (SSLSocket) originSocketFactory.createSocket(host, port);
+    SSLParameters params = socket.getSSLParameters();
+    params.setServerNames(List.of(new SNIHostName(host)));
+    socket.setSSLParameters(params);
+    socket.startHandshake();
+    try {
+      OutputStream out = socket.getOutputStream();
+      out.write(requestToBytes(request));
+      out.flush();
 
-    IncrementalHttpResponseParser parser = new IncrementalHttpResponseParser();
-    InputStream in = origin.getInputStream();
-    byte[] buf = new byte[8192];
-    int offset = 0;
-    int length = 0;
-    while (!parser.isDone()) {
-      if (length == 0) {
-        length = in.read(buf);
-        offset = 0;
-        if (length < 0) {
-          throw new IOException("Origin closed connection prematurely");
+      IncrementalHttpResponseParser parser = new IncrementalHttpResponseParser();
+      InputStream in = socket.getInputStream();
+      byte[] buf = new byte[8192];
+      int offset = 0;
+      int length = 0;
+      while (!parser.isDone()) {
+        if (length == 0) {
+          length = in.read(buf);
+          offset = 0;
+          if (length < 0) {
+            throw new IOException("Origin closed connection prematurely");
+          }
         }
+        int used = parser.parse(buf, offset, length);
+        length -= used;
+        offset += used;
       }
-      int used = parser.parse(buf, offset, length);
-      length -= used;
-      offset += used;
+      HttpResponse response = parser.getResponse();
+      // Strip Transfer-Encoding: the body is already decoded by the parser; commitBuffered
+      // will re-encode with Content-Length, so having both headers would be invalid.
+      response = response.withoutHeader(HttpHeaderName.TRANSFER_ENCODING);
+      responseWriter.commitBuffered(response);
+    } finally {
+      socket.close();
     }
-    HttpResponse response = parser.getResponse();
-    // Strip Transfer-Encoding: the body is already decoded by the parser; commitBuffered
-    // will re-encode with Content-Length, so having both headers would be invalid.
-    response = response.withoutHeader(HttpHeaderName.TRANSFER_ENCODING);
-    responseWriter.commitBuffered(response);
   }
 
   private static byte[] requestToBytes(HttpRequest request) throws IOException {
+    byte[] bodyBytes = new byte[0];
+    HttpRequest.Body body = request.getBody();
+    if (body instanceof HttpRequest.InMemoryBody) {
+      bodyBytes = ((HttpRequest.InMemoryBody) body).toByteArray();
+    }
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     try (OutputStreamWriter w = new OutputStreamWriter(baos, StandardCharsets.UTF_8)) {
       w.append(request.getMethod())
@@ -327,14 +349,21 @@ final class MitmConnectStage implements Stage {
           .append(request.getVersion().toString())
           .append("\r\n");
       for (Map.Entry<String, String> e : request.getHeaders()) {
-        w.append(e.getKey()).append(": ").append(e.getValue()).append("\r\n");
+        // Strip framing headers; we re-add Content-Length below based on actual body length.
+        String name = e.getKey();
+        if (name.equalsIgnoreCase(HttpHeaderName.TRANSFER_ENCODING)) continue;
+        if (name.equalsIgnoreCase(HttpHeaderName.CONTENT_LENGTH)) continue;
+        w.append(name).append(": ").append(e.getValue()).append("\r\n");
+      }
+      if (bodyBytes.length > 0) {
+        w.append(HttpHeaderName.CONTENT_LENGTH)
+            .append(": ")
+            .append(String.valueOf(bodyBytes.length))
+            .append("\r\n");
       }
       w.append("\r\n");
     }
-    HttpRequest.Body body = request.getBody();
-    if (body instanceof HttpRequest.InMemoryBody) {
-      baos.write(((HttpRequest.InMemoryBody) body).toByteArray());
-    }
+    baos.write(bodyBytes);
     return baos.toByteArray();
   }
 
@@ -342,18 +371,6 @@ final class MitmConnectStage implements Stage {
   public void close() {
     if (delegate != null) {
       delegate.close();
-    }
-    closeOriginSocket();
-  }
-
-  private void closeOriginSocket() {
-    SSLSocket sock = originSocket;
-    if (sock != null) {
-      try {
-        sock.close();
-      } catch (IOException e) {
-        // ignore
-      }
     }
   }
 }
