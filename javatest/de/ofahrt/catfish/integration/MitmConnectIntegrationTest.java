@@ -136,16 +136,9 @@ public class MitmConnectIntegrationTest {
       out.flush();
 
       // Read CONNECT response.
-      StringBuilder connectResponse = new StringBuilder();
-      while (true) {
-        int b = in.read();
-        if (b == -1) break;
-        connectResponse.append((char) b);
-        if (connectResponse.toString().endsWith("\r\n\r\n")) break;
-      }
+      String connectResponse = readUntilBlankLine(in);
       assertTrue(
-          "Expected 200, got: " + connectResponse,
-          connectResponse.toString().startsWith("HTTP/1.1 200"));
+          "Expected 200, got: " + connectResponse, connectResponse.startsWith("HTTP/1.1 200"));
 
       // Upgrade to TLS using the MITM CA as trust root.
       // Explicitly set SNI so SslServerStage can match the hostname.
@@ -181,21 +174,95 @@ public class MitmConnectIntegrationTest {
   }
 
   @Test
+  public void mitmConnectProxy_originUnreachable_returns502() throws Exception {
+    // Port 1 is not listening; the origin connect will fail immediately with ECONNREFUSED.
+    try (Socket socket = new Socket("localhost", MITM_PORT)) {
+      OutputStream out = socket.getOutputStream();
+      InputStream in = socket.getInputStream();
+
+      out.write(
+          "CONNECT localhost:1 HTTP/1.1\r\nHost: localhost\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      out.flush();
+
+      String response = readUntilBlankLine(in);
+      assertTrue("Expected 502, got: " + response, response.startsWith("HTTP/1.1 502"));
+      assertTrue(
+          "Expected Connection: close, got: " + response, response.contains("Connection: close"));
+      assertTrue("Expected connection closed", in.read() == -1);
+    }
+  }
+
+  @Test
+  public void mitmConnectProxy_policyThrows_returns403() throws Exception {
+    CatfishHttpServer policyThrowsServer = newServer();
+    CertificateAuthority ca =
+        new OpensslCertificateAuthority(
+            workDir.resolve("ca.key"), workDir.resolve("ca.crt"), workDir);
+    try {
+      policyThrowsServer.listenMitmConnectProxyLocal(
+          9098,
+          (host, port) -> {
+            throw new RuntimeException("policy error");
+          },
+          ca);
+
+      try (Socket socket = new Socket("localhost", 9098)) {
+        OutputStream out = socket.getOutputStream();
+        InputStream in = socket.getInputStream();
+
+        out.write(
+            "CONNECT localhost:9999 HTTP/1.1\r\nHost: localhost\r\n\r\n"
+                .getBytes(StandardCharsets.ISO_8859_1));
+        out.flush();
+
+        String response = readUntilBlankLine(in);
+        assertTrue("Expected 403, got: " + response, response.startsWith("HTTP/1.1 403"));
+        assertTrue(
+            "Expected Connection: close, got: " + response, response.contains("Connection: close"));
+        assertTrue("Expected connection closed", in.read() == -1);
+      }
+    } finally {
+      policyThrowsServer.stop();
+    }
+  }
+
+  @Test
+  public void mitmConnectProxy_caFails_returns502() throws Exception {
+    CatfishHttpServer caFailsServer = newServer();
+    SSLInfo testSslInfo = TestHelper.getSSLInfo();
+    try {
+      caFailsServer.listenMitmConnectProxyLocal(
+          9099,
+          ConnectPolicy.allowAll(),
+          (hostname, originCert) -> {
+            throw new RuntimeException("CA failed");
+          },
+          testSslInfo.sslContext().getSocketFactory());
+
+      try (Socket socket = new Socket("localhost", 9099)) {
+        OutputStream out = socket.getOutputStream();
+        InputStream in = socket.getInputStream();
+
+        out.write(
+            ("CONNECT localhost:" + HTTPS_PORT + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                .getBytes(StandardCharsets.ISO_8859_1));
+        out.flush();
+
+        String response = readUntilBlankLine(in);
+        assertTrue("Expected 502, got: " + response, response.startsWith("HTTP/1.1 502"));
+        assertTrue(
+            "Expected Connection: close, got: " + response, response.contains("Connection: close"));
+        assertTrue("Expected connection closed", in.read() == -1);
+      }
+    } finally {
+      caFailsServer.stop();
+    }
+  }
+
+  @Test
   public void mitmConnectProxy_deniedByPolicy_returns403() throws Exception {
-    CatfishHttpServer deniedServer =
-        new CatfishHttpServer(
-            new NetworkEventListener() {
-              @Override
-              public void shutdown() {}
-
-              @Override
-              public void portOpened(int port, boolean ssl) {}
-
-              @Override
-              public void notifyInternalError(Connection id, Throwable throwable) {
-                throwable.printStackTrace();
-              }
-            });
+    CatfishHttpServer deniedServer = newServer();
     CertificateAuthority ca =
         new OpensslCertificateAuthority(
             workDir.resolve("ca.key"), workDir.resolve("ca.crt"), workDir);
@@ -211,23 +278,42 @@ public class MitmConnectIntegrationTest {
                 .getBytes(StandardCharsets.ISO_8859_1));
         out.flush();
 
-        StringBuilder response = new StringBuilder();
-        byte[] buf = new byte[4096];
-        int n;
-        while ((n = in.read(buf)) != -1) {
-          response.append(new String(buf, 0, n, StandardCharsets.ISO_8859_1));
-          if (response.toString().contains("\r\n\r\n")) break;
-        }
+        String response = readUntilBlankLine(in);
+        assertTrue("Expected 403, got: " + response, response.startsWith("HTTP/1.1 403"));
         assertTrue(
-            "Expected 403, got: " + response, response.toString().startsWith("HTTP/1.1 403"));
-        assertTrue(
-            "Expected Connection: close, got: " + response,
-            response.toString().contains("Connection: close"));
+            "Expected Connection: close, got: " + response, response.contains("Connection: close"));
         assertTrue("Expected connection closed", in.read() == -1);
       }
     } finally {
       deniedServer.stop();
     }
+  }
+
+  private static CatfishHttpServer newServer() throws IOException {
+    return new CatfishHttpServer(
+        new NetworkEventListener() {
+          @Override
+          public void shutdown() {}
+
+          @Override
+          public void portOpened(int port, boolean ssl) {}
+
+          @Override
+          public void notifyInternalError(Connection id, Throwable throwable) {
+            throwable.printStackTrace();
+          }
+        });
+  }
+
+  private static String readUntilBlankLine(InputStream in) throws IOException {
+    StringBuilder sb = new StringBuilder();
+    while (true) {
+      int b = in.read();
+      if (b == -1) break;
+      sb.append((char) b);
+      if (sb.toString().endsWith("\r\n\r\n")) break;
+    }
+    return sb.toString();
   }
 
   private static SSLContext buildSslContextTrusting(Path caCertFile) throws Exception {
