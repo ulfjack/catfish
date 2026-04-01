@@ -1,5 +1,6 @@
 package de.ofahrt.catfish.integration;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
@@ -27,6 +28,7 @@ import java.nio.file.Path;
 import java.security.KeyStore;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import javax.net.ssl.SNIHostName;
@@ -42,8 +44,11 @@ public class MitmConnectIntegrationTest {
   private static final int HTTPS_PORT = 9095;
   private static final int MITM_PORT = 9096;
 
-  private CatfishHttpServer server;
   private Path workDir;
+  private SSLInfo testSslInfo;
+  private CertificateAuthority ca;
+  private SSLContext clientCtx;
+  private final List<CatfishHttpServer> serversToStop = new ArrayList<>();
 
   private static boolean opensslAvailable() {
     try {
@@ -67,104 +72,128 @@ public class MitmConnectIntegrationTest {
         "-pkeyopt", "rsa_keygen_bits:2048",
         "-out", workDir.resolve("ca.key").toString());
     runOpenssl(
-        "openssl",
-        "req",
-        "-new",
-        "-x509",
-        "-days",
-        "1",
-        "-key",
-        workDir.resolve("ca.key").toString(),
-        "-out",
-        workDir.resolve("ca.crt").toString(),
-        "-subj",
-        "/CN=Test MITM CA");
+        "openssl", "req",
+        "-new", "-x509",
+        "-days", "1",
+        "-key", workDir.resolve("ca.key").toString(),
+        "-out", workDir.resolve("ca.crt").toString(),
+        "-subj", "/CN=Test MITM CA");
 
-    // Load the test HTTPS cert (test-certificate.p12, covers localhost).
-    SSLInfo testSslInfo = TestHelper.getSSLInfo();
-
-    server =
-        new CatfishHttpServer(
-            new NetworkEventListener() {
-              @Override
-              public void shutdown() {}
-
-              @Override
-              public void portOpened(int port, boolean ssl) {}
-
-              @Override
-              public void notifyInternalError(Connection id, Throwable throwable) {
-                throwable.printStackTrace();
-              }
-            });
-
-    // Start origin HTTPS server on HTTPS_PORT.
-    HttpVirtualHost host =
-        new HttpVirtualHost(
-            (conn, request, writer) ->
-                writer.commitBuffered(
-                    StandardResponses.OK.withBody("MITM-OK".getBytes(StandardCharsets.UTF_8))));
-    host = host.ssl(testSslInfo);
-    server.addHttpHost("localhost", host);
-    server.listenHttpsLocal(HTTPS_PORT);
-
-    // Start MITM proxy on MITM_PORT.
-    // Use the test SSLContext as originFactory so the proxy trusts the self-signed test cert.
-    CertificateAuthority ca =
+    testSslInfo = TestHelper.getSSLInfo();
+    ca =
         new OpensslCertificateAuthority(
             workDir.resolve("ca.key"), workDir.resolve("ca.crt"), workDir);
+    clientCtx = buildSslContextTrusting(workDir.resolve("ca.crt"));
+
+    // Start origin HTTPS server on HTTPS_PORT.
+    CatfishHttpServer server = newServer();
+    server.addHttpHost(
+        "localhost",
+        new HttpVirtualHost(
+                (conn, request, writer) ->
+                    writer.commitBuffered(
+                        StandardResponses.OK.withBody("MITM-OK".getBytes(StandardCharsets.UTF_8))))
+            .ssl(testSslInfo));
+    server.listenHttpsLocal(HTTPS_PORT);
     server.listenMitmConnectProxyLocal(
         MITM_PORT, ConnectPolicy.allowAll(), ca, testSslInfo.sslContext().getSocketFactory());
+    serversToStop.add(server);
   }
 
   @After
-  public void stopServer() throws Exception {
-    if (server != null) {
-      server.stop();
+  public void stopServers() throws Exception {
+    for (CatfishHttpServer s : serversToStop) {
+      s.stop();
     }
+    serversToStop.clear();
   }
 
-  @Test
-  public void mitmConnectProxy_transparentlyBridgesHttps() throws Exception {
-    // Load the MITM CA cert so we can trust the fake leaf cert.
-    SSLContext clientCtx = buildSslContextTrusting(workDir.resolve("ca.crt"));
+  // ---- Helpers ----
 
-    try (Socket socket = new Socket("localhost", MITM_PORT)) {
+  /**
+   * Creates a new HTTPS origin server on {@code port} with the given handler (ssl is applied
+   * automatically). The server is registered for teardown in {@code @After}.
+   */
+  private CatfishHttpServer startHttpsServer(int port, HttpVirtualHost host)
+      throws IOException, InterruptedException {
+    CatfishHttpServer s = newServer();
+    s.addHttpHost("localhost", host.ssl(testSslInfo));
+    s.listenHttpsLocal(port);
+    serversToStop.add(s);
+    return s;
+  }
+
+  /**
+   * Creates a new MITM proxy on {@code mitmPort} using the shared CA and test SSL context. The
+   * server is registered for teardown in {@code @After}.
+   */
+  private CatfishHttpServer startMitmProxy(int mitmPort) throws IOException, InterruptedException {
+    CatfishHttpServer s = newServer();
+    s.listenMitmConnectProxyLocal(
+        mitmPort, ConnectPolicy.allowAll(), ca, testSslInfo.sslContext().getSocketFactory());
+    serversToStop.add(s);
+    return s;
+  }
+
+  /**
+   * Opens a TCP connection to the MITM proxy at {@code mitmPort}, sends CONNECT to reach {@code
+   * localhost:originPort}, performs the TLS handshake, and returns the resulting {@link SSLSocket}.
+   * The caller is responsible for closing it.
+   */
+  private SSLSocket connectViaMitm(int mitmPort, int originPort) throws Exception {
+    Socket socket = new Socket("localhost", mitmPort);
+    try {
       OutputStream out = socket.getOutputStream();
       InputStream in = socket.getInputStream();
-
-      // Send CONNECT.
-      String connectRequest =
-          "CONNECT localhost:" + HTTPS_PORT + " HTTP/1.1\r\nHost: localhost\r\n\r\n";
-      out.write(connectRequest.getBytes(StandardCharsets.ISO_8859_1));
+      out.write(
+          ("CONNECT localhost:" + originPort + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
+              .getBytes(StandardCharsets.ISO_8859_1));
       out.flush();
-
-      // Read CONNECT response.
-      String connectResponse = readUntilBlankLine(in);
-      assertTrue(
-          "Expected 200, got: " + connectResponse, connectResponse.startsWith("HTTP/1.1 200"));
-
-      // Upgrade to TLS using the MITM CA as trust root.
-      // Explicitly set SNI so SslServerStage can match the hostname.
+      String connectResp = readUntilBlankLine(in);
+      assertTrue("Expected 200, got: " + connectResp, connectResp.startsWith("HTTP/1.1 200"));
       SSLSocket sslSocket =
           (SSLSocket)
               clientCtx
                   .getSocketFactory()
-                  .createSocket(socket, "localhost", HTTPS_PORT, /* autoClose= */ true);
+                  .createSocket(socket, "localhost", originPort, /* autoClose= */ true);
       SSLParameters sslParams = sslSocket.getSSLParameters();
       sslParams.setServerNames(List.of(new SNIHostName("localhost")));
       sslSocket.setSSLParameters(sslParams);
       sslSocket.setUseClientMode(true);
       sslSocket.startHandshake();
+      return sslSocket;
+    } catch (Exception e) {
+      socket.close();
+      throw e;
+    }
+  }
 
-      // Send HTTP GET through the MITM-TLS tunnel.
+  /** Returns a virtual host that echoes the request body, with upload allowed. */
+  private static HttpVirtualHost echoBodyHost() {
+    return new HttpVirtualHost(
+            (conn, request, writer) -> {
+              byte[] body = new byte[0];
+              HttpRequest.Body rb = request.getBody();
+              if (rb instanceof HttpRequest.InMemoryBody) {
+                body = ((HttpRequest.InMemoryBody) rb).toByteArray();
+              }
+              writer.commitBuffered(StandardResponses.OK.withBody(body));
+            })
+        .uploadPolicy(UploadPolicy.ALLOW);
+  }
+
+  // ---- Tests ----
+
+  @Test
+  public void mitmConnectProxy_transparentlyBridgesHttps() throws Exception {
+    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
-      String httpRequest = "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-      sslOut.write(httpRequest.getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.write(
+          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
       sslOut.flush();
 
-      // Read the full response.
       ByteArrayOutputStream responseBytes = new ByteArrayOutputStream();
       byte[] buf = new byte[4096];
       int n;
@@ -183,12 +212,10 @@ public class MitmConnectIntegrationTest {
     try (Socket socket = new Socket("localhost", MITM_PORT)) {
       OutputStream out = socket.getOutputStream();
       InputStream in = socket.getInputStream();
-
       out.write(
           "CONNECT localhost:1 HTTP/1.1\r\nHost: localhost\r\n\r\n"
               .getBytes(StandardCharsets.ISO_8859_1));
       out.flush();
-
       String response = readUntilBlankLine(in);
       assertTrue("Expected 502, got: " + response, response.startsWith("HTTP/1.1 502"));
       assertTrue(
@@ -199,97 +226,75 @@ public class MitmConnectIntegrationTest {
 
   @Test
   public void mitmConnectProxy_policyThrows_returns403() throws Exception {
-    CatfishHttpServer policyThrowsServer = newServer();
-    CertificateAuthority ca =
-        new OpensslCertificateAuthority(
-            workDir.resolve("ca.key"), workDir.resolve("ca.crt"), workDir);
-    try {
-      policyThrowsServer.listenMitmConnectProxyLocal(
-          9098,
-          (host, port) -> {
-            throw new RuntimeException("policy error");
-          },
-          ca);
+    CatfishHttpServer s = newServer();
+    serversToStop.add(s);
+    s.listenMitmConnectProxyLocal(
+        9098,
+        (host, port) -> {
+          throw new RuntimeException("policy error");
+        },
+        ca);
 
-      try (Socket socket = new Socket("localhost", 9098)) {
-        OutputStream out = socket.getOutputStream();
-        InputStream in = socket.getInputStream();
-
-        out.write(
-            "CONNECT localhost:9999 HTTP/1.1\r\nHost: localhost\r\n\r\n"
-                .getBytes(StandardCharsets.ISO_8859_1));
-        out.flush();
-
-        String response = readUntilBlankLine(in);
-        assertTrue("Expected 403, got: " + response, response.startsWith("HTTP/1.1 403"));
-        assertTrue(
-            "Expected Connection: close, got: " + response, response.contains("Connection: close"));
-        assertTrue("Expected connection closed", in.read() == -1);
-      }
-    } finally {
-      policyThrowsServer.stop();
+    try (Socket socket = new Socket("localhost", 9098)) {
+      OutputStream out = socket.getOutputStream();
+      InputStream in = socket.getInputStream();
+      out.write(
+          "CONNECT localhost:9999 HTTP/1.1\r\nHost: localhost\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      out.flush();
+      String response = readUntilBlankLine(in);
+      assertTrue("Expected 403, got: " + response, response.startsWith("HTTP/1.1 403"));
+      assertTrue(
+          "Expected Connection: close, got: " + response, response.contains("Connection: close"));
+      assertTrue("Expected connection closed", in.read() == -1);
     }
   }
 
   @Test
   public void mitmConnectProxy_caFails_returns502() throws Exception {
-    CatfishHttpServer caFailsServer = newServer();
-    SSLInfo testSslInfo = TestHelper.getSSLInfo();
-    try {
-      caFailsServer.listenMitmConnectProxyLocal(
-          9099,
-          ConnectPolicy.allowAll(),
-          (hostname, originCert) -> {
-            throw new RuntimeException("CA failed");
-          },
-          testSslInfo.sslContext().getSocketFactory());
+    CatfishHttpServer s = newServer();
+    serversToStop.add(s);
+    s.listenMitmConnectProxyLocal(
+        9099,
+        ConnectPolicy.allowAll(),
+        (hostname, originCert) -> {
+          throw new RuntimeException("CA failed");
+        },
+        testSslInfo.sslContext().getSocketFactory());
 
-      try (Socket socket = new Socket("localhost", 9099)) {
-        OutputStream out = socket.getOutputStream();
-        InputStream in = socket.getInputStream();
-
-        out.write(
-            ("CONNECT localhost:" + HTTPS_PORT + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
-                .getBytes(StandardCharsets.ISO_8859_1));
-        out.flush();
-
-        String response = readUntilBlankLine(in);
-        assertTrue("Expected 502, got: " + response, response.startsWith("HTTP/1.1 502"));
-        assertTrue(
-            "Expected Connection: close, got: " + response, response.contains("Connection: close"));
-        assertTrue("Expected connection closed", in.read() == -1);
-      }
-    } finally {
-      caFailsServer.stop();
+    try (Socket socket = new Socket("localhost", 9099)) {
+      OutputStream out = socket.getOutputStream();
+      InputStream in = socket.getInputStream();
+      out.write(
+          ("CONNECT localhost:" + HTTPS_PORT + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
+              .getBytes(StandardCharsets.ISO_8859_1));
+      out.flush();
+      String response = readUntilBlankLine(in);
+      assertTrue("Expected 502, got: " + response, response.startsWith("HTTP/1.1 502"));
+      assertTrue(
+          "Expected Connection: close, got: " + response, response.contains("Connection: close"));
+      assertTrue("Expected connection closed", in.read() == -1);
     }
   }
 
   @Test
   public void mitmConnectProxy_deniedByPolicy_returns403() throws Exception {
-    CatfishHttpServer deniedServer = newServer();
-    CertificateAuthority ca =
-        new OpensslCertificateAuthority(
-            workDir.resolve("ca.key"), workDir.resolve("ca.crt"), workDir);
-    try {
-      deniedServer.listenMitmConnectProxyLocal(9097, ConnectPolicy.denyAll(), ca);
+    CatfishHttpServer s = newServer();
+    serversToStop.add(s);
+    s.listenMitmConnectProxyLocal(9097, ConnectPolicy.denyAll(), ca);
 
-      try (Socket socket = new Socket("localhost", 9097)) {
-        OutputStream out = socket.getOutputStream();
-        InputStream in = socket.getInputStream();
-
-        out.write(
-            "CONNECT localhost:9999 HTTP/1.1\r\nHost: localhost\r\n\r\n"
-                .getBytes(StandardCharsets.ISO_8859_1));
-        out.flush();
-
-        String response = readUntilBlankLine(in);
-        assertTrue("Expected 403, got: " + response, response.startsWith("HTTP/1.1 403"));
-        assertTrue(
-            "Expected Connection: close, got: " + response, response.contains("Connection: close"));
-        assertTrue("Expected connection closed", in.read() == -1);
-      }
-    } finally {
-      deniedServer.stop();
+    try (Socket socket = new Socket("localhost", 9097)) {
+      OutputStream out = socket.getOutputStream();
+      InputStream in = socket.getInputStream();
+      out.write(
+          "CONNECT localhost:9999 HTTP/1.1\r\nHost: localhost\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      out.flush();
+      String response = readUntilBlankLine(in);
+      assertTrue("Expected 403, got: " + response, response.startsWith("HTTP/1.1 403"));
+      assertTrue(
+          "Expected Connection: close, got: " + response, response.contains("Connection: close"));
+      assertTrue("Expected connection closed", in.read() == -1);
     }
   }
 
@@ -302,88 +307,53 @@ public class MitmConnectIntegrationTest {
       expectedBody[i] = (byte) (i & 0xff);
     }
 
-    // Override origin handler to serve the large response.
-    CatfishHttpServer largeServer = newServer();
-    SSLInfo testSslInfo = TestHelper.getSSLInfo();
-    HttpVirtualHost largeHost =
+    startHttpsServer(
+        9094,
         new HttpVirtualHost(
             (conn, request, writer) ->
-                writer.commitBuffered(
-                    de.ofahrt.catfish.model.StandardResponses.OK.withBody(expectedBody)));
-    largeHost = largeHost.ssl(testSslInfo);
-    largeServer.addHttpHost("localhost", largeHost);
-    largeServer.listenHttpsLocal(9094);
+                writer.commitBuffered(StandardResponses.OK.withBody(expectedBody))));
+    startMitmProxy(9093);
 
-    CatfishHttpServer largeMitm = newServer();
-    CertificateAuthority ca =
-        new OpensslCertificateAuthority(
-            workDir.resolve("ca.key"), workDir.resolve("ca.crt"), workDir);
-    largeMitm.listenMitmConnectProxyLocal(
-        9093, ConnectPolicy.allowAll(), ca, testSslInfo.sslContext().getSocketFactory());
+    try (SSLSocket sslSocket = connectViaMitm(9093, 9094)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+      sslOut.write(
+          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
 
-    try {
-      SSLContext clientCtx = buildSslContextTrusting(workDir.resolve("ca.crt"));
+      String responseHeaders = readUntilBlankLine(sslIn);
+      assertTrue(
+          "Expected HTTP 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
 
-      try (Socket socket = new Socket("localhost", 9093)) {
-        OutputStream out = socket.getOutputStream();
-        InputStream in = socket.getInputStream();
+      byte[] actual = readBody(sslIn, responseHeaders);
+      assertEquals("Body size mismatch", bodySize, actual.length);
+      assertArrayEquals(expectedBody, actual);
+    }
+  }
 
-        String connectRequest = "CONNECT localhost:9094 HTTP/1.1\r\nHost: localhost\r\n\r\n";
-        out.write(connectRequest.getBytes(StandardCharsets.ISO_8859_1));
-        out.flush();
+  @Test
+  public void mitmConnectProxy_postRequest_forwardsBodyToOrigin() throws Exception {
+    byte[] sentBody = "POST-BODY-DATA".getBytes(StandardCharsets.UTF_8);
 
-        String connectResponse = readUntilBlankLine(in);
-        assertTrue(
-            "Expected 200, got: " + connectResponse, connectResponse.startsWith("HTTP/1.1 200"));
+    startHttpsServer(9086, echoBodyHost());
+    startMitmProxy(9087);
 
-        SSLSocket sslSocket =
-            (SSLSocket)
-                clientCtx
-                    .getSocketFactory()
-                    .createSocket(socket, "localhost", 9094, /* autoClose= */ true);
-        SSLParameters sslParams = sslSocket.getSSLParameters();
-        sslParams.setServerNames(List.of(new SNIHostName("localhost")));
-        sslSocket.setSSLParameters(sslParams);
-        sslSocket.setUseClientMode(true);
-        sslSocket.startHandshake();
+    try (SSLSocket sslSocket = connectViaMitm(9087, 9086)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+      sslOut.write(
+          ("POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: "
+                  + sentBody.length
+                  + "\r\nConnection: close\r\n\r\n")
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.write(sentBody);
+      sslOut.flush();
 
-        OutputStream sslOut = sslSocket.getOutputStream();
-        InputStream sslIn = sslSocket.getInputStream();
-        String httpRequest = "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-        sslOut.write(httpRequest.getBytes(StandardCharsets.ISO_8859_1));
-        sslOut.flush();
-
-        // Read status + headers.
-        String responseHeaders = readUntilBlankLine(sslIn);
-        assertTrue(
-            "Expected HTTP 200, got: " + responseHeaders,
-            responseHeaders.startsWith("HTTP/1.1 200"));
-
-        // Read body, decoding Transfer-Encoding: chunked if present.
-        byte[] actual;
-        if (responseHeaders
-            .toLowerCase(java.util.Locale.US)
-            .contains("transfer-encoding: chunked")) {
-          actual = readChunkedBody(sslIn);
-        } else {
-          ByteArrayOutputStream bodyBaos = new ByteArrayOutputStream();
-          byte[] buf = new byte[65536];
-          int n;
-          while ((n = sslIn.read(buf)) != -1) {
-            bodyBaos.write(buf, 0, n);
-          }
-          actual = bodyBaos.toByteArray();
-        }
-        assertEquals("Body size mismatch", bodySize, actual.length);
-        for (int i = 0; i < bodySize; i++) {
-          if (actual[i] != expectedBody[i]) {
-            throw new AssertionError("Body mismatch at byte " + i);
-          }
-        }
-      }
-    } finally {
-      largeServer.stop();
-      largeMitm.stop();
+      String responseHeaders = readUntilBlankLine(sslIn);
+      assertTrue(
+          "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
+      assertArrayEquals(sentBody, readBody(sslIn, responseHeaders));
     }
   }
 
@@ -391,265 +361,29 @@ public class MitmConnectIntegrationTest {
   public void mitmConnectProxy_chunkedRequestBody_forwardsBodyToOrigin() throws Exception {
     byte[] sentBody = "chunked-body-data".getBytes(StandardCharsets.UTF_8);
 
-    // Origin echoes the request body.
-    CatfishHttpServer chunkedReqServer = newServer();
-    SSLInfo testSslInfo = TestHelper.getSSLInfo();
-    HttpVirtualHost echoHost =
-        new HttpVirtualHost(
-                (conn, request, writer) -> {
-                  byte[] body = new byte[0];
-                  HttpRequest.Body rb = request.getBody();
-                  if (rb instanceof HttpRequest.InMemoryBody) {
-                    body = ((HttpRequest.InMemoryBody) rb).toByteArray();
-                  }
-                  writer.commitBuffered(StandardResponses.OK.withBody(body));
-                })
-            .uploadPolicy(UploadPolicy.ALLOW)
-            .ssl(testSslInfo);
-    chunkedReqServer.addHttpHost("localhost", echoHost);
-    chunkedReqServer.listenHttpsLocal(9082);
+    startHttpsServer(9082, echoBodyHost());
+    startMitmProxy(9083);
 
-    CatfishHttpServer chunkedReqMitm = newServer();
-    CertificateAuthority ca =
-        new OpensslCertificateAuthority(
-            workDir.resolve("ca.key"), workDir.resolve("ca.crt"), workDir);
-    chunkedReqMitm.listenMitmConnectProxyLocal(
-        9083, ConnectPolicy.allowAll(), ca, testSslInfo.sslContext().getSocketFactory());
+    try (SSLSocket sslSocket = connectViaMitm(9083, 9082)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
 
-    try {
-      SSLContext clientCtx = buildSslContextTrusting(workDir.resolve("ca.crt"));
+      // Build chunked POST body: one chunk with the data.
+      String chunkSize = Integer.toHexString(sentBody.length);
+      byte[] chunkedBody =
+          (chunkSize + "\r\n" + new String(sentBody, StandardCharsets.UTF_8) + "\r\n0\r\n\r\n")
+              .getBytes(StandardCharsets.UTF_8);
+      sslOut.write(
+          ("POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n"
+                  + "Connection: close\r\n\r\n")
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.write(chunkedBody);
+      sslOut.flush();
 
-      try (Socket socket = new Socket("localhost", 9083)) {
-        OutputStream out = socket.getOutputStream();
-        InputStream in = socket.getInputStream();
-
-        out.write(
-            "CONNECT localhost:9082 HTTP/1.1\r\nHost: localhost\r\n\r\n"
-                .getBytes(StandardCharsets.ISO_8859_1));
-        out.flush();
-        String connectResp = readUntilBlankLine(in);
-        assertTrue(connectResp.startsWith("HTTP/1.1 200"));
-
-        SSLSocket sslSocket =
-            (SSLSocket)
-                clientCtx
-                    .getSocketFactory()
-                    .createSocket(socket, "localhost", 9082, /* autoClose= */ true);
-        SSLParameters sslParams = sslSocket.getSSLParameters();
-        sslParams.setServerNames(List.of(new SNIHostName("localhost")));
-        sslSocket.setSSLParameters(sslParams);
-        sslSocket.setUseClientMode(true);
-        sslSocket.startHandshake();
-
-        OutputStream sslOut = sslSocket.getOutputStream();
-        InputStream sslIn = sslSocket.getInputStream();
-
-        // Build chunked POST body: one chunk with the data.
-        String chunkSize = Integer.toHexString(sentBody.length);
-        byte[] chunkedBody =
-            (chunkSize + "\r\n" + new String(sentBody, StandardCharsets.UTF_8) + "\r\n0\r\n\r\n")
-                .getBytes(StandardCharsets.UTF_8);
-
-        String postRequest =
-            "POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n"
-                + "Connection: close\r\n\r\n";
-        sslOut.write(postRequest.getBytes(StandardCharsets.ISO_8859_1));
-        sslOut.write(chunkedBody);
-        sslOut.flush();
-
-        String responseHeaders = readUntilBlankLine(sslIn);
-        assertTrue(
-            "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
-
-        ByteArrayOutputStream bodyBaos = new ByteArrayOutputStream();
-        byte[] buf = new byte[4096];
-        int n;
-        while ((n = sslIn.read(buf)) != -1) {
-          bodyBaos.write(buf, 0, n);
-        }
-        assertEquals(
-            new String(sentBody, StandardCharsets.UTF_8),
-            new String(bodyBaos.toByteArray(), StandardCharsets.UTF_8));
-      }
-    } finally {
-      chunkedReqServer.stop();
-      chunkedReqMitm.stop();
-    }
-  }
-
-  @Test
-  public void mitmConnectProxy_originFailsDuringRequest_returns502() throws Exception {
-    // Start an origin that is up for the CONNECT cert-mirror phase but then goes down.
-    CatfishHttpServer failingOrigin = newServer();
-    SSLInfo testSslInfo = TestHelper.getSSLInfo();
-    // Use a latch so origin closes its listening port after the cert-mirror socket connects.
-    java.util.concurrent.CountDownLatch connectSeen = new java.util.concurrent.CountDownLatch(1);
-    HttpVirtualHost originHost =
-        new HttpVirtualHost(
-                (conn, request, writer) ->
-                    writer.commitBuffered(StandardResponses.OK.withBody(new byte[0])))
-            .ssl(testSslInfo);
-    failingOrigin.addHttpHost("localhost", originHost);
-    failingOrigin.listenHttpsLocal(9080);
-
-    CatfishHttpServer failingMitm = newServer();
-    CertificateAuthority ca =
-        new OpensslCertificateAuthority(
-            workDir.resolve("ca.key"), workDir.resolve("ca.crt"), workDir);
-    // Use the test SSLContext so cert-mirror succeeds.
-    failingMitm.listenMitmConnectProxyLocal(
-        9081, ConnectPolicy.allowAll(), ca, testSslInfo.sslContext().getSocketFactory());
-
-    try {
-      SSLContext clientCtx = buildSslContextTrusting(workDir.resolve("ca.crt"));
-
-      try (Socket socket = new Socket("localhost", 9081)) {
-        OutputStream out = socket.getOutputStream();
-        InputStream in = socket.getInputStream();
-
-        out.write(
-            "CONNECT localhost:9080 HTTP/1.1\r\nHost: localhost\r\n\r\n"
-                .getBytes(StandardCharsets.ISO_8859_1));
-        out.flush();
-
-        // Wait for the 200; by then doConnect() has completed cert-mirror.
-        String connectResp = readUntilBlankLine(in);
-        assertTrue(connectResp.startsWith("HTTP/1.1 200"));
-
-        // Stop origin so MitmProxyStage.executorTask() fails to open a new socket.
-        failingOrigin.stop();
-        failingOrigin = null;
-
-        SSLSocket sslSocket =
-            (SSLSocket)
-                clientCtx
-                    .getSocketFactory()
-                    .createSocket(socket, "localhost", 9080, /* autoClose= */ true);
-        SSLParameters sslParams = sslSocket.getSSLParameters();
-        sslParams.setServerNames(List.of(new SNIHostName("localhost")));
-        sslSocket.setSSLParameters(sslParams);
-        sslSocket.setUseClientMode(true);
-        sslSocket.startHandshake();
-
-        OutputStream sslOut = sslSocket.getOutputStream();
-        InputStream sslIn = sslSocket.getInputStream();
-        sslOut.write(
-            "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
-                .getBytes(StandardCharsets.ISO_8859_1));
-        sslOut.flush();
-
-        // Should get a 502 back from the MITM proxy.
-        String responseHeaders = readUntilBlankLine(sslIn);
-        assertTrue(
-            "Expected 502, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 502"));
-      }
-    } finally {
-      if (failingOrigin != null) {
-        failingOrigin.stop();
-      }
-      failingMitm.stop();
-    }
-  }
-
-  private static CatfishHttpServer newServer() throws IOException {
-    return new CatfishHttpServer(
-        new NetworkEventListener() {
-          @Override
-          public void shutdown() {}
-
-          @Override
-          public void portOpened(int port, boolean ssl) {}
-
-          @Override
-          public void notifyInternalError(Connection id, Throwable throwable) {
-            throwable.printStackTrace();
-          }
-        });
-  }
-
-  @Test
-  public void mitmConnectProxy_postRequest_forwardsBodyToOrigin() throws Exception {
-    byte[] sentBody = "POST-BODY-DATA".getBytes(StandardCharsets.UTF_8);
-
-    // Origin echoes request body in response.
-    CatfishHttpServer postServer = newServer();
-    SSLInfo testSslInfo = TestHelper.getSSLInfo();
-    HttpVirtualHost postHost =
-        new HttpVirtualHost(
-                (conn, request, writer) -> {
-                  byte[] body = new byte[0];
-                  HttpRequest.Body rb = request.getBody();
-                  if (rb instanceof HttpRequest.InMemoryBody) {
-                    body = ((HttpRequest.InMemoryBody) rb).toByteArray();
-                  }
-                  writer.commitBuffered(StandardResponses.OK.withBody(body));
-                })
-            .uploadPolicy(UploadPolicy.ALLOW)
-            .ssl(testSslInfo);
-    postServer.addHttpHost("localhost", postHost);
-    postServer.listenHttpsLocal(9086);
-
-    CatfishHttpServer postMitm = newServer();
-    CertificateAuthority ca =
-        new OpensslCertificateAuthority(
-            workDir.resolve("ca.key"), workDir.resolve("ca.crt"), workDir);
-    postMitm.listenMitmConnectProxyLocal(
-        9087, ConnectPolicy.allowAll(), ca, testSslInfo.sslContext().getSocketFactory());
-
-    try {
-      SSLContext clientCtx = buildSslContextTrusting(workDir.resolve("ca.crt"));
-
-      try (Socket socket = new Socket("localhost", 9087)) {
-        OutputStream out = socket.getOutputStream();
-        InputStream in = socket.getInputStream();
-
-        out.write(
-            ("CONNECT localhost:9086 HTTP/1.1\r\nHost: localhost\r\n\r\n")
-                .getBytes(StandardCharsets.ISO_8859_1));
-        out.flush();
-        String connectResp = readUntilBlankLine(in);
-        assertTrue(connectResp.startsWith("HTTP/1.1 200"));
-
-        SSLSocket sslSocket =
-            (SSLSocket)
-                clientCtx
-                    .getSocketFactory()
-                    .createSocket(socket, "localhost", 9086, /* autoClose= */ true);
-        SSLParameters sslParams = sslSocket.getSSLParameters();
-        sslParams.setServerNames(List.of(new SNIHostName("localhost")));
-        sslSocket.setSSLParameters(sslParams);
-        sslSocket.setUseClientMode(true);
-        sslSocket.startHandshake();
-
-        OutputStream sslOut = sslSocket.getOutputStream();
-        InputStream sslIn = sslSocket.getInputStream();
-
-        String postRequest =
-            "POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: "
-                + sentBody.length
-                + "\r\nConnection: close\r\n\r\n";
-        sslOut.write(postRequest.getBytes(StandardCharsets.ISO_8859_1));
-        sslOut.write(sentBody);
-        sslOut.flush();
-
-        String responseHeaders = readUntilBlankLine(sslIn);
-        assertTrue(
-            "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
-
-        ByteArrayOutputStream bodyBaos = new ByteArrayOutputStream();
-        byte[] buf = new byte[4096];
-        int n;
-        while ((n = sslIn.read(buf)) != -1) {
-          bodyBaos.write(buf, 0, n);
-        }
-        byte[] receivedBody = bodyBaos.toByteArray();
-        assertEquals(
-            new String(sentBody, StandardCharsets.UTF_8),
-            new String(receivedBody, StandardCharsets.UTF_8));
-      }
-    } finally {
-      postServer.stop();
-      postMitm.stop();
+      String responseHeaders = readUntilBlankLine(sslIn);
+      assertTrue(
+          "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
+      assertArrayEquals(sentBody, readBody(sslIn, responseHeaders));
     }
   }
 
@@ -658,111 +392,35 @@ public class MitmConnectIntegrationTest {
     byte[] originBody = "chunked-origin-data".getBytes(StandardCharsets.UTF_8);
 
     // Origin streams the response (causes chunked Transfer-Encoding from origin).
-    CatfishHttpServer chunkedServer = newServer();
-    SSLInfo testSslInfo = TestHelper.getSSLInfo();
-    HttpVirtualHost chunkedHost =
+    startHttpsServer(
+        9084,
         new HttpVirtualHost(
-                (conn, request, writer) -> {
-                  OutputStream bodyOut = writer.commitStreamed(StandardResponses.OK);
-                  bodyOut.write(originBody);
-                  bodyOut.flush(); // force chunked encoding (prevents Content-Length optimization)
-                  bodyOut.close();
-                })
-            .ssl(testSslInfo);
-    chunkedServer.addHttpHost("localhost", chunkedHost);
-    chunkedServer.listenHttpsLocal(9084);
+            (conn, request, writer) -> {
+              OutputStream bodyOut = writer.commitStreamed(StandardResponses.OK);
+              bodyOut.write(originBody);
+              bodyOut.flush(); // force chunked encoding (prevents Content-Length optimization)
+              bodyOut.close();
+            }));
+    startMitmProxy(9085);
 
-    CatfishHttpServer chunkedMitm = newServer();
-    CertificateAuthority ca =
-        new OpensslCertificateAuthority(
-            workDir.resolve("ca.key"), workDir.resolve("ca.crt"), workDir);
-    chunkedMitm.listenMitmConnectProxyLocal(
-        9085, ConnectPolicy.allowAll(), ca, testSslInfo.sslContext().getSocketFactory());
+    try (SSLSocket sslSocket = connectViaMitm(9085, 9084)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+      sslOut.write(
+          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
 
-    try {
-      SSLContext clientCtx = buildSslContextTrusting(workDir.resolve("ca.crt"));
-
-      try (Socket socket = new Socket("localhost", 9085)) {
-        OutputStream out = socket.getOutputStream();
-        InputStream in = socket.getInputStream();
-
-        out.write(
-            ("CONNECT localhost:9084 HTTP/1.1\r\nHost: localhost\r\n\r\n")
-                .getBytes(StandardCharsets.ISO_8859_1));
-        out.flush();
-        String connectResp = readUntilBlankLine(in);
-        assertTrue(connectResp.startsWith("HTTP/1.1 200"));
-
-        SSLSocket sslSocket =
-            (SSLSocket)
-                clientCtx
-                    .getSocketFactory()
-                    .createSocket(socket, "localhost", 9084, /* autoClose= */ true);
-        SSLParameters sslParams = sslSocket.getSSLParameters();
-        sslParams.setServerNames(List.of(new SNIHostName("localhost")));
-        sslSocket.setSSLParameters(sslParams);
-        sslSocket.setUseClientMode(true);
-        sslSocket.startHandshake();
-
-        OutputStream sslOut = sslSocket.getOutputStream();
-        InputStream sslIn = sslSocket.getInputStream();
-        sslOut.write(
-            "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
-                .getBytes(StandardCharsets.ISO_8859_1));
-        sslOut.flush();
-
-        String responseHeaders = readUntilBlankLine(sslIn);
-        assertTrue(
-            "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
-
-        byte[] actual;
-        if (responseHeaders.toLowerCase(Locale.US).contains("transfer-encoding: chunked")) {
-          actual = readChunkedBody(sslIn);
-        } else {
-          ByteArrayOutputStream bodyBaos = new ByteArrayOutputStream();
-          byte[] buf = new byte[4096];
-          int n;
-          while ((n = sslIn.read(buf)) != -1) {
-            bodyBaos.write(buf, 0, n);
-          }
-          actual = bodyBaos.toByteArray();
-        }
-        assertEquals(
-            new String(originBody, StandardCharsets.UTF_8),
-            new String(actual, StandardCharsets.UTF_8));
-      }
-    } finally {
-      chunkedServer.stop();
-      chunkedMitm.stop();
+      String responseHeaders = readUntilBlankLine(sslIn);
+      assertTrue(
+          "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
+      assertArrayEquals(originBody, readBody(sslIn, responseHeaders));
     }
   }
 
   @Test
   public void mitmConnectProxy_keepAlive_secondRequestOnSameConnection() throws Exception {
-    SSLContext clientCtx = buildSslContextTrusting(workDir.resolve("ca.crt"));
-
-    try (Socket socket = new Socket("localhost", MITM_PORT)) {
-      OutputStream out = socket.getOutputStream();
-      InputStream in = socket.getInputStream();
-
-      out.write(
-          ("CONNECT localhost:" + HTTPS_PORT + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
-              .getBytes(StandardCharsets.ISO_8859_1));
-      out.flush();
-      String connectResp = readUntilBlankLine(in);
-      assertTrue(connectResp.startsWith("HTTP/1.1 200"));
-
-      SSLSocket sslSocket =
-          (SSLSocket)
-              clientCtx
-                  .getSocketFactory()
-                  .createSocket(socket, "localhost", HTTPS_PORT, /* autoClose= */ true);
-      SSLParameters sslParams = sslSocket.getSSLParameters();
-      sslParams.setServerNames(List.of(new SNIHostName("localhost")));
-      sslSocket.setSSLParameters(sslParams);
-      sslSocket.setUseClientMode(true);
-      sslSocket.startHandshake();
-
+    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
 
@@ -770,7 +428,6 @@ public class MitmConnectIntegrationTest {
       sslOut.write(
           "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
       sslOut.flush();
-
       String resp1Headers = readUntilBlankLine(sslIn);
       assertTrue("Expected 200, got: " + resp1Headers, resp1Headers.startsWith("HTTP/1.1 200"));
       byte[] resp1Body = readBody(sslIn, resp1Headers);
@@ -783,21 +440,47 @@ public class MitmConnectIntegrationTest {
           "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
               .getBytes(StandardCharsets.ISO_8859_1));
       sslOut.flush();
-
       String resp2Headers = readUntilBlankLine(sslIn);
       assertTrue("Expected 200, got: " + resp2Headers, resp2Headers.startsWith("HTTP/1.1 200"));
-      ByteArrayOutputStream body2Baos = new ByteArrayOutputStream();
-      byte[] buf = new byte[4096];
-      int n;
-      while ((n = sslIn.read(buf)) != -1) {
-        body2Baos.write(buf, 0, n);
-      }
+      byte[] resp2Body = readBody(sslIn, resp2Headers);
       assertTrue(
           "Expected MITM-OK in second response",
-          new String(body2Baos.toByteArray(), StandardCharsets.ISO_8859_1).contains("MITM-OK"));
+          new String(resp2Body, StandardCharsets.ISO_8859_1).contains("MITM-OK"));
     }
   }
 
+  @Test
+  public void mitmConnectProxy_originFailsDuringRequest_returns502() throws Exception {
+    // Start origin that is up for the CONNECT cert-mirror phase, then stop it.
+    CatfishHttpServer failingOrigin =
+        startHttpsServer(
+            9080,
+            new HttpVirtualHost(
+                (conn, request, writer) ->
+                    writer.commitBuffered(StandardResponses.OK.withBody(new byte[0]))));
+    startMitmProxy(9081);
+
+    try (SSLSocket sslSocket = connectViaMitm(9081, 9080)) {
+      // cert-mirror succeeded (we got the 200); now kill origin before the first request.
+      serversToStop.remove(failingOrigin);
+      failingOrigin.stop();
+
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+      sslOut.write(
+          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
+
+      String responseHeaders = readUntilBlankLine(sslIn);
+      assertTrue(
+          "Expected 502, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 502"));
+    }
+  }
+
+  // ---- I/O helpers ----
+
+  /** Reads the response body, honouring Transfer-Encoding: chunked, Content-Length, or EOF. */
   private static byte[] readBody(InputStream in, String headers) throws IOException {
     if (headers.toLowerCase(Locale.US).contains("transfer-encoding: chunked")) {
       return readChunkedBody(in);
@@ -885,6 +568,24 @@ public class MitmConnectIntegrationTest {
       if (sb.toString().endsWith("\r\n\r\n")) break;
     }
     return sb.toString();
+  }
+
+  // ---- Infrastructure ----
+
+  private static CatfishHttpServer newServer() throws IOException {
+    return new CatfishHttpServer(
+        new NetworkEventListener() {
+          @Override
+          public void shutdown() {}
+
+          @Override
+          public void portOpened(int port, boolean ssl) {}
+
+          @Override
+          public void notifyInternalError(Connection id, Throwable throwable) {
+            throwable.printStackTrace();
+          }
+        });
   }
 
   private static SSLContext buildSslContextTrusting(Path caCertFile) throws Exception {
