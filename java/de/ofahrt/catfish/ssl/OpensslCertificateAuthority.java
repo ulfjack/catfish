@@ -58,10 +58,12 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
         extFile, "subjectAltName=" + String.join(",", sanEntries), StandardCharsets.UTF_8);
 
     // Mirror the origin cert's CN; fall back to the hostname if absent.
+    // Strip '/' because openssl uses it as a field separator in -subj values.
     String cn = extractCn(originCert);
     if (cn == null) {
       cn = hostname;
     }
+    cn = cn.replace("/", "");
 
     try {
       runCommand(
@@ -79,6 +81,9 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
           "/CN=" + cn,
           "-out",
           csrFile.toString());
+      // Use the UUID (without hyphens) as the certificate serial number so concurrent
+      // invocations don't race on the shared .srl file that -CAcreateserial would create.
+      String serial = id.replace("-", "");
       runCommand(
           "openssl",
           "x509",
@@ -89,7 +94,8 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
           caCert.toString(),
           "-CAkey",
           caKey.toString(),
-          "-CAcreateserial",
+          "-set_serial",
+          "0x" + serial,
           "-out",
           crtFile.toString(),
           "-days",
