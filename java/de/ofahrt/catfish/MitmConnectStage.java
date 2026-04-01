@@ -1,29 +1,17 @@
 package de.ofahrt.catfish;
 
-import de.ofahrt.catfish.client.legacy.IncrementalHttpResponseParser;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
-import de.ofahrt.catfish.model.HttpHeaderName;
-import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.network.Connection;
-import de.ofahrt.catfish.model.server.CompressionPolicy;
 import de.ofahrt.catfish.model.server.ConnectPolicy;
 import de.ofahrt.catfish.model.server.ConnectTarget;
-import de.ofahrt.catfish.model.server.KeepAlivePolicy;
-import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.ssl.CertificateAuthority;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Executor;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLContext;
@@ -243,42 +231,21 @@ final class MitmConnectStage implements Stage {
     decryptedOut.clear();
     decryptedOut.flip();
 
-    String capturedHost = originHost;
-    int capturedPort = originPort;
-    HttpVirtualHost proxyHost =
-        new HttpVirtualHost(
-            (conn, request, responseWriter) ->
-                forwardRequest(capturedHost, capturedPort, request, responseWriter),
-            UploadPolicy.ALLOW,
-            KeepAlivePolicy.KEEP_ALIVE,
-            CompressionPolicy.NONE,
-            null);
-
-    HttpServerStage.RequestQueue queue =
-        (handler, conn, req, writer) ->
-            executor.execute(
-                () -> {
-                  try {
-                    handler.handle(conn, req, writer);
-                  } catch (IOException e) {
-                    throw new RuntimeException(e);
-                  }
-                });
-
-    HttpServerStage httpStage =
-        new HttpServerStage(
+    MitmProxyStage proxyStage =
+        new MitmProxyStage(
             parent,
-            queue,
-            (conn, req, resp) -> {},
-            ignored -> proxyHost,
             decryptedIn,
-            decryptedOut);
+            decryptedOut,
+            executor,
+            originHost,
+            originPort,
+            originSocketFactory);
 
     SSLContext capturedCtx = fakeCtx;
     SslServerStage ssl =
         new SslServerStage(
             parent,
-            httpStage,
+            proxyStage,
             ignored -> capturedCtx,
             executor,
             inputBuffer,
@@ -289,82 +256,6 @@ final class MitmConnectStage implements Stage {
     this.delegate = ssl;
     state = MitmState.DELEGATING;
     parent.encourageReads();
-  }
-
-  private void forwardRequest(
-      String host,
-      int port,
-      HttpRequest request,
-      de.ofahrt.catfish.model.server.HttpResponseWriter responseWriter)
-      throws IOException {
-    SSLSocket socket = (SSLSocket) originSocketFactory.createSocket(host, port);
-    SSLParameters params = socket.getSSLParameters();
-    params.setServerNames(List.of(new SNIHostName(host)));
-    socket.setSSLParameters(params);
-    socket.startHandshake();
-    try {
-      OutputStream out = socket.getOutputStream();
-      out.write(requestToBytes(request));
-      out.flush();
-
-      IncrementalHttpResponseParser parser = new IncrementalHttpResponseParser();
-      InputStream in = socket.getInputStream();
-      byte[] buf = new byte[8192];
-      int offset = 0;
-      int length = 0;
-      while (!parser.isDone()) {
-        if (length == 0) {
-          length = in.read(buf);
-          offset = 0;
-          if (length < 0) {
-            throw new IOException("Origin closed connection prematurely");
-          }
-        }
-        int used = parser.parse(buf, offset, length);
-        length -= used;
-        offset += used;
-      }
-      HttpResponse response = parser.getResponse();
-      // Strip Transfer-Encoding: the body is already decoded by the parser; commitBuffered
-      // will re-encode with Content-Length, so having both headers would be invalid.
-      response = response.withoutHeader(HttpHeaderName.TRANSFER_ENCODING);
-      responseWriter.commitBuffered(response);
-    } finally {
-      socket.close();
-    }
-  }
-
-  private static byte[] requestToBytes(HttpRequest request) throws IOException {
-    byte[] bodyBytes = new byte[0];
-    HttpRequest.Body body = request.getBody();
-    if (body instanceof HttpRequest.InMemoryBody) {
-      bodyBytes = ((HttpRequest.InMemoryBody) body).toByteArray();
-    }
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    try (OutputStreamWriter w = new OutputStreamWriter(baos, StandardCharsets.UTF_8)) {
-      w.append(request.getMethod())
-          .append(' ')
-          .append(request.getUri())
-          .append(' ')
-          .append(request.getVersion().toString())
-          .append("\r\n");
-      for (Map.Entry<String, String> e : request.getHeaders()) {
-        // Strip framing headers; we re-add Content-Length below based on actual body length.
-        String name = e.getKey();
-        if (name.equalsIgnoreCase(HttpHeaderName.TRANSFER_ENCODING)) continue;
-        if (name.equalsIgnoreCase(HttpHeaderName.CONTENT_LENGTH)) continue;
-        w.append(name).append(": ").append(e.getValue()).append("\r\n");
-      }
-      if (bodyBytes.length > 0) {
-        w.append(HttpHeaderName.CONTENT_LENGTH)
-            .append(": ")
-            .append(String.valueOf(bodyBytes.length))
-            .append("\r\n");
-      }
-      w.append("\r\n");
-    }
-    baos.write(bodyBytes);
-    return baos.toByteArray();
   }
 
   @Override

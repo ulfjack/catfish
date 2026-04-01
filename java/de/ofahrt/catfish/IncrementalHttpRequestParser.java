@@ -45,6 +45,7 @@ final class IncrementalHttpRequestParser {
 
   private boolean done;
   private boolean needsContinue;
+  private boolean headersOnly;
 
   private int majorVersion;
   private String messageHeaderName;
@@ -62,6 +63,10 @@ final class IncrementalHttpRequestParser {
     reset();
   }
 
+  public void setHeadersOnly(boolean headersOnly) {
+    this.headersOnly = headersOnly;
+  }
+
   void reset() {
     state = State.REQUEST_METHOD;
     elementBuffer = new StringBuilder();
@@ -71,6 +76,7 @@ final class IncrementalHttpRequestParser {
 
     done = false;
     needsContinue = false;
+    headersOnly = false;
     builder.reset();
 
     majorVersion = 0;
@@ -352,6 +358,10 @@ final class IncrementalHttpRequestParser {
               if (transferEncodingValue != null && contentLengthValue != null) {
                 return setBadRequest("Must not set both Content-Length and Transfer-Encoding");
               }
+              if (headersOnly) {
+                done = true;
+                return i + 1;
+              }
               if ("0".equals(contentLengthValue)) {
                 builder.setBody(new HttpRequest.InMemoryBody(new byte[0]));
                 done = true;
@@ -474,6 +484,9 @@ final class IncrementalHttpRequestParser {
   public HttpRequest getRequest() throws MalformedRequestException {
     if (!done) {
       throw new IllegalStateException("No parsed request available!");
+    }
+    if (headersOnly) {
+      return builder.buildPartialRequest();
     }
     return builder.build();
   }

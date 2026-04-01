@@ -1,5 +1,6 @@
 package de.ofahrt.catfish.integration;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
@@ -289,6 +290,100 @@ public class MitmConnectIntegrationTest {
     }
   }
 
+  @Test
+  public void mitmConnectProxy_largeResponse_streamsWithoutBuffering() throws Exception {
+    // The old 1 MB cap in IncrementalHttpResponseParser would have caused this to fail.
+    final int bodySize = 3 * 1024 * 1024; // 3 MB
+    byte[] expectedBody = new byte[bodySize];
+    for (int i = 0; i < bodySize; i++) {
+      expectedBody[i] = (byte) (i & 0xff);
+    }
+
+    // Override origin handler to serve the large response.
+    CatfishHttpServer largeServer = newServer();
+    SSLInfo testSslInfo = TestHelper.getSSLInfo();
+    HttpVirtualHost largeHost =
+        new HttpVirtualHost(
+            (conn, request, writer) ->
+                writer.commitBuffered(
+                    de.ofahrt.catfish.model.StandardResponses.OK.withBody(expectedBody)));
+    largeHost = largeHost.ssl(testSslInfo);
+    largeServer.addHttpHost("localhost", largeHost);
+    largeServer.listenHttpsLocal(9094);
+
+    CatfishHttpServer largeMitm = newServer();
+    CertificateAuthority ca =
+        new OpensslCertificateAuthority(
+            workDir.resolve("ca.key"), workDir.resolve("ca.crt"), workDir);
+    largeMitm.listenMitmConnectProxyLocal(
+        9093, ConnectPolicy.allowAll(), ca, testSslInfo.sslContext().getSocketFactory());
+
+    try {
+      SSLContext clientCtx = buildSslContextTrusting(workDir.resolve("ca.crt"));
+
+      try (Socket socket = new Socket("localhost", 9093)) {
+        OutputStream out = socket.getOutputStream();
+        InputStream in = socket.getInputStream();
+
+        String connectRequest = "CONNECT localhost:9094 HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        out.write(connectRequest.getBytes(StandardCharsets.ISO_8859_1));
+        out.flush();
+
+        String connectResponse = readUntilBlankLine(in);
+        assertTrue(
+            "Expected 200, got: " + connectResponse, connectResponse.startsWith("HTTP/1.1 200"));
+
+        SSLSocket sslSocket =
+            (SSLSocket)
+                clientCtx
+                    .getSocketFactory()
+                    .createSocket(socket, "localhost", 9094, /* autoClose= */ true);
+        SSLParameters sslParams = sslSocket.getSSLParameters();
+        sslParams.setServerNames(List.of(new SNIHostName("localhost")));
+        sslSocket.setSSLParameters(sslParams);
+        sslSocket.setUseClientMode(true);
+        sslSocket.startHandshake();
+
+        OutputStream sslOut = sslSocket.getOutputStream();
+        InputStream sslIn = sslSocket.getInputStream();
+        String httpRequest = "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+        sslOut.write(httpRequest.getBytes(StandardCharsets.ISO_8859_1));
+        sslOut.flush();
+
+        // Read status + headers.
+        String responseHeaders = readUntilBlankLine(sslIn);
+        assertTrue(
+            "Expected HTTP 200, got: " + responseHeaders,
+            responseHeaders.startsWith("HTTP/1.1 200"));
+
+        // Read body, decoding Transfer-Encoding: chunked if present.
+        byte[] actual;
+        if (responseHeaders
+            .toLowerCase(java.util.Locale.US)
+            .contains("transfer-encoding: chunked")) {
+          actual = readChunkedBody(sslIn);
+        } else {
+          ByteArrayOutputStream bodyBaos = new ByteArrayOutputStream();
+          byte[] buf = new byte[65536];
+          int n;
+          while ((n = sslIn.read(buf)) != -1) {
+            bodyBaos.write(buf, 0, n);
+          }
+          actual = bodyBaos.toByteArray();
+        }
+        assertEquals("Body size mismatch", bodySize, actual.length);
+        for (int i = 0; i < bodySize; i++) {
+          if (actual[i] != expectedBody[i]) {
+            throw new AssertionError("Body mismatch at byte " + i);
+          }
+        }
+      }
+    } finally {
+      largeServer.stop();
+      largeMitm.stop();
+    }
+  }
+
   private static CatfishHttpServer newServer() throws IOException {
     return new CatfishHttpServer(
         new NetworkEventListener() {
@@ -303,6 +398,48 @@ public class MitmConnectIntegrationTest {
             throwable.printStackTrace();
           }
         });
+  }
+
+  private static byte[] readChunkedBody(InputStream in) throws IOException {
+    ByteArrayOutputStream result = new ByteArrayOutputStream();
+    byte[] buf = new byte[65536];
+    while (true) {
+      // Read chunk-size line.
+      long chunkSize = 0;
+      while (true) {
+        int c = in.read();
+        if (c < 0) throw new IOException("EOF in chunked body");
+        if (c == '\r') continue;
+        if (c == '\n') break;
+        if (c >= '0' && c <= '9') chunkSize = chunkSize * 16 + (c - '0');
+        else if (c >= 'a' && c <= 'f') chunkSize = chunkSize * 16 + (c - 'a' + 10);
+        else if (c >= 'A' && c <= 'F') chunkSize = chunkSize * 16 + (c - 'A' + 10);
+      }
+      if (chunkSize == 0) {
+        // Consume trailing CRLF (empty trailers).
+        while (true) {
+          StringBuilder line = new StringBuilder();
+          while (true) {
+            int c = in.read();
+            if (c < 0 || c == '\n') break;
+            if (c != '\r') line.append((char) c);
+          }
+          if (line.length() == 0) break;
+        }
+        break;
+      }
+      long remaining = chunkSize;
+      while (remaining > 0) {
+        int n = in.read(buf, 0, (int) Math.min(buf.length, remaining));
+        if (n < 0) throw new IOException("EOF reading chunk data");
+        result.write(buf, 0, n);
+        remaining -= n;
+      }
+      // Consume CRLF after chunk data.
+      in.read(); // \r
+      in.read(); // \n
+    }
+    return result.toByteArray();
   }
 
   private static String readUntilBlankLine(InputStream in) throws IOException {
