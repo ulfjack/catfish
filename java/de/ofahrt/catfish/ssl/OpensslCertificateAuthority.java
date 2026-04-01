@@ -25,21 +25,15 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
   }
 
   @Override
-  public SSLInfo getOrCreate(String hostname, X509Certificate originCert) throws Exception {
+  public synchronized SSLInfo getOrCreate(String hostname, X509Certificate originCert)
+      throws Exception {
     SSLInfo cached = cache.get(hostname);
     if (cached != null) {
       return cached;
     }
-    // Synchronize per-host to avoid running openssl twice for the same hostname.
-    synchronized (hostname.intern()) {
-      cached = cache.get(hostname);
-      if (cached != null) {
-        return cached;
-      }
-      SSLInfo info = generate(hostname, originCert);
-      cache.put(hostname, info);
-      return info;
-    }
+    SSLInfo info = generate(hostname, originCert);
+    cache.put(hostname, info);
+    return info;
   }
 
   private SSLInfo generate(String hostname, X509Certificate originCert) throws Exception {
