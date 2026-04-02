@@ -6,11 +6,10 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
-import de.ofahrt.catfish.model.server.ConnectPolicy;
+import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
-import de.ofahrt.catfish.ssl.CertificateAuthority;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -153,34 +152,23 @@ public final class CatfishHttpServer {
     engine.shutdown();
   }
 
-  public void listenConnectProxy(int port, ConnectPolicy policy)
-      throws IOException, InterruptedException {
-    engine.listenAll(port, new ConnectTunnelServerHandler(executor, policy));
-  }
-
-  public void listenConnectProxyLocal(int port, ConnectPolicy policy)
-      throws IOException, InterruptedException {
-    engine.listenLocalhost(port, new ConnectTunnelServerHandler(executor, policy));
-  }
-
-  public void listenMitmConnectProxy(int port, ConnectPolicy policy, CertificateAuthority ca)
+  public void listenConnectProxy(int port, ConnectHandler handler)
       throws IOException, InterruptedException {
     engine.listenAll(
         port,
-        new MitmConnectTunnelServerHandler(
-            executor, policy, ca, (SSLSocketFactory) SSLSocketFactory.getDefault()));
+        new ConnectServerHandler(
+            executor, handler, (SSLSocketFactory) SSLSocketFactory.getDefault()));
   }
 
-  public void listenMitmConnectProxyLocal(int port, ConnectPolicy policy, CertificateAuthority ca)
+  public void listenConnectProxyLocal(int port, ConnectHandler handler)
       throws IOException, InterruptedException {
-    listenMitmConnectProxyLocal(port, policy, ca, (SSLSocketFactory) SSLSocketFactory.getDefault());
+    listenConnectProxyLocal(port, handler, (SSLSocketFactory) SSLSocketFactory.getDefault());
   }
 
-  public void listenMitmConnectProxyLocal(
-      int port, ConnectPolicy policy, CertificateAuthority ca, SSLSocketFactory originFactory)
+  public void listenConnectProxyLocal(
+      int port, ConnectHandler handler, SSLSocketFactory originFactory)
       throws IOException, InterruptedException {
-    engine.listenLocalhost(
-        port, new MitmConnectTunnelServerHandler(executor, policy, ca, originFactory));
+    engine.listenLocalhost(port, new ConnectServerHandler(executor, handler, originFactory));
   }
 
   public void listenHttpLocal(int port) throws IOException, InterruptedException {

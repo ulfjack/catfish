@@ -9,6 +9,7 @@ import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.network.Connection;
+import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.ByteArrayOutputStream;
@@ -78,6 +79,7 @@ final class MitmProxyStage implements Stage {
   private final String originHost;
   private final int originPort;
   private final SSLSocketFactory originSocketFactory;
+  private final ConnectHandler handler;
 
   private State state = State.READING_REQUEST_HEADERS;
   private final IncrementalHttpRequestParser requestParser =
@@ -104,7 +106,8 @@ final class MitmProxyStage implements Stage {
       Executor executor,
       String originHost,
       int originPort,
-      SSLSocketFactory originSocketFactory) {
+      SSLSocketFactory originSocketFactory,
+      ConnectHandler handler) {
     this.parent = parent;
     this.decryptedIn = decryptedIn;
     this.decryptedOut = decryptedOut;
@@ -112,6 +115,7 @@ final class MitmProxyStage implements Stage {
     this.originHost = originHost;
     this.originPort = originPort;
     this.originSocketFactory = originSocketFactory;
+    this.handler = handler;
     requestParser.setHeadersOnly(true);
   }
 
@@ -387,6 +391,7 @@ final class MitmProxyStage implements Stage {
 
       genOut.close();
       socket.close();
+      handler.onRequest(originHost, originPort, headers, originResponse);
 
     } catch (IOException e) {
       try {

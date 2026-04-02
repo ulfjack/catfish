@@ -12,7 +12,8 @@ import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
-import de.ofahrt.catfish.model.server.ConnectPolicy;
+import de.ofahrt.catfish.model.server.ConnectDecision;
+import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.ssl.CertificateAuthority;
 import de.ofahrt.catfish.ssl.OpensslCertificateAuthority;
@@ -95,8 +96,8 @@ public class MitmConnectIntegrationTest {
                         StandardResponses.OK.withBody("MITM-OK".getBytes(StandardCharsets.UTF_8))))
             .ssl(testSslInfo));
     server.listenHttpsLocal(HTTPS_PORT);
-    server.listenMitmConnectProxyLocal(
-        MITM_PORT, ConnectPolicy.allowAll(), ca, testSslInfo.sslContext().getSocketFactory());
+    server.listenConnectProxyLocal(
+        MITM_PORT, ConnectHandler.mitmAll(ca), testSslInfo.sslContext().getSocketFactory());
     serversToStop.add(server);
   }
 
@@ -129,8 +130,8 @@ public class MitmConnectIntegrationTest {
    */
   private CatfishHttpServer startMitmProxy(int mitmPort) throws IOException, InterruptedException {
     CatfishHttpServer s = newServer();
-    s.listenMitmConnectProxyLocal(
-        mitmPort, ConnectPolicy.allowAll(), ca, testSslInfo.sslContext().getSocketFactory());
+    s.listenConnectProxyLocal(
+        mitmPort, ConnectHandler.mitmAll(ca), testSslInfo.sslContext().getSocketFactory());
     serversToStop.add(s);
     return s;
   }
@@ -228,12 +229,11 @@ public class MitmConnectIntegrationTest {
   public void mitmConnectProxy_policyThrows_returns403() throws Exception {
     CatfishHttpServer s = newServer();
     serversToStop.add(s);
-    s.listenMitmConnectProxyLocal(
+    s.listenConnectProxyLocal(
         9098,
         (host, port) -> {
           throw new RuntimeException("policy error");
-        },
-        ca);
+        });
 
     try (Socket socket = new Socket("localhost", 9098)) {
       OutputStream out = socket.getOutputStream();
@@ -254,13 +254,12 @@ public class MitmConnectIntegrationTest {
   public void mitmConnectProxy_caFails_returns502() throws Exception {
     CatfishHttpServer s = newServer();
     serversToStop.add(s);
-    s.listenMitmConnectProxyLocal(
-        9099,
-        ConnectPolicy.allowAll(),
+    de.ofahrt.catfish.ssl.CertificateAuthority failingCa =
         (hostname, originCert) -> {
           throw new RuntimeException("CA failed");
-        },
-        testSslInfo.sslContext().getSocketFactory());
+        };
+    s.listenConnectProxyLocal(
+        9099, ConnectHandler.mitmAll(failingCa), testSslInfo.sslContext().getSocketFactory());
 
     try (Socket socket = new Socket("localhost", 9099)) {
       OutputStream out = socket.getOutputStream();
@@ -281,7 +280,7 @@ public class MitmConnectIntegrationTest {
   public void mitmConnectProxy_deniedByPolicy_returns403() throws Exception {
     CatfishHttpServer s = newServer();
     serversToStop.add(s);
-    s.listenMitmConnectProxyLocal(9097, ConnectPolicy.denyAll(), ca);
+    s.listenConnectProxyLocal(9097, ConnectHandler.denyAll());
 
     try (Socket socket = new Socket("localhost", 9097)) {
       OutputStream out = socket.getOutputStream();
@@ -475,6 +474,78 @@ public class MitmConnectIntegrationTest {
       String responseHeaders = readUntilBlankLine(sslIn);
       assertTrue(
           "Expected 502, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 502"));
+    }
+  }
+
+  @Test
+  public void connectHandler_interceptsAndTunnels() throws Exception {
+    int tunnelTargetPort = 9060;
+    int interceptTargetPort = 9061;
+    int proxyPort = 9062;
+
+    // Plain HTTP server as tunnel target.
+    CatfishHttpServer httpServer = newServer();
+    httpServer.addHttpHost(
+        "default",
+        new HttpVirtualHost(
+            (conn, request, writer) ->
+                writer.commitBuffered(
+                    StandardResponses.OK.withBody("tunnel-ok".getBytes(StandardCharsets.UTF_8)))));
+    httpServer.listenHttpLocal(tunnelTargetPort);
+    serversToStop.add(httpServer);
+
+    // HTTPS server as intercept target.
+    startHttpsServer(
+        interceptTargetPort,
+        new HttpVirtualHost(
+            (conn, request, writer) ->
+                writer.commitBuffered(
+                    StandardResponses.OK.withBody(
+                        "intercept-ok".getBytes(StandardCharsets.UTF_8)))));
+
+    // Mixed proxy: tunnel to tunnelTargetPort, intercept everything else.
+    CatfishHttpServer proxy = newServer();
+    proxy.listenConnectProxyLocal(
+        proxyPort,
+        (host, port) ->
+            port == tunnelTargetPort
+                ? ConnectDecision.tunnel(host, port)
+                : ConnectDecision.intercept(host, port, ca),
+        testSslInfo.sslContext().getSocketFactory());
+    serversToStop.add(proxy);
+
+    // Test tunnel path: plain HTTP through the tunnel.
+    try (Socket socket = new Socket("localhost", proxyPort)) {
+      OutputStream out = socket.getOutputStream();
+      InputStream in = socket.getInputStream();
+      out.write(
+          ("CONNECT localhost:" + tunnelTargetPort + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
+              .getBytes(StandardCharsets.ISO_8859_1));
+      out.flush();
+      String connectResp = readUntilBlankLine(in);
+      assertTrue(
+          "Expected 200 for tunnel, got: " + connectResp, connectResp.startsWith("HTTP/1.1 200"));
+      out.write(
+          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      out.flush();
+      String resp = readUntilBlankLine(in);
+      assertTrue("Expected 200 from tunnel target, got: " + resp, resp.startsWith("HTTP/1.1 200"));
+      assertArrayEquals("tunnel-ok".getBytes(StandardCharsets.UTF_8), readBody(in, resp));
+    }
+
+    // Test intercept path: TLS MITM.
+    try (SSLSocket sslSocket = connectViaMitm(proxyPort, interceptTargetPort)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+      sslOut.write(
+          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
+      String resp = readUntilBlankLine(sslIn);
+      assertTrue(
+          "Expected 200 from intercept target, got: " + resp, resp.startsWith("HTTP/1.1 200"));
+      assertArrayEquals("intercept-ok".getBytes(StandardCharsets.UTF_8), readBody(sslIn, resp));
     }
   }
 

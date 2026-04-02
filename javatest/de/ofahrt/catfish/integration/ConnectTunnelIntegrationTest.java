@@ -7,8 +7,8 @@ import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
-import de.ofahrt.catfish.model.server.ConnectPolicy;
-import de.ofahrt.catfish.model.server.ConnectTarget;
+import de.ofahrt.catfish.model.server.ConnectDecision;
+import de.ofahrt.catfish.model.server.ConnectHandler;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -48,7 +48,7 @@ public class ConnectTunnelIntegrationTest {
                     StandardResponses.OK.withBody("OK".getBytes(StandardCharsets.UTF_8))));
     server.addHttpHost("localhost", host);
     server.listenHttpLocal(HTTP_PORT);
-    server.listenConnectProxyLocal(PROXY_PORT, ConnectPolicy.allowAll());
+    server.listenConnectProxyLocal(PROXY_PORT, ConnectHandler.tunnelAll());
   }
 
   @After
@@ -119,7 +119,7 @@ public class ConnectTunnelIntegrationTest {
               }
             });
     try {
-      deniedServer.listenConnectProxyLocal(9092, ConnectPolicy.denyAll());
+      deniedServer.listenConnectProxyLocal(9092, ConnectHandler.denyAll());
 
       try (Socket socket = new Socket("localhost", 9092)) {
         OutputStream out = socket.getOutputStream();
@@ -185,9 +185,11 @@ public class ConnectTunnelIntegrationTest {
       rewriteServer.listenHttpLocal(httpPort);
 
       // Policy rewrites bogusPort to the real HTTP port.
-      ConnectPolicy rewritePolicy =
+      ConnectHandler rewritePolicy =
           (targetHost, port) ->
-              port == bogusPort ? ConnectTarget.allow("localhost", httpPort) : ConnectTarget.deny();
+              port == bogusPort
+                  ? ConnectDecision.tunnel("localhost", httpPort)
+                  : ConnectDecision.deny();
       rewriteServer.listenConnectProxyLocal(proxyPort, rewritePolicy);
 
       try (Socket socket = new Socket("localhost", proxyPort)) {

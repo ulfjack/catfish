@@ -4,10 +4,11 @@ import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.network.Connection;
-import de.ofahrt.catfish.model.server.ConnectPolicy;
-import de.ofahrt.catfish.model.server.ConnectTarget;
+import de.ofahrt.catfish.model.server.ConnectDecision;
+import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.ssl.CertificateAuthority;
 import java.io.IOException;
+import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
@@ -20,9 +21,8 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
- * A Stage that performs MITM CONNECT proxying: it handles the CONNECT handshake, then terminates
- * TLS from the client using a dynamically-generated leaf cert, and bridges to a real TLS connection
- * to the origin server. Incoming HTTP requests are fully parsed before being forwarded.
+ * A Stage that performs CONNECT proxying: it handles the CONNECT handshake, then either tunnels
+ * (transparent TCP) or intercepts (MITM TLS) based on the {@link ConnectHandler} decision.
  */
 final class MitmConnectStage implements Stage {
 
@@ -44,8 +44,7 @@ final class MitmConnectStage implements Stage {
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
   private final Executor executor;
-  private final ConnectPolicy policy;
-  private final CertificateAuthority ca;
+  private final ConnectHandler handler;
   private final SSLSocketFactory originSocketFactory;
   private final IncrementalHttpRequestParser connectParser = new IncrementalHttpRequestParser();
 
@@ -54,6 +53,9 @@ final class MitmConnectStage implements Stage {
   private int responseOffset;
   private boolean closeAfterSend;
 
+  // Set during doConnect(); read on NIO thread in setupMitm()/setupTunnel().
+  private boolean isTunnel;
+  private Socket tunnelSocket;
   private SSLContext fakeCtx;
   private String originHost;
   private int originPort;
@@ -66,15 +68,13 @@ final class MitmConnectStage implements Stage {
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer,
       Executor executor,
-      ConnectPolicy policy,
-      CertificateAuthority ca,
+      ConnectHandler handler,
       SSLSocketFactory originSocketFactory) {
     this.parent = parent;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
     this.executor = executor;
-    this.policy = policy;
-    this.ca = ca;
+    this.handler = handler;
     this.originSocketFactory = originSocketFactory;
   }
 
@@ -130,25 +130,39 @@ final class MitmConnectStage implements Stage {
   }
 
   private void doConnect(String host, int port) {
-    ConnectTarget target;
+    ConnectDecision decision;
     try {
-      target = policy.apply(host, port);
+      decision = handler.apply(host, port);
     } catch (Exception e) {
       parent.queue(() -> startResponse(RESPONSE_403, /* closeAfterSend= */ true));
       return;
     }
-    if (!target.isAllowed()) {
+
+    if (decision.isDenied()) {
       parent.queue(() -> startResponse(RESPONSE_403, /* closeAfterSend= */ true));
       return;
     }
 
-    // Connect to origin first so we can mirror its real certificate in the fake leaf cert.
+    if (decision.isTunnel()) {
+      try {
+        Socket sock = new Socket(decision.getHost(), decision.getPort());
+        isTunnel = true;
+        tunnelSocket = sock;
+        parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
+      } catch (IOException e) {
+        parent.queue(parent::close);
+      }
+      return;
+    }
+
+    // INTERCEPT: connect to origin to mirror its certificate.
+    CertificateAuthority ca = decision.getCertificateAuthority();
     SSLSocket socket;
     X509Certificate originCert;
     try {
-      socket = (SSLSocket) originSocketFactory.createSocket(target.getHost(), target.getPort());
+      socket = (SSLSocket) originSocketFactory.createSocket(decision.getHost(), decision.getPort());
       SSLParameters params = socket.getSSLParameters();
-      params.setServerNames(List.of(new SNIHostName(target.getHost())));
+      params.setServerNames(List.of(new SNIHostName(decision.getHost())));
       socket.setSSLParameters(params);
       socket.startHandshake();
       originCert = (X509Certificate) socket.getSession().getPeerCertificates()[0];
@@ -174,9 +188,11 @@ final class MitmConnectStage implements Stage {
     } catch (IOException ignored) {
     }
 
+    handler.onCertificateReady(host, port);
+
     fakeCtx = ctx;
-    originHost = target.getHost();
-    originPort = target.getPort();
+    originHost = decision.getHost();
+    originPort = decision.getPort();
     parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
   }
 
@@ -213,7 +229,11 @@ final class MitmConnectStage implements Stage {
             if (closeAfterSend) {
               return ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
             }
-            setupMitm();
+            if (isTunnel) {
+              setupTunnel();
+            } else {
+              setupMitm();
+            }
             return ConnectionControl.PAUSE;
           }
           return ConnectionControl.CONTINUE;
@@ -221,6 +241,16 @@ final class MitmConnectStage implements Stage {
       default:
         return ConnectionControl.PAUSE;
     }
+  }
+
+  private void setupTunnel() throws IOException {
+    TunnelForwardStage tunnelStage =
+        new TunnelForwardStage(parent, inputBuffer, outputBuffer, executor, tunnelSocket);
+    tunnelSocket = null; // ownership transferred to tunnelStage
+    tunnelStage.connect(connection);
+    this.delegate = tunnelStage;
+    state = MitmState.DELEGATING;
+    parent.encourageReads();
   }
 
   private void setupMitm() {
@@ -239,7 +269,8 @@ final class MitmConnectStage implements Stage {
             executor,
             originHost,
             originPort,
-            originSocketFactory);
+            originSocketFactory,
+            handler);
 
     SSLContext capturedCtx = fakeCtx;
     SslServerStage ssl =
@@ -262,6 +293,11 @@ final class MitmConnectStage implements Stage {
   public void close() {
     if (delegate != null) {
       delegate.close();
+    } else if (tunnelSocket != null) {
+      try {
+        tunnelSocket.close();
+      } catch (IOException ignored) {
+      }
     }
   }
 }
