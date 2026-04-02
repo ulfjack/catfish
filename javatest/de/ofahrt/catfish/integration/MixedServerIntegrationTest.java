@@ -41,12 +41,10 @@ public class MixedServerIntegrationTest {
         new CatfishHttpServer(
             new NetworkEventListener() {
               @Override
-              public void shutdown() {
-              }
+              public void shutdown() {}
 
               @Override
-              public void portOpened(int port, boolean ssl) {
-              }
+              public void portOpened(int port, boolean ssl) {}
 
               @Override
               public void notifyInternalError(Connection id, Throwable throwable) {
@@ -68,9 +66,7 @@ public class MixedServerIntegrationTest {
     server.stop();
   }
 
-  /**
-   * Normal HTTP request with a relative URI is served by the local virtual host.
-   */
+  /** Normal HTTP request with a relative URI is served by the local virtual host. */
   @Test
   public void normalHttp() throws Exception {
     try (HttpConnection conn = HttpConnection.connect("localhost", MIXED_PORT)) {

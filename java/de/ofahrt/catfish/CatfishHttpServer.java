@@ -23,9 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
 
-/**
- * A <code>CatfishHttpServer</code> manages a HTTP-Server.
- */
+/** A <code>CatfishHttpServer</code> manages a HTTP-Server. */
 public final class CatfishHttpServer {
 
   interface RequestCallback extends Runnable {
