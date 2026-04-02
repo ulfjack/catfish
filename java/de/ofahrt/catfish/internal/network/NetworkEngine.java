@@ -56,6 +56,8 @@ public final class NetworkEngine {
     void queue(Runnable runnable);
 
     void log(String text, Object... params);
+
+    void replaceWith(Stage nextStage);
   }
 
   public interface NetworkHandler {
@@ -140,7 +142,7 @@ public final class NetworkEngine {
     private final ByteBuffer outputBuffer;
     private final LogHandler logHandler;
 
-    private final Stage first;
+    private Stage current;
     private ConnectionState state;
     private FlowState readState;
     private FlowState writeState;
@@ -164,7 +166,7 @@ public final class NetworkEngine {
       inputBuffer.flip(); // prepare for reading
       outputBuffer.clear();
       outputBuffer.flip(); // prepare for reading
-      this.first = handler.connect(this, inputBuffer, outputBuffer);
+      this.current = handler.connect(this, inputBuffer, outputBuffer);
       log(
           "%s at %s",
           outgoing ? "Outgoing" : "Incoming",
@@ -184,7 +186,7 @@ public final class NetworkEngine {
     private void connect() {
       try {
         state = ConnectionState.OPEN;
-        InitialConnectionState initialState = first.connect(connection);
+        InitialConnectionState initialState = current.connect(connection);
         log("Connected state=%s", initialState);
         readState =
             initialState != InitialConnectionState.WRITE_ONLY ? FlowState.OPEN : FlowState.PAUSED;
@@ -256,7 +258,7 @@ public final class NetworkEngine {
         writeState = FlowState.CLOSED;
         readState = FlowState.CLOSED;
         // Release resources, we may have a worker thread blocked on writing to the connection.
-        first.close();
+        current.close();
         key.cancel();
         try {
           socketChannel.close();
@@ -273,7 +275,7 @@ public final class NetworkEngine {
             }
             connect();
           } catch (IOException e) {
-            first.close();
+            current.close();
             // TODO: This is not really an error.
             networkEventListener.notifyInternalError(connection, e);
           }
@@ -307,7 +309,7 @@ public final class NetworkEngine {
             // There's no more incoming data, but we only want to notify the stage once all data is
             // processed.
             if (inputBuffer.hasRemaining()) {
-              ConnectionControl control = first.read();
+              ConnectionControl control = current.read();
               switch (control) {
                 case CONTINUE:
                   break;
@@ -323,7 +325,7 @@ public final class NetworkEngine {
                   } else {
                     // Buffer empty, notify the stage that the other side shut down the input.
                     readState = FlowState.CLOSED;
-                    first.inputClosed();
+                    current.inputClosed();
                   }
                   break;
                 case CLOSE_INPUT:
@@ -337,24 +339,25 @@ public final class NetworkEngine {
                   break;
                 case CLOSE_OUTPUT_AFTER_FLUSH:
                   throw new IllegalStateException(
-                      String.format("Cannot close-output-after-flush after read (%s)", first));
+                      String.format("Cannot close-output-after-flush after read (%s)", current));
                 case CLOSE_CONNECTION_AFTER_FLUSH:
                   throw new IllegalStateException(
-                      String.format("Cannot close-connection-after-flush after read (%s)", first));
+                      String.format(
+                          "Cannot close-connection-after-flush after read (%s)", current));
                 case CLOSE_CONNECTION_IMMEDIATELY:
                   close();
                   return;
               }
             } else {
               readState = FlowState.CLOSED;
-              first.inputClosed();
+              current.inputClosed();
             }
           }
           int attempt = 0;
           loop:
           while ((readState == FlowState.OPEN) && inputBuffer.hasRemaining()) {
             int before = inputBuffer.remaining();
-            ConnectionControl control = first.read();
+            ConnectionControl control = current.read();
             switch (control) {
               case CONTINUE:
                 if ((inputBuffer.remaining() == before) && (attempt++ == 10)) {
@@ -362,7 +365,7 @@ public final class NetworkEngine {
                   throw new IllegalStateException(
                       String.format(
                           "Stage did not process remaining input data after 10 attempts (%s)",
-                          first));
+                          current));
                 }
                 break;
               case NEED_MORE_DATA:
@@ -376,10 +379,10 @@ public final class NetworkEngine {
                 break;
               case CLOSE_OUTPUT_AFTER_FLUSH:
                 throw new IllegalStateException(
-                    String.format("Cannot close-output-after-flush after read (%s)", first));
+                    String.format("Cannot close-output-after-flush after read (%s)", current));
               case CLOSE_CONNECTION_AFTER_FLUSH:
                 throw new IllegalStateException(
-                    String.format("Cannot close-connection-after-flush after read (%s)", first));
+                    String.format("Cannot close-connection-after-flush after read (%s)", current));
               case CLOSE_CONNECTION_IMMEDIATELY:
                 close();
                 return;
@@ -389,20 +392,20 @@ public final class NetworkEngine {
           // Generate data for writing.
           while (writeState == FlowState.OPEN && (available(outputBuffer) > 0)) {
             int before = available(outputBuffer);
-            ConnectionControl control = first.write();
+            ConnectionControl control = current.write();
             //          log("Have %d bytes outgoing", Integer.valueOf(outputBuffer.remaining()));
             switch (control) {
               case CONTINUE:
                 break;
               case NEED_MORE_DATA:
                 throw new IllegalStateException(
-                    String.format("Cannot provide more data to write (%s)", first));
+                    String.format("Cannot provide more data to write (%s)", current));
               case PAUSE:
                 writeState = FlowState.PAUSED;
                 break;
               case CLOSE_INPUT:
                 throw new IllegalStateException(
-                    String.format("Cannot close-input after write (%s)", first));
+                    String.format("Cannot close-input after write (%s)", current));
               case CLOSE_OUTPUT_AFTER_FLUSH:
                 writeState = FlowState.CLOSE_AFTER_FLUSH;
                 break;
@@ -466,6 +469,17 @@ public final class NetworkEngine {
     @Override
     public void queue(Runnable runnable) {
       queue.queue(runnable);
+    }
+
+    @Override
+    public void replaceWith(Stage nextStage) {
+      current = nextStage;
+      InitialConnectionState s = nextStage.connect(connection);
+      readState = s != InitialConnectionState.WRITE_ONLY ? FlowState.OPEN : FlowState.PAUSED;
+      writeState = s != InitialConnectionState.READ_ONLY ? FlowState.OPEN : FlowState.PAUSED;
+      if (readState == FlowState.OPEN && inputBuffer.hasRemaining()) {
+        queue.queue(this::handleEvent);
+      }
     }
 
     @Override

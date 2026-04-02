@@ -15,6 +15,7 @@ import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.CompressionPolicy;
+import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.KeepAlivePolicy;
@@ -29,9 +30,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.zip.GZIPOutputStream;
+import javax.net.ssl.SSLSocketFactory;
 
 final class HttpServerStage implements Stage {
 
@@ -107,6 +110,12 @@ final class HttpServerStage implements Stage {
   public interface RequestListener {
 
     void notifySent(Connection connection, HttpRequest request, HttpResponse response);
+  }
+
+  interface ProxyForwarder {
+
+    void forward(Connection connection, HttpRequest request, HttpResponseWriter writer)
+        throws IOException;
   }
 
   private final class HttpResponseWriterImpl implements HttpResponseWriter {
@@ -242,6 +251,10 @@ final class HttpServerStage implements Stage {
   private final RequestQueue requestHandler;
   private final RequestListener requestListener;
   private final Function<String, HttpVirtualHost> virtualHostLookup;
+  private final ProxyForwarder proxyForwarder;
+  private final ConnectHandler connectHandler;
+  private final SSLSocketFactory originSocketFactory;
+  private final Executor executor;
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
   private final IncrementalHttpRequestParser parser;
@@ -257,10 +270,59 @@ final class HttpServerStage implements Stage {
       Function<String, HttpVirtualHost> virtualHostLookup,
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer) {
+    this(
+        parent,
+        requestHandler,
+        requestListener,
+        virtualHostLookup,
+        /* proxyForwarder= */ null,
+        /* connectHandler= */ null,
+        /* originSocketFactory= */ null,
+        /* executor= */ null,
+        inputBuffer,
+        outputBuffer);
+  }
+
+  HttpServerStage(
+      Pipeline parent,
+      RequestQueue requestHandler,
+      RequestListener requestListener,
+      Function<String, HttpVirtualHost> virtualHostLookup,
+      ProxyForwarder proxyForwarder,
+      ByteBuffer inputBuffer,
+      ByteBuffer outputBuffer) {
+    this(
+        parent,
+        requestHandler,
+        requestListener,
+        virtualHostLookup,
+        proxyForwarder,
+        /* connectHandler= */ null,
+        /* originSocketFactory= */ null,
+        /* executor= */ null,
+        inputBuffer,
+        outputBuffer);
+  }
+
+  HttpServerStage(
+      Pipeline parent,
+      RequestQueue requestHandler,
+      RequestListener requestListener,
+      Function<String, HttpVirtualHost> virtualHostLookup,
+      ProxyForwarder proxyForwarder,
+      ConnectHandler connectHandler,
+      SSLSocketFactory originSocketFactory,
+      Executor executor,
+      ByteBuffer inputBuffer,
+      ByteBuffer outputBuffer) {
     this.parent = parent;
     this.requestHandler = requestHandler;
     this.requestListener = requestListener;
     this.virtualHostLookup = virtualHostLookup;
+    this.proxyForwarder = proxyForwarder;
+    this.connectHandler = connectHandler;
+    this.originSocketFactory = originSocketFactory;
+    this.executor = executor;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
     this.parser =
@@ -409,6 +471,47 @@ final class HttpServerStage implements Stage {
     if (VERBOSE) {
       System.out.println(CoreHelper.requestToString(request));
     }
+    if (HttpMethodName.CONNECT.equals(request.getMethod())) {
+      if (connectHandler == null) {
+        startBuffered(
+            request,
+            StandardResponses.methodNotAllowed()
+                .allowing("GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"));
+        return ConnectionControl.CONTINUE;
+      }
+      String uri = request.getUri();
+      int colonIdx = uri.lastIndexOf(':');
+      if (colonIdx < 0) {
+        startBuffered(request, StandardResponses.BAD_REQUEST);
+        return ConnectionControl.CONTINUE;
+      }
+      String parsedHost = uri.substring(0, colonIdx);
+      int parsedPort;
+      try {
+        parsedPort = Integer.parseInt(uri.substring(colonIdx + 1));
+      } catch (NumberFormatException e) {
+        startBuffered(request, StandardResponses.BAD_REQUEST);
+        return ConnectionControl.CONTINUE;
+      }
+      parent.replaceWith(
+          new ConnectStage(
+              parent,
+              inputBuffer,
+              outputBuffer,
+              executor,
+              parsedHost,
+              parsedPort,
+              connectHandler,
+              originSocketFactory));
+      return ConnectionControl.PAUSE;
+    }
+    if (proxyForwarder != null && isAbsoluteUri(request.getUri())) {
+      HttpResponseWriter writer =
+          new HttpResponseWriterImpl(request, KeepAlivePolicy.CLOSE, CompressionPolicy.NONE);
+      requestHandler.queueRequest(
+          (conn, req, rw) -> proxyForwarder.forward(conn, req, rw), connection, request, writer);
+      return ConnectionControl.PAUSE;
+    }
     HttpVirtualHost host = virtualHostLookup.apply(request.getHeaders().get(HttpHeaderName.HOST));
     if (host == null) {
       startBuffered(request, StandardResponses.MISDIRECTED_REQUEST);
@@ -435,6 +538,10 @@ final class HttpServerStage implements Stage {
       }
       return ConnectionControl.CONTINUE;
     }
+  }
+
+  private static boolean isAbsoluteUri(String uri) {
+    return uri.startsWith("http://") || uri.startsWith("https://");
   }
 
   private static HttpResponse buildTraceResponse(HttpRequest request) {

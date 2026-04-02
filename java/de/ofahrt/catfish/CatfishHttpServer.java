@@ -23,9 +23,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
 
-/** A <code>CatfishHttpServer</code> manages a HTTP-Server. */
+/**
+ * A <code>CatfishHttpServer</code> manages a HTTP-Server.
+ */
 public final class CatfishHttpServer {
+
   interface RequestCallback extends Runnable {
+
     void reject();
   }
 
@@ -157,8 +161,7 @@ public final class CatfishHttpServer {
       throws IOException, InterruptedException {
     engine.listenAll(
         port,
-        new ConnectServerHandler(
-            executor, handler, (SSLSocketFactory) SSLSocketFactory.getDefault()));
+        new MixedServerHandler(this, handler, (SSLSocketFactory) SSLSocketFactory.getDefault()));
   }
 
   public void listenConnectProxyLocal(int port, ConnectHandler handler)
@@ -169,7 +172,7 @@ public final class CatfishHttpServer {
   public void listenConnectProxyLocal(
       int port, ConnectHandler handler, SSLSocketFactory originFactory)
       throws IOException, InterruptedException {
-    engine.listenLocalhost(port, new ConnectServerHandler(executor, handler, originFactory));
+    engine.listenLocalhost(port, new MixedServerHandler(this, handler, originFactory));
   }
 
   public void listenHttpLocal(int port) throws IOException, InterruptedException {
@@ -196,8 +199,7 @@ public final class CatfishHttpServer {
       throws IOException, InterruptedException {
     engine.listenUnixSocket(
         path,
-        new ConnectServerHandler(
-            executor, handler, (SSLSocketFactory) SSLSocketFactory.getDefault()));
+        new MixedServerHandler(this, handler, (SSLSocketFactory) SSLSocketFactory.getDefault()));
   }
 
   public int getOpenConnections() {
