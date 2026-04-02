@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.model.network;
 
 import java.net.InetSocketAddress;
+import java.nio.file.Path;
 import java.util.UUID;
 import javax.net.ssl.SSLSession;
 
@@ -12,6 +13,7 @@ public final class Connection {
   private final InetSocketAddress remoteAddress;
   private final boolean ssl;
   private final SSLSession sslSession;
+  private final Path socketPath;
 
   public Connection(InetSocketAddress localAddress, InetSocketAddress remoteAddress, boolean ssl) {
     this.id = UUID.randomUUID();
@@ -21,6 +23,7 @@ public final class Connection {
     this.remoteAddress = remoteAddress;
     this.ssl = ssl;
     this.sslSession = null;
+    this.socketPath = null;
   }
 
   public Connection(
@@ -32,6 +35,18 @@ public final class Connection {
     this.remoteAddress = remoteAddress;
     this.ssl = sslSession != null;
     this.sslSession = sslSession;
+    this.socketPath = null;
+  }
+
+  public Connection(Path socketPath, boolean ssl) {
+    this.id = UUID.randomUUID();
+    this.startTimeMillis = System.currentTimeMillis();
+    this.startTimeNanos = System.nanoTime();
+    this.localAddress = null;
+    this.remoteAddress = null;
+    this.ssl = ssl;
+    this.sslSession = null;
+    this.socketPath = socketPath;
   }
 
   public UUID getId() {
@@ -60,6 +75,10 @@ public final class Connection {
 
   public SSLSession getSSLSession() {
     return sslSession;
+  }
+
+  public Path getSocketPath() {
+    return socketPath;
   }
 
   @Override

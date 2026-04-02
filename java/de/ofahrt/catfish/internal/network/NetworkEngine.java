@@ -12,12 +12,16 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.StandardProtocolFamily;
+import java.net.UnixDomainSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -538,6 +542,66 @@ public final class NetworkEngine {
     }
   }
 
+  private final class UnixServerSocketHandler implements EventHandler {
+    private final ServerSocketChannel serverChannel;
+    private final SelectionKey key;
+    private final NetworkHandler handler;
+    private final Path socketPath;
+
+    public UnixServerSocketHandler(
+        ServerSocketChannel serverChannel,
+        SelectionKey key,
+        NetworkHandler handler,
+        Path socketPath) {
+      this.serverChannel = serverChannel;
+      this.key = key;
+      this.handler = handler;
+      this.socketPath = socketPath;
+    }
+
+    @SuppressWarnings("resource")
+    @Override
+    public void handleEvent() {
+      if (key.isAcceptable()) {
+        SocketChannel socketChannel;
+        try {
+          socketChannel = serverChannel.accept();
+        } catch (IOException e) {
+          networkEventListener.notifyInternalError(null, e);
+          return;
+        }
+
+        openCounter.incrementAndGet();
+        Connection connection = new Connection(socketPath, handler.usesSsl());
+        try {
+          socketChannel.configureBlocking(false);
+          getQueueForConnection().attachConnection(connection, socketChannel, handler);
+        } catch (IOException e) {
+          try {
+            serverChannel.close();
+          } catch (IOException e1) {
+            e.addSuppressed(e1);
+          }
+          networkEventListener.notifyInternalError(connection, e);
+        }
+      }
+    }
+
+    public void shutdown() {
+      key.cancel();
+      try {
+        serverChannel.close();
+      } catch (IOException ignored) {
+        // Not much we can do at this point.
+      }
+      try {
+        Files.deleteIfExists(socketPath);
+      } catch (IOException ignored) {
+        // Not much we can do at this point.
+      }
+    }
+  }
+
   private final class SelectorQueue implements Runnable {
     private final int id;
     private final Selector selector;
@@ -593,6 +657,49 @@ public final class NetworkEngine {
                   });
               ServerSocketHandler socketHandler =
                   new ServerSocketHandler(serverChannel, key, handler);
+              key.attach(socketHandler);
+              shutdownQueue.add(socketHandler::shutdown);
+            } catch (Exception e) {
+              thrownException.set(e);
+            } finally {
+              latch.countDown();
+            }
+          });
+      latch.await();
+      Exception e = thrownException.get();
+      if (e != null) {
+        if (e instanceof IOException) {
+          throw (IOException) e;
+        } else if (e instanceof RuntimeException) {
+          throw (RuntimeException) e;
+        }
+        throw new IOException("Unknown error", e);
+      }
+    }
+
+    private void listenUnixSocket(final Path path, final NetworkHandler handler)
+        throws IOException, InterruptedException {
+      if (shutdownInitiated.get()) {
+        throw new IllegalStateException();
+      }
+      CountDownLatch latch = new CountDownLatch(1);
+      AtomicReference<Exception> thrownException = new AtomicReference<>();
+      queue(
+          () -> {
+            try {
+              if (shutdown) {
+                return;
+              }
+              Files.deleteIfExists(path);
+              @SuppressWarnings("resource")
+              ServerSocketChannel serverChannel =
+                  ServerSocketChannel.open(StandardProtocolFamily.UNIX);
+              serverChannel.configureBlocking(false);
+              serverChannel.bind(UnixDomainSocketAddress.of(path));
+              SelectionKey key = serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+              networkEventListener.socketOpened(path, handler.usesSsl());
+              UnixServerSocketHandler socketHandler =
+                  new UnixServerSocketHandler(serverChannel, key, handler, path);
               key.attach(socketHandler);
               shutdownQueue.add(socketHandler::shutdown);
             } catch (Exception e) {
@@ -783,6 +890,11 @@ public final class NetworkEngine {
   private void listen(InetAddress address, int port, NetworkHandler handler)
       throws IOException, InterruptedException {
     getQueueForConnection().listenPort(address, port, handler);
+  }
+
+  public void listenUnixSocket(Path path, NetworkHandler handler)
+      throws IOException, InterruptedException {
+    getQueueForConnection().listenUnixSocket(path, handler);
   }
 
   public void connect(InetAddress address, int port, NetworkHandler handler)

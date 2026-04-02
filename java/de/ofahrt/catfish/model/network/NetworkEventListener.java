@@ -1,7 +1,11 @@
 package de.ofahrt.catfish.model.network;
 
+import java.nio.file.Path;
+
 public interface NetworkEventListener {
   void portOpened(int port, boolean ssl);
+
+  default void socketOpened(Path socketPath, boolean ssl) {}
 
   default void portOpened(NetworkServer server) {
     portOpened(server.port(), server.ssl());

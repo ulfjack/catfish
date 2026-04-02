@@ -11,6 +11,7 @@ import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -185,6 +186,18 @@ public final class CatfishHttpServer {
 
   public void listenHttps(int port) throws IOException, InterruptedException {
     engine.listenAll(port, new HttpServerHandler(this, /* ssl= */ true));
+  }
+
+  public void listenHttpUnixSocket(Path path) throws IOException, InterruptedException {
+    engine.listenUnixSocket(path, new HttpServerHandler(this, /* ssl= */ false));
+  }
+
+  public void listenConnectProxyUnixSocket(Path path, ConnectHandler handler)
+      throws IOException, InterruptedException {
+    engine.listenUnixSocket(
+        path,
+        new ConnectServerHandler(
+            executor, handler, (SSLSocketFactory) SSLSocketFactory.getDefault()));
   }
 
   public int getOpenConnections() {
