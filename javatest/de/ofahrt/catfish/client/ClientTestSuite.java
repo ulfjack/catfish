@@ -6,9 +6,14 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
 @SuiteClasses({
+  ClientStageTest.class,
   HttpConnectionTest.class,
+  HttpRequestGeneratorBufferedTest.class,
   IncrementalHttpResponseParserTest.class,
   IncrementalHttpResponseParserIncrementalTest.class,
+  LoggingNetworkEventListenerTest.class,
+  LoggingTrustManagerTest.class,
+  SslHelperTest.class,
 })
 public class ClientTestSuite {
   // Ok
