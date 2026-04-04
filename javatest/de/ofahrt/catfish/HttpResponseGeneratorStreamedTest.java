@@ -259,6 +259,160 @@ public class HttpResponseGeneratorStreamedTest {
     assertEquals("", response);
   }
 
+  @Test
+  public void chunkedBuffer_2() throws Exception {
+    assertLargeBufferChunkedWorks(2, 5);
+  }
+
+  @Test
+  public void chunkedBuffer_4() throws Exception {
+    assertLargeBufferChunkedWorks(4, 10);
+  }
+
+  @Test
+  public void chunkedBuffer_8() throws Exception {
+    assertLargeBufferChunkedWorks(8, 20);
+  }
+
+  @Test
+  public void chunkedBuffer_16() throws Exception {
+    assertLargeBufferChunkedWorks(16, 40);
+  }
+
+  @Test
+  public void chunkedBuffer_32() throws Exception {
+    assertLargeBufferChunkedWorks(32, 80);
+  }
+
+  @Test
+  public void chunkedBuffer_64() throws Exception {
+    assertLargeBufferChunkedWorks(64, 160);
+  }
+
+  @Test
+  public void chunkedBuffer_128() throws Exception {
+    assertLargeBufferChunkedWorks(128, 320);
+  }
+
+  @Test
+  public void chunkedBuffer_256() throws Exception {
+    assertLargeBufferChunkedWorks(256, 640);
+  }
+
+  @Test
+  public void chunkedBuffer_512() throws Exception {
+    assertLargeBufferChunkedWorks(512, 1280);
+  }
+
+  @Test
+  public void chunkedBuffer_1024() throws Exception {
+    assertLargeBufferChunkedWorks(1024, 2560);
+  }
+
+  @Test
+  public void chunkedBuffer_2048() throws Exception {
+    assertLargeBufferChunkedWorks(2048, 5120);
+  }
+
+  @Test
+  public void chunkedBuffer_4096() throws Exception {
+    assertLargeBufferChunkedWorks(4096, 10240);
+  }
+
+  @Test
+  public void chunkedBuffer_8192() throws Exception {
+    assertLargeBufferChunkedWorks(8192, 20480);
+  }
+
+  @Test
+  public void chunkedBuffer_16384() throws Exception {
+    assertLargeBufferChunkedWorks(16384, 40960);
+  }
+
+  @Test
+  public void chunkedBuffer_32768() throws Exception {
+    assertLargeBufferChunkedWorks(32768, 81920);
+  }
+
+  @Test
+  public void chunkedBuffer_65536() throws Exception {
+    assertLargeBufferChunkedWorks(65536, 65536 + 100);
+  }
+
+  @Test
+  public void chunkedBuffer_131072() throws Exception {
+    assertLargeBufferChunkedWorks(131072, 131072);
+  }
+
+  private void assertLargeBufferChunkedWorks(int bufferSize, int bodySize) throws Exception {
+    byte[] body = new byte[bodySize];
+    for (int i = 0; i < body.length; i++) {
+      body[i] = (byte) (i & 0xff);
+    }
+    Semaphore called = new Semaphore(0);
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.create(
+            called::release, null, StandardResponses.OK, true, bufferSize);
+    Thread t =
+        new Thread(
+            () -> {
+              try (OutputStream out = gen.getOutputStream()) {
+                out.write(body);
+              } catch (Exception e) {
+                e.printStackTrace();
+                fail();
+              }
+            });
+    t.start();
+    byte[] raw = readUntilStop(gen, Math.max(bufferSize, 7), called);
+    t.join(1000);
+    // Find the end of headers (\r\n\r\n) in raw bytes.
+    int headerEnd = indexOf(raw, new byte[] {'\r', '\n', '\r', '\n'});
+    assertTrue("Headers not found", headerEnd >= 0);
+    String headers = new String(raw, 0, headerEnd, StandardCharsets.UTF_8);
+    assertTrue(headers.startsWith("HTTP/1.1 200 OK\r\n"));
+    assertTrue(headers.contains("Transfer-Encoding: chunked"));
+    // Decode the chunked body from raw bytes.
+    byte[] decoded = decodeChunkedBytes(raw, headerEnd + 4);
+    assertEquals(body.length, decoded.length);
+    for (int i = 0; i < body.length; i++) {
+      assertEquals("Mismatch at index " + i, body[i], decoded[i]);
+    }
+  }
+
+  private static int indexOf(byte[] haystack, byte[] needle) {
+    outer:
+    for (int i = 0; i <= haystack.length - needle.length; i++) {
+      for (int j = 0; j < needle.length; j++) {
+        if (haystack[i + j] != needle[j]) {
+          continue outer;
+        }
+      }
+      return i;
+    }
+    return -1;
+  }
+
+  private static byte[] decodeChunkedBytes(byte[] raw, int offset) {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    int pos = offset;
+    while (pos < raw.length) {
+      // Read chunk size (hex digits until \r\n).
+      int crlfPos = pos;
+      while (crlfPos < raw.length - 1 && !(raw[crlfPos] == '\r' && raw[crlfPos + 1] == '\n')) {
+        crlfPos++;
+      }
+      int chunkSize = Integer.parseInt(new String(raw, pos, crlfPos - pos, StandardCharsets.UTF_8), 16);
+      if (chunkSize == 0) {
+        break;
+      }
+      int dataStart = crlfPos + 2;
+      out.write(raw, dataStart, chunkSize);
+      pos = dataStart + chunkSize + 2; // skip data + \r\n
+    }
+    return out.toByteArray();
+  }
+
   @Test(expected = IllegalArgumentException.class)
   public void nonPositiveBufferSize_throws() {
     HttpResponseGeneratorStreamed.create(() -> {}, null, StandardResponses.OK, true, 0);

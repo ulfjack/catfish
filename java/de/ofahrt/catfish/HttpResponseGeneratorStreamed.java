@@ -210,7 +210,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
       if (bytesToCopy <= 0) {
         return ReadToken.NOT_ENOUGH_SPACE;
       }
-      byte[] chunkHeader = new byte[6];
+      byte[] chunkHeader = new byte[hexDigits + 2];
       int bytesToCopyRemainder = bytesToCopy;
       for (int i = hexDigits - 1; i >= 0; i--) {
         int c = bytesToCopyRemainder % 16;
