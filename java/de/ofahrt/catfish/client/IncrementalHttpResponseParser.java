@@ -50,7 +50,7 @@ final class IncrementalHttpResponseParser {
 
   //       CTL            = <any US-ASCII control character
   //                        (octets 0 - 31) and DEL (127)>
-  private static boolean isControl(char c) {
+  static boolean isControl(char c) {
     return (c < 32) || (c == 127);
   }
 
@@ -58,7 +58,7 @@ final class IncrementalHttpResponseParser {
   //                      | "," | ";" | ":" | "\" | <">
   //                      | "/" | "[" | "]" | "?" | "="
   //                      | "{" | "}" | SP | HT
-  private static boolean isSeparator(char c) {
+  static boolean isSeparator(char c) {
     return (c == '(')
         || (c == ')')
         || (c == '<')
@@ -80,15 +80,15 @@ final class IncrementalHttpResponseParser {
         || (c == '\t');
   }
 
-  private static boolean isTokenCharacter(char c) {
+  static boolean isTokenCharacter(char c) {
     return !isControl(c) && !isSeparator(c);
   }
 
-  private boolean isDigit(char c) {
+  static boolean isDigit(char c) {
     return (c >= '0') && (c <= '9');
   }
 
-  private boolean isSpace(char c) {
+  static boolean isSpace(char c) {
     return (c == ' ') || (c == '\t');
   }
 

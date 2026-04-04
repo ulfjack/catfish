@@ -1,14 +1,13 @@
-package de.ofahrt.catfish.client;
+package de.ofahrt.catfish.client.legacy;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import de.ofahrt.catfish.client.HttpResponseParserTest;
 import de.ofahrt.catfish.model.HttpResponse;
-import java.nio.charset.Charset;
 import org.junit.Test;
 
-public class IncrementalHttpResponseParserTest extends HttpResponseParserTest {
+public class LegacyIncrementalHttpResponseParserTest extends HttpResponseParserTest {
 
   @Override
   public HttpResponse parse(byte[] data) throws Exception {
@@ -16,6 +15,11 @@ public class IncrementalHttpResponseParserTest extends HttpResponseParserTest {
     parser.parse(data);
     return parser.getResponse();
   }
+
+  // The legacy parser does not enforce these length limits.
+  @Override @Test public void badReasonPhrase_tooLong() {}
+  @Override @Test public void badHeaderName_tooLong() {}
+  @Override @Test public void badHeaderValue_tooLong() {}
 
   // ---- isControl ----
 
@@ -97,23 +101,5 @@ public class IncrementalHttpResponseParserTest extends HttpResponseParserTest {
   @Test
   public void isSpace_nonSpace() {
     assertFalse(IncrementalHttpResponseParser.isSpace('A'));
-  }
-
-  // ---- parse return value tests ----
-
-  @Test
-  public void ignoreTrailingData() throws Exception {
-    IncrementalHttpResponseParser parser = new IncrementalHttpResponseParser();
-    byte[] data = "HTTP/1.1 200 OK\r\n\r\nTRAILING_DATA".getBytes(Charset.forName("ISO-8859-1"));
-    assertEquals(data.length - 13, parser.parse(data));
-  }
-
-  @Test
-  public void ignoreTrailingDataAfterBody() throws Exception {
-    IncrementalHttpResponseParser parser = new IncrementalHttpResponseParser();
-    byte[] data =
-        "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n0123TRAILING_DATA"
-            .getBytes(Charset.forName("ISO-8859-1"));
-    assertEquals(data.length - 13, parser.parse(data));
   }
 }
