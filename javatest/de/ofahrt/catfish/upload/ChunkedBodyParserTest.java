@@ -77,6 +77,64 @@ public class ChunkedBodyParserTest {
     parseBody("5\r\nhelloXY0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
   }
 
+  @Test(expected = IOException.class)
+  public void chunkSizeTooLarge() throws IOException {
+    // 0x80000000 = 2^31, which exceeds Integer.MAX_VALUE.
+    parseBody("80000000\r\nhello\r\n0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
+  }
+
+  @Test
+  public void chunkSizeBareLf() throws IOException {
+    // Bare LF (no preceding CR) is accepted as a line terminator in the chunk-size line.
+    assertArrayEquals(new byte[0], parseBody("0\n\n".getBytes(StandardCharsets.ISO_8859_1)));
+  }
+
+  @Test(expected = IOException.class)
+  public void unexpectedCharInChunkSize() throws IOException {
+    // '!' is not hex, ';', '\r', or '\n', so it causes an error after a valid hex digit.
+    parseBody("5!\r\nhello\r\n0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
+  }
+
+  @Test
+  public void chunkExtBareLf() throws IOException {
+    // Bare LF (no CR) in the chunk-extension also terminates the chunk-size line.
+    assertArrayEquals(
+        "hello".getBytes(StandardCharsets.ISO_8859_1),
+        parseBody("5;ext\nhello\r\n0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1)));
+  }
+
+  @Test(expected = IOException.class)
+  public void badChunkSizeLf() throws IOException {
+    // CR not followed by LF in the chunk-size line is an error.
+    parseBody("5\rX\r\nhello\r\n0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
+  }
+
+  @Test
+  public void bareLineFeedAfterChunkData() throws IOException {
+    // Bare LF (no preceding CR) after chunk-data is accepted.
+    assertArrayEquals(
+        "hello".getBytes(StandardCharsets.ISO_8859_1),
+        parseBody("5\r\nhello\n0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1)));
+  }
+
+  @Test(expected = IOException.class)
+  public void badChunkDataLf() throws IOException {
+    // CR not followed by LF after chunk-data is an error.
+    parseBody("5\r\nhello\rX0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
+  }
+
+  @Test
+  public void terminalBareLineFeed() throws IOException {
+    // Bare LF (no preceding CR) as the terminal empty line is accepted.
+    assertArrayEquals(new byte[0], parseBody("0\r\n\n".getBytes(StandardCharsets.ISO_8859_1)));
+  }
+
+  @Test(expected = IOException.class)
+  public void badFinalLf() throws IOException {
+    // CR not followed by LF in the terminal CRLF is an error.
+    parseBody("0\r\n\rX".getBytes(StandardCharsets.ISO_8859_1));
+  }
+
   @Test
   public void trailingDataNotConsumed() throws IOException {
     // The parser must stop after the terminal CRLF; bytes after it belong to the next request.

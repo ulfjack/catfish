@@ -13,6 +13,7 @@ import org.junit.runners.Suite.SuiteClasses;
   InternalServerErrorResponseTest.class,
   PreconditionsTest.class,
   RedirectResponseTest.class,
+  SimpleHttpResponseBuilderTest.class,
   ModelNetworkTestSuite.class,
 })
 public class ModelTestSuite {}

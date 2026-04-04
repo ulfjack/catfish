@@ -2722,4 +2722,80 @@ public class HttpResponseValidatorTest {
   public void isValidCspControlCharInValueReturnsFalse() {
     assertFalse(HttpResponseValidator.isValidContentSecurityPolicy("default-src\u0001value"));
   }
+
+  // ── isValidPermissionsPolicy: SF bare-item types ─────────────────────────────
+
+  @Test
+  public void isValidPermissionsPolicyBooleanValueReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidPermissionsPolicy("feature=?1"));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyNumberValueReturnsTrue() {
+    assertTrue(HttpResponseValidator.isValidPermissionsPolicy("feature=123"));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyBinaryValueReturnsTrue() {
+    // :YQ==: is base64-encoded "a".
+    assertTrue(HttpResponseValidator.isValidPermissionsPolicy("feature=:YQ==:"));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyStringWithEscapeReturnsTrue() {
+    // SF string with escaped backslash: "a\\b"
+    assertTrue(HttpResponseValidator.isValidPermissionsPolicy("feature=\"a\\\\b\""));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyStringInvalidCharReturnsFalse() {
+    // Control character inside an SF string is invalid.
+    assertFalse(HttpResponseValidator.isValidPermissionsPolicy("feature=\"\u0001\""));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyUnknownTypeReturnsFalse() {
+    // '@' is not a valid SF bare-item start character.
+    assertFalse(HttpResponseValidator.isValidPermissionsPolicy("feature=@unknown"));
+  }
+
+  // ── Other validator edge cases ─────────────────────────────────────────────
+
+  @Test
+  public void isValidETagWithInternalQuoteReturnsFalse() {
+    // An ETag whose opaque-tag contains an unescaped double-quote is invalid.
+    assertFalse(HttpResponseValidator.isValidETag("\"a\"b\""));
+  }
+
+  @Test
+  public void isValidCacheControlInvalidDirectiveKeyReturnsFalse() {
+    // A directive name containing '(' is not a valid token.
+    assertFalse(HttpResponseValidator.isValidCacheControl("(bad)=value"));
+  }
+
+  @Test
+  public void isValidContentRangeOverflowReturnsFalse() {
+    // Astronomically large position numbers cause Long.parseLong to overflow.
+    assertFalse(
+        HttpResponseValidator.isValidContentRange(
+            "bytes 99999999999999999999-100000000000000000000/200000000000000000000"));
+  }
+
+  @Test
+  public void isValidAccessControlAllowOriginMalformedUriReturnsFalse() {
+    // An IPv6 literal with missing closing bracket causes a URISyntaxException.
+    assertFalse(
+        HttpResponseValidator.isValidAccessControlAllowOrigin("http://[::1"));
+  }
+
+  @Test
+  public void isValidStsWithEmptyDirectiveDoesNotThrow() throws Exception {
+    // Trailing semicolon produces an empty directive token that must be silently skipped.
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.STRICT_TRANSPORT_SECURITY, "max-age=1;")
+            .build();
+    validator.validate(response);
+  }
 }
