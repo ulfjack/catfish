@@ -2784,8 +2784,7 @@ public class HttpResponseValidatorTest {
   @Test
   public void isValidAccessControlAllowOriginMalformedUriReturnsFalse() {
     // An IPv6 literal with missing closing bracket causes a URISyntaxException.
-    assertFalse(
-        HttpResponseValidator.isValidAccessControlAllowOrigin("http://[::1"));
+    assertFalse(HttpResponseValidator.isValidAccessControlAllowOrigin("http://[::1"));
   }
 
   @Test
@@ -2797,5 +2796,23 @@ public class HttpResponseValidatorTest {
             .addHeader(HttpHeaderName.STRICT_TRANSPORT_SECURITY, "max-age=1;")
             .build();
     validator.validate(response);
+  }
+
+  @Test
+  public void isValidPermissionsPolicyDecimalValueReturnsTrue() {
+    // A decimal sf-number like 1.5 covers the decimal branch of consumeSfNumber.
+    assertTrue(HttpResponseValidator.isValidPermissionsPolicy("feature=1.5"));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyBinaryInvalidCharReturnsFalse() {
+    // '!' is not a valid base64 character so consumeSfBinary returns -1.
+    assertFalse(HttpResponseValidator.isValidPermissionsPolicy("feature=:abc!:"));
+  }
+
+  @Test
+  public void isValidPermissionsPolicyBinaryUnclosedReturnsFalse() {
+    // Missing closing ':' causes consumeSfBinary to return -1 (unclosed).
+    assertFalse(HttpResponseValidator.isValidPermissionsPolicy("feature=:abc"));
   }
 }

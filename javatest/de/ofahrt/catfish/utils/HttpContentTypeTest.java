@@ -1,7 +1,9 @@
 package de.ofahrt.catfish.utils;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -81,5 +83,25 @@ public class HttpContentTypeTest {
     assertArrayEquals(
         new String[] {"text/html", "a", "b", "c", "d"},
         HttpContentType.parseContentType("text/html;a=b;c=d"));
+  }
+
+  @Test
+  public void isValidContentType_null_throwsNpe() {
+    assertThrows(NullPointerException.class, () -> HttpContentType.isValidContentType(null));
+  }
+
+  @Test
+  public void getMimeTypeFromContentType_commonType_returnsDirectly() {
+    assertEquals("text/html", HttpContentType.getMimeTypeFromContentType("text/html"));
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void getMimeTypeFromContentType_invalidPattern_throws() {
+    HttpContentType.getMimeTypeFromContentType("!");
+  }
+
+  @Test
+  public void constructor() {
+    new HttpContentType();
   }
 }

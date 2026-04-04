@@ -14,6 +14,7 @@ import org.junit.runners.Suite.SuiteClasses;
   PreconditionsTest.class,
   RedirectResponseTest.class,
   SimpleHttpResponseBuilderTest.class,
+  StandardResponsesTest.class,
   ModelNetworkTestSuite.class,
 })
 public class ModelTestSuite {}

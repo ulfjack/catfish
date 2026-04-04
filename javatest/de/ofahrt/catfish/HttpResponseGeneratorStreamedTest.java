@@ -259,6 +259,40 @@ public class HttpResponseGeneratorStreamedTest {
     assertEquals("", response);
   }
 
+  @Test(expected = IllegalArgumentException.class)
+  public void nonPositiveBufferSize_throws() {
+    HttpResponseGeneratorStreamed.create(() -> {}, null, StandardResponses.OK, true, 0);
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void generateWithEmptyBuffer_throws() {
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.create(() -> {}, null, StandardResponses.OK, true);
+    gen.generate(ByteBuffer.allocate(0));
+  }
+
+  @Test
+  public void generateAfterClosed_returnsStop() throws Exception {
+    AtomicInteger called = new AtomicInteger();
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.create(
+            called::incrementAndGet, null, StandardResponses.OK, true);
+    gen.getOutputStream().close();
+    readUntilStop(gen);
+    // After fully reading, a subsequent generate call returns STOP immediately.
+    ByteBuffer buf = ByteBuffer.allocate(100);
+    assertEquals(ContinuationToken.STOP, gen.generate(buf));
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void writeAfterOutputStreamClosed_throws() throws Exception {
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.create(() -> {}, null, StandardResponses.OK, true);
+    OutputStream out = gen.getOutputStream();
+    out.close();
+    out.write(new byte[] {'x'});
+  }
+
   @Test
   public void closeNotifiesWriter() throws Exception {
     Semaphore called = new Semaphore(0);

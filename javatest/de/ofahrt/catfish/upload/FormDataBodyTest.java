@@ -8,6 +8,7 @@ import static org.junit.Assert.assertTrue;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
@@ -124,6 +125,60 @@ public class FormDataBodyTest {
     FormDataBody body = FormDataBody.parseFormData(request);
     Map<String, String> map = body.formDataAsMap();
     assertEquals("value", map.get("key"));
+  }
+
+  @Test
+  public void parseFormData_multipart_returnsEntries() throws Exception {
+    byte[] bodyBytes =
+        "--abc\r\nContent-Disposition: form-data; name=\"field\"\r\n\r\nvalue\r\n--abc--\r\n"
+            .getBytes(StandardCharsets.ISO_8859_1);
+    HttpRequest request =
+        new HttpRequest() {
+          @Override
+          public String getUri() {
+            return "/";
+          }
+
+          @Override
+          public HttpRequest.Body getBody() {
+            return new HttpRequest.InMemoryBody(bodyBytes);
+          }
+
+          @Override
+          public HttpHeaders getHeaders() {
+            return HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, "multipart/form-data; boundary=abc");
+          }
+        };
+    FormDataBody body = FormDataBody.parseFormData(request);
+    assertEquals(1, body.size());
+    assertEquals("field", body.get(0).getName());
+    assertEquals("value", body.get(0).getValue());
+  }
+
+  @Test(expected = IOException.class)
+  public void parseFormData_incompleteMulitpart_throws() throws Exception {
+    // Incomplete multipart: no final boundary → parser is not done → throws
+    byte[] bodyBytes =
+        "--abc\r\nContent-Disposition: form-data; name=\"field\"\r\n\r\nvalue"
+            .getBytes(StandardCharsets.ISO_8859_1);
+    HttpRequest request =
+        new HttpRequest() {
+          @Override
+          public String getUri() {
+            return "/";
+          }
+
+          @Override
+          public HttpRequest.Body getBody() {
+            return new HttpRequest.InMemoryBody(bodyBytes);
+          }
+
+          @Override
+          public HttpHeaders getHeaders() {
+            return HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, "multipart/form-data; boundary=abc");
+          }
+        };
+    FormDataBody.parseFormData(request);
   }
 
   @Test

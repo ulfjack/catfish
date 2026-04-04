@@ -16,7 +16,8 @@ public class SimpleHttpResponseBuilderTest {
             .addHeader(HttpHeaderName.CONTENT_TYPE, "text/html")
             .addHeader(HttpHeaderName.CONTENT_TYPE, "charset=utf-8")
             .build();
-    assertEquals("text/html, charset=utf-8", response.getHeaders().get(HttpHeaderName.CONTENT_TYPE));
+    assertEquals(
+        "text/html, charset=utf-8", response.getHeaders().get(HttpHeaderName.CONTENT_TYPE));
   }
 
   @Test
@@ -26,8 +27,9 @@ public class SimpleHttpResponseBuilderTest {
         new SimpleHttpResponse.Builder()
             .setStatusCode(200)
             .addHeader(HttpHeaderName.HOST, "localhost");
-    assertThrows(IllegalArgumentException.class, () ->
-        builder.addHeader(HttpHeaderName.HOST, "localhost:8080"));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> builder.addHeader(HttpHeaderName.HOST, "localhost:8080"));
   }
 
   @Test

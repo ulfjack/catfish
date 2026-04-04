@@ -2,6 +2,9 @@ package de.ofahrt.catfish.ssl;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import de.ofahrt.catfish.ssl.Asn1Parser.Event;
@@ -118,6 +121,90 @@ public class Asn1ParserTest {
   public void parseMethodPrintsStructure() throws IOException {
     // SEQUENCE { NULL }: 30 02 05 00
     Asn1Parser parser = new Asn1Parser(new byte[] {0x30, 0x02, 0x05, 0x00});
+    parser.parse();
+  }
+
+  private ObjectIdentifier parseOid() throws IOException {
+    // OID 1.2.840.113549.1.1.1: 06 09 2a 86 48 86 f7 0d 01 01 01
+    Asn1Parser parser =
+        new Asn1Parser(
+            new byte[] {
+              0x06, 0x09, 0x2a, (byte) 0x86, 0x48, (byte) 0x86, (byte) 0xf7, 0x0d, 0x01, 0x01, 0x01
+            });
+    parser.nextEvent();
+    return parser.getObjectIdentifier();
+  }
+
+  @Test
+  public void objectIdentifierHashCode() throws IOException {
+    ObjectIdentifier oid = parseOid();
+    assertNotEquals(0, oid.hashCode());
+  }
+
+  @Test
+  public void objectIdentifierEqualsSelf() throws IOException {
+    ObjectIdentifier oid = parseOid();
+    assertTrue(oid.equals(oid));
+  }
+
+  @Test
+  public void objectIdentifierNotEqualsNonOid() throws IOException {
+    ObjectIdentifier oid = parseOid();
+    assertFalse(oid.equals("not an oid"));
+  }
+
+  @Test
+  public void objectIdentifierToString() throws IOException {
+    ObjectIdentifier oid = parseOid();
+    assertEquals("1.2.840.113549.1.1.1", oid.toString());
+  }
+
+  @Test
+  public void tagReturnsCurrentEvent() throws IOException {
+    Asn1Parser parser = new Asn1Parser(new byte[] {0x05, 0x00});
+    parser.nextEvent();
+    assertEquals(Event.NULL, parser.tag());
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void getIntegerWhenNotInteger_throws() throws IOException {
+    Asn1Parser parser = new Asn1Parser(new byte[] {0x05, 0x00});
+    parser.nextEvent();
+    parser.getInteger();
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void getOctetStringWhenNotOctetString_throws() throws IOException {
+    Asn1Parser parser = new Asn1Parser(new byte[] {0x02, 0x01, 0x2a});
+    parser.nextEvent();
+    parser.getOctetString();
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void getObjectIdentifierWhenNotOid_throws() throws IOException {
+    Asn1Parser parser = new Asn1Parser(new byte[] {0x05, 0x00});
+    parser.nextEvent();
+    parser.getObjectIdentifier();
+  }
+
+  @Test(expected = IOException.class)
+  public void tooLongLengthEncoding_throws() throws IOException {
+    // 0x85 = 0x80 | 5, meaning 5-byte length field follows, which exceeds the 4-byte limit.
+    Asn1Parser parser =
+        new Asn1Parser(new byte[] {0x02, (byte) 0x85, 0x00, 0x00, 0x00, 0x00, 0x00});
+    parser.nextEvent();
+  }
+
+  @Test
+  public void parseMethodWithIntegerOctetStringAndOid() throws IOException {
+    // SEQUENCE { INTEGER 1, OCTET_STRING {0x01}, OID 1.2 }
+    // INTEGER 1:      02 01 01
+    // OCTET_STRING:   04 01 01
+    // OID 1.2:        06 01 2a
+    // SEQUENCE wraps: 30 09 ...
+    Asn1Parser parser =
+        new Asn1Parser(
+            new byte[] {0x30, 0x09, 0x02, 0x01, 0x01, 0x04, 0x01, 0x01, 0x06, 0x01, 0x2a});
     parser.parse();
   }
 }

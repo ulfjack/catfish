@@ -6,6 +6,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.nio.charset.StandardCharsets;
 import java.util.TreeMap;
 import org.junit.Test;
 
@@ -336,5 +337,47 @@ public class IncrementalMultipartParserTest {
     int len = parser.parse("foobar".getBytes());
     assertEquals(0, len);
     assertTrue(parser.isDone());
+  }
+
+  @Test(expected = MalformedMultipartException.class)
+  public void illegalCharacterInBoundaryUnquoted() throws Exception {
+    // '!' passes through content-type parsing as a TOKEN char but fails isBoundaryCharacter.
+    parse("multipart/form-data; boundary=abc!", "");
+  }
+
+  @Test(expected = MalformedMultipartException.class)
+  public void unexpectedCharAfterBoundary() throws Exception {
+    // After a part-body boundary match, 'X' is not '-' or '\r' → END_BOUNDARY error path.
+    IncrementalMultipartParser parser =
+        new IncrementalMultipartParser("multipart/form-data; boundary=abc");
+    byte[] data =
+        "--abc\r\nContent-Disposition: form-data; name=\"foo\"\r\n\r\nfoo\r\n--abcX"
+            .getBytes(StandardCharsets.ISO_8859_1);
+    parser.parse(data, 0, data.length);
+    parser.getParsedBody();
+  }
+
+  @Test(expected = MalformedMultipartException.class)
+  public void unexpectedCharAfterHyphenInEndBoundary() throws Exception {
+    // After '\r\n--abc-', 'X' is not '-' → END_BOUNDARY_EXPECT_HYPHEN error path.
+    IncrementalMultipartParser parser =
+        new IncrementalMultipartParser("multipart/form-data; boundary=abc");
+    byte[] data =
+        "--abc\r\nContent-Disposition: form-data; name=\"foo\"\r\n\r\nfoo\r\n--abc-X"
+            .getBytes(StandardCharsets.ISO_8859_1);
+    parser.parse(data, 0, data.length);
+    parser.getParsedBody();
+  }
+
+  @Test(expected = MalformedMultipartException.class)
+  public void contentDispositionWithoutNameThrows() throws Exception {
+    // Content-Disposition present but has no name= attribute and no Content-Type.
+    IncrementalMultipartParser parser =
+        new IncrementalMultipartParser("multipart/form-data; boundary=abc");
+    byte[] data =
+        "--abc\r\nContent-Disposition: form-data\r\n\r\nvalue\r\n--abc--\r\n"
+            .getBytes(StandardCharsets.ISO_8859_1);
+    parser.parse(data, 0, data.length);
+    parser.getParsedBody();
   }
 }

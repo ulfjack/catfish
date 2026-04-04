@@ -16,6 +16,7 @@ import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import javax.servlet.http.HttpSession;
+import javax.servlet.http.HttpSessionContext;
 import org.junit.Test;
 
 public class SessionManagerTest {
@@ -162,5 +163,24 @@ public class SessionManagerTest {
   public void systemClockReturnsPositiveTime() {
     Clock.SystemClock clock = new Clock.SystemClock();
     assertTrue(clock.currentTimeMillis() > 0);
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void getServletContext_throws() {
+    new SessionImpl("a", 0, 1000).getServletContext();
+  }
+
+  @SuppressWarnings("deprecation")
+  @Test
+  public void getSessionContext_methodsWork() {
+    SessionImpl session = new SessionImpl("a", 0, 1000);
+    HttpSessionContext ctx = session.getSessionContext();
+    assertFalse(ctx.getIds().hasMoreElements());
+    assertNull(ctx.getSession("any"));
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void invalidate_throws() {
+    new SessionImpl("a", 0, 1000).invalidate();
   }
 }

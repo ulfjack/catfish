@@ -8,10 +8,12 @@ import org.junit.runners.Suite.SuiteClasses;
 @SuiteClasses({
   EnumerationsTest.class,
   FileDataTest.class,
+  FilterDispatcherTest.class,
   HttpFilterTest.class,
   RequestImplTest.class,
   ResponseImplTest.class,
   ServletHelperTest.class,
+  ServletHttpHandlerTest.class,
   SessionManagerTest.class,
   XsrfTokenTest.class,
 })

@@ -25,6 +25,16 @@ public class XsrfTokenTest {
     assertFalse(XsrfToken.isValid(TestHelper.createSessionForTesting(), null));
   }
 
+  @Test(expected = NullPointerException.class)
+  public void getToken_nullSession_throwsNpe() {
+    XsrfToken.getToken(null);
+  }
+
+  @Test
+  public void isValid_sessionWithoutToken_returnsFalse() {
+    assertFalse(XsrfToken.isValid(TestHelper.createSessionForTesting(), "abc"));
+  }
+
   @Test
   public void cannotUseTokenForAnotherSession() {
     HttpSession sessionA = TestHelper.createSessionForTesting();

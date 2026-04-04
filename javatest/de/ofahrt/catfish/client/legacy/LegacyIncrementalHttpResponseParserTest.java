@@ -5,6 +5,7 @@ import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.client.HttpResponseParserTest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.MalformedResponseException;
 import org.junit.Test;
 
 public class LegacyIncrementalHttpResponseParserTest extends HttpResponseParserTest {
@@ -142,5 +143,28 @@ public class LegacyIncrementalHttpResponseParserTest extends HttpResponseParserT
   @Test
   public void isSpace_nonSpace() {
     assertFalse(IncrementalHttpResponseParser.isSpace('A'));
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void httpMajorVersionNotZeroOrOne_throws() throws Exception {
+    // HTTP/2.0 has major version 2, which the legacy parser does not support.
+    parse(
+        "HTTP/2.0 200 OK\n\n"
+            .replace("\n", "\r\n")
+            .getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
+  }
+
+  @Test(expected = MalformedResponseException.class)
+  public void httpMinorVersionTooLong_throws() throws Exception {
+    // 8-digit minor version exceeds the 7-digit limit.
+    parse(
+        "HTTP/1.12345678 200 OK\n\n"
+            .replace("\n", "\r\n")
+            .getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void getResponseBeforeDone_throws() throws Exception {
+    new IncrementalHttpResponseParser().getResponse();
   }
 }
