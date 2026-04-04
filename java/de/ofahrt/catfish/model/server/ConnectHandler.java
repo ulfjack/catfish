@@ -18,7 +18,10 @@ public interface ConnectHandler {
 
   /** Called on the executor thread after each proxied HTTP request completes (INTERCEPT only). */
   default void onResponse(
-      UUID requestId, String originHost, int originPort, HttpRequest request,
+      UUID requestId,
+      String originHost,
+      int originPort,
+      HttpRequest request,
       HttpResponse response) {}
 
   static ConnectHandler tunnelAll() {
