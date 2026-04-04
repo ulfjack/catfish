@@ -37,6 +37,18 @@ public class HttpRequestTest {
   }
 
   @Test
+  public void defaultGetVersion() {
+    HttpRequest req = () -> "/";
+    assertEquals(HttpVersion.HTTP_1_1, req.getVersion());
+  }
+
+  @Test
+  public void defaultGetMethod() {
+    HttpRequest req = () -> "/";
+    assertEquals(HttpMethodName.GET, req.getMethod());
+  }
+
+  @Test
   public void inMemoryBody_toByteArray() {
     byte[] data = new byte[] {1, 2, 3};
     HttpRequest.InMemoryBody body = new HttpRequest.InMemoryBody(data);

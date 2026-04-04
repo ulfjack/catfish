@@ -50,4 +50,17 @@ public class ValidatingHttpHandlerTest {
     handler.handle((Connection) null, null, delegate);
     assertSame(StandardResponses.INTERNAL_SERVER_ERROR, delegate.bufferedResponse);
   }
+
+  @Test
+  public void commitStreamed_validResponse_delegatesStream() throws IOException {
+    RecordingResponseWriter delegate = new RecordingResponseWriter();
+    ValidatingHttpHandler handler =
+        new ValidatingHttpHandler(
+            (connection, request, responseWriter) -> {
+              OutputStream out = responseWriter.commitStreamed(StandardResponses.OK);
+              assertNotNull(out);
+            });
+    handler.handle((Connection) null, null, delegate);
+    assertSame(StandardResponses.OK, delegate.streamedResponse);
+  }
 }
