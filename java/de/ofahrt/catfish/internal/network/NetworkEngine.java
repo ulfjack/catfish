@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class NetworkEngine {
   private static final boolean DEBUG = false;
   private static final boolean LOG_TO_FILE = false;
-  private static final int DEFAULT_BUFFER_SIZE = 32768;
+  private static final int DEFAULT_BUFFER_SIZE = 65536;
 
   private static final boolean OUTGOING_CONNECTION = true;
   private static final boolean INCOMING_CONNECTION = false;

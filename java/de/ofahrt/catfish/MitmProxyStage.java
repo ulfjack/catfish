@@ -284,7 +284,7 @@ final class MitmProxyStage implements Stage {
       originOut.flush();
 
       // Stream request body from pipe to origin.
-      byte[] buf = new byte[8192];
+      byte[] buf = new byte[65536];
       while (true) {
         int n;
         try {
@@ -306,7 +306,7 @@ final class MitmProxyStage implements Stage {
       IncrementalHttpResponseParser respParser = new IncrementalHttpResponseParser();
       respParser.setNoBody(true);
 
-      byte[] readBuf = new byte[8192];
+      byte[] readBuf = new byte[65536];
       int bufStart = 0;
       int bufEnd = 0;
 
@@ -415,7 +415,7 @@ final class MitmProxyStage implements Stage {
   private void drainAndClosePipe() {
     requestBodyPipe.closeWrite();
     // Drain any remaining bytes so the pipe read() returns cleanly.
-    byte[] discard = new byte[4096];
+    byte[] discard = new byte[65536];
     try {
       while (requestBodyPipe.read(discard, 0, discard.length) >= 0) {}
     } catch (InterruptedException e) {

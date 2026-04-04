@@ -107,7 +107,7 @@ final class TunnelForwardStage implements Stage {
   private void readFromTarget() {
     try {
       InputStream in = targetSocket.getInputStream();
-      byte[] buf = new byte[8192];
+      byte[] buf = new byte[65536];
       int n;
       while ((n = in.read(buf)) != -1) {
         fromTarget.add(Arrays.copyOf(buf, n));

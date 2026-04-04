@@ -36,21 +36,21 @@ public class PipeBufferTest {
       total += w;
       if (w == 0) break;
     }
-    // Buffer is now full (32 KB).
-    assertEquals(32768, total);
+    // Buffer is now full (64 KB).
+    assertEquals(65536, total);
     assertEquals(0, pipe.tryWrite(chunk, 0, 1));
   }
 
   @Test
   public void tryWrite_partialWriteWhenNearFull() {
     PipeBuffer pipe = new PipeBuffer();
-    byte[] big = new byte[32000];
+    byte[] big = new byte[65000];
     int w1 = pipe.tryWrite(big, 0, big.length);
-    assertEquals(32000, w1);
-    // Only 768 bytes left.
+    assertEquals(65000, w1);
+    // Only 536 bytes left.
     byte[] more = new byte[1000];
     int w2 = pipe.tryWrite(more, 0, more.length);
-    assertEquals(768, w2);
+    assertEquals(536, w2);
     assertEquals(0, pipe.tryWrite(more, 0, 1));
   }
 
@@ -138,10 +138,10 @@ public class PipeBufferTest {
   public void tryWrite_wrapsAroundRingBuffer() throws InterruptedException {
     PipeBuffer pipe = new PipeBuffer();
     // Fill up then drain to put writePos near end of buffer.
-    byte[] full = new byte[32768];
+    byte[] full = new byte[65536];
     pipe.tryWrite(full, 0, full.length);
     pipe.closeWrite();
-    byte[] drain = new byte[32768];
+    byte[] drain = new byte[65536];
     pipe.read(drain, 0, drain.length);
     pipe.reset();
 
@@ -154,7 +154,7 @@ public class PipeBufferTest {
     byte[] partial = new byte[15000];
     pipe.read(partial, 0, partial.length);
 
-    // Write 5000 more bytes, wrapping around (writePos = 30000+5000-32768 = 2232).
+    // Write 5000 more bytes (writePos = 35000).
     byte[] wrap = new byte[5000];
     Arrays.fill(wrap, (byte) 2);
     int w = pipe.tryWrite(wrap, 0, wrap.length);

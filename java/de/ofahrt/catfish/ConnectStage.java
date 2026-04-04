@@ -216,8 +216,8 @@ final class ConnectStage implements Stage {
   }
 
   private void setupMitm() {
-    ByteBuffer decryptedIn = ByteBuffer.allocate(32768);
-    ByteBuffer decryptedOut = ByteBuffer.allocate(32768);
+    ByteBuffer decryptedIn = ByteBuffer.allocate(65536);
+    ByteBuffer decryptedOut = ByteBuffer.allocate(65536);
     decryptedIn.clear();
     decryptedIn.flip();
     decryptedOut.clear();

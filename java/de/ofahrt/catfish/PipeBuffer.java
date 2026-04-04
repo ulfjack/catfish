@@ -10,7 +10,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * #closeWrite}. The executor thread reads via {@link #read} (blocking until data or EOF).
  */
 final class PipeBuffer {
-  private static final int CAPACITY = 32768;
+  private static final int CAPACITY = 65536;
 
   private final byte[] buffer = new byte[CAPACITY];
   private int readPos;
