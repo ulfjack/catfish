@@ -4,8 +4,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import static org.junit.Assert.assertFalse;
+
 import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.MalformedRequestException;
+import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.upload.SimpleUploadPolicy;
 import de.ofahrt.catfish.utils.HttpContentTypeTest;
 import org.junit.Test;
@@ -198,6 +201,58 @@ public class IncrementalHttpParserTest {
           IncrementalHttpRequestParser.isTokenCharacter(c),
           HttpContentTypeTest.isTokenCharacter(c));
     }
+  }
+
+  @Test
+  public void chunkedUploadDenied() throws MalformedRequestException {
+    IncrementalHttpRequestParser parser =
+        new IncrementalHttpRequestParser(new SimpleUploadPolicy(100));
+    byte[] data =
+        "POST / HTTP/1.1\r\nHost: foo\r\nTransfer-Encoding: chunked\r\n\r\n".getBytes();
+    parser.parse(data);
+    assertTrue(parser.isDone());
+    try {
+      parser.getRequest();
+      fail();
+    } catch (MalformedRequestException e) {
+      assertEquals(
+          HttpStatusCode.PAYLOAD_TOO_LARGE.getStatusCode(), e.getErrorResponse().getStatusCode());
+    }
+  }
+
+  @Test
+  public void chunkedUploadWithExpectContinue() {
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser(UploadPolicy.ALLOW);
+    byte[] data =
+        "POST / HTTP/1.1\r\nHost: foo\r\nTransfer-Encoding: chunked\r\nExpect: 100-continue\r\n\r\n"
+            .getBytes();
+    parser.parse(data);
+    assertTrue(parser.isDone());
+    assertTrue(parser.needsContinue());
+  }
+
+  @Test
+  public void resumeAfterContinue_notWaiting() {
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    try {
+      parser.resumeAfterContinue();
+      fail();
+    } catch (IllegalStateException expected) {
+    }
+  }
+
+  @Test
+  public void resumeAfterContinue_resumes() {
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser(UploadPolicy.ALLOW);
+    byte[] data =
+        "POST / HTTP/1.1\r\nHost: foo\r\nTransfer-Encoding: chunked\r\nExpect: 100-continue\r\n\r\n"
+            .getBytes();
+    parser.parse(data);
+    assertTrue(parser.needsContinue());
+    assertTrue(parser.isDone());
+    parser.resumeAfterContinue();
+    assertFalse(parser.needsContinue());
+    assertFalse(parser.isDone());
   }
 
   private static String repeat(String s, int count) {
