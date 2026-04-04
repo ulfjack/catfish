@@ -24,6 +24,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLParameters;
@@ -261,6 +262,8 @@ final class MitmProxyStage implements Stage {
   // ---- Executor task ----
 
   private void executorTask(HttpRequest headers) {
+    UUID requestId = UUID.randomUUID();
+    handler.onRequest(requestId, originHost, originPort, headers);
     SSLSocket socket;
     try {
       socket = (SSLSocket) originSocketFactory.createSocket(originHost, originPort);
@@ -391,7 +394,7 @@ final class MitmProxyStage implements Stage {
 
       genOut.close();
       socket.close();
-      handler.onRequest(originHost, originPort, headers, originResponse);
+      handler.onResponse(requestId, originHost, originPort, headers, originResponse);
 
     } catch (IOException e) {
       try {

@@ -6,6 +6,7 @@ import de.ofahrt.catfish.model.network.Connection;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Executor;
+import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
@@ -167,6 +168,8 @@ final class SslServerStage implements Stage {
         inputBuffer.flip(); // prepare buffer for reading
         if (result.getStatus() == Status.CLOSED) {
           return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
+        } else if (result.getStatus() == Status.BUFFER_UNDERFLOW) {
+          return ConnectionControl.NEED_MORE_DATA;
         } else if (result.getStatus() != Status.OK) {
           throw new IOException(result.toString());
         }
@@ -181,7 +184,11 @@ final class SslServerStage implements Stage {
   @Override
   public void inputClosed() throws IOException {
     if (sslEngine != null) {
-      sslEngine.closeInbound();
+      try {
+        sslEngine.closeInbound();
+      } catch (SSLException e) {
+        // Peer closed without sending close_notify - this is common in practice.
+      }
     }
     next.inputClosed();
   }
