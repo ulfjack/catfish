@@ -20,8 +20,10 @@ import org.junit.runners.Suite.SuiteClasses;
 @SuiteClasses({
   CatfishHttpServerTest.class,
   HashConflictGeneratorTest.class,
+  HttpVirtualHostTest.class,
   IncrementalHttpParserIncrementalTest.class,
   IncrementalHttpParserTest.class,
+  ValidatingHttpHandlerTest.class,
   HttpResponseGeneratorBufferedTest.class,
   HttpResponseGeneratorStreamedTest.class,
   PipeBufferTest.class,
