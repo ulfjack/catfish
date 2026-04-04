@@ -65,6 +65,33 @@ public abstract class HttpResponseParserTest {
     assertEquals("123456789a", bodyAsString(response));
   }
 
+  @Test
+  public void majorVersionLeadingZeroStripped() throws Exception {
+    // "01" major version: leading zero is silently dropped, treated as HTTP/1.1
+    HttpResponse response = parse("HTTP/01.1 200 OK\n\n");
+    assertEquals(HttpVersion.HTTP_1_1, response.getProtocolVersion());
+  }
+
+  @Test
+  public void minorVersionLeadingZeroStripped() throws Exception {
+    // "01" minor version: leading zero is silently dropped, treated as HTTP/1.1
+    HttpResponse response = parse("HTTP/1.01 200 OK\n\n");
+    assertEquals(HttpVersion.HTTP_1_1, response.getProtocolVersion());
+  }
+
+  @Test
+  public void headerValueTrailingSpacesTrimmed() throws Exception {
+    HttpResponse response = parse("HTTP/1.1 200 OK\nConnection: close  \n\n");
+    assertEquals("close", response.getHeaders().get("Connection"));
+  }
+
+  @Test
+  public void headerFolding() throws Exception {
+    // A continuation line (starts with whitespace) is folded into the previous value
+    HttpResponse response = parse("HTTP/1.1 200 OK\nConnection: keep\n alive\n\n");
+    assertEquals("keep alive", response.getHeaders().get("Connection"));
+  }
+
   // ---- Error-path tests ----
 
   @Test(expected = Exception.class)
@@ -243,6 +270,12 @@ public abstract class HttpResponseParserTest {
   public void badChunk_secondChunkTooLarge() throws Exception {
     // F4241 hex = 1000001, which exceeds maxContentLength (1000000)
     parse("HTTP/1.1 200 OK\nTransfer-Encoding: chunked\n\n1\nA\nF4241\n");
+  }
+
+  @Test(expected = Exception.class)
+  public void badChunk_cumulativeSizeExceedsMax() throws Exception {
+    // F4240 hex = 1000000: does not exceed maxContentLength alone, but 1 (existing) + 1000000 does
+    parse("HTTP/1.1 200 OK\nTransfer-Encoding: chunked\n\n1\nA\nF4240\n");
   }
 
   // ---- CHUNKED_CONTENT_NEXT errors ----
