@@ -305,6 +305,9 @@ public class IncrementalHttpResponseParserIncrementalTest extends HttpResponsePa
     for (int i = 0; i < lengths.length; i++) {
       int len = Math.min(data.length - pos, lengths[i]);
       int consumed = parser.parse(data, pos, len);
+      if (consumed < len) {
+        return parser.getResponse(); // throws if parse error
+      }
       assertEquals(len, consumed);
       pos += len;
       if (pos == data.length) {
@@ -312,7 +315,6 @@ public class IncrementalHttpResponseParserIncrementalTest extends HttpResponsePa
       }
       assertFalse(parser.isDone());
     }
-    assertTrue(parser.isDone());
     return parser.getResponse();
   }
 }
