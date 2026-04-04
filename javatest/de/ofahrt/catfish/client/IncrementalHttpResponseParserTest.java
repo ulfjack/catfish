@@ -71,6 +71,36 @@ public class IncrementalHttpResponseParserTest extends HttpResponseParserTest {
     assertFalse(IncrementalHttpResponseParser.isTokenCharacter('\u0000'));
   }
 
+  // ---- isHexDigit ----
+
+  @Test
+  public void isHexDigit_digits() {
+    assertTrue(IncrementalHttpResponseParser.isHexDigit('0'));
+    assertTrue(IncrementalHttpResponseParser.isHexDigit('9'));
+  }
+
+  @Test
+  public void isHexDigit_upperCase() {
+    assertTrue(IncrementalHttpResponseParser.isHexDigit('A'));
+    assertTrue(IncrementalHttpResponseParser.isHexDigit('F'));
+  }
+
+  @Test
+  public void isHexDigit_lowerCase() {
+    assertTrue(IncrementalHttpResponseParser.isHexDigit('a'));
+    assertTrue(IncrementalHttpResponseParser.isHexDigit('f'));
+  }
+
+  @Test
+  public void isHexDigit_nonHex() {
+    assertFalse(IncrementalHttpResponseParser.isHexDigit('/'));  // just below '0'
+    assertFalse(IncrementalHttpResponseParser.isHexDigit(':'));  // just above '9'
+    assertFalse(IncrementalHttpResponseParser.isHexDigit('@'));  // just below 'A'
+    assertFalse(IncrementalHttpResponseParser.isHexDigit('G'));  // just above 'F'
+    assertFalse(IncrementalHttpResponseParser.isHexDigit('`'));  // just below 'a'
+    assertFalse(IncrementalHttpResponseParser.isHexDigit('g'));  // just above 'f'
+  }
+
   // ---- isDigit ----
 
   @Test

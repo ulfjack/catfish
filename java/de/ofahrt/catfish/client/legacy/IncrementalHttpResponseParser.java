@@ -87,6 +87,10 @@ public final class IncrementalHttpResponseParser {
     return !isControl(c) && !isSeparator(c);
   }
 
+  static boolean isHexDigit(char c) {
+    return ((c >= '0') && (c <= '9')) || ((c >= 'A') && (c <= 'F')) || ((c >= 'a') && (c <= 'f'));
+  }
+
   static boolean isDigit(char c) {
     return (c >= '0') && (c <= '9');
   }
@@ -360,9 +364,7 @@ public final class IncrementalHttpResponseParser {
               content = Arrays.copyOf(content, content.length + parsedChunkLength);
             }
             state = State.CHUNKED_CONTENT_DATA;
-          } else if (((c >= '0') && (c <= '9'))
-              || ((c >= 'A') && (c <= 'F'))
-              || ((c >= 'a') && (c <= 'f'))) {
+          } else if (isHexDigit(c)) {
             elementBuffer.append(c);
           } else {
             throw new MalformedResponseException("Illegal character in chunked content length");
