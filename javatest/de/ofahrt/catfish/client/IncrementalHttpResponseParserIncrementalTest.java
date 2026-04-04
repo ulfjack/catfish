@@ -2,7 +2,6 @@ package de.ofahrt.catfish.client;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.model.HttpResponse;
 import info.adams.junit.NamedParameterized;

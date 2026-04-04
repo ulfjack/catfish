@@ -41,8 +41,11 @@ public class IncrementalHttpResponseParserTest extends HttpResponseParserTest {
 
   @Test
   public void isSeparator_allSeparators() {
-    for (char c : new char[]{'(', ')', '<', '>', '@', ',', ';', ':', '\\', '"',
-                             '/', '[', ']', '?', '=', '{', '}', ' ', '\t'}) {
+    for (char c :
+        new char[] {
+          '(', ')', '<', '>', '@', ',', ';', ':', '\\', '"', '/', '[', ']', '?', '=', '{', '}', ' ',
+          '\t'
+        }) {
       assertTrue("expected separator: " + c, IncrementalHttpResponseParser.isSeparator(c));
     }
   }
@@ -93,12 +96,12 @@ public class IncrementalHttpResponseParserTest extends HttpResponseParserTest {
 
   @Test
   public void isHexDigit_nonHex() {
-    assertFalse(IncrementalHttpResponseParser.isHexDigit('/'));  // just below '0'
-    assertFalse(IncrementalHttpResponseParser.isHexDigit(':'));  // just above '9'
-    assertFalse(IncrementalHttpResponseParser.isHexDigit('@'));  // just below 'A'
-    assertFalse(IncrementalHttpResponseParser.isHexDigit('G'));  // just above 'F'
-    assertFalse(IncrementalHttpResponseParser.isHexDigit('`'));  // just below 'a'
-    assertFalse(IncrementalHttpResponseParser.isHexDigit('g'));  // just above 'f'
+    assertFalse(IncrementalHttpResponseParser.isHexDigit('/')); // just below '0'
+    assertFalse(IncrementalHttpResponseParser.isHexDigit(':')); // just above '9'
+    assertFalse(IncrementalHttpResponseParser.isHexDigit('@')); // just below 'A'
+    assertFalse(IncrementalHttpResponseParser.isHexDigit('G')); // just above 'F'
+    assertFalse(IncrementalHttpResponseParser.isHexDigit('`')); // just below 'a'
+    assertFalse(IncrementalHttpResponseParser.isHexDigit('g')); // just above 'f'
   }
 
   // ---- isDigit ----
@@ -111,8 +114,8 @@ public class IncrementalHttpResponseParserTest extends HttpResponseParserTest {
 
   @Test
   public void isDigit_nonDigits() {
-    assertFalse(IncrementalHttpResponseParser.isDigit('/'));  // just below '0'
-    assertFalse(IncrementalHttpResponseParser.isDigit(':'));  // just above '9'
+    assertFalse(IncrementalHttpResponseParser.isDigit('/')); // just below '0'
+    assertFalse(IncrementalHttpResponseParser.isDigit(':')); // just above '9'
     assertFalse(IncrementalHttpResponseParser.isDigit('A'));
   }
 

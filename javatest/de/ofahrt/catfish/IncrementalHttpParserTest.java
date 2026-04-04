@@ -1,10 +1,9 @@
 package de.ofahrt.catfish;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-
-import static org.junit.Assert.assertFalse;
 
 import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.MalformedRequestException;
@@ -207,8 +206,7 @@ public class IncrementalHttpParserTest {
   public void chunkedUploadDenied() throws MalformedRequestException {
     IncrementalHttpRequestParser parser =
         new IncrementalHttpRequestParser(new SimpleUploadPolicy(100));
-    byte[] data =
-        "POST / HTTP/1.1\r\nHost: foo\r\nTransfer-Encoding: chunked\r\n\r\n".getBytes();
+    byte[] data = "POST / HTTP/1.1\r\nHost: foo\r\nTransfer-Encoding: chunked\r\n\r\n".getBytes();
     parser.parse(data);
     assertTrue(parser.isDone());
     try {

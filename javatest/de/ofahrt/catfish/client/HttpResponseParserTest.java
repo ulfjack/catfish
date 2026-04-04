@@ -239,7 +239,8 @@ public abstract class HttpResponseParserTest {
 
   @Test(expected = Exception.class)
   public void badHeaderNameOrContinuation_illegalChar() throws Exception {
-    parse(("HTTP/1.1 200 OK\nX: value\n\u0001bad: value\n\n").getBytes(StandardCharsets.ISO_8859_1));
+    parse(
+        ("HTTP/1.1 200 OK\nX: value\n\u0001bad: value\n\n").getBytes(StandardCharsets.ISO_8859_1));
   }
 
   // ---- Content-Length errors ----
