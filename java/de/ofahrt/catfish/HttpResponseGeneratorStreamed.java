@@ -33,7 +33,23 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
       boolean includeBody,
       int bufferSize) {
     return new HttpResponseGeneratorStreamed(
-        dataAvailableCallback, request, response, includeBody, bufferSize);
+        dataAvailableCallback, request, response, includeBody, /* rawBody= */ false, bufferSize);
+  }
+
+  /**
+   * Creates a raw pass-through generator. The response headers are used as-is (the caller is
+   * responsible for setting Content-Length or Transfer-Encoding), and body bytes written to the
+   * OutputStream are forwarded without any framing.
+   */
+  public static HttpResponseGeneratorStreamed createRaw(
+      Runnable dataAvailableCallback, HttpRequest request, HttpResponse response) {
+    return new HttpResponseGeneratorStreamed(
+        dataAvailableCallback,
+        request,
+        response,
+        /* includeBody= */ true,
+        /* rawBody= */ true,
+        DEFAULT_BUFFER_SIZE);
   }
 
   private enum WriteState {
@@ -69,6 +85,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private final HttpRequest request;
   private HttpResponse response;
   private final boolean includeBody;
+  private final boolean rawBody;
 
   private final Runnable dataAvailableCallback;
   private final AtomicBoolean outputStreamAcquired = new AtomicBoolean();
@@ -87,6 +104,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
       HttpRequest request,
       HttpResponse response,
       boolean includeBody,
+      boolean rawBody,
       int bufferSize) {
     if (bufferSize <= 0) {
       throw new IllegalArgumentException("Buffer size must be positive, but is " + bufferSize);
@@ -94,6 +112,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     this.request = request;
     this.response = response;
     this.includeBody = includeBody;
+    this.rawBody = rawBody;
     this.dataAvailableCallback = dataAvailableCallback;
     this.buffer = new byte[bufferSize];
   }
@@ -342,15 +361,18 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     if (data != null) {
       throw new IllegalStateException();
     }
-    if (close) {
-      int contentLength = writePosition;
-      response =
-          response.withHeaderOverrides(
-              HttpHeaders.of(HttpHeaderName.CONTENT_LENGTH, Integer.toString(contentLength)));
-    } else {
-      response =
-          response.withHeaderOverrides(HttpHeaders.of(HttpHeaderName.TRANSFER_ENCODING, "chunked"));
-      useChunking = true;
+    if (!rawBody) {
+      if (close) {
+        int contentLength = writePosition;
+        response =
+            response.withHeaderOverrides(
+                HttpHeaders.of(HttpHeaderName.CONTENT_LENGTH, Integer.toString(contentLength)));
+      } else {
+        response =
+            response.withHeaderOverrides(
+                HttpHeaders.of(HttpHeaderName.TRANSFER_ENCODING, "chunked"));
+        useChunking = true;
+      }
     }
     HttpHeaders headers = response.getHeaders();
     data =

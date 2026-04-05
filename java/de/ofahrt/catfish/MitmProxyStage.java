@@ -32,7 +32,7 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
- * Streaming MITM proxy stage. After the CONNECT+TLS setup in {@link MitmConnectStage}, this stage
+ * Streaming MITM proxy stage. After the CONNECT+TLS setup in {@link HttpServerStage}, this stage
  * takes over and drives a two-state NIO loop:
  *
  * <ul>
@@ -315,23 +315,33 @@ final class MitmProxyStage implements Stage {
       HttpResponse originResponse = respParser.getResponse();
       String responseCl = originResponse.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
       String responseTe = originResponse.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
+      boolean chunkedResponse = responseTe != null && "chunked".equalsIgnoreCase(responseTe);
 
-      // Build forwarded response: strip CL+TE (generator will add them), add Date+Connection.
-      HttpResponse forwardedResponse =
-          originResponse
-              .withoutHeader(HttpHeaderName.CONTENT_LENGTH)
-              .withoutHeader(HttpHeaderName.TRANSFER_ENCODING)
-              .withHeaderOverrides(
-                  HttpHeaders.of(
-                      HttpHeaderName.CONNECTION,
-                      keepAlive ? "keep-alive" : "close",
-                      HttpHeaderName.DATE,
-                      DateTimeFormatter.RFC_1123_DATE_TIME.format(
-                          ZonedDateTime.now(ZoneOffset.UTC))));
+      HttpHeaders dateAndConnection =
+          HttpHeaders.of(
+              HttpHeaderName.CONNECTION,
+              keepAlive ? "keep-alive" : "close",
+              HttpHeaderName.DATE,
+              DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now(ZoneOffset.UTC)));
 
-      HttpResponseGeneratorStreamed gen =
-          HttpResponseGeneratorStreamed.create(
-              parent::encourageWrites, headers, forwardedResponse, /* includeBody= */ true);
+      HttpResponseGeneratorStreamed gen;
+      if (chunkedResponse) {
+        // Pass raw chunked bytes through — keep original Transfer-Encoding header.
+        HttpResponse forwardedResponse = originResponse.withHeaderOverrides(dateAndConnection);
+        gen =
+            HttpResponseGeneratorStreamed.createRaw(
+                parent::encourageWrites, headers, forwardedResponse);
+      } else {
+        // Strip CL+TE; the generator will add its own framing.
+        HttpResponse forwardedResponse =
+            originResponse
+                .withoutHeader(HttpHeaderName.CONTENT_LENGTH)
+                .withoutHeader(HttpHeaderName.TRANSFER_ENCODING)
+                .withHeaderOverrides(dateAndConnection);
+        gen =
+            HttpResponseGeneratorStreamed.create(
+                parent::encourageWrites, headers, forwardedResponse, /* includeBody= */ true);
+      }
       parent.queue(
           () -> {
             responseGen = gen;
@@ -342,9 +352,21 @@ final class MitmProxyStage implements Stage {
 
       // Stream the response body. Each branch is responsible for handling leftover bytes
       // (bytes already read from origin beyond the blank line) before reading more from origin.
-      if (responseTe != null && "chunked".equalsIgnoreCase(responseTe)) {
-        // streamChunkedResponse handles leftover bytes internally via CombinedInputStream.
-        streamChunkedResponse(originIn, genOut, readBuf, leftoverStart, leftoverLen);
+      if (chunkedResponse) {
+        // Pass raw chunked bytes through; use scanner to find the end.
+        ChunkedBodyScanner responseScanner = new ChunkedBodyScanner();
+        if (leftoverLen > 0) {
+          responseScanner.advance(readBuf, leftoverStart, leftoverLen);
+          genOut.write(readBuf, leftoverStart, leftoverLen);
+        }
+        while (!responseScanner.isDone()) {
+          int n = originIn.read(readBuf, 0, readBuf.length);
+          if (n < 0) {
+            break;
+          }
+          responseScanner.advance(readBuf, 0, n);
+          genOut.write(readBuf, 0, n);
+        }
       } else if (responseCl != null) {
         long remaining;
         try {
@@ -433,115 +455,6 @@ final class MitmProxyStage implements Stage {
           responseGen = gen;
           parent.encourageWrites();
         });
-  }
-
-  // ---- Chunked response decoder (executor thread) ----
-
-  /**
-   * Decodes a chunked response from {@code in}, writing the decoded body bytes to {@code out}.
-   * {@code buf} is a scratch buffer. Leftover bytes already read ({@code readBuf[lo..lo+len)}) are
-   * processed first via a simple byte-at-a-time reader backed by the leftover array.
-   */
-  private static void streamChunkedResponse(
-      InputStream in, OutputStream out, byte[] buf, int leftoverOff, int leftoverLen)
-      throws IOException {
-    CombinedInputStream combined = new CombinedInputStream(buf, leftoverOff, leftoverLen, in);
-    while (true) {
-      // Read chunk-size line (hex digits, optional extension, terminated by CRLF).
-      long chunkSize = 0;
-      while (true) {
-        int c = combined.read();
-        if (c < 0) {
-          throw new IOException("EOF reading chunked response chunk size");
-        }
-        if (c == '\r') {
-          continue;
-        }
-        if (c == '\n') {
-          break;
-        }
-        if (c >= '0' && c <= '9') {
-          chunkSize = chunkSize * 16 + (c - '0');
-        } else if (c >= 'a' && c <= 'f') {
-          chunkSize = chunkSize * 16 + (c - 'a' + 10);
-        } else if (c >= 'A' && c <= 'F') {
-          chunkSize = chunkSize * 16 + (c - 'A' + 10);
-        }
-        // else: chunk extension, ignore
-      }
-      if (chunkSize == 0) {
-        // Consume trailers until empty line.
-        while (true) {
-          StringBuilder line = new StringBuilder();
-          while (true) {
-            int c = combined.read();
-            if (c < 0 || c == '\n') {
-              break;
-            }
-            if (c != '\r') {
-              line.append((char) c);
-            }
-          }
-          if (line.length() == 0) {
-            break; // empty line = end of trailers
-          }
-        }
-        break;
-      }
-      // Read chunk data.
-      long remaining = chunkSize;
-      while (remaining > 0) {
-        int n = combined.read(buf, 0, (int) Math.min(buf.length, remaining));
-        if (n < 0) {
-          throw new IOException("EOF reading chunked response data");
-        }
-        out.write(buf, 0, n);
-        remaining -= n;
-      }
-      // Consume CRLF after chunk data.
-      int cr = combined.read();
-      int lf = combined.read();
-      if (cr != '\r' || lf != '\n') {
-        throw new IOException("Expected CRLF after chunk data");
-      }
-    }
-  }
-
-  /**
-   * A simple InputStream that first drains a byte-array prefix then delegates to a real stream.
-   * Used to replay leftover bytes buffered during header parsing before reading from origin.
-   */
-  private static final class CombinedInputStream extends InputStream {
-    private final byte[] prefix;
-    private int prefixOff;
-    private final int prefixEnd;
-    private final InputStream delegate;
-
-    CombinedInputStream(byte[] prefix, int off, int len, InputStream delegate) {
-      this.prefix = prefix;
-      this.prefixOff = off;
-      this.prefixEnd = off + len;
-      this.delegate = delegate;
-    }
-
-    @Override
-    public int read() throws IOException {
-      if (prefixOff < prefixEnd) {
-        return prefix[prefixOff++] & 0xff;
-      }
-      return delegate.read();
-    }
-
-    @Override
-    public int read(byte[] b, int off, int len) throws IOException {
-      if (prefixOff < prefixEnd) {
-        int n = Math.min(len, prefixEnd - prefixOff);
-        System.arraycopy(prefix, prefixOff, b, off, n);
-        prefixOff += n;
-        return n;
-      }
-      return delegate.read(b, off, len);
-    }
   }
 
   // ---- Request header serialization ----

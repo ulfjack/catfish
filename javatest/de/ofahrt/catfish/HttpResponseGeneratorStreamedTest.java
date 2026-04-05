@@ -414,6 +414,75 @@ public class HttpResponseGeneratorStreamedTest {
     return out.toByteArray();
   }
 
+  // ---- Raw mode tests ----
+
+  @Test
+  public void raw_smallBody_noFramingAdded() throws Exception {
+    AtomicInteger called = new AtomicInteger();
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.createRaw(
+            called::incrementAndGet, null, StandardResponses.OK);
+    OutputStream out = gen.getOutputStream();
+    out.write(new byte[] {'x', 'y'});
+    out.close();
+    String response = new String(readUntilStop(gen), StandardCharsets.UTF_8);
+    // Raw mode: no Content-Length or Transfer-Encoding added.
+    assertEquals("HTTP/1.1 200 OK\r\n\r\nxy", response);
+  }
+
+  @Test
+  public void raw_flushedBody_noChunking() throws Exception {
+    AtomicInteger called = new AtomicInteger();
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.createRaw(
+            called::incrementAndGet, null, StandardResponses.OK);
+    OutputStream out = gen.getOutputStream();
+    out.write(new byte[] {'a', 'b'});
+    out.flush();
+    String partial = new String(readUntilPause(gen), StandardCharsets.UTF_8);
+    // Raw mode: no Transfer-Encoding header, no chunk framing.
+    assertEquals("HTTP/1.1 200 OK\r\n\r\nab", partial);
+    out.write(new byte[] {'c', 'd'});
+    out.close();
+    String rest = new String(readUntilStop(gen), StandardCharsets.UTF_8);
+    // No chunk size prefix, no trailing 0\r\n\r\n.
+    assertEquals("cd", rest);
+  }
+
+  @Test
+  public void raw_preservesExistingHeaders() throws Exception {
+    AtomicInteger called = new AtomicInteger();
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.createRaw(
+            called::incrementAndGet,
+            null,
+            StandardResponses.OK.withHeaderOverrides(
+                de.ofahrt.catfish.model.HttpHeaders.of(
+                    de.ofahrt.catfish.model.HttpHeaderName.TRANSFER_ENCODING, "chunked")));
+    OutputStream out = gen.getOutputStream();
+    // Write pre-chunked data.
+    out.write("2\r\nxy\r\n0\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+    out.close();
+    String response = new String(readUntilStop(gen), StandardCharsets.UTF_8);
+    assertTrue(response.contains("Transfer-Encoding: chunked"));
+    assertTrue(response.endsWith("2\r\nxy\r\n0\r\n\r\n"));
+    // Should not contain Content-Length (raw mode doesn't add it).
+    assertFalse(response.contains("Content-Length"));
+  }
+
+  @Test
+  public void raw_emptyBody() throws Exception {
+    AtomicInteger called = new AtomicInteger();
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.createRaw(
+            called::incrementAndGet, null, StandardResponses.OK);
+    gen.getOutputStream().close();
+    String response = new String(readUntilStop(gen), StandardCharsets.UTF_8);
+    assertEquals("HTTP/1.1 200 OK\r\n\r\n", response);
+  }
+
+  // ---- Error tests ----
+
   @Test(expected = IllegalArgumentException.class)
   public void nonPositiveBufferSize_throws() {
     HttpResponseGeneratorStreamed.create(() -> {}, null, StandardResponses.OK, true, 0);
