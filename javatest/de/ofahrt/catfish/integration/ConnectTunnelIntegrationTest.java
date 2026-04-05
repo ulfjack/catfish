@@ -102,6 +102,56 @@ public class ConnectTunnelIntegrationTest {
   }
 
   @Test
+  public void connectWithoutPort_returns400() throws Exception {
+    try (Socket socket = new Socket("localhost", PROXY_PORT)) {
+      OutputStream out = socket.getOutputStream();
+      InputStream in = socket.getInputStream();
+
+      String connectRequest = "CONNECT localhost HTTP/1.1\r\nHost: localhost\r\n\r\n";
+      out.write(connectRequest.getBytes(StandardCharsets.ISO_8859_1));
+      out.flush();
+
+      StringBuilder response = new StringBuilder();
+      byte[] buf = new byte[4096];
+      int n;
+      while ((n = in.read(buf)) != -1) {
+        response.append(new String(buf, 0, n, StandardCharsets.ISO_8859_1));
+        if (response.toString().contains("\r\n\r\n")) {
+          break;
+        }
+      }
+      assertTrue(
+          "Expected 400 response, got: " + response,
+          response.toString().startsWith("HTTP/1.1 400"));
+    }
+  }
+
+  @Test
+  public void connectWithNonNumericPort_returns400() throws Exception {
+    try (Socket socket = new Socket("localhost", PROXY_PORT)) {
+      OutputStream out = socket.getOutputStream();
+      InputStream in = socket.getInputStream();
+
+      String connectRequest = "CONNECT localhost:abc HTTP/1.1\r\nHost: localhost\r\n\r\n";
+      out.write(connectRequest.getBytes(StandardCharsets.ISO_8859_1));
+      out.flush();
+
+      StringBuilder response = new StringBuilder();
+      byte[] buf = new byte[4096];
+      int n;
+      while ((n = in.read(buf)) != -1) {
+        response.append(new String(buf, 0, n, StandardCharsets.ISO_8859_1));
+        if (response.toString().contains("\r\n\r\n")) {
+          break;
+        }
+      }
+      assertTrue(
+          "Expected 400 response, got: " + response,
+          response.toString().startsWith("HTTP/1.1 400"));
+    }
+  }
+
+  @Test
   public void connectTunnelDenied() throws Exception {
     // Use a dedicated server to avoid port conflicts with the @Before server.
     CatfishHttpServer deniedServer =

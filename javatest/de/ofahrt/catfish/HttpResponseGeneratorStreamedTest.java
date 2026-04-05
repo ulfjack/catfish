@@ -402,7 +402,8 @@ public class HttpResponseGeneratorStreamedTest {
       while (crlfPos < raw.length - 1 && !(raw[crlfPos] == '\r' && raw[crlfPos + 1] == '\n')) {
         crlfPos++;
       }
-      int chunkSize = Integer.parseInt(new String(raw, pos, crlfPos - pos, StandardCharsets.UTF_8), 16);
+      int chunkSize =
+          Integer.parseInt(new String(raw, pos, crlfPos - pos, StandardCharsets.UTF_8), 16);
       if (chunkSize == 0) {
         break;
       }

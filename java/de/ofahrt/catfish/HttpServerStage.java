@@ -41,48 +41,8 @@ final class HttpServerStage implements Stage {
   private static final boolean VERBOSE = false;
   private static final byte[] EMPTY_BODY = new byte[0];
   private static final String GZIP_ENCODING = "gzip";
-  private static final byte[] CONTINUE_RESPONSE_BYTES =
-      "HTTP/1.1 100 Continue\r\n\r\n".getBytes(StandardCharsets.UTF_8);
   private static final HttpHeaders OPTIONS_STAR_HEADERS =
       HttpHeaders.of(HttpHeaderName.ALLOW, "GET, HEAD, POST, PUT, DELETE, OPTIONS, TRACE");
-
-  /**
-   * A minimal response generator that writes a {@code 100 Continue} preliminary response. This
-   * generator does not represent a final response, so {@link #getRequest()} and {@link
-   * #getResponse()} both return null.
-   */
-  private static final class ContinueResponseGenerator extends HttpResponseGenerator {
-
-    private int offset = 0;
-
-    @Override
-    public HttpRequest getRequest() {
-      return null;
-    }
-
-    @Override
-    public HttpResponse getResponse() {
-      return null;
-    }
-
-    @Override
-    public ContinuationToken generate(ByteBuffer buffer) {
-      int bytesToCopy = Math.min(buffer.remaining(), CONTINUE_RESPONSE_BYTES.length - offset);
-      buffer.put(CONTINUE_RESPONSE_BYTES, offset, bytesToCopy);
-      offset += bytesToCopy;
-      return offset >= CONTINUE_RESPONSE_BYTES.length
-          ? ContinuationToken.STOP
-          : ContinuationToken.CONTINUE;
-    }
-
-    @Override
-    public void close() {}
-
-    @Override
-    public boolean keepAlive() {
-      return true;
-    }
-  }
 
   // Incoming data:
   // Socket -> SSL Stage -> HTTP Stage -> Request Queue
@@ -395,23 +355,7 @@ final class HttpServerStage implements Stage {
           responseGenerator = null;
           parser.resumeAfterContinue();
           parent.log("Sent 100 Continue, resuming body read");
-          ConnectionControl continueControl = read();
-          switch (continueControl) {
-            case CONTINUE:
-            case NEED_MORE_DATA:
-              parent.encourageReads();
-              break;
-            case PAUSE:
-              break;
-            case CLOSE_CONNECTION_AFTER_FLUSH:
-              throw new IllegalStateException();
-            case CLOSE_INPUT:
-              throw new IllegalStateException();
-            case CLOSE_OUTPUT_AFTER_FLUSH:
-            case CLOSE_CONNECTION_IMMEDIATELY:
-              return continueControl;
-          }
-          return ConnectionControl.PAUSE;
+          return readAndResume();
         }
         requestListener.notifySent(
             connection, responseGenerator.getRequest(), responseGenerator.getResponse());
@@ -419,30 +363,31 @@ final class HttpServerStage implements Stage {
         processing = false;
         parent.log("Completed. keepAlive=%s", Boolean.valueOf(keepAlive));
         if (keepAlive) {
-          // Process any data that is already buffered.
-          ConnectionControl next = read();
-          parent.log("control after read=%s", next);
-          switch (next) {
-            case CONTINUE:
-            case NEED_MORE_DATA:
-              parent.encourageReads();
-              break;
-            case PAUSE:
-              break;
-            case CLOSE_CONNECTION_AFTER_FLUSH:
-              throw new IllegalStateException();
-            case CLOSE_INPUT:
-              throw new IllegalStateException();
-            case CLOSE_OUTPUT_AFTER_FLUSH:
-            case CLOSE_CONNECTION_IMMEDIATELY:
-              return next;
-          }
-          return ConnectionControl.PAUSE;
+          return readAndResume();
         } else {
           return ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
         }
     }
     throw new IllegalStateException(token.toString());
+  }
+
+  private ConnectionControl readAndResume() {
+    ConnectionControl control = read();
+    switch (control) {
+      case CONTINUE:
+      case NEED_MORE_DATA:
+        parent.encourageReads();
+        break;
+      case PAUSE:
+        break;
+      case CLOSE_CONNECTION_AFTER_FLUSH:
+      case CLOSE_INPUT:
+        throw new IllegalStateException();
+      case CLOSE_OUTPUT_AFTER_FLUSH:
+      case CLOSE_CONNECTION_IMMEDIATELY:
+        return control;
+    }
+    return ConnectionControl.PAUSE;
   }
 
   @Override
