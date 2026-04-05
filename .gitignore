@@ -1,5 +1,7 @@
-.ijwb/
+.claude/
+.coverage/
 .idea/
+.ijwb/
 bazel-*
 catfish.iml
 out/
