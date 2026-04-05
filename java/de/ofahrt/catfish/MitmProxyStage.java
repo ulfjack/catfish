@@ -152,7 +152,21 @@ final class MitmProxyStage implements Stage {
 
     keepAlive = HttpConnectionHeader.mayKeepAlive(headers);
     state = State.STREAMING;
-    executor.execute(() -> executorTask(headers));
+    OriginForwarder forwarder =
+        new OriginForwarder(
+            parent,
+            originHost,
+            originPort,
+            originSocketFactory,
+            handler,
+            requestBodyPipe,
+            keepAlive,
+            (gen, ka) -> {
+              responseGen = gen;
+              keepAlive = ka;
+              parent.encourageWrites();
+            });
+    executor.execute(() -> forwarder.run(headers));
 
     if (bodyState == BodyState.NO_BODY) {
       requestBodyPipe.closeWrite();
@@ -243,241 +257,265 @@ final class MitmProxyStage implements Stage {
     }
   }
 
-  // ---- Executor task ----
+  /**
+   * Runs on the executor thread. Connects to the origin server, forwards the request (headers +
+   * body from the pipe), parses the origin response headers, and streams the response body back
+   * through an {@link HttpResponseGeneratorStreamed} that the NIO thread drains.
+   */
+  private static final class OriginForwarder {
+    private final Pipeline parent;
+    private final String originHost;
+    private final int originPort;
+    private final SSLSocketFactory originSocketFactory;
+    private final ConnectHandler handler;
+    private final PipeBuffer requestBodyPipe;
+    private final boolean keepAlive;
 
-  private void executorTask(HttpRequest headers) {
-    UUID requestId = UUID.randomUUID();
-    handler.onRequest(requestId, originHost, originPort, headers);
-    SSLSocket socket;
-    try {
-      socket = (SSLSocket) originSocketFactory.createSocket(originHost, originPort);
-      SSLParameters params = socket.getSSLParameters();
-      params.setServerNames(List.of(new SNIHostName(originHost)));
-      socket.setSSLParameters(params);
-      socket.startHandshake();
-    } catch (IOException e) {
-      // Drain the request body pipe so NIO isn't stuck.
-      drainAndClosePipe();
-      sendErrorResponse();
-      return;
+    /** Callback to install the response generator and keepAlive flag on the NIO thread. */
+    interface ResultCallback {
+      void accept(HttpResponseGeneratorStreamed gen, boolean keepAlive);
     }
 
-    try {
-      OutputStream originOut = socket.getOutputStream();
-      originOut.write(requestHeadersToBytes(headers));
-      originOut.flush();
+    private final ResultCallback resultCallback;
 
-      // Stream request body from pipe to origin.
-      byte[] buf = new byte[65536];
-      while (true) {
-        int n;
-        try {
-          n = requestBodyPipe.read(buf, 0, buf.length);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          throw new IOException("Interrupted while reading request body pipe");
-        }
-        if (n < 0) {
-          break;
-        }
-        originOut.write(buf, 0, n);
-        parent.queue(parent::encourageReads);
-      }
-      originOut.flush();
+    OriginForwarder(
+        Pipeline parent,
+        String originHost,
+        int originPort,
+        SSLSocketFactory originSocketFactory,
+        ConnectHandler handler,
+        PipeBuffer requestBodyPipe,
+        boolean keepAlive,
+        ResultCallback resultCallback) {
+      this.parent = parent;
+      this.originHost = originHost;
+      this.originPort = originPort;
+      this.originSocketFactory = originSocketFactory;
+      this.handler = handler;
+      this.requestBodyPipe = requestBodyPipe;
+      this.keepAlive = keepAlive;
+      this.resultCallback = resultCallback;
+    }
 
-      // Parse response headers (headers only; body is streamed separately).
-      InputStream originIn = socket.getInputStream();
-      IncrementalHttpResponseParser respParser = new IncrementalHttpResponseParser();
-      respParser.setNoBody(true);
-
-      byte[] readBuf = new byte[65536];
-      int bufStart = 0;
-      int bufEnd = 0;
-
-      while (!respParser.isDone()) {
-        if (bufEnd == readBuf.length) {
-          System.arraycopy(readBuf, bufStart, readBuf, 0, bufEnd - bufStart);
-          bufEnd -= bufStart;
-          bufStart = 0;
-        }
-        int n = originIn.read(readBuf, bufEnd, readBuf.length - bufEnd);
-        if (n < 0) {
-          throw new IOException("Origin closed connection during response headers");
-        }
-        bufEnd += n;
-        int consumed = respParser.parse(readBuf, bufStart, bufEnd - bufStart);
-        bufStart += consumed;
-      }
-      // readBuf[bufStart..bufEnd) are the first body bytes already read.
-      int leftoverStart = bufStart;
-      int leftoverLen = bufEnd - bufStart;
-
-      HttpResponse originResponse = respParser.getResponse();
-      String responseCl = originResponse.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
-      String responseTe = originResponse.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
-      boolean chunkedResponse = responseTe != null && "chunked".equalsIgnoreCase(responseTe);
-
-      HttpHeaders dateAndConnection =
-          HttpHeaders.of(
-              HttpHeaderName.CONNECTION,
-              keepAlive ? "keep-alive" : "close",
-              HttpHeaderName.DATE,
-              DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now(ZoneOffset.UTC)));
-
-      HttpResponseGeneratorStreamed gen;
-      if (chunkedResponse) {
-        // Pass raw chunked bytes through — keep original Transfer-Encoding header.
-        HttpResponse forwardedResponse = originResponse.withHeaderOverrides(dateAndConnection);
-        gen =
-            HttpResponseGeneratorStreamed.createRaw(
-                parent::encourageWrites, headers, forwardedResponse);
-      } else {
-        // Strip CL+TE; the generator will add its own framing.
-        HttpResponse forwardedResponse =
-            originResponse
-                .withoutHeader(HttpHeaderName.CONTENT_LENGTH)
-                .withoutHeader(HttpHeaderName.TRANSFER_ENCODING)
-                .withHeaderOverrides(dateAndConnection);
-        gen =
-            HttpResponseGeneratorStreamed.create(
-                parent::encourageWrites, headers, forwardedResponse, /* includeBody= */ true);
-      }
-      parent.queue(
-          () -> {
-            responseGen = gen;
-            parent.encourageWrites();
-          });
-
-      OutputStream genOut = gen.getOutputStream();
-
-      // Stream the response body. Each branch is responsible for handling leftover bytes
-      // (bytes already read from origin beyond the blank line) before reading more from origin.
-      if (chunkedResponse) {
-        // Pass raw chunked bytes through; use scanner to find the end.
-        ChunkedBodyScanner responseScanner = new ChunkedBodyScanner();
-        if (leftoverLen > 0) {
-          responseScanner.advance(readBuf, leftoverStart, leftoverLen);
-          genOut.write(readBuf, leftoverStart, leftoverLen);
-        }
-        while (!responseScanner.isDone()) {
-          int n = originIn.read(readBuf, 0, readBuf.length);
-          if (n < 0) {
-            break;
-          }
-          responseScanner.advance(readBuf, 0, n);
-          genOut.write(readBuf, 0, n);
-        }
-      } else if (responseCl != null) {
-        long remaining;
-        try {
-          remaining = Long.parseLong(responseCl);
-        } catch (NumberFormatException e) {
-          remaining = 0;
-        }
-        // Write leftover bytes first, then read the rest from origin.
-        if (leftoverLen > 0) {
-          genOut.write(readBuf, leftoverStart, leftoverLen);
-          remaining -= leftoverLen;
-        }
-        while (remaining > 0) {
-          int n = originIn.read(readBuf, 0, (int) Math.min(readBuf.length, remaining));
-          if (n < 0) {
-            break;
-          }
-          genOut.write(readBuf, 0, n);
-          remaining -= n;
-        }
-      } else {
-        // Read until origin closes. Write leftover bytes first.
-        if (leftoverLen > 0) {
-          genOut.write(readBuf, leftoverStart, leftoverLen);
-        }
-        int n;
-        while ((n = originIn.read(readBuf)) >= 0) {
-          genOut.write(readBuf, 0, n);
-        }
-      }
-
-      genOut.close();
-      socket.close();
-      handler.onResponse(requestId, originHost, originPort, headers, originResponse);
-
-    } catch (IOException e) {
+    void run(HttpRequest headers) {
+      UUID requestId = UUID.randomUUID();
+      handler.onRequest(requestId, originHost, originPort, headers);
+      SSLSocket socket;
       try {
-        socket.close();
-      } catch (IOException ignored) {
-      }
-      // If the generator is already set, close it so NIO gets STOP.
-      HttpResponseGeneratorStreamed gen = responseGen;
-      if (gen != null) {
-        gen.close();
-      } else {
+        socket = (SSLSocket) originSocketFactory.createSocket(originHost, originPort);
+        SSLParameters params = socket.getSSLParameters();
+        params.setServerNames(List.of(new SNIHostName(originHost)));
+        socket.setSSLParameters(params);
+        socket.startHandshake();
+      } catch (IOException e) {
         drainAndClosePipe();
         sendErrorResponse();
+        return;
       }
-    }
-  }
 
-  private void drainAndClosePipe() {
-    requestBodyPipe.closeWrite();
-    // Drain any remaining bytes so the pipe read() returns cleanly.
-    byte[] discard = new byte[65536];
-    try {
-      while (requestBodyPipe.read(discard, 0, discard.length) >= 0) {}
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    }
-  }
+      HttpResponseGeneratorStreamed gen = null;
+      try {
+        OutputStream originOut = socket.getOutputStream();
+        originOut.write(requestHeadersToBytes(headers));
+        originOut.flush();
 
-  private void sendErrorResponse() {
-    HttpResponse errResp =
-        new HttpResponse() {
-          @Override
-          public int getStatusCode() {
-            return 502;
+        // Stream request body from pipe to origin.
+        byte[] buf = new byte[65536];
+        while (true) {
+          int n;
+          try {
+            n = requestBodyPipe.read(buf, 0, buf.length);
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while reading request body pipe");
           }
-
-          @Override
-          public HttpHeaders getHeaders() {
-            return HttpHeaders.of(HttpHeaderName.CONNECTION, "close");
+          if (n < 0) {
+            break;
           }
-        };
-    HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(
-            parent::encourageWrites, null, errResp, /* includeBody= */ false);
-    try {
-      gen.getOutputStream().close();
-    } catch (IOException ignored) {
-    }
-    keepAlive = false;
-    parent.queue(
-        () -> {
-          responseGen = gen;
-          parent.encourageWrites();
-        });
-  }
-
-  // ---- Request header serialization ----
-
-  private static byte[] requestHeadersToBytes(HttpRequest request) throws IOException {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    try (OutputStreamWriter w = new OutputStreamWriter(baos, StandardCharsets.UTF_8)) {
-      w.append(request.getMethod())
-          .append(' ')
-          .append(request.getUri())
-          .append(' ')
-          .append(request.getVersion().toString())
-          .append("\r\n");
-      for (Map.Entry<String, String> e : request.getHeaders()) {
-        String name = e.getKey();
-        if ("Proxy-Connection".equalsIgnoreCase(name)) {
-          continue;
+          originOut.write(buf, 0, n);
+          parent.queue(parent::encourageReads);
         }
-        w.append(name).append(": ").append(e.getValue()).append("\r\n");
+        originOut.flush();
+
+        // Parse response headers (headers only; body is streamed separately).
+        InputStream originIn = socket.getInputStream();
+        IncrementalHttpResponseParser respParser = new IncrementalHttpResponseParser();
+        respParser.setNoBody(true);
+
+        byte[] readBuf = new byte[65536];
+        int bufStart = 0;
+        int bufEnd = 0;
+
+        while (!respParser.isDone()) {
+          if (bufEnd == readBuf.length) {
+            System.arraycopy(readBuf, bufStart, readBuf, 0, bufEnd - bufStart);
+            bufEnd -= bufStart;
+            bufStart = 0;
+          }
+          int n = originIn.read(readBuf, bufEnd, readBuf.length - bufEnd);
+          if (n < 0) {
+            throw new IOException("Origin closed connection during response headers");
+          }
+          bufEnd += n;
+          int consumed = respParser.parse(readBuf, bufStart, bufEnd - bufStart);
+          bufStart += consumed;
+        }
+        // readBuf[bufStart..bufEnd) are the first body bytes already read.
+        int leftoverStart = bufStart;
+        int leftoverLen = bufEnd - bufStart;
+
+        HttpResponse originResponse = respParser.getResponse();
+        String responseCl = originResponse.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
+        String responseTe = originResponse.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
+        boolean chunkedResponse = responseTe != null && "chunked".equalsIgnoreCase(responseTe);
+
+        HttpHeaders dateAndConnection =
+            HttpHeaders.of(
+                HttpHeaderName.CONNECTION,
+                keepAlive ? "keep-alive" : "close",
+                HttpHeaderName.DATE,
+                DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now(ZoneOffset.UTC)));
+
+        if (chunkedResponse) {
+          // Pass raw chunked bytes through — keep original Transfer-Encoding header.
+          HttpResponse forwardedResponse = originResponse.withHeaderOverrides(dateAndConnection);
+          gen =
+              HttpResponseGeneratorStreamed.createRaw(
+                  parent::encourageWrites, headers, forwardedResponse);
+        } else {
+          // Strip CL+TE; the generator will add its own framing.
+          HttpResponse forwardedResponse =
+              originResponse
+                  .withoutHeader(HttpHeaderName.CONTENT_LENGTH)
+                  .withoutHeader(HttpHeaderName.TRANSFER_ENCODING)
+                  .withHeaderOverrides(dateAndConnection);
+          gen =
+              HttpResponseGeneratorStreamed.create(
+                  parent::encourageWrites, headers, forwardedResponse, /* includeBody= */ true);
+        }
+        HttpResponseGeneratorStreamed genFinal = gen;
+        parent.queue(() -> resultCallback.accept(genFinal, keepAlive));
+
+        OutputStream genOut = gen.getOutputStream();
+
+        // Stream the response body. Each branch is responsible for handling leftover bytes
+        // (bytes already read from origin beyond the blank line) before reading more from origin.
+        if (chunkedResponse) {
+          // Pass raw chunked bytes through; use scanner to find the end.
+          ChunkedBodyScanner responseScanner = new ChunkedBodyScanner();
+          if (leftoverLen > 0) {
+            responseScanner.advance(readBuf, leftoverStart, leftoverLen);
+            genOut.write(readBuf, leftoverStart, leftoverLen);
+          }
+          while (!responseScanner.isDone()) {
+            int n = originIn.read(readBuf, 0, readBuf.length);
+            if (n < 0) {
+              break;
+            }
+            responseScanner.advance(readBuf, 0, n);
+            genOut.write(readBuf, 0, n);
+          }
+        } else if (responseCl != null) {
+          long remaining;
+          try {
+            remaining = Long.parseLong(responseCl);
+          } catch (NumberFormatException e) {
+            remaining = 0;
+          }
+          if (leftoverLen > 0) {
+            genOut.write(readBuf, leftoverStart, leftoverLen);
+            remaining -= leftoverLen;
+          }
+          while (remaining > 0) {
+            int n = originIn.read(readBuf, 0, (int) Math.min(readBuf.length, remaining));
+            if (n < 0) {
+              break;
+            }
+            genOut.write(readBuf, 0, n);
+            remaining -= n;
+          }
+        } else {
+          if (leftoverLen > 0) {
+            genOut.write(readBuf, leftoverStart, leftoverLen);
+          }
+          int n;
+          while ((n = originIn.read(readBuf)) >= 0) {
+            genOut.write(readBuf, 0, n);
+          }
+        }
+
+        genOut.close();
+        socket.close();
+        handler.onResponse(requestId, originHost, originPort, headers, originResponse);
+
+      } catch (IOException e) {
+        try {
+          socket.close();
+        } catch (IOException ignored) {
+        }
+        if (gen != null) {
+          // Generator was already handed to the NIO thread; close it so NIO gets STOP.
+          gen.close();
+        } else {
+          drainAndClosePipe();
+          sendErrorResponse();
+        }
       }
-      w.append("\r\n");
     }
-    return baos.toByteArray();
+
+    private void drainAndClosePipe() {
+      requestBodyPipe.closeWrite();
+      byte[] discard = new byte[65536];
+      try {
+        while (requestBodyPipe.read(discard, 0, discard.length) >= 0) {}
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }
+
+    private void sendErrorResponse() {
+      HttpResponse errResp =
+          new HttpResponse() {
+            @Override
+            public int getStatusCode() {
+              return 502;
+            }
+
+            @Override
+            public HttpHeaders getHeaders() {
+              return HttpHeaders.of(HttpHeaderName.CONNECTION, "close");
+            }
+          };
+      HttpResponseGeneratorStreamed gen =
+          HttpResponseGeneratorStreamed.create(
+              parent::encourageWrites, null, errResp, /* includeBody= */ false);
+      try {
+        gen.getOutputStream().close();
+      } catch (IOException ignored) {
+      }
+      parent.queue(() -> resultCallback.accept(gen, false));
+    }
+
+    private static byte[] requestHeadersToBytes(HttpRequest request) throws IOException {
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      try (OutputStreamWriter w = new OutputStreamWriter(baos, StandardCharsets.UTF_8)) {
+        w.append(request.getMethod())
+            .append(' ')
+            .append(request.getUri())
+            .append(' ')
+            .append(request.getVersion().toString())
+            .append("\r\n");
+        for (Map.Entry<String, String> e : request.getHeaders()) {
+          String name = e.getKey();
+          if ("Proxy-Connection".equalsIgnoreCase(name)) {
+            continue;
+          }
+          w.append(name).append(": ").append(e.getValue()).append("\r\n");
+        }
+        w.append("\r\n");
+      }
+      return baos.toByteArray();
+    }
   }
 
   // ---- Housekeeping ----
