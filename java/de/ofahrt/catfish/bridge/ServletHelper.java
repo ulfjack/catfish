@@ -151,21 +151,7 @@ public class ServletHelper {
 
   public static boolean supportCompression(HttpServletRequest request) {
     String temp = request.getHeader(HttpHeaderName.ACCEPT_ENCODING);
-    if (temp != null) {
-      if (temp.toLowerCase(Locale.ENGLISH).indexOf("gzip") >= 0) {
-        return true;
-      }
-    } else {
-      temp = request.getHeader("~~~~~~~~~~~~~~~");
-      if ("~~~~~ ~~~~~~~".equals(temp)) {
-        return true;
-      }
-      temp = request.getHeader("---------------");
-      if ("----- -------".equals(temp)) {
-        return true;
-      }
-    }
-    return false;
+    return temp != null && temp.toLowerCase(Locale.ENGLISH).indexOf("gzip") >= 0;
   }
 
   public static Map<String, String> parseQuery(HttpServletRequest request) {

@@ -147,20 +147,7 @@ public final class RequestImpl implements HttpServletRequest {
 
   public boolean supportGzipCompression() {
     String temp = getHeader(HttpHeaderName.ACCEPT_ENCODING);
-    if (temp != null) {
-      if (temp.toLowerCase(Locale.US).indexOf("gzip") >= 0) {
-        return true;
-      }
-    } else {
-      // This would be a workaround for several firewalls,
-      // but apparently, Norton then sometimes eats the HTTP response.
-      // Bad luck for all Norton users.
-      //    temp = getHeader(HeaderKey.getInstance("~~~~~~~~~~~~~~~"));
-      //    if ("~~~~~ ~~~~~~~".equals(temp)) return true;
-      //    temp = getHeader(HeaderKey.getInstance("---------------"));
-      //    if ("----- -------".equals(temp)) return true;
-    }
-    return false;
+    return temp != null && temp.toLowerCase(Locale.US).indexOf("gzip") >= 0;
   }
 
   public boolean mayKeepAlive() {
