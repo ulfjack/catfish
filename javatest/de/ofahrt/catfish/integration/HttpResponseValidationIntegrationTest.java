@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.integration;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpVirtualHost;
@@ -128,12 +129,41 @@ public class HttpResponseValidationIntegrationTest {
         (Connection conn, HttpRequest req, HttpResponseWriter writer) ->
             writer.commitBuffered(StandardResponses.OK);
 
+    // commitBuffered with 204 No Content and empty body — should succeed and strip CL/TE.
+    HttpHandler noContentHandler =
+        (Connection conn, HttpRequest req, HttpResponseWriter writer) ->
+            writer.commitBuffered(StandardResponses.NO_CONTENT);
+
+    // commitStreamed with 204 No Content — should throw, handler recovers with 500.
+    HttpHandler noContentStreamedHandler =
+        (Connection conn, HttpRequest req, HttpResponseWriter writer) -> {
+          try {
+            writer.commitStreamed(StandardResponses.NO_CONTENT);
+          } catch (IllegalArgumentException e) {
+            writer.commitBuffered(StandardResponses.INTERNAL_SERVER_ERROR);
+          }
+        };
+
+    // Double commit via commitBuffered — should throw on second call.
+    HttpHandler doubleCommitBufferedHandler =
+        (Connection conn, HttpRequest req, HttpResponseWriter writer) -> {
+          writer.commitBuffered(StandardResponses.OK);
+          try {
+            writer.commitBuffered(StandardResponses.OK);
+          } catch (IllegalStateException e) {
+            // Expected — first commit already sent the response.
+          }
+        };
+
     ServletHttpHandler handler =
         new ServletHttpHandler.Builder()
             .withSessionManager(new SessionManager())
             .exact("/bad-servlet", conflictingHeadersServlet)
             .exact("/bad-buffered", conflictingBufferedHandler)
             .exact("/bad-streamed", conflictingStreamedHandler)
+            .exact("/no-content", noContentHandler)
+            .exact("/no-content-streamed", noContentStreamedHandler)
+            .exact("/double-commit-buffered", doubleCommitBufferedHandler)
             .exact(
                 "/validating/bad-upgrade-required",
                 new ValidatingHttpHandler(upgradeRequiredWithoutUpgradeHandler))
@@ -181,6 +211,31 @@ public class HttpResponseValidationIntegrationTest {
   public void httpHandler_commitStreamedWithConflictingHeadersYields500() throws IOException {
     assertEquals(
         HttpStatusCode.INTERNAL_SERVER_ERROR.getStatusCode(), get("/bad-streamed").getStatusCode());
+  }
+
+  // ── No-body status code tests ────────────────────────────────────────────────
+
+  @Test
+  public void commitBuffered_noContentStatus_succeeds() throws IOException {
+    HttpResponse response = get("/no-content");
+    assertEquals(HttpStatusCode.NO_CONTENT.getStatusCode(), response.getStatusCode());
+    assertNull(response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
+    assertNull(response.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING));
+  }
+
+  @Test
+  public void commitStreamed_noContentStatus_yields500() throws IOException {
+    assertEquals(
+        HttpStatusCode.INTERNAL_SERVER_ERROR.getStatusCode(),
+        get("/no-content-streamed").getStatusCode());
+  }
+
+  // ── Double-commit tests ────────────────────────────────────────────────────
+
+  @Test
+  public void doubleCommitBuffered_firstResponseSucceeds() throws IOException {
+    HttpResponse response = get("/double-commit-buffered");
+    assertEquals(HttpStatusCode.OK.getStatusCode(), response.getStatusCode());
   }
 
   // ── ValidatingHttpHandler tests ──────────────────────────────────────────────
