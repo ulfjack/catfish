@@ -74,13 +74,20 @@ if [[ ! -f "$DAT" ]]; then
   echo "  bazelisk coverage //javatest/de/ofahrt/catfish:catfish"
   exit 1
 fi
+echo " Lines Branch   Func  File"
 awk '
-  /^SF:/          { file=substr($0,4); hits=0; total=0 }
-  /^DA:/          { total++; split($0,a,","); if (a[2]>0) hits++ }
+  /^SF:/   { file=substr($0,4); lh=0; lf=0; brf=0; brh=0; fnf=0; fnh=0 }
+  /^DA:/   { lf++; split($0,a,","); if (a[2]>0) lh++ }
+  /^BRF:/  { brf=substr($0,5) }
+  /^BRH:/  { brh=substr($0,5) }
+  /^FNF:/  { fnf=substr($0,5) }
+  /^FNH:/  { fnh=substr($0,5) }
   /^end_of_record/ {
-    if (total>0 && file ~ /de.ofahrt.catfish/) {
+    if (lf>0 && file ~ /de.ofahrt.catfish/) {
       sub(/.*\\/java\\/de\\/ofahrt\\/catfish\\//, "", file)
-      printf "%5.1f%%  %s\\n", hits*100/total, file
+      bp = brf>0 ? brh*100/brf : 100
+      fp = fnf>0 ? fnh*100/fnf : 100
+      printf "%5.1f%% %5.1f%%  %5.1f%%  %s\\n", lh*100/lf, bp, fp, file
     }
   }
 ' "$DAT" | sort -n
