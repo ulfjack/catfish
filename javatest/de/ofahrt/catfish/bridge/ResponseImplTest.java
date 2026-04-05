@@ -239,6 +239,21 @@ public class ResponseImplTest {
     make(new CapturingWriter()).setStatus(200, "OK");
   }
 
+  @Test(expected = UnsupportedOperationException.class)
+  public void addHeader_throws() {
+    make(new CapturingWriter()).addHeader("X-Foo", "bar");
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void addIntHeader_throws() {
+    make(new CapturingWriter()).addIntHeader("X-Foo", 1);
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void addDateHeader_throws() {
+    make(new CapturingWriter()).addDateHeader("X-Foo", 0);
+  }
+
   @Test
   public void setDateHeader() throws IOException {
     CapturingWriter w = new CapturingWriter();
