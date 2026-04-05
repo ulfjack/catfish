@@ -249,8 +249,7 @@ public class BasicIntegrationTest {
   public void connectOnPlainHttpServer_returns405() throws Exception {
     HttpResponse response =
         localServer.send("CONNECT localhost:9999 HTTP/1.1\nHost: localhost\n\n");
-    assertEquals(
-        HttpStatusCode.METHOD_NOT_ALLOWED.getStatusCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.METHOD_NOT_ALLOWED.getStatusCode(), response.getStatusCode());
   }
 
   // Conformance test #27: unknown HTTP method must return 501 Not Implemented (RFC 7231 §4.1).

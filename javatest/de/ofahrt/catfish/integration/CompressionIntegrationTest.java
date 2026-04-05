@@ -44,8 +44,7 @@ public class CompressionIntegrationTest {
       (Connection conn, HttpRequest req, HttpResponseWriter writer) -> {
         if ("/streamed".equals(req.getUri())) {
           OutputStream out =
-              writer.commitStreamed(
-                  StandardResponses.OK.withHeaderOverrides(TEXT_PLAIN));
+              writer.commitStreamed(StandardResponses.OK.withHeaderOverrides(TEXT_PLAIN));
           out.write(LARGE_BODY_BYTES);
           out.close();
         } else {
@@ -71,8 +70,7 @@ public class CompressionIntegrationTest {
               }
             });
     server.addHttpHost(
-        HOST,
-        new HttpVirtualHost(HANDLER).compressionPolicy(CompressionPolicy.COMPRESS));
+        HOST, new HttpVirtualHost(HANDLER).compressionPolicy(CompressionPolicy.COMPRESS));
     server.listenHttpLocal(HTTP_PORT);
   }
 

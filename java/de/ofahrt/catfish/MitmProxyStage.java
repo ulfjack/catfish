@@ -61,18 +61,6 @@ final class MitmProxyStage implements Stage {
     CHUNKED,
   }
 
-  private enum ChunkedScanState {
-    SIZE,
-    SIZE_CR,
-    DATA,
-    DATA_CR,
-    DATA_LF,
-    TRAILER,
-    TRAILER_CR,
-    TRAILER_LINE,
-    TRAILER_LINE_CR,
-  }
-
   private final Pipeline parent;
   private final ByteBuffer decryptedIn;
   private final ByteBuffer decryptedOut;
@@ -88,11 +76,7 @@ final class MitmProxyStage implements Stage {
 
   private BodyState bodyState;
   private long bodyBytesRemaining;
-  // Chunked scanner state
-  private ChunkedScanState chunkedScanState;
-  private long currentChunkSize;
-  private long chunkDataLeft;
-  private boolean chunkedDone;
+  private final ChunkedBodyScanner chunkedScanner = new ChunkedBodyScanner();
 
   private final PipeBuffer requestBodyPipe = new PipeBuffer();
 
@@ -154,7 +138,7 @@ final class MitmProxyStage implements Stage {
     String te = headers.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
     if (te != null && "chunked".equalsIgnoreCase(te)) {
       bodyState = BodyState.CHUNKED;
-      initChunkedScanner();
+      chunkedScanner.reset();
     } else if (cl != null && !"0".equals(cl)) {
       bodyState = BodyState.CONTENT_LENGTH;
       try {
@@ -202,15 +186,15 @@ final class MitmProxyStage implements Stage {
       return written == toConsume ? ConnectionControl.CONTINUE : ConnectionControl.PAUSE;
     } else {
       // CHUNKED: scan to find body end; limit writes to that boundary.
-      int endIdx = findChunkedBodyEnd(arr, pos, rem);
+      int endIdx = chunkedScanner.findEnd(arr, pos, rem);
       int toConsume = endIdx >= 0 ? endIdx : rem;
       if (toConsume == 0) {
         return ConnectionControl.PAUSE;
       }
       int written = requestBodyPipe.tryWrite(arr, pos, toConsume);
-      advanceChunkedScanner(arr, pos, written);
+      chunkedScanner.advance(arr, pos, written);
       decryptedIn.position(pos + written);
-      if (endIdx >= 0 && written == endIdx && chunkedDone) {
+      if (endIdx >= 0 && written == endIdx && chunkedScanner.isDone()) {
         requestBodyPipe.closeWrite();
         return ConnectionControl.PAUSE;
       }
@@ -583,124 +567,6 @@ final class MitmProxyStage implements Stage {
     return baos.toByteArray();
   }
 
-  // ---- Chunked request body scanner (NIO thread) ----
-
-  private void initChunkedScanner() {
-    chunkedScanState = ChunkedScanState.SIZE;
-    currentChunkSize = 0;
-    chunkDataLeft = 0;
-    chunkedDone = false;
-  }
-
-  /**
-   * Dry-run scan: saves scanner state, scans {@code len} bytes to find the end of the chunked body,
-   * restores state, and returns the end position (exclusive) or -1 if not found.
-   */
-  private int findChunkedBodyEnd(byte[] arr, int off, int len) {
-    ChunkedScanState savedScanState = chunkedScanState;
-    long savedChunkSize = currentChunkSize;
-    long savedChunkDataLeft = chunkDataLeft;
-    boolean savedChunkedDone = chunkedDone;
-
-    int result = advanceChunkedScanner(arr, off, len);
-    boolean foundEnd = chunkedDone; // capture before restoring state
-
-    chunkedScanState = savedScanState;
-    currentChunkSize = savedChunkSize;
-    chunkDataLeft = savedChunkDataLeft;
-    chunkedDone = savedChunkedDone;
-
-    return foundEnd ? result : -1;
-  }
-
-  /**
-   * Advances the chunked body scanner through {@code len} bytes. If the terminal {@code 0\r\n\r\n}
-   * is found, sets {@code chunkedDone=true} and returns the end position (number of bytes
-   * consumed). Otherwise returns {@code len}.
-   */
-  private int advanceChunkedScanner(byte[] arr, int off, int len) {
-    for (int i = 0; i < len; i++) {
-      char c = (char) (arr[off + i] & 0xff);
-      switch (chunkedScanState) {
-        case SIZE:
-          if (c == '\r') {
-            chunkedScanState = ChunkedScanState.SIZE_CR;
-          } else if (c >= '0' && c <= '9') {
-            currentChunkSize = currentChunkSize * 16 + (c - '0');
-          } else if (c >= 'a' && c <= 'f') {
-            currentChunkSize = currentChunkSize * 16 + (c - 'a' + 10);
-          } else if (c >= 'A' && c <= 'F') {
-            currentChunkSize = currentChunkSize * 16 + (c - 'A' + 10);
-          }
-          // else: chunk extension, ignore
-          break;
-        case SIZE_CR:
-          if (c == '\n') {
-            if (currentChunkSize == 0) {
-              chunkedScanState = ChunkedScanState.TRAILER;
-            } else {
-              chunkDataLeft = currentChunkSize;
-              currentChunkSize = 0;
-              chunkedScanState = ChunkedScanState.DATA;
-            }
-          }
-          break;
-        case DATA:
-          {
-            // Bulk-skip data bytes.
-            long bulk = Math.min(chunkDataLeft, len - i);
-            i += (int) bulk - 1; // loop will increment by 1
-            chunkDataLeft -= bulk;
-            if (chunkDataLeft == 0) {
-              chunkedScanState = ChunkedScanState.DATA_CR;
-            }
-          }
-          break;
-        case DATA_CR:
-          if (c == '\r') {
-            chunkedScanState = ChunkedScanState.DATA_LF;
-          }
-          break;
-        case DATA_LF:
-          if (c == '\n') {
-            currentChunkSize = 0;
-            chunkedScanState = ChunkedScanState.SIZE;
-          }
-          break;
-        case TRAILER:
-          // At start of a new trailer line.
-          if (c == '\r') {
-            chunkedScanState = ChunkedScanState.TRAILER_CR;
-          } else if (c != '\n') {
-            chunkedScanState = ChunkedScanState.TRAILER_LINE;
-          }
-          break;
-        case TRAILER_CR:
-          if (c == '\n') {
-            // Empty line: end of trailers.
-            chunkedDone = true;
-            return i + 1;
-          } else {
-            chunkedScanState = ChunkedScanState.TRAILER_LINE;
-          }
-          break;
-        case TRAILER_LINE:
-          if (c == '\r') {
-            chunkedScanState = ChunkedScanState.TRAILER_LINE_CR;
-          }
-          break;
-        case TRAILER_LINE_CR:
-          if (c == '\n') {
-            chunkedScanState = ChunkedScanState.TRAILER; // start of next trailer line
-          } else {
-            chunkedScanState = ChunkedScanState.TRAILER_LINE;
-          }
-          break;
-      }
-    }
-    return len;
-  }
-
   // ---- Housekeeping ----
 
   private void resetForNextRequest() {
@@ -711,7 +577,7 @@ final class MitmProxyStage implements Stage {
     responseGen = null;
     bodyState = null;
     bodyBytesRemaining = 0;
-    chunkedDone = false;
+    chunkedScanner.reset();
     keepAlive = false;
   }
 }
