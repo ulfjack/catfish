@@ -12,7 +12,9 @@ import de.ofahrt.catfish.CollectionsUtils;
 import de.ofahrt.catfish.HashConflictGenerator;
 import de.ofahrt.catfish.InputStreams;
 import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.network.Connection;
@@ -22,6 +24,7 @@ import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import javax.servlet.http.HttpSession;
 import org.junit.Test;
 
 /** Tests for {@link RequestImpl}. */
@@ -427,6 +430,191 @@ public class RequestImplTest {
     RequestImpl req = requestForHeader("Date", "Sun, 06 Nov 1994 08:49:37 GMT");
     long millis = req.getDateHeader("Date");
     assertTrue(millis > 0);
+  }
+
+  @Test
+  public void getDateHeader_returnsNegativeOneForBadDate() throws Exception {
+    assertEquals(-1, requestForHeader("Date", "not-a-date").getDateHeader("Date"));
+  }
+
+  @Test
+  public void supportGzipCompression_trueWhenPresent() throws Exception {
+    assertTrue(
+        requestForHeader(HttpHeaderName.ACCEPT_ENCODING, "gzip, deflate")
+            .supportGzipCompression());
+  }
+
+  @Test
+  public void supportGzipCompression_falseWhenAbsent() throws Exception {
+    assertFalse(empty().supportGzipCompression());
+  }
+
+  @Test
+  public void supportGzipCompression_falseForDeflateOnly() throws Exception {
+    assertFalse(
+        requestForHeader(HttpHeaderName.ACCEPT_ENCODING, "deflate").supportGzipCompression());
+  }
+
+  @Test
+  public void getScheme_http() throws Exception {
+    assertEquals("http", empty().getScheme());
+  }
+
+  @Test
+  public void getScheme_https() throws Exception {
+    RequestImpl req =
+        new RequestImpl(
+            new SimpleHttpRequest.Builder().setUri("*").build(),
+            new Connection(null, null, true),
+            null,
+            null);
+    assertEquals("https", req.getScheme());
+  }
+
+  @Test
+  public void getServerName_fromHostHeader() throws Exception {
+    assertEquals("example.com", requestForHeader("Host", "example.com:8080").getServerName());
+  }
+
+  @Test
+  public void getServerName_fromHostHeaderWithoutPort() throws Exception {
+    assertEquals("example.com", requestForHeader("Host", "example.com").getServerName());
+  }
+
+  @Test
+  public void getServerName_fallsBackToLocalAddress() throws Exception {
+    InetAddress addr = InetAddress.getByAddress("local", new byte[] {127, 0, 0, 1});
+    RequestImpl req =
+        new RequestImpl(
+            new SimpleHttpRequest.Builder().setUri("*").build(),
+            new Connection(new InetSocketAddress(addr, 80), null, false),
+            null,
+            null);
+    assertEquals("127.0.0.1", req.getServerName());
+  }
+
+  @Test
+  public void getServerPort_fromHostHeader() throws Exception {
+    assertEquals(8080, requestForHeader("Host", "example.com:8080").getServerPort());
+  }
+
+  @Test
+  public void getServerPort_defaultsTo80ForHttp() throws Exception {
+    assertEquals(80, requestForHeader("Host", "example.com").getServerPort());
+  }
+
+  @Test
+  public void getServerPort_defaultsTo443ForHttps() throws Exception {
+    RequestImpl req =
+        new RequestImpl(
+            new SimpleHttpRequest.Builder().setUri("*").addHeader("Host", "example.com").build(),
+            new Connection(null, null, true),
+            null,
+            null);
+    assertEquals(443, req.getServerPort());
+  }
+
+  @Test
+  public void getServerPort_fallsBackToLocalPort() throws Exception {
+    InetAddress addr = InetAddress.getByAddress("local", new byte[] {127, 0, 0, 1});
+    RequestImpl req =
+        new RequestImpl(
+            new SimpleHttpRequest.Builder().setUri("*").build(),
+            new Connection(new InetSocketAddress(addr, 9090), null, false),
+            null,
+            null);
+    assertEquals(9090, req.getServerPort());
+  }
+
+  @Test
+  public void getRequestURI() throws Exception {
+    RequestImpl req = toRequestImpl(new SimpleHttpRequest.Builder().setUri("/foo/bar?q=1"));
+    assertEquals("/foo/bar", req.getRequestURI());
+  }
+
+  @Test
+  public void getMethod_returnsGetForHead() throws Exception {
+    RequestImpl req =
+        toRequestImpl(
+            new SimpleHttpRequest.Builder()
+                .setMethod(HttpMethodName.HEAD)
+                .setUri("*"));
+    assertEquals("GET", req.getMethod());
+  }
+
+  @Test
+  public void getMethod_returnsActualMethod() throws Exception {
+    RequestImpl req =
+        toRequestImpl(
+            new SimpleHttpRequest.Builder()
+                .setMethod(HttpMethodName.POST)
+                .setUri("*"));
+    assertEquals("POST", req.getMethod());
+  }
+
+  @Test
+  public void isRequestedSessionIdFromCookie_returnsTrue() throws Exception {
+    assertTrue(empty().isRequestedSessionIdFromCookie());
+  }
+
+  @Test
+  public void isRequestedSessionIdFromURL_returnsFalse() throws Exception {
+    assertFalse(empty().isRequestedSessionIdFromURL());
+  }
+
+  @Test
+  public void getSession_withSessionManager() throws Exception {
+    SessionManager sm = new SessionManager();
+    RequestImpl req =
+        new RequestImpl(
+            new SimpleHttpRequest.Builder().setUri("*").build(),
+            new Connection(null, null, false),
+            sm,
+            null);
+    HttpSession session = req.getSession(true);
+    assertNotNull(session);
+    // Same session on second call.
+    assertEquals(session, req.getSession(true));
+  }
+
+  @Test
+  public void getSession_falseReturnsNull() throws Exception {
+    assertNull(empty().getSession(false));
+  }
+
+  @Test
+  public void isRequestedSessionIdValid_falseWithNoSession() throws Exception {
+    assertFalse(empty().isRequestedSessionIdValid());
+  }
+
+  @Test
+  public void setCharacterEncoding() throws Exception {
+    RequestImpl req = empty();
+    req.setCharacterEncoding("ISO-8859-1");
+    assertEquals("ISO-8859-1", req.getCharacterEncoding());
+  }
+
+  @Test
+  public void getVersion() throws Exception {
+    assertEquals(HttpVersion.HTTP_0_9, empty().getVersion());
+  }
+
+  @Test
+  public void getPath() throws Exception {
+    RequestImpl req = toRequestImpl(new SimpleHttpRequest.Builder().setUri("/foo/bar"));
+    assertEquals("/foo/bar", req.getPath());
+  }
+
+  @Test
+  public void mayKeepAlive() throws Exception {
+    RequestImpl req =
+        toRequestImpl(
+            new SimpleHttpRequest.Builder()
+                .setVersion(HttpVersion.HTTP_1_1)
+                .setUri("*")
+                .addHeader("Host", "localhost")
+                .addHeader("Connection", "keep-alive"));
+    assertTrue(req.mayKeepAlive());
   }
 
   // Only use lower-case letters to circumvent the canonicalizer.

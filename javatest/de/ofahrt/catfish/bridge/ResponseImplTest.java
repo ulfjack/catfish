@@ -208,4 +208,76 @@ public class ResponseImplTest {
     out.close();
     assertNotNull(w.committed);
   }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void addCookie_throws() {
+    make(new CapturingWriter()).addCookie(null);
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void encodeRedirectUrl_throws() {
+    make(new CapturingWriter()).encodeRedirectUrl("/");
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void encodeRedirectURL_throws() {
+    make(new CapturingWriter()).encodeRedirectURL("/");
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void encodeUrl_throws() {
+    make(new CapturingWriter()).encodeUrl("/");
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void encodeURL_throws() {
+    make(new CapturingWriter()).encodeURL("/");
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void setStatus_deprecated_throws() {
+    make(new CapturingWriter()).setStatus(200, "OK");
+  }
+
+  @Test
+  public void setDateHeader() throws IOException {
+    CapturingWriter w = new CapturingWriter();
+    ResponseImpl r = make(w);
+    r.setDateHeader("Date", 0);
+    r.close();
+    assertNotNull(w.committed.getHeaders().get("Date"));
+  }
+
+  @Test
+  public void setContentLength_isIgnored() throws IOException {
+    CapturingWriter w = new CapturingWriter();
+    ResponseImpl r = make(w);
+    r.setContentLength(999);
+    r.close();
+    // Content-Length is set by the framework, not the servlet.
+    assertNotNull(w.committed);
+  }
+
+  @Test
+  public void getContentType_returnsNullBeforeSet() {
+    assertNull(make(new CapturingWriter()).getContentType());
+  }
+
+  @Test
+  public void close_withNoOutputStream_stillCommits() throws IOException {
+    CapturingWriter w = new CapturingWriter();
+    ResponseImpl r = make(w);
+    r.setStatus(200);
+    r.close();
+    assertNotNull(w.committed);
+    assertEquals(200, w.committed.getStatusCode());
+  }
+
+  @Test
+  public void sendError_oneArg_setsBody() throws IOException {
+    CapturingWriter w = new CapturingWriter();
+    make(w).sendError(500);
+    assertNotNull(w.committed.getBody());
+    assertTrue(w.committed.getBody().length > 0);
+  }
 }
