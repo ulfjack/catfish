@@ -12,7 +12,6 @@ import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.Collections;
 import javax.servlet.Servlet;
 
@@ -41,11 +40,7 @@ public final class ServletHttpHandler implements HttpHandler {
   }
 
   private static String getPath(HttpRequest request) {
-    try {
-      return new URI(request.getUri()).getPath();
-    } catch (URISyntaxException e) {
-      throw new RuntimeException(e);
-    }
+    return URI.create(request.getUri()).getPath();
   }
 
   private static final class ServletAsHttpHandler implements HttpHandler {

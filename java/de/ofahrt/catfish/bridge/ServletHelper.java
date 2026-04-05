@@ -14,7 +14,6 @@ import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.util.Enumeration;
 import java.util.Locale;
@@ -134,19 +133,15 @@ public class ServletHelper {
   }
 
   public static String getFilename(HttpServletRequest request) {
-    try {
-      String filename = new URI(request.getRequestURI()).getPath();
-      int j = filename.lastIndexOf('/');
-      if (j != -1) {
-        filename = filename.substring(j + 1);
-      }
-      if ("".equals(filename)) {
-        filename = "index";
-      }
-      return filename;
-    } catch (URISyntaxException e) {
-      throw new RuntimeException(e);
+    String filename = URI.create(request.getRequestURI()).getPath();
+    int j = filename.lastIndexOf('/');
+    if (j != -1) {
+      filename = filename.substring(j + 1);
     }
+    if ("".equals(filename)) {
+      filename = "index";
+    }
+    return filename;
   }
 
   public static boolean supportCompression(HttpServletRequest request) {
