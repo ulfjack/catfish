@@ -147,7 +147,7 @@ final class HttpServerStage implements Stage {
       // We want to create the ResponseGenerator on the current thread.
       HttpResponseGeneratorBuffered gen =
           HttpResponseGeneratorBuffered.create(request, actualResponse, !headRequest);
-      parent.queue(() -> startBuffered(gen));
+      parent.queue(() -> startResponse(gen));
     }
 
     @Override
@@ -182,7 +182,7 @@ final class HttpServerStage implements Stage {
       HttpResponseGeneratorStreamed gen =
           HttpResponseGeneratorStreamed.create(
               parent::encourageWrites, request, responseToWrite, !headRequest);
-      parent.queue(() -> startStreamed(gen));
+      parent.queue(() -> startResponse(gen));
       return compress ? new GZIPOutputStream(gen.getOutputStream()) : gen.getOutputStream();
     }
 
@@ -511,21 +511,6 @@ final class HttpServerStage implements Stage {
         .withBody(baos.toByteArray());
   }
 
-  private void startStreamed(HttpResponseGeneratorStreamed gen) {
-    this.responseGenerator = gen;
-    this.keepAlive = responseGenerator.keepAlive();
-    HttpResponse response = responseGenerator.getResponse();
-    parent.log(
-        "%s %d %s",
-        response.getProtocolVersion(),
-        Integer.valueOf(response.getStatusCode()),
-        response.getStatusMessage());
-    if (HttpServerStage.VERBOSE) {
-      System.out.println(CoreHelper.responseToString(response));
-    }
-    parent.encourageWrites();
-  }
-
   private void startBuffered(HttpRequest request, HttpResponse responseToWrite) {
     byte[] body = responseToWrite.getBody();
     if (body == null) {
@@ -540,10 +525,10 @@ final class HttpServerStage implements Stage {
                 Integer.toString(body.length),
                 HttpHeaderName.DATE,
                 HttpDate.formatDate(Instant.now())));
-    startBuffered(HttpResponseGeneratorBuffered.createWithBody(request, response));
+    startResponse(HttpResponseGeneratorBuffered.createWithBody(request, response));
   }
 
-  private void startBuffered(HttpResponseGeneratorBuffered gen) {
+  private void startResponse(HttpResponseGenerator gen) {
     this.responseGenerator = gen;
     this.keepAlive = responseGenerator.keepAlive();
     HttpResponse response = responseGenerator.getResponse();
