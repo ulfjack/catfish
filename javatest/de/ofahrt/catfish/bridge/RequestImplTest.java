@@ -1,9 +1,11 @@
 package de.ofahrt.catfish.bridge;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import de.ofahrt.catfish.CollectionsUtils;
@@ -274,6 +276,157 @@ public class RequestImplTest {
             null,
             null);
     assertEquals(-1, req.getContentLength());
+  }
+
+  @Test
+  public void getAttribute_returnsNullWhenAbsent() throws Exception {
+    assertNull(empty().getAttribute("missing"));
+  }
+
+  @Test
+  public void setAttribute_getAttribute_roundTrip() throws Exception {
+    RequestImpl req = empty();
+    req.setAttribute("key", "value");
+    assertEquals("value", req.getAttribute("key"));
+  }
+
+  @Test
+  public void removeAttribute() throws Exception {
+    RequestImpl req = empty();
+    req.setAttribute("key", "value");
+    req.removeAttribute("key");
+    assertNull(req.getAttribute("key"));
+  }
+
+  @Test
+  public void getAttributeNames_empty() throws Exception {
+    assertFalse(empty().getAttributeNames().hasMoreElements());
+  }
+
+  @Test
+  public void getAttributeNames_afterSet() throws Exception {
+    RequestImpl req = empty();
+    req.setAttribute("a", 1);
+    assertEquals(Arrays.asList("a"), CollectionsUtils.toList(req.getAttributeNames()));
+  }
+
+  @Test
+  public void getLocalName() throws Exception {
+    InetAddress addr = InetAddress.getByAddress("local-host", new byte[] {127, 0, 0, 1});
+    RequestImpl req =
+        new RequestImpl(
+            new SimpleHttpRequest.Builder().setUri("*").build(),
+            new Connection(new InetSocketAddress(addr, 8080), null, false),
+            null,
+            null);
+    assertEquals("local-host", req.getLocalName());
+  }
+
+  @Test
+  public void getLocalPort() throws Exception {
+    InetAddress addr = InetAddress.getByAddress("local-host", new byte[] {127, 0, 0, 1});
+    RequestImpl req =
+        new RequestImpl(
+            new SimpleHttpRequest.Builder().setUri("*").build(),
+            new Connection(new InetSocketAddress(addr, 8080), null, false),
+            null,
+            null);
+    assertEquals(8080, req.getLocalPort());
+  }
+
+  @Test
+  public void getRemotePort() throws Exception {
+    InetAddress addr = InetAddress.getByAddress("client", new byte[] {10, 0, 0, 1});
+    RequestImpl req =
+        new RequestImpl(
+            new SimpleHttpRequest.Builder().setUri("*").build(),
+            new Connection(null, new InetSocketAddress(addr, 12345), false),
+            null,
+            null);
+    assertEquals(12345, req.getRemotePort());
+  }
+
+  @Test
+  public void getContentType_returnsNullWhenAbsent() throws Exception {
+    assertNull(empty().getContentType());
+  }
+
+  @Test
+  public void getContentType_returnsValue() throws Exception {
+    assertEquals(
+        "text/plain",
+        requestForHeader(HttpHeaderName.CONTENT_TYPE, "text/plain").getContentType());
+  }
+
+  @Test
+  public void getQueryString_returnsNullForNoQuery() throws Exception {
+    RequestImpl req = toRequestImpl(new SimpleHttpRequest.Builder().setUri("/path"));
+    assertNull(req.getQueryString());
+  }
+
+  @Test
+  public void getQueryString_returnsQuery() throws Exception {
+    RequestImpl req = toRequestImpl(new SimpleHttpRequest.Builder().setUri("/path?a=1&b=2"));
+    assertEquals("a=1&b=2", req.getQueryString());
+  }
+
+  @Test
+  public void getParameterMap() throws Exception {
+    RequestImpl req = toRequestImpl(new SimpleHttpRequest.Builder().setUri("/path?x=1&y=2"));
+    assertEquals("1", req.getParameterMap().get("x"));
+    assertEquals("2", req.getParameterMap().get("y"));
+  }
+
+  @Test
+  public void getParameterValues_returnsNullWhenAbsent() throws Exception {
+    assertNull(empty().getParameterValues("missing"));
+  }
+
+  @Test
+  public void getParameterValues_returnsSingletonArray() throws Exception {
+    RequestImpl req = toRequestImpl(new SimpleHttpRequest.Builder().setUri("/path?k=v"));
+    String[] vals = req.getParameterValues("k");
+    assertNotNull(vals);
+    assertEquals(1, vals.length);
+    assertEquals("v", vals[0]);
+  }
+
+  @Test
+  public void getPathTranslated_returnsNull() throws Exception {
+    assertNull(empty().getPathTranslated());
+  }
+
+  @Test
+  public void getAuthType_returnsNull() throws Exception {
+    assertNull(empty().getAuthType());
+  }
+
+  @Test
+  public void isSecure_falseForHttp() throws Exception {
+    assertFalse(empty().isSecure());
+  }
+
+  @Test
+  public void isSecure_trueForHttps() throws Exception {
+    RequestImpl req =
+        new RequestImpl(
+            new SimpleHttpRequest.Builder().setUri("*").build(),
+            new Connection(null, null, true),
+            null,
+            null);
+    assertTrue(req.isSecure());
+  }
+
+  @Test
+  public void getDateHeader_returnsNegativeOneWhenAbsent() throws Exception {
+    assertEquals(-1, empty().getDateHeader("Date"));
+  }
+
+  @Test
+  public void getDateHeader_parsesValidDate() throws Exception {
+    RequestImpl req = requestForHeader("Date", "Sun, 06 Nov 1994 08:49:37 GMT");
+    long millis = req.getDateHeader("Date");
+    assertTrue(millis > 0);
   }
 
   // Only use lower-case letters to circumvent the canonicalizer.

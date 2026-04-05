@@ -26,4 +26,41 @@ public class ServletHelperTest {
     assertEquals(1, formData.data.size());
     assertEquals("b", formData.data.get("a"));
   }
+
+  // ---- formatText ----
+
+  @Test
+  public void formatText_escapesHtmlEntities() {
+    assertEquals("&lt;b&gt;", ServletHelper.formatText("<b>", false));
+  }
+
+  @Test
+  public void formatText_escapesAmpersand() {
+    assertEquals("a&amp;b", ServletHelper.formatText("a&b", false));
+  }
+
+  @Test
+  public void formatText_escapesQuote() {
+    assertEquals("&quot;hi&quot;", ServletHelper.formatText("\"hi\"", false));
+  }
+
+  @Test
+  public void formatText_newlinesBecomeBreaks() {
+    assertEquals("a<br/>b", ServletHelper.formatText("a\nb", false));
+  }
+
+  @Test
+  public void formatText_carriageReturnStripped() {
+    assertEquals("ab", ServletHelper.formatText("a\rb", false));
+  }
+
+  @Test
+  public void formatText_fixedWrapsPre() {
+    assertEquals("<pre>hello</pre>", ServletHelper.formatText("hello", true));
+  }
+
+  @Test
+  public void formatText_plainTextPassesThrough() {
+    assertEquals("hello world", ServletHelper.formatText("hello world", false));
+  }
 }

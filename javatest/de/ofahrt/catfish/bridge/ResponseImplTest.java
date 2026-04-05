@@ -3,6 +3,7 @@ package de.ofahrt.catfish.bridge;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -135,5 +136,76 @@ public class ResponseImplTest {
     ResponseImpl r = make(new CapturingWriter());
     r.setCookie("session=abc; Path=/");
     assertTrue(r.containsHeader("Set-Cookie"));
+  }
+
+  @Test
+  public void getContentType_returnsNullByDefault() {
+    assertNull(make(new CapturingWriter()).getContentType());
+  }
+
+  @Test
+  public void setContentType_visibleAfterCommit() throws IOException {
+    CapturingWriter w = new CapturingWriter();
+    ResponseImpl r = make(w);
+    r.setContentType("text/html");
+    r.close();
+    assertTrue(w.committed.getHeaders().get("Content-Type").contains("text/html"));
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void flushBuffer_throws() {
+    make(new CapturingWriter()).flushBuffer();
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void getBufferSize_throws() {
+    make(new CapturingWriter()).getBufferSize();
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void isCommitted_throws() {
+    make(new CapturingWriter()).isCommitted();
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void reset_throws() {
+    make(new CapturingWriter()).reset();
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void resetBuffer_throws() {
+    make(new CapturingWriter()).resetBuffer();
+  }
+
+  @Test(expected = UnsupportedOperationException.class)
+  public void setBufferSize_throws() {
+    make(new CapturingWriter()).setBufferSize(100);
+  }
+
+  @Test
+  public void setHeader_getHeader() {
+    ResponseImpl r = make(new CapturingWriter());
+    r.setHeader("X-Custom", "value");
+    assertTrue(r.containsHeader("X-Custom"));
+  }
+
+  @Test
+  public void setStatus_commitsWithCorrectCode() throws IOException {
+    CapturingWriter w = new CapturingWriter();
+    ResponseImpl r = make(w);
+    r.setStatus(201);
+    r.close();
+    assertEquals(201, w.committed.getStatusCode());
+  }
+
+  @Test
+  public void getOutputStream_writesBody() throws IOException {
+    CapturingWriter w = new CapturingWriter();
+    ResponseImpl r = make(w);
+    r.setStatus(200);
+    var out = r.getOutputStream();
+    out.write(new byte[] {'h', 'i'});
+    out.close();
+    assertNotNull(w.committed);
   }
 }
