@@ -134,6 +134,18 @@ public class HttpResponseValidationIntegrationTest {
         (Connection conn, HttpRequest req, HttpResponseWriter writer) ->
             writer.commitBuffered(StandardResponses.NO_CONTENT);
 
+    // commitBuffered with 204 and non-empty body — should throw, handler recovers with 500.
+    HttpHandler noContentWithBodyHandler =
+        (Connection conn, HttpRequest req, HttpResponseWriter writer) -> {
+          try {
+            writer.commitBuffered(
+                StandardResponses.NO_CONTENT.withBody(
+                    "oops".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+          } catch (IllegalArgumentException e) {
+            writer.commitBuffered(StandardResponses.INTERNAL_SERVER_ERROR);
+          }
+        };
+
     // commitStreamed with 204 No Content — should throw, handler recovers with 500.
     HttpHandler noContentStreamedHandler =
         (Connection conn, HttpRequest req, HttpResponseWriter writer) -> {
@@ -162,6 +174,7 @@ public class HttpResponseValidationIntegrationTest {
             .exact("/bad-buffered", conflictingBufferedHandler)
             .exact("/bad-streamed", conflictingStreamedHandler)
             .exact("/no-content", noContentHandler)
+            .exact("/no-content-with-body", noContentWithBodyHandler)
             .exact("/no-content-streamed", noContentStreamedHandler)
             .exact("/double-commit-buffered", doubleCommitBufferedHandler)
             .exact(
@@ -221,6 +234,13 @@ public class HttpResponseValidationIntegrationTest {
     assertEquals(HttpStatusCode.NO_CONTENT.getStatusCode(), response.getStatusCode());
     assertNull(response.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
     assertNull(response.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING));
+  }
+
+  @Test
+  public void commitBuffered_noContentStatusWithBody_yields500() throws IOException {
+    assertEquals(
+        HttpStatusCode.INTERNAL_SERVER_ERROR.getStatusCode(),
+        get("/no-content-with-body").getStatusCode());
   }
 
   @Test

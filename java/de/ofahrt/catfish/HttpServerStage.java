@@ -99,18 +99,18 @@ final class HttpServerStage implements Stage {
         throw new IllegalArgumentException(
             "Response must not contain both Content-Length and Transfer-Encoding");
       }
+      byte[] body = responseToWrite.getBody();
+      boolean bodyAllowed = HttpStatusCode.mayHaveBody(responseToWrite.getStatusCode());
+      if (!bodyAllowed && body != null && body.length != 0) {
+        throw new IllegalArgumentException(
+            String.format(
+                "Responses with status code %d are not allowed to have a body",
+                Integer.valueOf(responseToWrite.getStatusCode())));
+      }
       if (!committed.compareAndSet(false, true)) {
         throw new IllegalStateException("This response is already committed");
       }
-      byte[] body = responseToWrite.getBody();
-      boolean bodyAllowed = HttpStatusCode.mayHaveBody(responseToWrite.getStatusCode());
       if (!bodyAllowed) {
-        if (body != null && body.length != 0) {
-          throw new IllegalArgumentException(
-              String.format(
-                  "Responses with status code %d are not allowed to have a body",
-                  Integer.valueOf(responseToWrite.getStatusCode())));
-        }
         // Silently strip Content-Length and Transfer-Encoding: they are meaningless for
         // responses that must not have a body.
         responseToWrite =
