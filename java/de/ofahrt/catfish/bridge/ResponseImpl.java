@@ -24,7 +24,9 @@ import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletResponse;
 
 public final class ResponseImpl implements HttpServletResponse {
+
   private static final class StreamingHttpResponse implements HttpResponse {
+
     private final HttpVersion committedVersion;
     private final int committedStatus;
     private final HttpHeaders committedHeaders;
@@ -333,10 +335,7 @@ public final class ResponseImpl implements HttpServletResponse {
 
   @Override
   public void addDateHeader(String name, long date) {
-    if (isCommitted) {
-      throw new IllegalStateException();
-    }
-    addHeader(canonicalize(name), HttpDate.formatDate(Instant.ofEpochMilli(date)));
+    addHeader(name, HttpDate.formatDate(Instant.ofEpochMilli(date)));
   }
 
   @Override
@@ -349,9 +348,6 @@ public final class ResponseImpl implements HttpServletResponse {
 
   @Override
   public void addIntHeader(String name, int value) {
-    if (isCommitted) {
-      throw new IllegalStateException();
-    }
     addHeader(name, Integer.toString(value));
   }
 
