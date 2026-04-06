@@ -74,12 +74,6 @@ final class HttpServerStage implements Stage {
     void notifySent(Connection connection, HttpRequest request, HttpResponse response);
   }
 
-  interface ProxyForwarder {
-
-    void forward(Connection connection, HttpRequest request, HttpResponseWriter writer)
-        throws IOException;
-  }
-
   private final class HttpResponseWriterImpl implements HttpResponseWriter {
 
     private final HttpRequest request;
@@ -213,7 +207,6 @@ final class HttpServerStage implements Stage {
   private final RequestQueue requestHandler;
   private final RequestListener requestListener;
   private final Function<String, HttpVirtualHost> virtualHostLookup;
-  private final ProxyForwarder proxyForwarder;
   private final ConnectHandler connectHandler;
   private final SSLSocketFactory originSocketFactory;
   private final ConcurrentHashMap<String, SSLInfo> sslInfoCache;
@@ -225,6 +218,8 @@ final class HttpServerStage implements Stage {
   private boolean processing;
   private boolean keepAlive = true;
   private HttpResponseGenerator responseGenerator;
+  // Set by headers callback when an absolute URI is detected (forward proxy interception).
+  private HttpRequest forwardProxyRequest;
 
   HttpServerStage(
       Pipeline parent,
@@ -238,7 +233,6 @@ final class HttpServerStage implements Stage {
         requestHandler,
         requestListener,
         virtualHostLookup,
-        /* proxyForwarder= */ null,
         /* connectHandler= */ null,
         /* originSocketFactory= */ null,
         /* sslInfoCache= */ null,
@@ -252,29 +246,6 @@ final class HttpServerStage implements Stage {
       RequestQueue requestHandler,
       RequestListener requestListener,
       Function<String, HttpVirtualHost> virtualHostLookup,
-      ProxyForwarder proxyForwarder,
-      ByteBuffer inputBuffer,
-      ByteBuffer outputBuffer) {
-    this(
-        parent,
-        requestHandler,
-        requestListener,
-        virtualHostLookup,
-        proxyForwarder,
-        /* connectHandler= */ null,
-        /* originSocketFactory= */ null,
-        /* sslInfoCache= */ null,
-        /* executor= */ null,
-        inputBuffer,
-        outputBuffer);
-  }
-
-  HttpServerStage(
-      Pipeline parent,
-      RequestQueue requestHandler,
-      RequestListener requestListener,
-      Function<String, HttpVirtualHost> virtualHostLookup,
-      ProxyForwarder proxyForwarder,
       ConnectHandler connectHandler,
       SSLSocketFactory originSocketFactory,
       ConcurrentHashMap<String, SSLInfo> sslInfoCache,
@@ -285,7 +256,6 @@ final class HttpServerStage implements Stage {
     this.requestHandler = requestHandler;
     this.requestListener = requestListener;
     this.virtualHostLookup = virtualHostLookup;
-    this.proxyForwarder = proxyForwarder;
     this.connectHandler = connectHandler;
     this.originSocketFactory = originSocketFactory;
     this.sslInfoCache = sslInfoCache;
@@ -305,6 +275,16 @@ final class HttpServerStage implements Stage {
               }
               return host.uploadPolicy().isAllowed(request);
             });
+    if (connectHandler != null) {
+      this.parser.setHeadersCallback(
+          (partialRequest) -> {
+            if (isAbsoluteUri(partialRequest.getUri())) {
+              forwardProxyRequest = partialRequest;
+              return false; // stop body parsing — ForwardProxyStage will handle it
+            }
+            return true; // continue normal body parsing
+          });
+    }
   }
 
   @Override
@@ -321,6 +301,23 @@ final class HttpServerStage implements Stage {
       inputBuffer.position(inputBuffer.position() + consumed);
     }
     if (parser.isDone()) {
+      if (forwardProxyRequest != null) {
+        HttpRequest req = forwardProxyRequest;
+        forwardProxyRequest = null;
+        parser.reset();
+        parent.replaceWith(
+            new ForwardProxyStage(
+                parent,
+                inputBuffer,
+                outputBuffer,
+                executor,
+                req,
+                connectHandler,
+                originSocketFactory != null
+                    ? originSocketFactory
+                    : (SSLSocketFactory) SSLSocketFactory.getDefault()));
+        return ConnectionControl.PAUSE;
+      }
       if (parser.needsContinue()) {
         responseGenerator = new ContinueResponseGenerator();
         parent.encourageWrites();
@@ -456,13 +453,6 @@ final class HttpServerStage implements Stage {
               connectHandler,
               originSocketFactory,
               sslInfoCache));
-      return ConnectionControl.PAUSE;
-    }
-    if (proxyForwarder != null && isAbsoluteUri(request.getUri())) {
-      HttpResponseWriter writer =
-          new HttpResponseWriterImpl(request, KeepAlivePolicy.CLOSE, CompressionPolicy.NONE);
-      requestHandler.queueRequest(
-          (conn, req, rw) -> proxyForwarder.forward(conn, req, rw), connection, request, writer);
       return ConnectionControl.PAUSE;
     }
     HttpVirtualHost host = virtualHostLookup.apply(request.getHeaders().get(HttpHeaderName.HOST));

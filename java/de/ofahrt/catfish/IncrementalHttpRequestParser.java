@@ -43,9 +43,19 @@ final class IncrementalHttpRequestParser {
   private boolean expectLineFeed;
   private int headerFieldCount;
 
+  /**
+   * Optional callback invoked when all headers have been parsed but before body parsing begins.
+   * Return {@code false} to stop parsing (like headersOnly), {@code true} to continue normally.
+   */
+  @FunctionalInterface
+  interface HeadersCallback {
+    boolean shouldParseBody(HttpRequest partialRequest);
+  }
+
   private boolean done;
   private boolean needsContinue;
   private boolean headersOnly;
+  private HeadersCallback headersCallback;
 
   private int majorVersion;
   private String messageHeaderName;
@@ -67,6 +77,10 @@ final class IncrementalHttpRequestParser {
     this.headersOnly = headersOnly;
   }
 
+  public void setHeadersCallback(HeadersCallback headersCallback) {
+    this.headersCallback = headersCallback;
+  }
+
   void reset() {
     state = State.REQUEST_METHOD;
     elementBuffer = new StringBuilder();
@@ -77,6 +91,7 @@ final class IncrementalHttpRequestParser {
     done = false;
     needsContinue = false;
     headersOnly = false;
+    headersCallback = null;
     builder.reset();
 
     majorVersion = 0;
@@ -352,6 +367,11 @@ final class IncrementalHttpRequestParser {
           messageHeaderValue = null;
 
           if (c == '\n') {
+            if (headersCallback != null
+                && !headersCallback.shouldParseBody(builder.buildPartialRequest())) {
+              done = true;
+              return i + 1;
+            }
             String contentLengthValue = builder.getHeader(HttpHeaderName.CONTENT_LENGTH);
             String transferEncodingValue = builder.getHeader(HttpHeaderName.TRANSFER_ENCODING);
             if (contentLengthValue != null || transferEncodingValue != null) {
