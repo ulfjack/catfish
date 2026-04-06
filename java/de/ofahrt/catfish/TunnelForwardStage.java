@@ -14,8 +14,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * A Stage that forwards bytes bidirectionally between the client NIO connection and an
- * already-opened origin {@link Socket}. Installed as a delegate inside {@link MitmConnectStage}
- * after the 200 response is sent for the TUNNEL decision.
+ * already-opened origin {@link Socket}. Installed as a delegate inside {@link ConnectStage} after
+ * the 200 response is sent for the TUNNEL decision.
  */
 final class TunnelForwardStage implements Stage {
 
@@ -94,8 +94,12 @@ final class TunnelForwardStage implements Stage {
     }
     outputBuffer.flip();
     boolean hasMore = currentChunk != null || !fromTarget.isEmpty();
-    if (hasMore) return ConnectionControl.CONTINUE;
-    if (targetClosed) return ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
+    if (hasMore) {
+      return ConnectionControl.CONTINUE;
+    }
+    if (targetClosed) {
+      return ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
+    }
     return ConnectionControl.PAUSE;
   }
 

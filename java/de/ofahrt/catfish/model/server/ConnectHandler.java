@@ -16,6 +16,19 @@ public interface ConnectHandler {
   /** Called on the executor thread before forwarding a request to the origin (INTERCEPT only). */
   default void onRequest(UUID requestId, String originHost, int originPort, HttpRequest request) {}
 
+  /**
+   * Called on the executor thread for each MITM-intercepted request. Return a {@link RequestAction}
+   * to control how the request is handled: forward to origin (optionally with a rewritten request),
+   * respond locally (buffered or streaming), or forward while capturing the response body.
+   *
+   * <p>The default implementation calls {@link #onRequest} and forwards unchanged.
+   */
+  default RequestAction handleRequest(
+      UUID requestId, String originHost, int originPort, HttpRequest request) {
+    onRequest(requestId, originHost, originPort, request);
+    return RequestAction.forward();
+  }
+
   /** Called on the executor thread after each proxied HTTP request completes (INTERCEPT only). */
   default void onResponse(
       UUID requestId,

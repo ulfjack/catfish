@@ -10,6 +10,7 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.ConnectHandler;
+import de.ofahrt.catfish.model.server.RequestAction;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.ByteArrayOutputStream;
@@ -299,7 +300,57 @@ final class MitmProxyStage implements Stage {
 
     void run(HttpRequest headers) {
       UUID requestId = UUID.randomUUID();
-      handler.onRequest(requestId, originHost, originPort, headers);
+      RequestAction action = handler.handleRequest(requestId, originHost, originPort, headers);
+
+      if (action.localResponse() != null) {
+        runLocalResponse(requestId, headers, action);
+        return;
+      }
+
+      HttpRequest effectiveRequest = action.request() != null ? action.request() : headers;
+      runForwardToOrigin(requestId, headers, effectiveRequest, action.captureStream());
+    }
+
+    private void runLocalResponse(UUID requestId, HttpRequest headers, RequestAction action) {
+      drainPipe();
+
+      HttpResponse localResponse = action.localResponse();
+      HttpHeaders dateAndConnection =
+          HttpHeaders.of(
+              HttpHeaderName.CONNECTION,
+              keepAlive ? "keep-alive" : "close",
+              HttpHeaderName.DATE,
+              DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now(ZoneOffset.UTC)));
+      HttpResponse responseWithHeaders =
+          localResponse
+              .withoutHeader(HttpHeaderName.CONTENT_LENGTH)
+              .withoutHeader(HttpHeaderName.TRANSFER_ENCODING)
+              .withHeaderOverrides(dateAndConnection);
+      HttpResponseGeneratorStreamed gen =
+          HttpResponseGeneratorStreamed.create(
+              parent::encourageWrites, headers, responseWithHeaders, /* includeBody= */ true);
+      parent.queue(() -> resultCallback.accept(gen, keepAlive));
+
+      try {
+        OutputStream genOut = gen.getOutputStream();
+        if (action.bodyWriter() != null) {
+          action.bodyWriter().writeTo(genOut);
+        } else if (localResponse.getBody() != null) {
+          genOut.write(localResponse.getBody());
+        }
+        genOut.close();
+      } catch (IOException e) {
+        gen.close();
+        return;
+      }
+      handler.onResponse(requestId, originHost, originPort, headers, localResponse);
+    }
+
+    private void runForwardToOrigin(
+        UUID requestId,
+        HttpRequest originalHeaders,
+        HttpRequest effectiveHeaders,
+        OutputStream captureStream) {
       SSLSocket socket;
       try {
         socket = (SSLSocket) originSocketFactory.createSocket(originHost, originPort);
@@ -310,13 +361,14 @@ final class MitmProxyStage implements Stage {
       } catch (IOException e) {
         drainAndClosePipe();
         sendErrorResponse();
+        closeCaptureStream(captureStream);
         return;
       }
 
       HttpResponseGeneratorStreamed gen = null;
       try {
         OutputStream originOut = socket.getOutputStream();
-        originOut.write(requestHeadersToBytes(headers));
+        originOut.write(requestHeadersToBytes(effectiveHeaders));
         originOut.flush();
 
         // Stream request body from pipe to origin.
@@ -381,7 +433,7 @@ final class MitmProxyStage implements Stage {
           HttpResponse forwardedResponse = originResponse.withHeaderOverrides(dateAndConnection);
           gen =
               HttpResponseGeneratorStreamed.createRaw(
-                  parent::encourageWrites, headers, forwardedResponse);
+                  parent::encourageWrites, originalHeaders, forwardedResponse);
         } else {
           // Strip CL+TE; the generator will add its own framing.
           HttpResponse forwardedResponse =
@@ -391,21 +443,26 @@ final class MitmProxyStage implements Stage {
                   .withHeaderOverrides(dateAndConnection);
           gen =
               HttpResponseGeneratorStreamed.create(
-                  parent::encourageWrites, headers, forwardedResponse, /* includeBody= */ true);
+                  parent::encourageWrites,
+                  originalHeaders,
+                  forwardedResponse,
+                  /* includeBody= */ true);
         }
         HttpResponseGeneratorStreamed genFinal = gen;
         parent.queue(() -> resultCallback.accept(genFinal, keepAlive));
 
         OutputStream genOut = gen.getOutputStream();
 
-        // Stream the response body. Each branch is responsible for handling leftover bytes
-        // (bytes already read from origin beyond the blank line) before reading more from origin.
+        // Stream the response body. When captureStream is non-null, tee each chunk to it.
+        OutputStream bodyOut =
+            captureStream != null ? new TeeOutputStream(genOut, captureStream) : genOut;
+
         if (chunkedResponse) {
           // Pass raw chunked bytes through; use scanner to find the end.
           ChunkedBodyScanner responseScanner = new ChunkedBodyScanner();
           if (leftoverLen > 0) {
             responseScanner.advance(readBuf, leftoverStart, leftoverLen);
-            genOut.write(readBuf, leftoverStart, leftoverLen);
+            bodyOut.write(readBuf, leftoverStart, leftoverLen);
           }
           while (!responseScanner.isDone()) {
             int n = originIn.read(readBuf, 0, readBuf.length);
@@ -413,7 +470,7 @@ final class MitmProxyStage implements Stage {
               break;
             }
             responseScanner.advance(readBuf, 0, n);
-            genOut.write(readBuf, 0, n);
+            bodyOut.write(readBuf, 0, n);
           }
         } else if (responseCl != null) {
           long remaining;
@@ -423,7 +480,7 @@ final class MitmProxyStage implements Stage {
             remaining = 0;
           }
           if (leftoverLen > 0) {
-            genOut.write(readBuf, leftoverStart, leftoverLen);
+            bodyOut.write(readBuf, leftoverStart, leftoverLen);
             remaining -= leftoverLen;
           }
           while (remaining > 0) {
@@ -431,28 +488,30 @@ final class MitmProxyStage implements Stage {
             if (n < 0) {
               break;
             }
-            genOut.write(readBuf, 0, n);
+            bodyOut.write(readBuf, 0, n);
             remaining -= n;
           }
         } else {
           if (leftoverLen > 0) {
-            genOut.write(readBuf, leftoverStart, leftoverLen);
+            bodyOut.write(readBuf, leftoverStart, leftoverLen);
           }
           int n;
           while ((n = originIn.read(readBuf)) >= 0) {
-            genOut.write(readBuf, 0, n);
+            bodyOut.write(readBuf, 0, n);
           }
         }
 
         genOut.close();
+        closeCaptureStream(captureStream);
         socket.close();
-        handler.onResponse(requestId, originHost, originPort, headers, originResponse);
+        handler.onResponse(requestId, originHost, originPort, originalHeaders, originResponse);
 
       } catch (IOException e) {
         try {
           socket.close();
         } catch (IOException ignored) {
         }
+        closeCaptureStream(captureStream);
         if (gen != null) {
           // Generator was already handed to the NIO thread; close it so NIO gets STOP.
           gen.close();
@@ -463,13 +522,29 @@ final class MitmProxyStage implements Stage {
       }
     }
 
-    private void drainAndClosePipe() {
-      requestBodyPipe.closeWrite();
+    /**
+     * Drains the pipe until the NIO thread closes it. For GET requests this returns immediately.
+     */
+    private void drainPipe() {
       byte[] discard = new byte[65536];
       try {
         while (requestBodyPipe.read(discard, 0, discard.length) >= 0) {}
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
+      }
+    }
+
+    private void drainAndClosePipe() {
+      requestBodyPipe.closeWrite();
+      drainPipe();
+    }
+
+    private static void closeCaptureStream(OutputStream captureStream) {
+      if (captureStream != null) {
+        try {
+          captureStream.close();
+        } catch (IOException ignored) {
+        }
       }
     }
 
@@ -515,6 +590,53 @@ final class MitmProxyStage implements Stage {
         w.append("\r\n");
       }
       return baos.toByteArray();
+    }
+
+    /**
+     * An OutputStream that writes to both a primary and secondary stream. Errors on the secondary
+     * stream are silently ignored so that a cache write failure does not break the proxied
+     * response.
+     */
+    private static final class TeeOutputStream extends OutputStream {
+      private final OutputStream primary;
+      private final OutputStream secondary;
+
+      TeeOutputStream(OutputStream primary, OutputStream secondary) {
+        this.primary = primary;
+        this.secondary = secondary;
+      }
+
+      @Override
+      public void write(int b) throws IOException {
+        primary.write(b);
+        try {
+          secondary.write(b);
+        } catch (IOException ignored) {
+        }
+      }
+
+      @Override
+      public void write(byte[] b, int off, int len) throws IOException {
+        primary.write(b, off, len);
+        try {
+          secondary.write(b, off, len);
+        } catch (IOException ignored) {
+        }
+      }
+
+      @Override
+      public void flush() throws IOException {
+        primary.flush();
+        try {
+          secondary.flush();
+        } catch (IOException ignored) {
+        }
+      }
+
+      @Override
+      public void close() throws IOException {
+        primary.close();
+      }
     }
   }
 

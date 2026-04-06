@@ -8,12 +8,17 @@ import static org.junit.Assume.assumeTrue;
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.bridge.TestHelper;
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
+import de.ofahrt.catfish.model.server.RequestAction;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.ssl.CertificateAuthority;
 import de.ofahrt.catfish.ssl.OpensslCertificateAuthority;
@@ -32,6 +37,7 @@ import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
@@ -546,6 +552,249 @@ public class MitmConnectIntegrationTest {
       assertTrue(
           "Expected 200 from intercept target, got: " + resp, resp.startsWith("HTTP/1.1 200"));
       assertArrayEquals("intercept-ok".getBytes(StandardCharsets.UTF_8), readBody(sslIn, resp));
+    }
+  }
+
+  // ---- handleRequest tests ----
+
+  /**
+   * Creates a MITM proxy on {@code mitmPort} with a custom {@link ConnectHandler} that intercepts
+   * all CONNECT requests using the shared CA and delegates to {@code handleRequest} for each
+   * proxied HTTP request.
+   */
+  private CatfishHttpServer startMitmProxyWithHandler(int mitmPort, ConnectHandler handler)
+      throws IOException, InterruptedException {
+    CatfishHttpServer s = newServer();
+    s.listenConnectProxyLocal(mitmPort, handler, testSslInfo.sslContext().getSocketFactory());
+    serversToStop.add(s);
+    return s;
+  }
+
+  @Test
+  public void handleRequest_localBufferedResponse_skipsOrigin() throws Exception {
+    byte[] cachedBody = "cached-response".getBytes(StandardCharsets.UTF_8);
+    HttpResponse cachedResponse =
+        StandardResponses.OK
+            .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, "text/plain"))
+            .withBody(cachedBody);
+
+    startMitmProxyWithHandler(
+        9070,
+        new ConnectHandler() {
+          @Override
+          public ConnectDecision apply(String host, int port) {
+            return ConnectDecision.intercept(host, port, ca);
+          }
+
+          @Override
+          public RequestAction handleRequest(
+              UUID requestId, String originHost, int originPort, HttpRequest request) {
+            return RequestAction.respond(cachedResponse);
+          }
+        });
+
+    // No origin server is started — the local response should be served without connecting.
+    try (SSLSocket sslSocket = connectViaMitm(9070, HTTPS_PORT)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+      sslOut.write(
+          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
+
+      String responseHeaders = readUntilBlankLine(sslIn);
+      assertTrue(
+          "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
+      assertArrayEquals(cachedBody, readBody(sslIn, responseHeaders));
+    }
+  }
+
+  @Test
+  public void handleRequest_localStreamingResponse_streamsLargeBody() throws Exception {
+    int bodySize = 2 * 1024 * 1024; // 2 MB
+    byte[] largeBody = new byte[bodySize];
+    for (int i = 0; i < bodySize; i++) {
+      largeBody[i] = (byte) (i & 0xff);
+    }
+
+    startMitmProxyWithHandler(
+        9071,
+        new ConnectHandler() {
+          @Override
+          public ConnectDecision apply(String host, int port) {
+            return ConnectDecision.intercept(host, port, ca);
+          }
+
+          @Override
+          public RequestAction handleRequest(
+              UUID requestId, String originHost, int originPort, HttpRequest request) {
+            return RequestAction.respondStreaming(
+                StandardResponses.OK, out -> out.write(largeBody));
+          }
+        });
+
+    try (SSLSocket sslSocket = connectViaMitm(9071, HTTPS_PORT)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+      sslOut.write(
+          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
+
+      String responseHeaders = readUntilBlankLine(sslIn);
+      assertTrue(
+          "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
+      byte[] actual = readBody(sslIn, responseHeaders);
+      assertEquals("Body size mismatch", bodySize, actual.length);
+      assertArrayEquals(largeBody, actual);
+    }
+  }
+
+  @Test
+  public void handleRequest_forwardAndCapture_teesResponseBody() throws Exception {
+    byte[] originBody = "origin-body-to-capture".getBytes(StandardCharsets.UTF_8);
+
+    startHttpsServer(
+        9072,
+        new HttpVirtualHost(
+            (conn, request, writer) ->
+                writer.commitBuffered(StandardResponses.OK.withBody(originBody))));
+
+    ByteArrayOutputStream captured = new ByteArrayOutputStream();
+    startMitmProxyWithHandler(
+        9073,
+        new ConnectHandler() {
+          @Override
+          public ConnectDecision apply(String host, int port) {
+            return ConnectDecision.intercept(host, port, ca);
+          }
+
+          @Override
+          public RequestAction handleRequest(
+              UUID requestId, String originHost, int originPort, HttpRequest request) {
+            return RequestAction.forwardAndCapture(captured);
+          }
+        });
+
+    try (SSLSocket sslSocket = connectViaMitm(9073, 9072)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+      sslOut.write(
+          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
+
+      String responseHeaders = readUntilBlankLine(sslIn);
+      assertTrue(
+          "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
+      byte[] clientBody = readBody(sslIn, responseHeaders);
+      assertArrayEquals("Client should receive origin body", originBody, clientBody);
+    }
+    // The captured stream should also contain the origin body.
+    assertArrayEquals(
+        "Capture stream should contain origin body", originBody, captured.toByteArray());
+  }
+
+  @Test
+  public void handleRequest_requestRewrite_modifiesForwardedRequest() throws Exception {
+    // Origin echoes the request URI back in the response body.
+    startHttpsServer(
+        9074,
+        new HttpVirtualHost(
+            (conn, request, writer) ->
+                writer.commitBuffered(
+                    StandardResponses.OK.withBody(
+                        request.getUri().getBytes(StandardCharsets.UTF_8)))));
+
+    startMitmProxyWithHandler(
+        9075,
+        new ConnectHandler() {
+          @Override
+          public ConnectDecision apply(String host, int port) {
+            return ConnectDecision.intercept(host, port, ca);
+          }
+
+          @Override
+          public RequestAction handleRequest(
+              UUID requestId, String originHost, int originPort, HttpRequest request) {
+            try {
+              HttpRequest rewritten =
+                  new SimpleHttpRequest.Builder()
+                      .setVersion(request.getVersion())
+                      .setMethod(request.getMethod())
+                      .setUri("/rewritten-path")
+                      .addHeader(HttpHeaderName.HOST, request.getHeaders().get(HttpHeaderName.HOST))
+                      .addHeader(HttpHeaderName.CONNECTION, "close")
+                      .build();
+              return RequestAction.forward(rewritten);
+            } catch (Exception e) {
+              throw new RuntimeException(e);
+            }
+          }
+        });
+
+    try (SSLSocket sslSocket = connectViaMitm(9075, 9074)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+      sslOut.write(
+          "GET /original-path HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
+
+      String responseHeaders = readUntilBlankLine(sslIn);
+      assertTrue(
+          "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
+      String body = new String(readBody(sslIn, responseHeaders), StandardCharsets.UTF_8);
+      assertEquals("Origin should have received rewritten URI", "/rewritten-path", body);
+    }
+  }
+
+  @Test
+  public void handleRequest_localResponse_keepAlive_secondRequestForwarded() throws Exception {
+    byte[] cachedBody = "cached".getBytes(StandardCharsets.UTF_8);
+
+    startMitmProxyWithHandler(
+        9076,
+        new ConnectHandler() {
+          @Override
+          public ConnectDecision apply(String host, int port) {
+            return ConnectDecision.intercept(host, port, ca);
+          }
+
+          @Override
+          public RequestAction handleRequest(
+              UUID requestId, String originHost, int originPort, HttpRequest request) {
+            if ("/cached".equals(request.getUri())) {
+              return RequestAction.respond(StandardResponses.OK.withBody(cachedBody));
+            }
+            return RequestAction.forward();
+          }
+        });
+
+    try (SSLSocket sslSocket = connectViaMitm(9076, HTTPS_PORT)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+
+      // First request: served from local response.
+      sslOut.write(
+          "GET /cached HTTP/1.1\r\nHost: localhost\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
+      String resp1Headers = readUntilBlankLine(sslIn);
+      assertTrue("Expected 200, got: " + resp1Headers, resp1Headers.startsWith("HTTP/1.1 200"));
+      byte[] resp1Body = readBody(sslIn, resp1Headers);
+      assertArrayEquals("First request should be cached response", cachedBody, resp1Body);
+
+      // Second request: forwarded to origin (which returns "MITM-OK").
+      sslOut.write(
+          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
+      String resp2Headers = readUntilBlankLine(sslIn);
+      assertTrue("Expected 200, got: " + resp2Headers, resp2Headers.startsWith("HTTP/1.1 200"));
+      byte[] resp2Body = readBody(sslIn, resp2Headers);
+      assertTrue(
+          "Second request should be forwarded to origin",
+          new String(resp2Body, StandardCharsets.ISO_8859_1).contains("MITM-OK"));
     }
   }
 
