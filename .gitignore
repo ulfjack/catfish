@@ -2,6 +2,7 @@
 .coverage/
 .idea/
 .ijwb/
+.bazelrc.user
 bazel-*
 catfish.iml
 out/
