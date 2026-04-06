@@ -2,7 +2,6 @@ package de.ofahrt.catfish.ssl;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
@@ -77,40 +76,32 @@ public class OpensslCertificateAuthorityTest {
   }
 
   @Test
-  public void getOrCreate_returnsNonNullContext() throws Exception {
+  public void create_returnsNonNullContext() throws Exception {
     OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
-    SSLInfo info = ca.getOrCreate("localhost", originCert);
+    SSLInfo info = ca.create("localhost", originCert);
     assertNotNull(info.sslContext());
   }
 
   @Test
-  public void getOrCreate_cacheHit_returnsSameInstance() throws Exception {
+  public void create_differentHostnames_returnsDifferentContexts() throws Exception {
     OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
-    SSLInfo first = ca.getOrCreate("localhost", originCert);
-    SSLInfo second = ca.getOrCreate("localhost", originCert);
-    assertSame("Second call should return cached instance", first, second);
-  }
-
-  @Test
-  public void getOrCreate_differentHostnames_returnsDifferentContexts() throws Exception {
-    OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
-    SSLInfo info1 = ca.getOrCreate("host1.example.com", originCert);
-    SSLInfo info2 = ca.getOrCreate("host2.example.com", originCert);
+    SSLInfo info1 = ca.create("host1.example.com", originCert);
+    SSLInfo info2 = ca.create("host2.example.com", originCert);
     assertNotNull(info1.sslContext());
     assertNotNull(info2.sslContext());
   }
 
   @Test
-  public void getOrCreate_mirrorsCnFromOriginCert() throws Exception {
+  public void create_mirrorsCnFromOriginCert() throws Exception {
     OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
-    SSLInfo info = ca.getOrCreate("localhost", originCert);
+    SSLInfo info = ca.create("localhost", originCert);
     assertEquals("testhost", extractCn(info.certificate()));
   }
 
   @Test
-  public void getOrCreate_mirrorsSansFromOriginCert() throws Exception {
+  public void create_mirrorsSansFromOriginCert() throws Exception {
     OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
-    SSLInfo info = ca.getOrCreate("localhost", originCert);
+    SSLInfo info = ca.create("localhost", originCert);
 
     Collection<List<?>> sans = info.certificate().getSubjectAlternativeNames();
     assertNotNull("Generated cert must have SANs", sans);
@@ -123,7 +114,7 @@ public class OpensslCertificateAuthorityTest {
   }
 
   @Test
-  public void getOrCreate_noSanOriginCert_fallsBackToHostname() throws Exception {
+  public void create_noSanOriginCert_fallsBackToHostname() throws Exception {
     // Use a cert with no SANs: load the plain test cert (test.cert.pem has no SAN extension).
     SSLInfo noSanInfo =
         SSLContextFactory.loadPemKeyAndCrtFiles(
@@ -132,7 +123,7 @@ public class OpensslCertificateAuthorityTest {
     X509Certificate noSanCert = noSanInfo.certificate();
 
     OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
-    SSLInfo info = ca.getOrCreate("fallback.example.com", noSanCert);
+    SSLInfo info = ca.create("fallback.example.com", noSanCert);
 
     Collection<List<?>> sans = info.certificate().getSubjectAlternativeNames();
     assertNotNull("Generated cert must have SANs", sans);

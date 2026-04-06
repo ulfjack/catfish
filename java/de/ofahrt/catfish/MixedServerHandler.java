@@ -13,6 +13,7 @@ import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
+import de.ofahrt.catfish.ssl.SSLInfo;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -21,6 +22,7 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
@@ -64,6 +66,7 @@ final class MixedServerHandler implements NetworkHandler {
   private final CatfishHttpServer server;
   private final ConnectHandler connectHandler;
   private final SSLSocketFactory originSocketFactory;
+  private final ConcurrentHashMap<String, SSLInfo> sslInfoCache = new ConcurrentHashMap<>();
 
   MixedServerHandler(
       CatfishHttpServer server,
@@ -89,6 +92,7 @@ final class MixedServerHandler implements NetworkHandler {
         this::forwardProxyRequest,
         connectHandler,
         originSocketFactory,
+        sslInfoCache,
         server.executor,
         inputBuffer,
         outputBuffer);

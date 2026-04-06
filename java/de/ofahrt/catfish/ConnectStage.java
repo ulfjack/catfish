@@ -6,12 +6,14 @@ import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.ssl.CertificateAuthority;
+import de.ofahrt.catfish.ssl.SSLInfo;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLContext;
@@ -49,6 +51,7 @@ final class ConnectStage implements Stage {
   private final int port;
   private final ConnectHandler handler;
   private final SSLSocketFactory originSocketFactory;
+  private final ConcurrentHashMap<String, SSLInfo> sslInfoCache;
 
   private ConnectState state = ConnectState.CONNECTING;
   private byte[] pendingResponseBytes;
@@ -71,7 +74,8 @@ final class ConnectStage implements Stage {
       String host,
       int port,
       ConnectHandler handler,
-      SSLSocketFactory originSocketFactory) {
+      SSLSocketFactory originSocketFactory,
+      ConcurrentHashMap<String, SSLInfo> sslInfoCache) {
     this.parent = parent;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
@@ -80,6 +84,7 @@ final class ConnectStage implements Stage {
     this.port = port;
     this.handler = handler;
     this.originSocketFactory = originSocketFactory;
+    this.sslInfoCache = sslInfoCache;
   }
 
   @Override
@@ -125,37 +130,49 @@ final class ConnectStage implements Stage {
       return;
     }
 
-    // INTERCEPT: connect to origin to mirror its certificate.
-    CertificateAuthority ca = decision.getCertificateAuthority();
-    SSLSocket socket;
-    X509Certificate originCert;
-    try {
-      socket = (SSLSocket) originSocketFactory.createSocket(decision.getHost(), decision.getPort());
-      SSLParameters params = socket.getSSLParameters();
-      params.setServerNames(List.of(new SNIHostName(decision.getHost())));
-      socket.setSSLParameters(params);
-      socket.startHandshake();
-      originCert = (X509Certificate) socket.getSession().getPeerCertificates()[0];
-    } catch (IOException e) {
-      parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
-      return;
-    }
-
+    // INTERCEPT: use a cached cert if available, otherwise connect to origin to mirror its cert.
+    SSLInfo cached = sslInfoCache != null ? sslInfoCache.get(connectHost) : null;
     SSLContext ctx;
-    try {
-      ctx = ca.getOrCreate(connectHost, originCert).sslContext();
-    } catch (Exception e) {
+    if (cached != null) {
+      ctx = cached.sslContext();
+    } else {
+      CertificateAuthority ca = decision.getCertificateAuthority();
+      SSLSocket socket;
+      X509Certificate originCert;
+      try {
+        socket =
+            (SSLSocket) originSocketFactory.createSocket(decision.getHost(), decision.getPort());
+        SSLParameters params = socket.getSSLParameters();
+        params.setServerNames(List.of(new SNIHostName(decision.getHost())));
+        socket.setSSLParameters(params);
+        socket.startHandshake();
+        originCert = (X509Certificate) socket.getSession().getPeerCertificates()[0];
+      } catch (IOException e) {
+        parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
+        return;
+      }
+
+      SSLInfo info;
+      try {
+        info = ca.create(connectHost, originCert);
+      } catch (Exception e) {
+        try {
+          socket.close();
+        } catch (IOException ignored) {
+        }
+        parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
+        return;
+      }
+
       try {
         socket.close();
       } catch (IOException ignored) {
       }
-      parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
-      return;
-    }
 
-    try {
-      socket.close();
-    } catch (IOException ignored) {
+      if (sslInfoCache != null) {
+        sslInfoCache.putIfAbsent(connectHost, info);
+      }
+      ctx = info.sslContext();
     }
 
     handler.onCertificateReady(connectHost, connectPort);

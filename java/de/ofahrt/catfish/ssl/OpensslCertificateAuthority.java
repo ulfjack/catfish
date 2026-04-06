@@ -10,13 +10,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 public final class OpensslCertificateAuthority implements CertificateAuthority {
   private final Path caKey;
   private final Path caCert;
   private final Path workDir;
-  private final ConcurrentHashMap<String, SSLInfo> cache = new ConcurrentHashMap<>();
 
   public OpensslCertificateAuthority(Path caKey, Path caCert, Path workDir) {
     this.caKey = caKey;
@@ -25,18 +23,7 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
   }
 
   @Override
-  public synchronized SSLInfo getOrCreate(String hostname, X509Certificate originCert)
-      throws Exception {
-    SSLInfo cached = cache.get(hostname);
-    if (cached != null) {
-      return cached;
-    }
-    SSLInfo info = generate(hostname, originCert);
-    cache.put(hostname, info);
-    return info;
-  }
-
-  private SSLInfo generate(String hostname, X509Certificate originCert) throws Exception {
+  public SSLInfo create(String hostname, X509Certificate originCert) throws Exception {
     String id = UUID.randomUUID().toString();
     Path extFile = workDir.resolve(id + ".ext");
     Path keyFile = workDir.resolve(id + ".key");

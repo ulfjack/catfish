@@ -19,6 +19,7 @@ import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.KeepAlivePolicy;
+import de.ofahrt.catfish.ssl.SSLInfo;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import de.ofahrt.catfish.utils.HttpContentType;
 import java.io.ByteArrayOutputStream;
@@ -30,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
@@ -214,6 +216,7 @@ final class HttpServerStage implements Stage {
   private final ProxyForwarder proxyForwarder;
   private final ConnectHandler connectHandler;
   private final SSLSocketFactory originSocketFactory;
+  private final ConcurrentHashMap<String, SSLInfo> sslInfoCache;
   private final Executor executor;
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
@@ -238,6 +241,7 @@ final class HttpServerStage implements Stage {
         /* proxyForwarder= */ null,
         /* connectHandler= */ null,
         /* originSocketFactory= */ null,
+        /* sslInfoCache= */ null,
         /* executor= */ null,
         inputBuffer,
         outputBuffer);
@@ -259,6 +263,7 @@ final class HttpServerStage implements Stage {
         proxyForwarder,
         /* connectHandler= */ null,
         /* originSocketFactory= */ null,
+        /* sslInfoCache= */ null,
         /* executor= */ null,
         inputBuffer,
         outputBuffer);
@@ -272,6 +277,7 @@ final class HttpServerStage implements Stage {
       ProxyForwarder proxyForwarder,
       ConnectHandler connectHandler,
       SSLSocketFactory originSocketFactory,
+      ConcurrentHashMap<String, SSLInfo> sslInfoCache,
       Executor executor,
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer) {
@@ -282,6 +288,7 @@ final class HttpServerStage implements Stage {
     this.proxyForwarder = proxyForwarder;
     this.connectHandler = connectHandler;
     this.originSocketFactory = originSocketFactory;
+    this.sslInfoCache = sslInfoCache;
     this.executor = executor;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
@@ -447,7 +454,8 @@ final class HttpServerStage implements Stage {
               parsedHost,
               parsedPort,
               connectHandler,
-              originSocketFactory));
+              originSocketFactory,
+              sslInfoCache));
       return ConnectionControl.PAUSE;
     }
     if (proxyForwarder != null && isAbsoluteUri(request.getUri())) {
