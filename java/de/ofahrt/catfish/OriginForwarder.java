@@ -220,9 +220,23 @@ final class OriginForwarder {
       int leftoverLen = bufEnd - bufStart;
 
       originResponse = respParser.getResponse();
-      String responseCl = originResponse.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
-      String responseTe = originResponse.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
+      int statusCode = originResponse.getStatusCode();
+      // Responses to HEAD, and 1xx/204/304 responses, MUST NOT have a body (RFC 7230 §3.3).
+      boolean noBody =
+          "HEAD".equalsIgnoreCase(originalHeaders.getMethod())
+              || (statusCode >= 100 && statusCode < 200)
+              || statusCode == 204
+              || statusCode == 304;
+      String responseCl =
+          noBody ? null : originResponse.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
+      String responseTe =
+          noBody ? null : originResponse.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
       boolean chunkedResponse = responseTe != null && "chunked".equalsIgnoreCase(responseTe);
+
+      // Determine if the origin connection will close after this response.
+      String originConnection = originResponse.getHeaders().get(HttpHeaderName.CONNECTION);
+      boolean originKeepAlive =
+          originConnection == null || !"close".equalsIgnoreCase(originConnection);
 
       HttpHeaders dateAndConnection =
           HttpHeaders.of(
@@ -249,7 +263,7 @@ final class OriginForwarder {
                 parent::encourageWrites,
                 originalHeaders,
                 forwardedResponse,
-                /* includeBody= */ true);
+                /* includeBody= */ !noBody && (responseCl != null || !originKeepAlive));
       }
       HttpResponseGeneratorStreamed genFinal = gen;
       parent.queue(() -> resultCallback.accept(genFinal, keepAlive));
@@ -260,7 +274,9 @@ final class OriginForwarder {
       OutputStream bodyOut =
           captureStream != null ? new TeeOutputStream(counter, captureStream) : counter;
 
-      if (chunkedResponse) {
+      if (noBody) {
+        // No body to stream (1xx/204/304/HEAD).
+      } else if (chunkedResponse) {
         ChunkedBodyScanner responseScanner = new ChunkedBodyScanner();
         if (leftoverLen > 0) {
           responseScanner.advance(readBuf, leftoverStart, leftoverLen);
@@ -293,7 +309,8 @@ final class OriginForwarder {
           bodyOut.write(readBuf, 0, n);
           remaining -= n;
         }
-      } else {
+      } else if (!originKeepAlive) {
+        // No CL/chunked and origin will close connection — read until EOF.
         if (leftoverLen > 0) {
           bodyOut.write(readBuf, leftoverStart, leftoverLen);
         }
@@ -302,6 +319,7 @@ final class OriginForwarder {
           bodyOut.write(readBuf, 0, n);
         }
       }
+      // else: no CL/chunked but origin is keep-alive — treat as empty body.
 
       counter.close();
       closeCaptureStream(captureStream);

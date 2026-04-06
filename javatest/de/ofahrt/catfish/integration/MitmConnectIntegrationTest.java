@@ -555,6 +555,29 @@ public class MitmConnectIntegrationTest {
     }
   }
 
+  @Test(timeout = 10_000)
+  public void mitmConnectProxy_origin204NoContent_doesNotHang() throws Exception {
+    // Origin returns 204 No Content (no body, no Content-Length).
+    startHttpsServer(
+        9088,
+        new HttpVirtualHost(
+            (conn, request, writer) -> writer.commitBuffered(StandardResponses.NO_CONTENT)));
+    startMitmProxy(9089);
+
+    try (SSLSocket sslSocket = connectViaMitm(9089, 9088)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+      sslOut.write(
+          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
+
+      String responseHeaders = readUntilBlankLine(sslIn);
+      assertTrue(
+          "Expected 204, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 204"));
+    }
+  }
+
   // ---- handleRequest tests ----
 
   /**
