@@ -64,6 +64,7 @@ final class ConnectStage implements Stage {
   private SSLContext fakeCtx;
   private String originHost;
   private int originPort;
+  private Runnable onClose;
   private Connection connection;
 
   ConnectStage(
@@ -105,6 +106,7 @@ final class ConnectStage implements Stage {
   }
 
   private void doConnect(String connectHost, int connectPort) {
+    onClose = () -> handler.onConnectComplete(connectHost, connectPort);
     ConnectDecision decision;
     try {
       decision = handler.apply(connectHost, connectPort);
@@ -227,7 +229,7 @@ final class ConnectStage implements Stage {
 
   private void setupTunnel() throws IOException {
     TunnelForwardStage tunnelStage =
-        new TunnelForwardStage(parent, inputBuffer, outputBuffer, executor, tunnelSocket);
+        new TunnelForwardStage(parent, inputBuffer, outputBuffer, executor, tunnelSocket, onClose);
     tunnelSocket = null; // ownership transferred to tunnelStage
     parent.replaceWith(tunnelStage);
   }
@@ -249,7 +251,8 @@ final class ConnectStage implements Stage {
             originHost,
             originPort,
             originSocketFactory,
-            handler);
+            handler,
+            onClose);
 
     SSLContext capturedCtx = fakeCtx;
     SslServerStage ssl =
@@ -272,6 +275,9 @@ final class ConnectStage implements Stage {
         tunnelSocket.close();
       } catch (IOException ignored) {
       }
+    }
+    if (onClose != null) {
+      onClose.run();
     }
   }
 }

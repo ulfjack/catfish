@@ -52,6 +52,7 @@ final class MitmProxyStage implements Stage {
   private final int originPort;
   private final SSLSocketFactory originSocketFactory;
   private final ConnectHandler handler;
+  private final Runnable onClose;
 
   private State state = State.READING_REQUEST_HEADERS;
   private final IncrementalHttpRequestParser requestParser =
@@ -75,7 +76,8 @@ final class MitmProxyStage implements Stage {
       String originHost,
       int originPort,
       SSLSocketFactory originSocketFactory,
-      ConnectHandler handler) {
+      ConnectHandler handler,
+      Runnable onClose) {
     this.parent = parent;
     this.decryptedIn = decryptedIn;
     this.decryptedOut = decryptedOut;
@@ -84,6 +86,7 @@ final class MitmProxyStage implements Stage {
     this.originPort = originPort;
     this.originSocketFactory = originSocketFactory;
     this.handler = handler;
+    this.onClose = onClose;
     requestParser.setHeadersOnly(true);
   }
 
@@ -239,6 +242,7 @@ final class MitmProxyStage implements Stage {
     if (gen != null) {
       gen.close();
     }
+    onClose.run();
   }
 
   // ---- Housekeeping ----

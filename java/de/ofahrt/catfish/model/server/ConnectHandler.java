@@ -24,6 +24,9 @@ public interface ConnectHandler {
     return RequestAction.forward();
   }
 
+  /** Called when a CONNECT connection closes (tunnel disconnected or MITM session ended). */
+  default void onConnectComplete(String host, int port) {}
+
   /** Called on the executor thread after each proxied HTTP request completes (INTERCEPT only). */
   default void onResponse(
       UUID requestId,

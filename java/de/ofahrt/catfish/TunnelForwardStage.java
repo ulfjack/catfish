@@ -25,6 +25,7 @@ final class TunnelForwardStage implements Stage {
   private final Executor executor;
   private final Socket targetSocket;
   private final OutputStream targetOut;
+  private final Runnable onClose;
 
   private final LinkedBlockingQueue<byte[]> fromTarget = new LinkedBlockingQueue<>();
   private byte[] currentChunk;
@@ -36,7 +37,8 @@ final class TunnelForwardStage implements Stage {
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer,
       Executor executor,
-      Socket targetSocket)
+      Socket targetSocket,
+      Runnable onClose)
       throws IOException {
     this.parent = parent;
     this.inputBuffer = inputBuffer;
@@ -44,6 +46,7 @@ final class TunnelForwardStage implements Stage {
     this.executor = executor;
     this.targetSocket = targetSocket;
     this.targetOut = targetSocket.getOutputStream();
+    this.onClose = onClose;
   }
 
   @Override
@@ -106,6 +109,7 @@ final class TunnelForwardStage implements Stage {
   @Override
   public void close() {
     closeTargetSocket();
+    onClose.run();
   }
 
   private void readFromTarget() {
