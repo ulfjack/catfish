@@ -77,14 +77,16 @@ public class OpensslCertificateAuthorityTest {
 
   @Test
   public void create_returnsNonNullContext() throws Exception {
-    OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
+    OpensslCertificateAuthority ca =
+        new OpensslCertificateAuthority.Builder(caKey, caCert, workDir).build();
     SSLInfo info = ca.create("localhost", originCert);
     assertNotNull(info.sslContext());
   }
 
   @Test
   public void create_differentHostnames_returnsDifferentContexts() throws Exception {
-    OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
+    OpensslCertificateAuthority ca =
+        new OpensslCertificateAuthority.Builder(caKey, caCert, workDir).build();
     SSLInfo info1 = ca.create("host1.example.com", originCert);
     SSLInfo info2 = ca.create("host2.example.com", originCert);
     assertNotNull(info1.sslContext());
@@ -93,14 +95,16 @@ public class OpensslCertificateAuthorityTest {
 
   @Test
   public void create_mirrorsCnFromOriginCert() throws Exception {
-    OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
+    OpensslCertificateAuthority ca =
+        new OpensslCertificateAuthority.Builder(caKey, caCert, workDir).build();
     SSLInfo info = ca.create("localhost", originCert);
     assertEquals("testhost", extractCn(info.certificate()));
   }
 
   @Test
   public void create_mirrorsSansFromOriginCert() throws Exception {
-    OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
+    OpensslCertificateAuthority ca =
+        new OpensslCertificateAuthority.Builder(caKey, caCert, workDir).build();
     SSLInfo info = ca.create("localhost", originCert);
 
     Collection<List<?>> sans = info.certificate().getSubjectAlternativeNames();
@@ -122,7 +126,8 @@ public class OpensslCertificateAuthorityTest {
             new File("javatest/de/ofahrt/catfish/ssl/test.cert.pem"));
     X509Certificate noSanCert = noSanInfo.certificate();
 
-    OpensslCertificateAuthority ca = new OpensslCertificateAuthority(caKey, caCert, workDir);
+    OpensslCertificateAuthority ca =
+        new OpensslCertificateAuthority.Builder(caKey, caCert, workDir).build();
     SSLInfo info = ca.create("fallback.example.com", noSanCert);
 
     Collection<List<?>> sans = info.certificate().getSubjectAlternativeNames();

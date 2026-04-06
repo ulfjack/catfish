@@ -88,8 +88,9 @@ public class MitmConnectIntegrationTest {
 
     testSslInfo = TestHelper.getSSLInfo();
     ca =
-        new OpensslCertificateAuthority(
-            workDir.resolve("ca.key"), workDir.resolve("ca.crt"), workDir);
+        new OpensslCertificateAuthority.Builder(
+                workDir.resolve("ca.key"), workDir.resolve("ca.crt"), workDir)
+            .build();
     clientCtx = buildSslContextTrusting(workDir.resolve("ca.crt"));
 
     // Start origin HTTPS server on HTTPS_PORT.

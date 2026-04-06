@@ -6,20 +6,25 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
 public final class OpensslCertificateAuthority implements CertificateAuthority {
+  private static final Duration DEFAULT_VALIDITY = Duration.ofDays(1);
+
   private final Path caKey;
   private final Path caCert;
   private final Path workDir;
+  private final Duration validity;
 
-  public OpensslCertificateAuthority(Path caKey, Path caCert, Path workDir) {
-    this.caKey = caKey;
-    this.caCert = caCert;
-    this.workDir = workDir;
+  private OpensslCertificateAuthority(Builder builder) {
+    this.caKey = builder.caKey;
+    this.caCert = builder.caCert;
+    this.workDir = builder.workDir;
+    this.validity = builder.validity;
   }
 
   @Override
@@ -80,7 +85,7 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
           "-out",
           crtFile.toString(),
           "-days",
-          "365",
+          String.valueOf(Math.max(1, (validity.toSeconds() + 86399) / 86400)),
           "-extfile",
           extFile.toString());
 
@@ -134,6 +139,28 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
     if (exitCode != 0) {
       throw new IOException(
           "Command failed with exit code " + exitCode + ": " + String.join(" ", args));
+    }
+  }
+
+  public static final class Builder {
+    private final Path caKey;
+    private final Path caCert;
+    private final Path workDir;
+    private Duration validity = DEFAULT_VALIDITY;
+
+    public Builder(Path caKey, Path caCert, Path workDir) {
+      this.caKey = caKey;
+      this.caCert = caCert;
+      this.workDir = workDir;
+    }
+
+    public Builder setValidity(Duration validity) {
+      this.validity = validity;
+      return this;
+    }
+
+    public OpensslCertificateAuthority build() {
+      return new OpensslCertificateAuthority(this);
     }
   }
 }
