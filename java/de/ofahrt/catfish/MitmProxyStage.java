@@ -2,12 +2,10 @@ package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
-import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.ConnectHandler;
-import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -22,8 +20,8 @@ import javax.net.ssl.SSLSocketFactory;
  *   <li>{@code READING_REQUEST_HEADERS} — feeds {@code decryptedIn} bytes into an headers-only
  *       {@link IncrementalHttpRequestParser}. When done: determines body framing, starts the
  *       executor task, transitions to {@code STREAMING}.
- *   <li>{@code STREAMING} — {@code read()} feeds {@code decryptedIn} bytes into {@code
- *       requestBodyPipe}; returns {@code PAUSE} when pipe is full or body is done. {@code write()}
+ *   <li>{@code STREAMING} — {@code read()} feeds {@code decryptedIn} bytes into the {@link
+ *       BodyStreamer}; returns {@code PAUSE} when pipe is full or body is done. {@code write()}
  *       drains the {@link HttpResponseGeneratorStreamed} set by the executor task into {@code
  *       decryptedOut}; returns {@code PAUSE} when the generator is not yet set.
  * </ul>
@@ -38,12 +36,6 @@ final class MitmProxyStage implements Stage {
     STREAMING,
   }
 
-  private enum BodyState {
-    NO_BODY,
-    CONTENT_LENGTH,
-    CHUNKED,
-  }
-
   private final Pipeline parent;
   private final ByteBuffer decryptedIn;
   private final ByteBuffer decryptedOut;
@@ -55,14 +47,8 @@ final class MitmProxyStage implements Stage {
   private final Runnable onClose;
 
   private State state = State.READING_REQUEST_HEADERS;
-  private final IncrementalHttpRequestParser requestParser =
-      new IncrementalHttpRequestParser(UploadPolicy.ALLOW);
-
-  private BodyState bodyState;
-  private long bodyBytesRemaining;
-  private final ChunkedBodyScanner chunkedScanner = new ChunkedBodyScanner();
-
-  private final PipeBuffer requestBodyPipe = new PipeBuffer();
+  private final IncrementalHttpRequestParser requestParser = new IncrementalHttpRequestParser();
+  private final BodyStreamer bodyStreamer = new BodyStreamer();
 
   // Set by executor task via parent.queue(); read/cleared on NIO thread only.
   private HttpResponseGeneratorStreamed responseGen;
@@ -87,7 +73,6 @@ final class MitmProxyStage implements Stage {
     this.originSocketFactory = originSocketFactory;
     this.handler = handler;
     this.onClose = onClose;
-    requestParser.setHeadersOnly(true);
   }
 
   @Override
@@ -101,7 +86,7 @@ final class MitmProxyStage implements Stage {
       case READING_REQUEST_HEADERS:
         return readRequestHeaders();
       case STREAMING:
-        return readStreamingBody();
+        return bodyStreamer.feedBytes(decryptedIn);
     }
     throw new IllegalStateException();
   }
@@ -120,24 +105,10 @@ final class MitmProxyStage implements Stage {
       return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
     }
 
-    String cl = headers.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
-    String te = headers.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
-    if (te != null && "chunked".equalsIgnoreCase(te)) {
-      bodyState = BodyState.CHUNKED;
-      chunkedScanner.reset();
-    } else if (cl != null && !"0".equals(cl)) {
-      bodyState = BodyState.CONTENT_LENGTH;
-      try {
-        bodyBytesRemaining = Long.parseLong(cl);
-      } catch (NumberFormatException e) {
-        return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
-      }
-    } else {
-      bodyState = BodyState.NO_BODY;
-    }
-
+    bodyStreamer.init(headers);
     keepAlive = HttpConnectionHeader.mayKeepAlive(headers);
     state = State.STREAMING;
+
     OriginForwarder forwarder =
         new OriginForwarder(
             parent,
@@ -146,7 +117,7 @@ final class MitmProxyStage implements Stage {
             /* useTls= */ true,
             originSocketFactory,
             handler,
-            requestBodyPipe,
+            bodyStreamer.pipe(),
             keepAlive,
             (gen, ka) -> {
               responseGen = gen;
@@ -155,57 +126,16 @@ final class MitmProxyStage implements Stage {
             });
     executor.execute(() -> forwarder.run(headers));
 
-    if (bodyState == BodyState.NO_BODY) {
-      requestBodyPipe.closeWrite();
+    bodyStreamer.closeIfNoBody();
+    if (!bodyStreamer.hasBody()) {
       return ConnectionControl.PAUSE;
     }
-    return readStreamingBody();
-  }
-
-  private ConnectionControl readStreamingBody() {
-    if (requestBodyPipe.isWriteClosed()) {
-      return ConnectionControl.PAUSE;
-    }
-
-    byte[] arr = decryptedIn.array();
-    int pos = decryptedIn.position();
-    int rem = decryptedIn.remaining();
-
-    if (rem == 0) {
-      return ConnectionControl.CONTINUE;
-    }
-
-    if (bodyState == BodyState.CONTENT_LENGTH) {
-      int toConsume = (int) Math.min(rem, bodyBytesRemaining);
-      int written = requestBodyPipe.tryWrite(arr, pos, toConsume);
-      decryptedIn.position(pos + written);
-      bodyBytesRemaining -= written;
-      if (bodyBytesRemaining == 0) {
-        requestBodyPipe.closeWrite();
-        return ConnectionControl.PAUSE;
-      }
-      return written == toConsume ? ConnectionControl.CONTINUE : ConnectionControl.PAUSE;
-    } else {
-      // CHUNKED: scan to find body end; limit writes to that boundary.
-      int endIdx = chunkedScanner.findEnd(arr, pos, rem);
-      int toConsume = endIdx >= 0 ? endIdx : rem;
-      if (toConsume == 0) {
-        return ConnectionControl.PAUSE;
-      }
-      int written = requestBodyPipe.tryWrite(arr, pos, toConsume);
-      chunkedScanner.advance(arr, pos, written);
-      decryptedIn.position(pos + written);
-      if (endIdx >= 0 && written == endIdx && chunkedScanner.isDone()) {
-        requestBodyPipe.closeWrite();
-        return ConnectionControl.PAUSE;
-      }
-      return written == toConsume ? ConnectionControl.CONTINUE : ConnectionControl.PAUSE;
-    }
+    return bodyStreamer.feedBytes(decryptedIn);
   }
 
   @Override
   public void inputClosed() throws IOException {
-    requestBodyPipe.closeWrite();
+    bodyStreamer.closeWrite();
   }
 
   @Override
@@ -237,7 +167,7 @@ final class MitmProxyStage implements Stage {
 
   @Override
   public void close() {
-    requestBodyPipe.closeWrite();
+    bodyStreamer.closeWrite();
     HttpResponseGeneratorStreamed gen = responseGen;
     if (gen != null) {
       gen.close();
@@ -250,12 +180,9 @@ final class MitmProxyStage implements Stage {
   private void resetForNextRequest() {
     state = State.READING_REQUEST_HEADERS;
     requestParser.reset();
-    requestParser.setHeadersOnly(true);
-    requestBodyPipe.reset();
+
+    bodyStreamer.reset();
     responseGen = null;
-    bodyState = null;
-    bodyBytesRemaining = 0;
-    chunkedScanner.reset();
     keepAlive = false;
   }
 }

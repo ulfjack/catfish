@@ -1,14 +1,13 @@
 package de.ofahrt.catfish;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.MalformedRequestException;
-import de.ofahrt.catfish.model.server.UploadPolicy;
-import de.ofahrt.catfish.upload.SimpleUploadPolicy;
 import de.ofahrt.catfish.utils.HttpContentTypeTest;
 import org.junit.Test;
 
@@ -27,7 +26,8 @@ public class IncrementalHttpParserTest {
   @Test
   public void noAutoReset() {
     IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
-    assertEquals(18, parser.parse("GET / HTTP/1.1\r\n\r\n".getBytes()));
+    String request = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
+    assertEquals(request.length(), parser.parse(request.getBytes()));
     assertTrue(parser.isDone());
     assertEquals(0, parser.parse("NOT A VALID REQUEST".getBytes()));
   }
@@ -36,7 +36,7 @@ public class IncrementalHttpParserTest {
   public void unexpectedLineFeed() {
     IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
     // Note: no \r before the final \n!
-    byte[] data = "GET / HTTP/1.1\r\n\n".getBytes();
+    byte[] data = "GET / HTTP/1.1\r\nHost: localhost\r\n\n".getBytes();
     assertEquals(data.length, parser.parse(data));
     assertTrue(parser.isDone());
   }
@@ -44,17 +44,19 @@ public class IncrementalHttpParserTest {
   @Test
   public void ignoreTrailingContent() {
     IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
-    byte[] data = "GET / HTTP/1.1\r\n\r\nTRAILING_DATA".getBytes();
-    assertEquals(data.length - 13, parser.parse(data));
+    String headers = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
+    byte[] data = (headers + "TRAILING_DATA").getBytes();
+    assertEquals(headers.length(), parser.parse(data));
     assertTrue(parser.isDone());
   }
 
   @Test
-  public void ignoreTrailingContentAfterBody() {
-    IncrementalHttpRequestParser parser =
-        new IncrementalHttpRequestParser(new SimpleUploadPolicy(100));
-    byte[] data = "GET / HTTP/1.1\r\nContent-Length: 4\r\n\r\n0123TRAILING_DATA".getBytes();
-    assertEquals(data.length - 13, parser.parse(data));
+  public void stopAfterHeaders_bodyBytesUnconsumed() {
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    String headerStr = "GET / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 4\r\n\r\n";
+    byte[] data = (headerStr + "0123TRAILING_DATA").getBytes();
+    // Parser stops after headers; body + trailing data remain unconsumed.
+    assertEquals(headerStr.length(), parser.parse(data));
     assertTrue(parser.isDone());
   }
 
@@ -203,54 +205,13 @@ public class IncrementalHttpParserTest {
   }
 
   @Test
-  public void chunkedUploadDenied() throws MalformedRequestException {
-    IncrementalHttpRequestParser parser =
-        new IncrementalHttpRequestParser(new SimpleUploadPolicy(100));
+  public void chunkedRequest_parsesHeadersOnly() throws MalformedRequestException {
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
     byte[] data = "POST / HTTP/1.1\r\nHost: foo\r\nTransfer-Encoding: chunked\r\n\r\n".getBytes();
     parser.parse(data);
     assertTrue(parser.isDone());
-    try {
-      parser.getRequest();
-      fail();
-    } catch (MalformedRequestException e) {
-      assertEquals(
-          HttpStatusCode.PAYLOAD_TOO_LARGE.getStatusCode(), e.getErrorResponse().getStatusCode());
-    }
-  }
-
-  @Test
-  public void chunkedUploadWithExpectContinue() {
-    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser(UploadPolicy.ALLOW);
-    byte[] data =
-        "POST / HTTP/1.1\r\nHost: foo\r\nTransfer-Encoding: chunked\r\nExpect: 100-continue\r\n\r\n"
-            .getBytes();
-    parser.parse(data);
-    assertTrue(parser.isDone());
-    assertTrue(parser.needsContinue());
-  }
-
-  @Test
-  public void resumeAfterContinue_notWaiting() {
-    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
-    try {
-      parser.resumeAfterContinue();
-      fail();
-    } catch (IllegalStateException expected) {
-    }
-  }
-
-  @Test
-  public void resumeAfterContinue_resumes() {
-    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser(UploadPolicy.ALLOW);
-    byte[] data =
-        "POST / HTTP/1.1\r\nHost: foo\r\nTransfer-Encoding: chunked\r\nExpect: 100-continue\r\n\r\n"
-            .getBytes();
-    parser.parse(data);
-    assertTrue(parser.needsContinue());
-    assertTrue(parser.isDone());
-    parser.resumeAfterContinue();
-    assertFalse(parser.needsContinue());
-    assertFalse(parser.isDone());
+    HttpRequest request = parser.getRequest();
+    assertEquals("chunked", request.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING));
   }
 
   private static String repeat(String s, int count) {

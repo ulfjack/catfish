@@ -13,7 +13,6 @@ import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
-import de.ofahrt.catfish.upload.SimpleUploadPolicy;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -25,14 +24,22 @@ public class CatfishHttpServerTest {
 
   private static HttpRequest parse(String text) throws Exception {
     byte[] data = text.getBytes("ISO-8859-1");
-    IncrementalHttpRequestParser parser =
-        new IncrementalHttpRequestParser(new SimpleUploadPolicy(200));
+    IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
     int consumed = parser.parse(data);
-    // getRequest can throw if the request is malformed.
-    parser.getRequest();
-    assertEquals(data.length, consumed);
     assertTrue("parser not done at end of input", parser.isDone());
-    return parser.getRequest();
+    HttpRequest headers = parser.getRequest();
+
+    // Parse body if present.
+    String cl = headers.getHeaders().get("Content-Length");
+    if (cl != null && !"0".equals(cl)) {
+      int bodyLen = Integer.parseInt(cl);
+      de.ofahrt.catfish.upload.InMemoryEntityParser bodyParser =
+          new de.ofahrt.catfish.upload.InMemoryEntityParser(bodyLen);
+      bodyParser.parse(data, consumed, data.length - consumed);
+      assertTrue("body parser not done", bodyParser.isDone());
+      return headers.withBody(bodyParser.getParsedBody());
+    }
+    return headers;
   }
 
   private static HttpResponse createResponse(HttpRequest request) throws Exception {

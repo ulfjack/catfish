@@ -1,6 +1,5 @@
 package de.ofahrt.catfish;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -8,7 +7,6 @@ import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import org.junit.Test;
 
 /** Tests a parser for compliance with RFC 2616: http://www.ietf.org/rfc/rfc2616.txt */
@@ -141,18 +139,16 @@ public abstract class HttpParserTest {
   }
 
   @Test
-  public void withContent() throws Exception {
+  public void withContentLength_parsesHeaders() throws Exception {
     HttpRequest request =
         parse("POST / HTTP/1.1\nHost: localhost\nContent-Length: 10\n\n1234567890");
-    byte[] data = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
-    assertEquals("1234567890", new String(data, StandardCharsets.UTF_8));
+    assertEquals("10", request.getHeaders().get("Content-Length"));
   }
 
   @Test
-  public void withoutContentButWithContentLength() throws Exception {
+  public void withZeroContentLength_parsesHeaders() throws Exception {
     HttpRequest request = parse("POST / HTTP/1.1\nHost: localhost\nContent-Length: 0\n\n");
-    byte[] data = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
-    assertArrayEquals(new byte[0], data);
+    assertEquals("0", request.getHeaders().get("Content-Length"));
   }
 
   // Catfish-specific tests:
@@ -249,10 +245,13 @@ public abstract class HttpParserTest {
   @Test
   public void badContentLength() throws Exception {
     checkError(
-        "400 Illegal content length value", "GET / HTTP/1.1\nContent-Length: notanumber\n\n");
-    checkError("400 Illegal content length value", "GET / HTTP/1.1\nContent-Length: -1\n\n");
-    checkError("413 Payload Too Large", "GET / HTTP/1.1\nContent-Length: 2147483648\n\n");
-    checkError("413 Payload Too Large", "GET / HTTP/1.1\nContent-Length: 123456789\n\n");
+        "400 Illegal content length value",
+        "GET / HTTP/1.1\nHost: localhost\nContent-Length: notanumber\n\n");
+    checkError(
+        "400 Illegal content length value",
+        "GET / HTTP/1.1\nHost: localhost\nContent-Length: -1\n\n");
+    checkError(
+        "413 Payload Too Large", "GET / HTTP/1.1\nHost: localhost\nContent-Length: 2147483648\n\n");
   }
 
   @Test

@@ -33,6 +33,35 @@ public interface HttpRequest {
     return null;
   }
 
+  default HttpRequest withBody(Body body) {
+    return new HttpRequest() {
+      @Override
+      public HttpVersion getVersion() {
+        return HttpRequest.this.getVersion();
+      }
+
+      @Override
+      public String getMethod() {
+        return HttpRequest.this.getMethod();
+      }
+
+      @Override
+      public String getUri() {
+        return HttpRequest.this.getUri();
+      }
+
+      @Override
+      public HttpHeaders getHeaders() {
+        return HttpRequest.this.getHeaders();
+      }
+
+      @Override
+      public Body getBody() {
+        return body;
+      }
+    };
+  }
+
   default HttpRequest withHeaderOverrides(HttpHeaders overrides) {
     HttpHeaders combined = HttpRequest.this.getHeaders().withOverrides(overrides);
     return new HttpRequest() {

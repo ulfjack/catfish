@@ -7,12 +7,14 @@ import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
-import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
-import de.ofahrt.catfish.model.server.UploadPolicy;
-import de.ofahrt.catfish.upload.ChunkedBodyParser;
-import de.ofahrt.catfish.upload.InMemoryEntityParser;
-import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 
+/**
+ * Incremental HTTP/1.1 request header parser. Parses the request line and headers only; body
+ * parsing is the caller's responsibility. After {@link #isDone()} returns true, call {@link
+ * #getRequest()} to get the headers-only request.
+ */
 final class IncrementalHttpRequestParser {
   private static final int MAX_URI_LENGTH = 10_000;
   private static final int MAX_HEADER_NAME_LENGTH = 1000;
@@ -30,10 +32,7 @@ final class IncrementalHttpRequestParser {
     MESSAGE_HEADER_NAME,
     MESSAGE_HEADER_NAME_OR_CONTINUATION,
     MESSAGE_HEADER_VALUE,
-    PAYLOAD;
   }
-
-  private final UploadPolicy uploadPolicy;
 
   private final SimpleHttpRequest.Builder builder = new SimpleHttpRequest.Builder();
 
@@ -43,42 +42,16 @@ final class IncrementalHttpRequestParser {
   private boolean expectLineFeed;
   private int headerFieldCount;
 
-  /**
-   * Optional callback invoked when all headers have been parsed but before body parsing begins.
-   * Return {@code false} to stop parsing (like headersOnly), {@code true} to continue normally.
-   */
-  @FunctionalInterface
-  interface HeadersCallback {
-    boolean shouldParseBody(HttpRequest partialRequest);
-  }
-
   private boolean done;
-  private boolean needsContinue;
-  private boolean headersOnly;
-  private HeadersCallback headersCallback;
 
   private int majorVersion;
+  private int minorVersion;
+  private String unparsedUri;
   private String messageHeaderName;
   private String messageHeaderValue;
 
-  private HttpRequestBodyParser payloadParser;
-
-  public IncrementalHttpRequestParser(UploadPolicy uploadPolicy) {
-    this.uploadPolicy = uploadPolicy;
+  IncrementalHttpRequestParser() {
     reset();
-  }
-
-  public IncrementalHttpRequestParser() {
-    this.uploadPolicy = UploadPolicy.DENY;
-    reset();
-  }
-
-  public void setHeadersOnly(boolean headersOnly) {
-    this.headersOnly = headersOnly;
-  }
-
-  public void setHeadersCallback(HeadersCallback headersCallback) {
-    this.headersCallback = headersCallback;
   }
 
   void reset() {
@@ -89,16 +62,13 @@ final class IncrementalHttpRequestParser {
     headerFieldCount = 0;
 
     done = false;
-    needsContinue = false;
-    headersOnly = false;
-    headersCallback = null;
     builder.reset();
 
     majorVersion = 0;
+    minorVersion = 0;
+    unparsedUri = null;
     messageHeaderName = null;
     messageHeaderValue = null;
-
-    payloadParser = null;
   }
 
   //       CTL            = <any US-ASCII control character
@@ -196,7 +166,7 @@ final class IncrementalHttpRequestParser {
           break;
         case REQUEST_URI: // "*" | absoluteURI | abs_path | authority
           if (c == ' ') {
-            String unparsedUri = elementBuffer.toString();
+            unparsedUri = elementBuffer.toString();
             builder.setUri(unparsedUri);
             counter = 0;
             elementBuffer.setLength(0);
@@ -282,7 +252,7 @@ final class IncrementalHttpRequestParser {
             if (elementBuffer.length() > 7) {
               return setBadRequest("Http minor version is too long");
             }
-            int minorVersion = Integer.parseInt(elementBuffer.toString());
+            minorVersion = Integer.parseInt(elementBuffer.toString());
             builder.setVersion(HttpVersion.of(majorVersion, minorVersion));
             if (minorVersion < 1) {
               return setError(HttpStatusCode.VERSION_NOT_SUPPORTED, "Http version not supported");
@@ -309,8 +279,7 @@ final class IncrementalHttpRequestParser {
             if (elementBuffer.length() != 0) {
               return setBadRequest("Unexpected end of line in header field name");
             }
-            done = true;
-            return i + 1;
+            return validateAndFinish(i);
           } else if (isTokenCharacter(c)) {
             if (elementBuffer.length() >= MAX_HEADER_NAME_LENGTH) {
               return setError(
@@ -367,72 +336,7 @@ final class IncrementalHttpRequestParser {
           messageHeaderValue = null;
 
           if (c == '\n') {
-            if (headersCallback != null
-                && !headersCallback.shouldParseBody(builder.buildPartialRequest())) {
-              done = true;
-              return i + 1;
-            }
-            String contentLengthValue = builder.getHeader(HttpHeaderName.CONTENT_LENGTH);
-            String transferEncodingValue = builder.getHeader(HttpHeaderName.TRANSFER_ENCODING);
-            if (contentLengthValue != null || transferEncodingValue != null) {
-              if (transferEncodingValue != null && contentLengthValue != null) {
-                return setBadRequest("Must not set both Content-Length and Transfer-Encoding");
-              }
-              if (headersOnly) {
-                done = true;
-                return i + 1;
-              }
-              if ("0".equals(contentLengthValue)) {
-                builder.setBody(new HttpRequest.InMemoryBody(new byte[0]));
-                done = true;
-                return i + 1;
-              }
-              if (transferEncodingValue != null) {
-                if (!"chunked".equalsIgnoreCase(transferEncodingValue)) {
-                  return setError(HttpStatusCode.NOT_IMPLEMENTED, "Unknown Transfer-Encoding");
-                }
-                HttpRequest partialRequest = builder.buildPartialRequest();
-                if (!uploadPolicy.isAllowed(partialRequest)) {
-                  return setError(HttpStatusCode.PAYLOAD_TOO_LARGE);
-                }
-                payloadParser = new ChunkedBodyParser();
-                String expectValue = partialRequest.getHeaders().get(HttpHeaderName.EXPECT);
-                if ("100-continue".equalsIgnoreCase(expectValue)) {
-                  needsContinue = true;
-                  done = true;
-                  return i + 1;
-                }
-                state = State.PAYLOAD;
-                break;
-              }
-              long contentLength;
-              try {
-                contentLength = Long.parseLong(contentLengthValue);
-              } catch (NumberFormatException e) {
-                return setBadRequest("Illegal content length value");
-              }
-              if (contentLength < 0) {
-                return setBadRequest("Illegal content length value");
-              }
-              if (contentLength > Integer.MAX_VALUE) {
-                return setError(HttpStatusCode.PAYLOAD_TOO_LARGE);
-              }
-              HttpRequest partialRequest = builder.buildPartialRequest();
-              if (!uploadPolicy.isAllowed(partialRequest)) {
-                return setError(HttpStatusCode.PAYLOAD_TOO_LARGE);
-              }
-              payloadParser = new InMemoryEntityParser((int) contentLength);
-              String expectValue = partialRequest.getHeaders().get(HttpHeaderName.EXPECT);
-              if ("100-continue".equalsIgnoreCase(expectValue)) {
-                needsContinue = true;
-                done = true;
-                return i + 1;
-              }
-              state = State.PAYLOAD;
-            } else {
-              done = true;
-              return i + 1;
-            }
+            return validateAndFinish(i);
           } else if (isTokenCharacter(c)) {
             counter = 0;
             elementBuffer.setLength(0);
@@ -442,27 +346,51 @@ final class IncrementalHttpRequestParser {
             return setBadRequest("Illegal character in header field name");
           }
           break;
-        case PAYLOAD:
-          int parsed = payloadParser.parse(input, offset + i, length - i);
-          if (parsed <= 0) {
-            throw new IllegalStateException("Parser must process at least one byte");
-          }
-          i += parsed - 1; // loop increments by one
-          if (payloadParser.isDone()) {
-            try {
-              builder.setBody(payloadParser.getParsedBody());
-            } catch (IOException e) {
-              return setError(HttpStatusCode.BAD_REQUEST, e.getMessage());
-            }
-            done = true;
-            return i + 1; // add the one back since we skip the loop increment
-          }
-          break;
         default:
           throw new RuntimeException("Not implemented!");
       }
     }
     return length;
+  }
+
+  /** Validates header-level constraints and marks parsing as done. Called at the blank line. */
+  private int validateAndFinish(int i) {
+    if (unparsedUri != null && !unparsedUri.equals("*") && !unparsedUri.startsWith("/")) {
+      try {
+        URI parsed = new URI(unparsedUri);
+        if (!parsed.isAbsolute()) {
+          return setBadRequest("Malformed URI");
+        }
+      } catch (URISyntaxException e) {
+        return setBadRequest("Malformed URI");
+      }
+    }
+    String contentLengthValue = builder.getHeader(HttpHeaderName.CONTENT_LENGTH);
+    String transferEncodingValue = builder.getHeader(HttpHeaderName.TRANSFER_ENCODING);
+    if (contentLengthValue != null && transferEncodingValue != null) {
+      return setBadRequest("Must not set both Content-Length and Transfer-Encoding");
+    }
+    if (contentLengthValue != null) {
+      try {
+        long cl = Long.parseLong(contentLengthValue);
+        if (cl < 0) {
+          return setBadRequest("Illegal content length value");
+        }
+        if (cl > Integer.MAX_VALUE) {
+          return setError(HttpStatusCode.PAYLOAD_TOO_LARGE);
+        }
+      } catch (NumberFormatException e) {
+        return setBadRequest("Illegal content length value");
+      }
+    }
+    if (transferEncodingValue != null && !"chunked".equalsIgnoreCase(transferEncodingValue)) {
+      return setError(HttpStatusCode.NOT_IMPLEMENTED, "Unknown Transfer-Encoding");
+    }
+    if (majorVersion >= 1 && minorVersion >= 1 && builder.getHeader(HttpHeaderName.HOST) == null) {
+      return setBadRequest("Missing 'Host' field");
+    }
+    done = true;
+    return i + 1;
   }
 
   private int setBadRequest(String statusMessage) {
@@ -483,31 +411,17 @@ final class IncrementalHttpRequestParser {
     return done;
   }
 
-  /** Returns true if the server should send a {@code 100 Continue} response before the body. */
-  public boolean needsContinue() {
-    return needsContinue;
-  }
-
   /**
-   * Resumes body parsing after a {@code 100 Continue} response has been sent. Must only be called
-   * when {@link #needsContinue()} returns true.
+   * Returns the parsed headers-only request. Must only be called after {@link #isDone()} returns
+   * true. Throws {@link MalformedRequestException} if the request was malformed.
    */
-  public void resumeAfterContinue() {
-    if (!needsContinue) {
-      throw new IllegalStateException("Not waiting for continue");
-    }
-    needsContinue = false;
-    done = false;
-    state = State.PAYLOAD;
-  }
-
   public HttpRequest getRequest() throws MalformedRequestException {
     if (!done) {
       throw new IllegalStateException("No parsed request available!");
     }
-    if (headersOnly) {
-      return builder.buildPartialRequest();
+    if (builder.hasError()) {
+      throw new MalformedRequestException(builder.getErrorResponse());
     }
-    return builder.build();
+    return builder.buildPartialRequest();
   }
 }

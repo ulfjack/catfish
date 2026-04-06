@@ -21,16 +21,9 @@ import javax.net.ssl.SSLSocketFactory;
 /**
  * Streaming forward proxy stage for absolute-URI requests (e.g., {@code GET http://host/path
  * HTTP/1.1}). Replaces {@link HttpServerStage} when an absolute URI is detected during header
- * parsing. Uses the same body streaming infrastructure as {@link MitmProxyStage}: {@link
- * PipeBuffer} + {@link OriginForwarder}.
+ * parsing. Uses {@link BodyStreamer} + {@link OriginForwarder}.
  */
 final class ForwardProxyStage implements Stage {
-
-  private enum BodyState {
-    NO_BODY,
-    CONTENT_LENGTH,
-    CHUNKED,
-  }
 
   private final Pipeline parent;
   private final ByteBuffer inputBuffer;
@@ -40,16 +33,11 @@ final class ForwardProxyStage implements Stage {
   private final ConnectHandler connectHandler;
   private final SSLSocketFactory sslSocketFactory;
 
-  private BodyState bodyState;
-  private long bodyBytesRemaining;
-  private final ChunkedBodyScanner chunkedScanner = new ChunkedBodyScanner();
-
-  private final PipeBuffer requestBodyPipe = new PipeBuffer();
+  private final BodyStreamer bodyStreamer = new BodyStreamer();
 
   // Set by executor task via parent.queue(); read/cleared on NIO thread only.
   private HttpResponseGeneratorStreamed responseGen;
   private boolean keepAlive;
-  private boolean bodyDone;
 
   ForwardProxyStage(
       Pipeline parent,
@@ -70,36 +58,16 @@ final class ForwardProxyStage implements Stage {
 
   @Override
   public InitialConnectionState connect(Connection connection) {
-    // Determine body framing.
-    String cl = partialRequest.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
-    String te = partialRequest.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
-    if (te != null && "chunked".equalsIgnoreCase(te)) {
-      bodyState = BodyState.CHUNKED;
-    } else if (cl != null && !"0".equals(cl)) {
-      bodyState = BodyState.CONTENT_LENGTH;
-      try {
-        bodyBytesRemaining = Long.parseLong(cl);
-      } catch (NumberFormatException e) {
-        bodyState = BodyState.NO_BODY;
-      }
-    } else {
-      bodyState = BodyState.NO_BODY;
-    }
-
+    bodyStreamer.init(partialRequest);
     keepAlive = HttpConnectionHeader.mayKeepAlive(partialRequest);
-
-    if (bodyState == BodyState.NO_BODY) {
-      requestBodyPipe.closeWrite();
-      bodyDone = true;
-    }
+    bodyStreamer.closeIfNoBody();
 
     executor.execute(this::doForward);
 
     // Process any body bytes already in the input buffer (left over from HttpServerStage's parser).
-    // Also encourage reads so the NIO thread re-checks the buffer even if no new data arrives.
-    if (!bodyDone) {
+    if (bodyStreamer.hasBody()) {
       if (inputBuffer.hasRemaining()) {
-        readStreamingBody();
+        bodyStreamer.feedBytes(inputBuffer);
       }
       parent.encourageReads();
     }
@@ -161,7 +129,7 @@ final class ForwardProxyStage implements Stage {
             useTls,
             factory,
             connectHandler,
-            requestBodyPipe,
+            bodyStreamer.pipe(),
             keepAlive,
             (gen, ka) -> {
               responseGen = gen;
@@ -203,7 +171,7 @@ final class ForwardProxyStage implements Stage {
   private void drainPipe() {
     byte[] discard = new byte[65536];
     try {
-      while (requestBodyPipe.read(discard, 0, discard.length) >= 0) {}
+      while (bodyStreamer.pipe().read(discard, 0, discard.length) >= 0) {}
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
@@ -211,54 +179,12 @@ final class ForwardProxyStage implements Stage {
 
   @Override
   public ConnectionControl read() throws IOException {
-    if (bodyDone || requestBodyPipe.isWriteClosed()) {
-      return ConnectionControl.PAUSE;
-    }
-    return readStreamingBody();
-  }
-
-  private ConnectionControl readStreamingBody() {
-    byte[] arr = inputBuffer.array();
-    int pos = inputBuffer.position();
-    int rem = inputBuffer.remaining();
-
-    if (rem == 0) {
-      return ConnectionControl.CONTINUE;
-    }
-
-    if (bodyState == BodyState.CONTENT_LENGTH) {
-      int toConsume = (int) Math.min(rem, bodyBytesRemaining);
-      int written = requestBodyPipe.tryWrite(arr, pos, toConsume);
-      inputBuffer.position(pos + written);
-      bodyBytesRemaining -= written;
-      if (bodyBytesRemaining == 0) {
-        requestBodyPipe.closeWrite();
-        bodyDone = true;
-        return ConnectionControl.PAUSE;
-      }
-      return written == toConsume ? ConnectionControl.CONTINUE : ConnectionControl.PAUSE;
-    } else {
-      // CHUNKED
-      int endIdx = chunkedScanner.findEnd(arr, pos, rem);
-      int toConsume = endIdx >= 0 ? endIdx : rem;
-      if (toConsume == 0) {
-        return ConnectionControl.PAUSE;
-      }
-      int written = requestBodyPipe.tryWrite(arr, pos, toConsume);
-      chunkedScanner.advance(arr, pos, written);
-      inputBuffer.position(pos + written);
-      if (endIdx >= 0 && written == endIdx && chunkedScanner.isDone()) {
-        requestBodyPipe.closeWrite();
-        bodyDone = true;
-        return ConnectionControl.PAUSE;
-      }
-      return written == toConsume ? ConnectionControl.CONTINUE : ConnectionControl.PAUSE;
-    }
+    return bodyStreamer.feedBytes(inputBuffer);
   }
 
   @Override
   public void inputClosed() throws IOException {
-    requestBodyPipe.closeWrite();
+    bodyStreamer.closeWrite();
   }
 
   @Override
@@ -277,7 +203,6 @@ final class ForwardProxyStage implements Stage {
         return ConnectionControl.PAUSE;
       case STOP:
         responseGen = null;
-        // Forward proxy always closes after one request-response cycle.
         return ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
     }
     throw new IllegalStateException();
@@ -285,7 +210,7 @@ final class ForwardProxyStage implements Stage {
 
   @Override
   public void close() {
-    requestBodyPipe.closeWrite();
+    bodyStreamer.closeWrite();
     HttpResponseGeneratorStreamed gen = responseGen;
     if (gen != null) {
       gen.close();

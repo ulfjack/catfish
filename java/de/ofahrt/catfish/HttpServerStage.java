@@ -17,9 +17,12 @@ import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.CompressionPolicy;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
+import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.KeepAlivePolicy;
 import de.ofahrt.catfish.ssl.SSLInfo;
+import de.ofahrt.catfish.upload.ChunkedBodyParser;
+import de.ofahrt.catfish.upload.InMemoryEntityParser;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import de.ofahrt.catfish.utils.HttpContentType;
 import java.io.ByteArrayOutputStream;
@@ -213,13 +216,14 @@ final class HttpServerStage implements Stage {
   private final Executor executor;
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
-  private final IncrementalHttpRequestParser parser;
+  private final IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
   private Connection connection;
   private boolean processing;
   private boolean keepAlive = true;
   private HttpResponseGenerator responseGenerator;
-  // Set by headers callback when an absolute URI is detected (forward proxy interception).
-  private HttpRequest forwardProxyRequest;
+  // Set after header parsing when the request has a body to buffer.
+  private HttpRequestBodyParser bodyParser;
+  private HttpRequest headersRequest;
 
   HttpServerStage(
       Pipeline parent,
@@ -262,29 +266,6 @@ final class HttpServerStage implements Stage {
     this.executor = executor;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
-    this.parser =
-        new IncrementalHttpRequestParser(
-            (request) -> {
-              HttpVirtualHost host =
-                  virtualHostLookup.apply(request.getHeaders().get(HttpHeaderName.HOST));
-              if (host == null) {
-                // Unknown virtual host; deny the upload. This produces 413 rather than the
-                // correct 421, but UploadPolicy only returns boolean. The no-body case is
-                // handled in processRequest().
-                return false;
-              }
-              return host.uploadPolicy().isAllowed(request);
-            });
-    if (connectHandler != null) {
-      this.parser.setHeadersCallback(
-          (partialRequest) -> {
-            if (isAbsoluteUri(partialRequest.getUri())) {
-              forwardProxyRequest = partialRequest;
-              return false; // stop body parsing — ForwardProxyStage will handle it
-            }
-            return true; // continue normal body parsing
-          });
-    }
   }
 
   @Override
@@ -295,37 +276,119 @@ final class HttpServerStage implements Stage {
 
   @Override
   public ConnectionControl read() {
+    // Phase 2: body parsing (if active).
+    if (bodyParser != null) {
+      return readBody();
+    }
+
+    // Phase 1: header parsing.
     // invariant: inputBuffer is readable
     if (inputBuffer.hasRemaining()) {
       int consumed = parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.limit());
       inputBuffer.position(inputBuffer.position() + consumed);
     }
-    if (parser.isDone()) {
-      if (forwardProxyRequest != null) {
-        HttpRequest req = forwardProxyRequest;
-        forwardProxyRequest = null;
-        parser.reset();
-        parent.replaceWith(
-            new ForwardProxyStage(
-                parent,
-                inputBuffer,
-                outputBuffer,
-                executor,
-                req,
-                connectHandler,
-                originSocketFactory != null
-                    ? originSocketFactory
-                    : (SSLSocketFactory) SSLSocketFactory.getDefault()));
-        return ConnectionControl.PAUSE;
-      }
-      if (parser.needsContinue()) {
-        responseGenerator = new ContinueResponseGenerator();
-        parent.encourageWrites();
-        return ConnectionControl.PAUSE;
-      }
-      return processRequest();
+    if (!parser.isDone()) {
+      return ConnectionControl.CONTINUE;
     }
-    return ConnectionControl.CONTINUE;
+
+    HttpRequest headers;
+    try {
+      headers = parser.getRequest();
+    } catch (MalformedRequestException e) {
+      startBuffered(null, e.getErrorResponse());
+      return ConnectionControl.CLOSE_INPUT;
+    }
+    parser.reset();
+
+    // Route based on method/URI.
+    if (HttpMethodName.CONNECT.equals(headers.getMethod())) {
+      return handleConnect(headers);
+    }
+    if (connectHandler != null && isAbsoluteUri(headers.getUri())) {
+      parent.replaceWith(
+          new ForwardProxyStage(
+              parent,
+              inputBuffer,
+              outputBuffer,
+              executor,
+              headers,
+              connectHandler,
+              originSocketFactory != null
+                  ? originSocketFactory
+                  : (SSLSocketFactory) SSLSocketFactory.getDefault()));
+      return ConnectionControl.PAUSE;
+    }
+
+    // Regular request — check if it has a body.
+    String cl = headers.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
+    String te = headers.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
+    boolean hasBody =
+        (cl != null && !"0".equals(cl)) || (te != null && "chunked".equalsIgnoreCase(te));
+
+    if (!hasBody) {
+      return processRequest(headers);
+    }
+
+    // Body present — check upload policy.
+    HttpVirtualHost host = virtualHostLookup.apply(headers.getHeaders().get(HttpHeaderName.HOST));
+    if (host == null || !host.uploadPolicy().isAllowed(headers)) {
+      startBuffered(headers, StandardResponses.PAYLOAD_TOO_LARGE);
+      return ConnectionControl.CLOSE_INPUT;
+    }
+
+    // Set up body parser.
+    if (te != null && "chunked".equalsIgnoreCase(te)) {
+      bodyParser = new ChunkedBodyParser();
+    } else {
+      long contentLength;
+      try {
+        contentLength = Long.parseLong(cl);
+      } catch (NumberFormatException e) {
+        startBuffered(headers, StandardResponses.BAD_REQUEST);
+        return ConnectionControl.CLOSE_INPUT;
+      }
+      if (contentLength < 0 || contentLength > Integer.MAX_VALUE) {
+        startBuffered(headers, StandardResponses.PAYLOAD_TOO_LARGE);
+        return ConnectionControl.CLOSE_INPUT;
+      }
+      bodyParser = new InMemoryEntityParser((int) contentLength);
+    }
+    headersRequest = headers;
+
+    // Check for Expect: 100-continue.
+    String expectValue = headers.getHeaders().get(HttpHeaderName.EXPECT);
+    if ("100-continue".equalsIgnoreCase(expectValue)) {
+      responseGenerator = new ContinueResponseGenerator();
+      parent.encourageWrites();
+      return ConnectionControl.PAUSE;
+    }
+
+    // Start body parsing immediately.
+    return readBody();
+  }
+
+  private ConnectionControl readBody() {
+    if (!inputBuffer.hasRemaining()) {
+      return ConnectionControl.CONTINUE;
+    }
+    int consumed =
+        bodyParser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.remaining());
+    inputBuffer.position(inputBuffer.position() + consumed);
+    if (!bodyParser.isDone()) {
+      return ConnectionControl.CONTINUE;
+    }
+    HttpRequest headers = headersRequest;
+    HttpRequestBodyParser bp = bodyParser;
+    headersRequest = null;
+    bodyParser = null;
+    HttpRequest.Body body;
+    try {
+      body = bp.getParsedBody();
+    } catch (IOException e) {
+      startBuffered(headers, StandardResponses.BAD_REQUEST);
+      return ConnectionControl.CLOSE_INPUT;
+    }
+    return processRequest(headers.withBody(body));
   }
 
   @Override
@@ -357,7 +420,6 @@ final class HttpServerStage implements Stage {
       case STOP:
         if (responseGenerator instanceof ContinueResponseGenerator) {
           responseGenerator = null;
-          parser.resumeAfterContinue();
           parent.log("Sent 100 Continue, resuming body read");
           return readAndResume();
         }
@@ -402,58 +464,50 @@ final class HttpServerStage implements Stage {
     }
   }
 
-  private ConnectionControl processRequest() {
+  private ConnectionControl handleConnect(HttpRequest request) {
+    if (connectHandler == null) {
+      startBuffered(
+          request,
+          StandardResponses.methodNotAllowed()
+              .allowing("GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"));
+      return ConnectionControl.CONTINUE;
+    }
+    String uri = request.getUri();
+    int colonIdx = uri.lastIndexOf(':');
+    if (colonIdx < 0) {
+      startBuffered(request, StandardResponses.BAD_REQUEST);
+      return ConnectionControl.CONTINUE;
+    }
+    String parsedHost = uri.substring(0, colonIdx);
+    int parsedPort;
+    try {
+      parsedPort = Integer.parseInt(uri.substring(colonIdx + 1));
+    } catch (NumberFormatException e) {
+      startBuffered(request, StandardResponses.BAD_REQUEST);
+      return ConnectionControl.CONTINUE;
+    }
+    parent.replaceWith(
+        new ConnectStage(
+            parent,
+            inputBuffer,
+            outputBuffer,
+            executor,
+            parsedHost,
+            parsedPort,
+            connectHandler,
+            originSocketFactory,
+            sslInfoCache));
+    return ConnectionControl.PAUSE;
+  }
+
+  private ConnectionControl processRequest(HttpRequest request) {
     if (processing) {
       return ConnectionControl.PAUSE;
     }
     processing = true;
-    HttpRequest request;
-    try {
-      request = parser.getRequest();
-    } catch (MalformedRequestException e) {
-      startBuffered(null, e.getErrorResponse());
-      return ConnectionControl.CLOSE_INPUT;
-    } finally {
-      parser.reset();
-    }
     parent.log("%s %s %s", request.getMethod(), request.getUri(), request.getVersion());
     if (VERBOSE) {
       System.out.println(CoreHelper.requestToString(request));
-    }
-    if (HttpMethodName.CONNECT.equals(request.getMethod())) {
-      if (connectHandler == null) {
-        startBuffered(
-            request,
-            StandardResponses.methodNotAllowed()
-                .allowing("GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"));
-        return ConnectionControl.CONTINUE;
-      }
-      String uri = request.getUri();
-      int colonIdx = uri.lastIndexOf(':');
-      if (colonIdx < 0) {
-        startBuffered(request, StandardResponses.BAD_REQUEST);
-        return ConnectionControl.CONTINUE;
-      }
-      String parsedHost = uri.substring(0, colonIdx);
-      int parsedPort;
-      try {
-        parsedPort = Integer.parseInt(uri.substring(colonIdx + 1));
-      } catch (NumberFormatException e) {
-        startBuffered(request, StandardResponses.BAD_REQUEST);
-        return ConnectionControl.CONTINUE;
-      }
-      parent.replaceWith(
-          new ConnectStage(
-              parent,
-              inputBuffer,
-              outputBuffer,
-              executor,
-              parsedHost,
-              parsedPort,
-              connectHandler,
-              originSocketFactory,
-              sslInfoCache));
-      return ConnectionControl.PAUSE;
     }
     HttpVirtualHost host = virtualHostLookup.apply(request.getHeaders().get(HttpHeaderName.HOST));
     if (host == null) {
