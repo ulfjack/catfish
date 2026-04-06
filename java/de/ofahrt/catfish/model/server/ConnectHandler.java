@@ -27,13 +27,28 @@ public interface ConnectHandler {
   /** Called when a CONNECT connection closes (tunnel disconnected or MITM session ended). */
   default void onConnectComplete(String host, int port) {}
 
-  /** Called on the executor thread after each proxied HTTP request completes (INTERCEPT only). */
+  /**
+   * Called on the executor thread after origin response headers are received. Only fires on success
+   * (not on connection errors). For local responses, fires with the local response.
+   */
   default void onResponse(
       UUID requestId,
       String originHost,
       int originPort,
       HttpRequest request,
       HttpResponse response) {}
+
+  /**
+   * Called on the executor thread when a proxied request completes, whether successfully or not.
+   * Always fires exactly once per {@link #handleRequest} call. Fires after response body streaming
+   * is complete (or after an error).
+   */
+  default void onRequestComplete(
+      UUID requestId,
+      String originHost,
+      int originPort,
+      HttpRequest request,
+      RequestOutcome outcome) {}
 
   static ConnectHandler tunnelAll() {
     return (h, p) -> ConnectDecision.tunnel(h, p);

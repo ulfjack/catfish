@@ -8,6 +8,7 @@ import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.RequestAction;
+import de.ofahrt.catfish.model.server.RequestOutcome;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -93,17 +94,22 @@ final class OriginForwarder {
   void run(HttpRequest headers) {
     UUID requestId = UUID.randomUUID();
     RequestAction action = handler.handleRequest(requestId, originHost, originPort, headers);
-
-    if (action.localResponse() != null) {
-      runLocalResponse(requestId, headers, action);
-      return;
+    RequestOutcome outcome;
+    try {
+      if (action.localResponse() != null) {
+        outcome = runLocalResponse(requestId, headers, action);
+      } else {
+        HttpRequest effectiveRequest = action.request() != null ? action.request() : headers;
+        outcome = runForwardToOrigin(requestId, headers, effectiveRequest, action.captureStream());
+      }
+    } catch (Exception e) {
+      outcome = RequestOutcome.error(e);
     }
-
-    HttpRequest effectiveRequest = action.request() != null ? action.request() : headers;
-    runForwardToOrigin(requestId, headers, effectiveRequest, action.captureStream());
+    handler.onRequestComplete(requestId, originHost, originPort, headers, outcome);
   }
 
-  private void runLocalResponse(UUID requestId, HttpRequest headers, RequestAction action) {
+  private RequestOutcome runLocalResponse(
+      UUID requestId, HttpRequest headers, RequestAction action) {
     drainPipe();
 
     HttpResponse localResponse = action.localResponse();
@@ -123,22 +129,23 @@ final class OriginForwarder {
             parent::encourageWrites, headers, responseWithHeaders, /* includeBody= */ true);
     parent.queue(() -> resultCallback.accept(gen, keepAlive));
 
+    CountingOutputStream counter = new CountingOutputStream(gen.getOutputStream());
     try {
-      OutputStream genOut = gen.getOutputStream();
       if (action.bodyWriter() != null) {
-        action.bodyWriter().writeTo(genOut);
+        action.bodyWriter().writeTo(counter);
       } else if (localResponse.getBody() != null) {
-        genOut.write(localResponse.getBody());
+        counter.write(localResponse.getBody());
       }
-      genOut.close();
+      counter.close();
     } catch (IOException e) {
       gen.close();
-      return;
+      return RequestOutcome.error(localResponse, e, counter.count());
     }
     handler.onResponse(requestId, originHost, originPort, headers, localResponse);
+    return RequestOutcome.success(localResponse, counter.count());
   }
 
-  private void runForwardToOrigin(
+  private RequestOutcome runForwardToOrigin(
       UUID requestId,
       HttpRequest originalHeaders,
       HttpRequest effectiveHeaders,
@@ -156,10 +163,12 @@ final class OriginForwarder {
       drainAndClosePipe();
       sendErrorResponse();
       closeCaptureStream(captureStream);
-      return;
+      return RequestOutcome.error(e);
     }
 
     HttpResponseGeneratorStreamed gen = null;
+    HttpResponse originResponse = null;
+    CountingOutputStream counter = null;
     try {
       OutputStream originOut = socket.getOutputStream();
       originOut.write(requestHeadersToBytes(effectiveHeaders));
@@ -210,7 +219,7 @@ final class OriginForwarder {
       int leftoverStart = bufStart;
       int leftoverLen = bufEnd - bufStart;
 
-      HttpResponse originResponse = respParser.getResponse();
+      originResponse = respParser.getResponse();
       String responseCl = originResponse.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
       String responseTe = originResponse.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
       boolean chunkedResponse = responseTe != null && "chunked".equalsIgnoreCase(responseTe);
@@ -245,11 +254,11 @@ final class OriginForwarder {
       HttpResponseGeneratorStreamed genFinal = gen;
       parent.queue(() -> resultCallback.accept(genFinal, keepAlive));
 
-      OutputStream genOut = gen.getOutputStream();
+      counter = new CountingOutputStream(gen.getOutputStream());
 
       // Stream the response body. When captureStream is non-null, tee each chunk to it.
       OutputStream bodyOut =
-          captureStream != null ? new TeeOutputStream(genOut, captureStream) : genOut;
+          captureStream != null ? new TeeOutputStream(counter, captureStream) : counter;
 
       if (chunkedResponse) {
         ChunkedBodyScanner responseScanner = new ChunkedBodyScanner();
@@ -294,10 +303,11 @@ final class OriginForwarder {
         }
       }
 
-      genOut.close();
+      counter.close();
       closeCaptureStream(captureStream);
       socket.close();
       handler.onResponse(requestId, originHost, originPort, originalHeaders, originResponse);
+      return RequestOutcome.success(originResponse, counter.count());
 
     } catch (IOException e) {
       try {
@@ -311,6 +321,8 @@ final class OriginForwarder {
         drainAndClosePipe();
         sendErrorResponse();
       }
+      long bytes = counter != null ? counter.count() : 0;
+      return RequestOutcome.error(originResponse, e, bytes);
     }
   }
 
@@ -379,6 +391,42 @@ final class OriginForwarder {
       w.append("\r\n");
     }
     return baos.toByteArray();
+  }
+
+  /** An OutputStream wrapper that counts bytes written. */
+  static final class CountingOutputStream extends OutputStream {
+    private final OutputStream delegate;
+    private long count;
+
+    CountingOutputStream(OutputStream delegate) {
+      this.delegate = delegate;
+    }
+
+    long count() {
+      return count;
+    }
+
+    @Override
+    public void write(int b) throws IOException {
+      delegate.write(b);
+      count++;
+    }
+
+    @Override
+    public void write(byte[] b, int off, int len) throws IOException {
+      delegate.write(b, off, len);
+      count += len;
+    }
+
+    @Override
+    public void flush() throws IOException {
+      delegate.flush();
+    }
+
+    @Override
+    public void close() throws IOException {
+      delegate.close();
+    }
   }
 
   /**
