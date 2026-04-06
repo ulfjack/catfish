@@ -13,19 +13,14 @@ public interface ConnectHandler {
   /** Called on the executor thread after a leaf cert is obtained (INTERCEPT only). */
   default void onCertificateReady(String host, int port) {}
 
-  /** Called on the executor thread before forwarding a request to the origin (INTERCEPT only). */
-  default void onRequest(UUID requestId, String originHost, int originPort, HttpRequest request) {}
-
   /**
-   * Called on the executor thread for each MITM-intercepted request. Return a {@link RequestAction}
-   * to control how the request is handled: forward to origin (optionally with a rewritten request),
-   * respond locally (buffered or streaming), or forward while capturing the response body.
-   *
-   * <p>The default implementation calls {@link #onRequest} and forwards unchanged.
+   * Called on the executor thread for each MITM-intercepted or forward-proxied request. Return a
+   * {@link RequestAction} to control how the request is handled: forward to origin (optionally with
+   * a rewritten request), respond locally (buffered or streaming), or forward while capturing the
+   * response body.
    */
   default RequestAction handleRequest(
       UUID requestId, String originHost, int originPort, HttpRequest request) {
-    onRequest(requestId, originHost, originPort, request);
     return RequestAction.forward();
   }
 
