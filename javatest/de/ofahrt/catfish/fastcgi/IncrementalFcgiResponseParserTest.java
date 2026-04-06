@@ -1,6 +1,5 @@
 package de.ofahrt.catfish.fastcgi;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 import de.ofahrt.catfish.fastcgi.IncrementalFcgiResponseParser.MalformedResponseException;

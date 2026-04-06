@@ -6,8 +6,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.model.HttpHeaderName;
-import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.network.Connection;
 import java.io.ByteArrayInputStream;
@@ -189,9 +187,7 @@ public class ServletHelperTest {
     byte[] data = "name=value&foo=bar".getBytes("ISO-8859-1");
     FormData formData =
         ServletHelper.parseFormData(
-            data.length,
-            new ByteArrayInputStream(data),
-            "application/x-www-form-urlencoded");
+            data.length, new ByteArrayInputStream(data), "application/x-www-form-urlencoded");
     assertEquals("value", formData.data.get("name"));
     assertEquals("bar", formData.data.get("foo"));
   }

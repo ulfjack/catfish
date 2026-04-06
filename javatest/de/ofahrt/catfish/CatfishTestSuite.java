@@ -2,8 +2,8 @@ package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.api.CatfishApiTestSuite;
 import de.ofahrt.catfish.bridge.CatfishBridgeTestSuite;
-import de.ofahrt.catfish.fastcgi.FastCgiTestSuite;
 import de.ofahrt.catfish.client.ClientTestSuite;
+import de.ofahrt.catfish.fastcgi.FastCgiTestSuite;
 import de.ofahrt.catfish.integration.IntegrationTestSuite;
 import de.ofahrt.catfish.internal.CatfishInternalTestSuite;
 import de.ofahrt.catfish.model.ModelTestSuite;

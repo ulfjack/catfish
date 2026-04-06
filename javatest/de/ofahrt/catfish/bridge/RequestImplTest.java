@@ -357,8 +357,7 @@ public class RequestImplTest {
   @Test
   public void getContentType_returnsValue() throws Exception {
     assertEquals(
-        "text/plain",
-        requestForHeader(HttpHeaderName.CONTENT_TYPE, "text/plain").getContentType());
+        "text/plain", requestForHeader(HttpHeaderName.CONTENT_TYPE, "text/plain").getContentType());
   }
 
   @Test
@@ -440,8 +439,7 @@ public class RequestImplTest {
   @Test
   public void supportGzipCompression_trueWhenPresent() throws Exception {
     assertTrue(
-        requestForHeader(HttpHeaderName.ACCEPT_ENCODING, "gzip, deflate")
-            .supportGzipCompression());
+        requestForHeader(HttpHeaderName.ACCEPT_ENCODING, "gzip, deflate").supportGzipCompression());
   }
 
   @Test
@@ -535,20 +533,14 @@ public class RequestImplTest {
   @Test
   public void getMethod_returnsGetForHead() throws Exception {
     RequestImpl req =
-        toRequestImpl(
-            new SimpleHttpRequest.Builder()
-                .setMethod(HttpMethodName.HEAD)
-                .setUri("*"));
+        toRequestImpl(new SimpleHttpRequest.Builder().setMethod(HttpMethodName.HEAD).setUri("*"));
     assertEquals("GET", req.getMethod());
   }
 
   @Test
   public void getMethod_returnsActualMethod() throws Exception {
     RequestImpl req =
-        toRequestImpl(
-            new SimpleHttpRequest.Builder()
-                .setMethod(HttpMethodName.POST)
-                .setUri("*"));
+        toRequestImpl(new SimpleHttpRequest.Builder().setMethod(HttpMethodName.POST).setUri("*"));
     assertEquals("POST", req.getMethod());
   }
 
