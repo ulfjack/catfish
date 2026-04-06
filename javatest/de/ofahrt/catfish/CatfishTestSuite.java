@@ -2,6 +2,7 @@ package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.api.CatfishApiTestSuite;
 import de.ofahrt.catfish.bridge.CatfishBridgeTestSuite;
+import de.ofahrt.catfish.fastcgi.FastCgiTestSuite;
 import de.ofahrt.catfish.client.ClientTestSuite;
 import de.ofahrt.catfish.integration.IntegrationTestSuite;
 import de.ofahrt.catfish.internal.CatfishInternalTestSuite;
@@ -30,6 +31,7 @@ import org.junit.runners.Suite.SuiteClasses;
   HttpResponseGeneratorStreamedTest.class,
   PipeBufferTest.class,
   SNIParserTest.class,
+  FastCgiTestSuite.class,
   CatfishInternalTestSuite.class,
   CatfishSslTestSuite.class,
   CatfishApiTestSuite.class,
