@@ -135,7 +135,15 @@ final class ForwardProxyStage implements Stage {
               responseGen = gen;
               keepAlive = ka;
               parent.encourageWrites();
-            });
+            },
+            () ->
+                parent.queue(
+                    () -> {
+                      if (inputBuffer.hasRemaining()) {
+                        bodyStreamer.feedBytes(inputBuffer);
+                      }
+                      parent.encourageReads();
+                    }));
     forwarder.run(originRequest);
   }
 

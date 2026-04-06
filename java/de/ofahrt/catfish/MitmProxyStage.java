@@ -123,7 +123,15 @@ final class MitmProxyStage implements Stage {
               responseGen = gen;
               keepAlive = ka;
               parent.encourageWrites();
-            });
+            },
+            () ->
+                parent.queue(
+                    () -> {
+                      if (decryptedIn.hasRemaining()) {
+                        bodyStreamer.feedBytes(decryptedIn);
+                      }
+                      parent.encourageReads();
+                    }));
     executor.execute(() -> forwarder.run(headers));
 
     bodyStreamer.closeIfNoBody();

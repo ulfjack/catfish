@@ -337,6 +337,35 @@ public class MitmConnectIntegrationTest {
     }
   }
 
+  @Test(timeout = 10_000)
+  public void mitmConnectProxy_largePostBody_forwardsWithoutHanging() throws Exception {
+    // Body larger than PipeBuffer capacity (64KB) to exercise the backpressure/resume path.
+    byte[] sentBody = new byte[80_000];
+    for (int i = 0; i < sentBody.length; i++) {
+      sentBody[i] = (byte) (i & 0xff);
+    }
+
+    startHttpsServer(9063, echoBodyHost());
+    startMitmProxy(9064);
+
+    try (SSLSocket sslSocket = connectViaMitm(9064, 9063)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+      sslOut.write(
+          ("POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: "
+                  + sentBody.length
+                  + "\r\nConnection: close\r\n\r\n")
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.write(sentBody);
+      sslOut.flush();
+
+      String responseHeaders = readUntilBlankLine(sslIn);
+      assertTrue(
+          "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
+      assertArrayEquals(sentBody, readBody(sslIn, responseHeaders));
+    }
+  }
+
   @Test
   public void mitmConnectProxy_postRequest_forwardsBodyToOrigin() throws Exception {
     byte[] sentBody = "POST-BODY-DATA".getBytes(StandardCharsets.UTF_8);

@@ -69,6 +69,7 @@ final class OriginForwarder {
   }
 
   private final ResultCallback resultCallback;
+  private final Runnable pipeSpaceCallback;
 
   OriginForwarder(
       Pipeline parent,
@@ -79,7 +80,8 @@ final class OriginForwarder {
       ConnectHandler handler,
       PipeBuffer requestBodyPipe,
       boolean keepAlive,
-      ResultCallback resultCallback) {
+      ResultCallback resultCallback,
+      Runnable pipeSpaceCallback) {
     this.parent = parent;
     this.originHost = originHost;
     this.originPort = originPort;
@@ -89,6 +91,7 @@ final class OriginForwarder {
     this.requestBodyPipe = requestBodyPipe;
     this.keepAlive = keepAlive;
     this.resultCallback = resultCallback;
+    this.pipeSpaceCallback = pipeSpaceCallback;
   }
 
   void run(HttpRequest headers) {
@@ -188,7 +191,7 @@ final class OriginForwarder {
           break;
         }
         originOut.write(buf, 0, n);
-        parent.queue(parent::encourageReads);
+        pipeSpaceCallback.run();
       }
       originOut.flush();
 
