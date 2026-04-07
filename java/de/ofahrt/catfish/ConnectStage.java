@@ -133,7 +133,10 @@ final class ConnectStage implements Stage {
     }
 
     // INTERCEPT: use a cached cert if available, otherwise connect to origin to mirror its cert.
-    SSLInfo cached = sslInfoCache != null ? sslInfoCache.get(connectHost) : null;
+    // Cache key includes the port because different ports on the same host may serve different
+    // certs (different vhosts, different services).
+    String cacheKey = connectHost + ":" + connectPort;
+    SSLInfo cached = sslInfoCache != null ? sslInfoCache.get(cacheKey) : null;
     SSLContext ctx;
     if (cached != null) {
       ctx = cached.sslContext();
@@ -172,7 +175,7 @@ final class ConnectStage implements Stage {
       }
 
       if (sslInfoCache != null) {
-        sslInfoCache.putIfAbsent(connectHost, info);
+        sslInfoCache.putIfAbsent(cacheKey, info);
       }
       ctx = info.sslContext();
     }
