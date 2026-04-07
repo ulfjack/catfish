@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
@@ -224,6 +225,51 @@ public class MitmConnectIntegrationTest {
   }
 
   // ---- Tests ----
+
+  @Test
+  public void onConnectComplete_runsOnExecutorThread() throws Exception {
+    // onConnectComplete used to fire on the NIO selector thread (catfish-select-*), which would
+    // block the selector if the user callback did any real work. Verify it now runs on the
+    // executor pool (catfish-worker-*).
+    java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+    java.util.concurrent.atomic.AtomicReference<String> threadName =
+        new java.util.concurrent.atomic.AtomicReference<>();
+
+    CatfishHttpServer server = newServer();
+    serversToStop.add(server);
+    server.listenConnectProxyLocal(
+        9105,
+        new ConnectHandler() {
+          @Override
+          public ConnectDecision apply(String host, int port) {
+            return ConnectDecision.tunnel(host, port);
+          }
+
+          @Override
+          public void onConnectComplete(String host, int port) {
+            threadName.set(Thread.currentThread().getName());
+            latch.countDown();
+          }
+        });
+
+    // Open a CONNECT tunnel to HTTPS_PORT and immediately close — this triggers Stage.close()
+    // which runs onClose → handler.onConnectComplete.
+    try (Socket socket = new Socket("localhost", 9105)) {
+      OutputStream out = socket.getOutputStream();
+      InputStream in = socket.getInputStream();
+      out.write(
+          ("CONNECT localhost:" + HTTPS_PORT + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
+              .getBytes(StandardCharsets.ISO_8859_1));
+      out.flush();
+      readUntilBlankLine(in);
+    }
+
+    assertTrue("onConnectComplete not invoked within 2s", latch.await(2, TimeUnit.SECONDS));
+    String actual = threadName.get();
+    assertTrue(
+        "Expected onConnectComplete on an executor thread (catfish-worker-*), got: " + actual,
+        actual != null && actual.startsWith("catfish-worker-"));
+  }
 
   @Test
   public void mitmConnectProxy_transparentlyBridgesHttps() throws Exception {

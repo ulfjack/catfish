@@ -106,7 +106,9 @@ final class ConnectStage implements Stage {
   }
 
   private void doConnect(String connectHost, int connectPort) {
-    onClose = () -> handler.onConnectComplete(connectHost, connectPort);
+    // Stage.close() runs on the NIO selector thread; dispatch onConnectComplete to the executor
+    // so user callbacks don't block the selector.
+    onClose = () -> executor.execute(() -> handler.onConnectComplete(connectHost, connectPort));
     ConnectDecision decision;
     try {
       decision = handler.apply(connectHost, connectPort);
