@@ -6,6 +6,7 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
 @SuiteClasses({
+  FcgiHandlerTest.class,
   IncrementalFcgiResponseParserTest.class,
 })
 public class FastCgiTestSuite {}

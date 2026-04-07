@@ -4,7 +4,7 @@ import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
-import de.ofahrt.catfish.fastcgi.FcgiServlet;
+import de.ofahrt.catfish.fastcgi.FcgiHandler;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.network.Connection;
@@ -76,7 +76,10 @@ public class ExampleMain {
     HttpHandler handler =
         new ServletHttpHandler.Builder()
             .withSessionManager(new SessionManager())
-            .exact("/hello.php", new FcgiServlet())
+            .exact(
+                "/hello.php",
+                new FcgiHandler(
+                    "localhost", 12345, "/hello.php", "/home/ulfjack/Projects/catfish/hello.php"))
             .exact("/post", new CheckPostHandler())
             .exact("/", new TraceHandler())
             .exact("/large", new LargeResponseHandler(16536))

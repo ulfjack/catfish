@@ -4,7 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 final class Record {
@@ -53,12 +53,9 @@ final class Record {
   public Record setContentAsKeys(String... keys) {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     for (int i = 0; i < keys.length; i++) {
-      byte[] key = keys[i].getBytes(Charset.forName("UTF-8"));
-      if (key.length > 127) {
-        throw new IllegalArgumentException();
-      }
-      out.write(key.length);
-      out.write(0);
+      byte[] key = keys[i].getBytes(StandardCharsets.UTF_8);
+      writeLength(out, key.length);
+      writeLength(out, 0);
       out.write(key, 0, key.length);
     }
     return setContent(out.toByteArray());
@@ -67,21 +64,33 @@ final class Record {
   public Record setContentAsMap(Map<String, String> map) {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     for (Map.Entry<String, String> entry : map.entrySet()) {
-      byte[] key = entry.getKey().getBytes(Charset.forName("UTF-8"));
+      byte[] key = entry.getKey().getBytes(StandardCharsets.UTF_8);
       String valueString = entry.getValue() != null ? entry.getValue() : "";
-      byte[] value = valueString.getBytes(Charset.forName("UTF-8"));
-      if (key.length > 127) {
-        throw new IllegalArgumentException();
-      }
-      if (value.length > 127) {
-        throw new IllegalArgumentException();
-      }
-      out.write(key.length);
-      out.write(value.length);
+      byte[] value = valueString.getBytes(StandardCharsets.UTF_8);
+      writeLength(out, key.length);
+      writeLength(out, value.length);
       out.write(key, 0, key.length);
       out.write(value, 0, value.length);
     }
     return setContent(out.toByteArray());
+  }
+
+  /**
+   * Encodes a name-value-pair length per FCGI spec §3.4: 1 byte if length ≤127, otherwise 4 bytes
+   * with the high bit of the first byte set.
+   */
+  private static void writeLength(ByteArrayOutputStream out, int length) {
+    if (length < 0) {
+      throw new IllegalArgumentException("Invalid name-value length: " + length);
+    }
+    if (length <= 0x7f) {
+      out.write(length);
+    } else {
+      out.write(0x80 | ((length >>> 24) & 0xff));
+      out.write((length >>> 16) & 0xff);
+      out.write((length >>> 8) & 0xff);
+      out.write(length & 0xff);
+    }
   }
 
   @Override
@@ -129,10 +138,7 @@ final class Record {
 
   public void readFrom(InputStream in) throws IOException {
     byte[] temp = new byte[8];
-    int len = in.read(temp, 0, 8);
-    if (len != 8) {
-      throw new IOException("Argh: " + len);
-    }
+    readFully(in, temp, 0, 8);
     version = temp[0];
     type = temp[1];
     requestIdB1 = temp[2];
@@ -142,15 +148,26 @@ final class Record {
     paddingLength = temp[6];
     reserved = temp[7];
     contentData = new byte[(contentLengthB1 & 0xff) << 8 | (contentLengthB0 & 0xff)];
-    int readBytes = 0;
-    while (readBytes < contentData.length) {
-      len = in.read(contentData, readBytes, contentData.length - readBytes);
-      readBytes += len;
+    readFully(in, contentData, 0, contentData.length);
+    int padding = paddingLength & 0xff;
+    int paddingRead = 0;
+    while (paddingRead < padding) {
+      int n = in.read(temp, 0, Math.min(padding - paddingRead, temp.length));
+      if (n < 0) {
+        throw new IOException("Unexpected EOF reading padding");
+      }
+      paddingRead += n;
     }
-    readBytes = 0;
-    while (readBytes < paddingLength) {
-      len = in.read(temp, 0, Math.min(paddingLength, 8));
-      readBytes += len;
+  }
+
+  private static void readFully(InputStream in, byte[] buf, int off, int len) throws IOException {
+    int read = 0;
+    while (read < len) {
+      int n = in.read(buf, off + read, len - read);
+      if (n < 0) {
+        throw new IOException("Unexpected EOF (read " + read + " of " + len + " bytes)");
+      }
+      read += n;
     }
   }
 }
