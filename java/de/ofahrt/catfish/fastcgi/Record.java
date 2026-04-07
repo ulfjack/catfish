@@ -9,6 +9,8 @@ import java.util.Map;
 
 final class Record {
 
+  static final int MAX_CONTENT_LENGTH = 0xffff;
+
   private static final byte[] EMPTY_DATA = new byte[0];
 
   private byte version = (byte) FastCgiConstants.FCGI_VERSION_1;
@@ -44,6 +46,10 @@ final class Record {
   }
 
   public Record setContent(byte[] data) {
+    if (data.length > MAX_CONTENT_LENGTH) {
+      throw new IllegalArgumentException(
+          "Record content exceeds 0xffff bytes: " + data.length + "; caller must split.");
+    }
     this.contentData = data;
     this.contentLengthB0 = (byte) data.length;
     this.contentLengthB1 = (byte) (data.length >>> 8);
@@ -61,7 +67,12 @@ final class Record {
     return setContent(out.toByteArray());
   }
 
-  public Record setContentAsMap(Map<String, String> map) {
+  /**
+   * Encodes the given map as an FCGI name-value-pair stream (spec §3.4). Returned bytes are not
+   * length-bounded — callers writing this as record content must split into ≤{@link
+   * #MAX_CONTENT_LENGTH}-byte chunks.
+   */
+  public static byte[] encodeNameValuePairs(Map<String, String> map) {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     for (Map.Entry<String, String> entry : map.entrySet()) {
       byte[] key = entry.getKey().getBytes(StandardCharsets.UTF_8);
@@ -72,7 +83,7 @@ final class Record {
       out.write(key, 0, key.length);
       out.write(value, 0, value.length);
     }
-    return setContent(out.toByteArray());
+    return out.toByteArray();
   }
 
   /**

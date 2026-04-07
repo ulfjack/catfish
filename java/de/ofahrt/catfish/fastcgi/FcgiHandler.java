@@ -14,9 +14,12 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -38,18 +41,56 @@ public final class FcgiHandler implements HttpHandler {
   private static final int REQUEST_ID = 1;
   // FCGI_BeginRequestBody: role=FCGI_RESPONDER (0x0001), flags=0 (don't keep connection alive).
   private static final byte[] BEGIN_REQUEST_BODY = {0, 1, 0, 0, 0, 0, 0, 0};
+  private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
+  private static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(30);
+
+  /**
+   * Hop-by-hop response headers that must not be forwarded to the client per RFC 7230 §6.1, plus
+   * Content-Length and Transfer-Encoding which are managed by the HTTP response generator (we
+   * commit the response as streamed). All entries must be lowercase.
+   */
+  private static final Set<String> HOP_BY_HOP_RESPONSE_HEADERS =
+      Set.of(
+          "connection",
+          "proxy-connection",
+          "keep-alive",
+          "te",
+          "trailer",
+          "transfer-encoding",
+          "upgrade",
+          "content-length");
 
   private final String backendHost;
   private final int backendPort;
   private final String scriptName;
   private final String scriptFilename;
+  private final Duration connectTimeout;
+  private final Duration readTimeout;
 
   public FcgiHandler(
       String backendHost, int backendPort, String scriptName, String scriptFilename) {
+    this(
+        backendHost,
+        backendPort,
+        scriptName,
+        scriptFilename,
+        DEFAULT_CONNECT_TIMEOUT,
+        DEFAULT_READ_TIMEOUT);
+  }
+
+  public FcgiHandler(
+      String backendHost,
+      int backendPort,
+      String scriptName,
+      String scriptFilename,
+      Duration connectTimeout,
+      Duration readTimeout) {
     this.backendHost = backendHost;
     this.backendPort = backendPort;
     this.scriptName = scriptName;
     this.scriptFilename = scriptFilename;
+    this.connectTimeout = connectTimeout;
+    this.readTimeout = readTimeout;
   }
 
   @Override
@@ -58,34 +99,55 @@ public final class FcgiHandler implements HttpHandler {
     byte[] requestBody = extractBody(request);
     Map<String, String> params = buildParams(request, requestBody.length);
 
-    try (FastCgiConnection fcgi = FastCgiConnection.connect(backendHost, backendPort)) {
-      Record record = new Record().setRequestId(REQUEST_ID);
-
-      record.setType(FastCgiConstants.FCGI_BEGIN_REQUEST).setContent(BEGIN_REQUEST_BODY);
-      fcgi.write(record);
-
-      record.setType(FastCgiConstants.FCGI_PARAMS).setContentAsMap(params);
-      fcgi.write(record);
-      // Empty FCGI_PARAMS marks end-of-params.
-      record.setContent(new byte[0]);
-      fcgi.write(record);
-
-      record.setType(FastCgiConstants.FCGI_STDIN);
-      if (requestBody.length > 0) {
-        record.setContent(requestBody);
-        fcgi.write(record);
-      }
-      // Empty FCGI_STDIN marks end-of-input.
-      record.setContent(new byte[0]);
-      fcgi.write(record);
-
-      readAndForwardResponse(fcgi, writer);
+    ResponseAssembler assembler = new ResponseAssembler(writer);
+    try (FastCgiConnection fcgi =
+        FastCgiConnection.connect(backendHost, backendPort, connectTimeout, readTimeout)) {
+      sendRequest(fcgi, params, requestBody);
+      readResponse(fcgi, assembler);
+    } catch (IOException e) {
+      assembler.failWithBadGateway(e);
+      return;
     }
+    assembler.finish();
   }
 
-  private void readAndForwardResponse(FastCgiConnection fcgi, HttpResponseWriter writer)
+  private static void sendRequest(FastCgiConnection fcgi, Map<String, String> params, byte[] body)
       throws IOException {
-    ResponseAssembler assembler = new ResponseAssembler(writer);
+    Record record = new Record().setRequestId(REQUEST_ID);
+
+    record.setType(FastCgiConstants.FCGI_BEGIN_REQUEST).setContent(BEGIN_REQUEST_BODY);
+    fcgi.write(record);
+
+    writeStream(fcgi, FastCgiConstants.FCGI_PARAMS, Record.encodeNameValuePairs(params));
+    writeStream(fcgi, FastCgiConstants.FCGI_STDIN, body);
+  }
+
+  /**
+   * Writes a logical FCGI stream (PARAMS or STDIN) to the backend, splitting into ≤{@link
+   * Record#MAX_CONTENT_LENGTH}-byte records and always terminating with an empty record (the FCGI
+   * end-of-stream marker).
+   */
+  private static void writeStream(FastCgiConnection fcgi, int type, byte[] data)
+      throws IOException {
+    Record record = new Record().setRequestId(REQUEST_ID).setType(type);
+    int offset = 0;
+    while (offset < data.length) {
+      int chunk = Math.min(Record.MAX_CONTENT_LENGTH, data.length - offset);
+      byte[] slice =
+          (offset == 0 && chunk == data.length)
+              ? data
+              : Arrays.copyOfRange(data, offset, offset + chunk);
+      record.setContent(slice);
+      fcgi.write(record);
+      offset += chunk;
+    }
+    // End-of-stream marker.
+    record.setContent(new byte[0]);
+    fcgi.write(record);
+  }
+
+  private static void readResponse(FastCgiConnection fcgi, ResponseAssembler assembler)
+      throws IOException {
     IncrementalFcgiResponseParser parser = new IncrementalFcgiResponseParser(assembler);
     while (true) {
       Record record = fcgi.read();
@@ -101,11 +163,10 @@ public final class FcgiHandler implements HttpHandler {
           throw new IOException("Malformed FastCGI response", e);
         }
       } else if (type == FastCgiConstants.FCGI_END_REQUEST) {
-        break;
+        return;
       }
       // FCGI_STDERR and unknown types are silently ignored.
     }
-    assembler.finish();
   }
 
   private static byte[] extractBody(HttpRequest request) {
@@ -149,6 +210,12 @@ public final class FcgiHandler implements HttpHandler {
           || HttpHeaderName.CONTENT_TYPE.equalsIgnoreCase(name)) {
         continue;
       }
+      // Drop the "Proxy" request header to avoid the httpoxy CVE (CVE-2016-5385): a malicious
+      // client could otherwise set HTTP_PROXY in the backend's environment, which some HTTP
+      // client libraries honor for outbound requests.
+      if ("Proxy".equalsIgnoreCase(name)) {
+        continue;
+      }
       params.put("HTTP_" + name.toUpperCase(Locale.ROOT).replace('-', '_'), entry.getValue());
     }
     return params;
@@ -185,9 +252,14 @@ public final class FcgiHandler implements HttpHandler {
       String canonical = HttpHeaderName.canonicalize(key);
       if ("Status".equalsIgnoreCase(canonical)) {
         parseStatus(value);
-      } else {
-        headers.put(canonical, value);
+        return;
       }
+      // Drop hop-by-hop response headers per RFC 7230 §6.1; the HTTP response generator manages
+      // its own framing.
+      if (HOP_BY_HOP_RESPONSE_HEADERS.contains(canonical.toLowerCase(Locale.ROOT))) {
+        return;
+      }
+      headers.put(canonical, value);
     }
 
     private void parseStatus(String value) {
@@ -228,6 +300,40 @@ public final class FcgiHandler implements HttpHandler {
         body = writer.commitStreamed(buildResponse());
       }
       body.close();
+    }
+
+    /**
+     * Commit a 502 Bad Gateway in response to a backend connection / protocol failure. Safe to call
+     * even if a partial response was already streamed: in that case the partial body is closed and
+     * we propagate the original error so the connection is torn down.
+     */
+    void failWithBadGateway(IOException cause) throws IOException {
+      if (body != null) {
+        // Headers were already committed — we can't change the status code anymore. Tear down.
+        try {
+          body.close();
+        } catch (IOException ignored) {
+        }
+        throw cause;
+      }
+      HttpResponse badGateway =
+          new HttpResponse() {
+            @Override
+            public int getStatusCode() {
+              return HttpStatusCode.BAD_GATEWAY.getStatusCode();
+            }
+
+            @Override
+            public String getStatusMessage() {
+              return HttpStatusCode.BAD_GATEWAY.getStatusMessage();
+            }
+
+            @Override
+            public HttpHeaders getHeaders() {
+              return HttpHeaders.of(HttpHeaderName.CONNECTION, "close");
+            }
+          };
+      writer.commitBuffered(badGateway);
     }
 
     private HttpResponse buildResponse() {

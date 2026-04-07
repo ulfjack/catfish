@@ -18,6 +18,7 @@ import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -77,9 +78,10 @@ public class FcgiHandlerTest {
   }
 
   /**
-   * Mock FastCGI backend: accepts a single connection, reads BEGIN_REQUEST + PARAMS + STDIN, then
-   * sends back the supplied CGI response (status line + headers + body) followed by an empty STDOUT
-   * and FCGI_END_REQUEST.
+   * Mock FastCGI backend: accepts a single connection, accumulates BEGIN_REQUEST + PARAMS + STDIN
+   * across multiple records, then sends back the supplied CGI response (split into ≤4096-byte
+   * STDOUT records to exercise the streaming response path) followed by an empty STDOUT and
+   * FCGI_END_REQUEST.
    */
   private Future<CapturedRequest> startMockBackend(byte[] cgiResponse) {
     return executor.submit(
@@ -89,33 +91,41 @@ public class FcgiHandlerTest {
             InputStream in = socket.getInputStream();
             OutputStream out = socket.getOutputStream();
 
+            ByteArrayOutputStream paramsBuffer = new ByteArrayOutputStream();
             int requestId = -1;
-            while (true) {
+            boolean stdinDone = false;
+            while (!stdinDone) {
               Record record = new Record();
               record.readFrom(in);
               int type = record.getType();
               if (type == FastCgiConstants.FCGI_BEGIN_REQUEST) {
                 requestId = readRequestId(record);
               } else if (type == FastCgiConstants.FCGI_PARAMS) {
-                if (record.getContent().length == 0) {
-                  continue; // end-of-params marker
-                }
-                parseParams(record.getContent(), captured.params);
+                // Accumulate across records — a name-value pair may span them.
+                paramsBuffer.write(record.getContent());
               } else if (type == FastCgiConstants.FCGI_STDIN) {
                 if (record.getContent().length == 0) {
-                  break; // end-of-input marker
+                  stdinDone = true;
+                } else {
+                  captured.stdin.write(record.getContent());
                 }
-                captured.stdin.write(record.getContent());
               }
             }
+            parseParams(paramsBuffer.toByteArray(), captured.params);
 
-            // Send the CGI response in a single FCGI_STDOUT record (chunking is fine in tests).
-            Record stdout = new Record();
-            stdout.setRequestId(requestId).setType(FastCgiConstants.FCGI_STDOUT);
-            stdout.setContent(cgiResponse);
-            stdout.writeTo(out);
-
-            // Empty FCGI_STDOUT marks end-of-stream (not strictly required, but well-behaved).
+            // Send the CGI response in 4KB FCGI_STDOUT chunks (exercises the streaming path).
+            Record stdout =
+                new Record().setRequestId(requestId).setType(FastCgiConstants.FCGI_STDOUT);
+            int offset = 0;
+            while (offset < cgiResponse.length) {
+              int chunkLen = Math.min(4096, cgiResponse.length - offset);
+              byte[] chunk = new byte[chunkLen];
+              System.arraycopy(cgiResponse, offset, chunk, 0, chunkLen);
+              stdout.setContent(chunk);
+              stdout.writeTo(out);
+              offset += chunkLen;
+            }
+            // Empty FCGI_STDOUT marks end-of-stream.
             stdout.setContent(new byte[0]);
             stdout.writeTo(out);
 
@@ -302,5 +312,150 @@ public class FcgiHandlerTest {
     CapturedRequest req = captured.get(2, TimeUnit.SECONDS);
     assertEquals(longQuery.toString(), req.params.get("QUERY_STRING"));
     assertEquals(200, writer.response.getStatusCode());
+  }
+
+  @Test
+  public void largeRequestBody_splitsAcrossStdinRecords() throws Exception {
+    // 200 KB body — exceeds the 65535-byte FCGI record limit and must be split across records.
+    byte[] body = new byte[200 * 1024];
+    for (int i = 0; i < body.length; i++) {
+      body[i] = (byte) (i & 0xff);
+    }
+    byte[] cgiResponse = ("Content-Type: text/plain\r\n\r\nok").getBytes(StandardCharsets.UTF_8);
+    Future<CapturedRequest> captured = startMockBackend(cgiResponse);
+
+    HttpRequest request =
+        new HttpRequest() {
+          @Override
+          public String getMethod() {
+            return HttpMethodName.POST;
+          }
+
+          @Override
+          public String getUri() {
+            return "/upload";
+          }
+
+          @Override
+          public HttpHeaders getHeaders() {
+            return HttpHeaders.of(
+                HttpHeaderName.HOST,
+                "example.com",
+                HttpHeaderName.CONTENT_LENGTH,
+                Integer.toString(body.length));
+          }
+
+          @Override
+          public Body getBody() {
+            return new InMemoryBody(body);
+          }
+        };
+
+    FcgiHandler handler =
+        new FcgiHandler("localhost", serverSocket.getLocalPort(), "/upload", "/srv/upload.php");
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, request, writer);
+
+    CapturedRequest req = captured.get(5, TimeUnit.SECONDS);
+    assertArrayEquals(body, req.stdin.toByteArray());
+    assertEquals(200, writer.response.getStatusCode());
+  }
+
+  @Test
+  public void largeParamSet_splitsAcrossParamsRecords() throws Exception {
+    byte[] cgiResponse = ("Content-Type: text/plain\r\n\r\nok").getBytes(StandardCharsets.UTF_8);
+    Future<CapturedRequest> captured = startMockBackend(cgiResponse);
+
+    // QUERY_STRING ~80 KB — pushes the encoded params over the 65535-byte record limit, even
+    // before counting the other CGI vars.
+    StringBuilder longQuery = new StringBuilder();
+    for (int i = 0; i < 80 * 1024; i++) {
+      longQuery.append('x');
+    }
+    String uri = "/x?" + longQuery;
+
+    FcgiHandler handler =
+        new FcgiHandler("localhost", serverSocket.getLocalPort(), "/x", "/srv/x.php");
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, get(uri), writer);
+
+    CapturedRequest req = captured.get(5, TimeUnit.SECONDS);
+    assertEquals(longQuery.toString(), req.params.get("QUERY_STRING"));
+    assertEquals(200, writer.response.getStatusCode());
+  }
+
+  @Test
+  public void proxyHeader_droppedToMitigateHttpoxy() throws Exception {
+    byte[] cgiResponse = ("Content-Type: text/plain\r\n\r\nok").getBytes(StandardCharsets.UTF_8);
+    Future<CapturedRequest> captured = startMockBackend(cgiResponse);
+
+    HttpRequest request =
+        new HttpRequest() {
+          @Override
+          public String getUri() {
+            return "/x";
+          }
+
+          @Override
+          public HttpHeaders getHeaders() {
+            return HttpHeaders.of(
+                HttpHeaderName.HOST, "example.com", "Proxy", "http://attacker.example/");
+          }
+        };
+
+    FcgiHandler handler =
+        new FcgiHandler("localhost", serverSocket.getLocalPort(), "/x", "/srv/x.php");
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, request, writer);
+
+    CapturedRequest req = captured.get(2, TimeUnit.SECONDS);
+    // The Proxy request header must NOT be exposed as HTTP_PROXY (CVE-2016-5385).
+    assertEquals(null, req.params.get("HTTP_PROXY"));
+  }
+
+  @Test
+  public void hopByHopResponseHeaders_dropped() throws Exception {
+    byte[] cgiResponse =
+        ("Content-Type: text/plain\r\n"
+                + "Connection: close\r\n"
+                + "Transfer-Encoding: chunked\r\n"
+                + "Keep-Alive: timeout=5\r\n"
+                + "X-Custom: keepme\r\n"
+                + "\r\n"
+                + "ok")
+            .getBytes(StandardCharsets.UTF_8);
+    Future<CapturedRequest> captured = startMockBackend(cgiResponse);
+
+    FcgiHandler handler =
+        new FcgiHandler("localhost", serverSocket.getLocalPort(), "/x", "/srv/x.php");
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, get("/x"), writer);
+    captured.get(2, TimeUnit.SECONDS);
+
+    HttpHeaders responseHeaders = writer.response.getHeaders();
+    assertEquals(null, responseHeaders.get("Connection"));
+    assertEquals(null, responseHeaders.get("Transfer-Encoding"));
+    assertEquals(null, responseHeaders.get("Keep-Alive"));
+    assertEquals("text/plain", responseHeaders.get("Content-Type"));
+    // Unknown headers are canonicalized to lowercase by HttpHeaderName.canonicalize.
+    assertEquals("keepme", responseHeaders.get("x-custom"));
+  }
+
+  @Test
+  public void backendUnreachable_returns502BadGateway() throws Exception {
+    // Use a port that nothing is listening on. We close the test's serverSocket so its port
+    // becomes (almost certainly) free, then we point the handler at port 1 which is reserved
+    // and not bound — connect should fail immediately with ECONNREFUSED.
+    serverSocket.close();
+
+    FcgiHandler handler =
+        new FcgiHandler(
+            "127.0.0.1", 1, "/x", "/srv/x.php", Duration.ofMillis(500), Duration.ofMillis(500));
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, get("/x"), writer);
+
+    assertNotNull(writer.response);
+    assertEquals(502, writer.response.getStatusCode());
+    assertEquals("close", writer.response.getHeaders().get("Connection"));
   }
 }
