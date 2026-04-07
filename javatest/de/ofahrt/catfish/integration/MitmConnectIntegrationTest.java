@@ -45,16 +45,18 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.TrustManagerFactory;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class MitmConnectIntegrationTest {
   private static final int HTTPS_PORT = 9095;
   private static final int MITM_PORT = 9096;
 
-  private Path workDir;
-  private SSLInfo testSslInfo;
-  private CertificateAuthority ca;
-  private SSLContext clientCtx;
+  private static Path workDir;
+  private static SSLInfo testSslInfo;
+  private static CertificateAuthority ca;
+  private static SSLContext clientCtx;
+
   private final List<CatfishHttpServer> serversToStop = new ArrayList<>();
 
   private static boolean opensslAvailable() {
@@ -66,8 +68,8 @@ public class MitmConnectIntegrationTest {
     }
   }
 
-  @Before
-  public void startServer() throws Exception {
+  @BeforeClass
+  public static void setUpClass() throws Exception {
     assumeTrue("openssl must be available", opensslAvailable());
 
     workDir = Files.createTempDirectory("catfish-mitm-test");
@@ -92,8 +94,12 @@ public class MitmConnectIntegrationTest {
                 workDir.resolve("ca.key"), workDir.resolve("ca.crt"), workDir)
             .build();
     clientCtx = buildSslContextTrusting(workDir.resolve("ca.crt"));
+  }
 
-    // Start origin HTTPS server on HTTPS_PORT.
+  @Before
+  public void startServer() throws Exception {
+    // Start origin HTTPS server on HTTPS_PORT and MITM proxy on MITM_PORT. Each test gets a fresh
+    // pair so the proxy's per-host SSLInfo cache doesn't bleed between tests.
     CatfishHttpServer server = newServer();
     server.addHttpHost(
         "localhost",
