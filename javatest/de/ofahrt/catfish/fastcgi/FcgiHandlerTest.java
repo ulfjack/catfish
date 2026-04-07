@@ -17,7 +17,14 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.StandardProtocolFamily;
+import java.net.UnixDomainSocketAddress;
+import java.nio.channels.Channels;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -78,66 +85,88 @@ public class FcgiHandlerTest {
   }
 
   /**
-   * Mock FastCGI backend: accepts a single connection, accumulates BEGIN_REQUEST + PARAMS + STDIN
-   * across multiple records, then sends back the supplied CGI response (split into ≤4096-byte
-   * STDOUT records to exercise the streaming response path) followed by an empty STDOUT and
-   * FCGI_END_REQUEST.
+   * Mock FastCGI backend listening on the test's TCP server socket: accepts one connection, runs
+   * the shared FCGI exchange against it, and returns what was captured.
    */
   private Future<CapturedRequest> startMockBackend(byte[] cgiResponse) {
     return executor.submit(
         () -> {
-          CapturedRequest captured = new CapturedRequest();
           try (Socket socket = serverSocket.accept()) {
-            InputStream in = socket.getInputStream();
-            OutputStream out = socket.getOutputStream();
-
-            ByteArrayOutputStream paramsBuffer = new ByteArrayOutputStream();
-            int requestId = -1;
-            boolean stdinDone = false;
-            while (!stdinDone) {
-              Record record = new Record();
-              record.readFrom(in);
-              int type = record.getType();
-              if (type == FastCgiConstants.FCGI_BEGIN_REQUEST) {
-                requestId = readRequestId(record);
-              } else if (type == FastCgiConstants.FCGI_PARAMS) {
-                // Accumulate across records — a name-value pair may span them.
-                paramsBuffer.write(record.getContent());
-              } else if (type == FastCgiConstants.FCGI_STDIN) {
-                if (record.getContent().length == 0) {
-                  stdinDone = true;
-                } else {
-                  captured.stdin.write(record.getContent());
-                }
-              }
-            }
-            parseParams(paramsBuffer.toByteArray(), captured.params);
-
-            // Send the CGI response in 4KB FCGI_STDOUT chunks (exercises the streaming path).
-            Record stdout =
-                new Record().setRequestId(requestId).setType(FastCgiConstants.FCGI_STDOUT);
-            int offset = 0;
-            while (offset < cgiResponse.length) {
-              int chunkLen = Math.min(4096, cgiResponse.length - offset);
-              byte[] chunk = new byte[chunkLen];
-              System.arraycopy(cgiResponse, offset, chunk, 0, chunkLen);
-              stdout.setContent(chunk);
-              stdout.writeTo(out);
-              offset += chunkLen;
-            }
-            // Empty FCGI_STDOUT marks end-of-stream.
-            stdout.setContent(new byte[0]);
-            stdout.writeTo(out);
-
-            // FCGI_END_REQUEST: protocolStatus=0 (FCGI_REQUEST_COMPLETE), appStatus=0
-            Record end = new Record();
-            end.setRequestId(requestId).setType(FastCgiConstants.FCGI_END_REQUEST);
-            end.setContent(new byte[] {0, 0, 0, 0, 0, 0, 0, 0});
-            end.writeTo(out);
-            out.flush();
+            return serveOneRequest(socket.getInputStream(), socket.getOutputStream(), cgiResponse);
           }
-          return captured;
         });
+  }
+
+  /** Mock FastCGI backend listening on a Unix domain socket. */
+  private Future<CapturedRequest> startUnixMockBackend(Path path, byte[] cgiResponse)
+      throws IOException {
+    Files.deleteIfExists(path);
+    ServerSocketChannel serverChannel = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
+    serverChannel.bind(UnixDomainSocketAddress.of(path));
+    return executor.submit(
+        () -> {
+          try (ServerSocketChannel server = serverChannel;
+              SocketChannel channel = server.accept()) {
+            return serveOneRequest(
+                Channels.newInputStream(channel), Channels.newOutputStream(channel), cgiResponse);
+          } finally {
+            Files.deleteIfExists(path);
+          }
+        });
+  }
+
+  /**
+   * Reads BEGIN_REQUEST + PARAMS + STDIN (across multiple records) from the given streams, then
+   * writes the supplied CGI response in 4 KB FCGI_STDOUT chunks followed by an empty STDOUT and
+   * FCGI_END_REQUEST.
+   */
+  private static CapturedRequest serveOneRequest(
+      InputStream in, OutputStream out, byte[] cgiResponse) throws IOException {
+    CapturedRequest captured = new CapturedRequest();
+    ByteArrayOutputStream paramsBuffer = new ByteArrayOutputStream();
+    int requestId = -1;
+    boolean stdinDone = false;
+    while (!stdinDone) {
+      Record record = new Record();
+      record.readFrom(in);
+      int type = record.getType();
+      if (type == FastCgiConstants.FCGI_BEGIN_REQUEST) {
+        requestId = readRequestId(record);
+      } else if (type == FastCgiConstants.FCGI_PARAMS) {
+        // Accumulate across records — a name-value pair may span them.
+        paramsBuffer.write(record.getContent());
+      } else if (type == FastCgiConstants.FCGI_STDIN) {
+        if (record.getContent().length == 0) {
+          stdinDone = true;
+        } else {
+          captured.stdin.write(record.getContent());
+        }
+      }
+    }
+    parseParams(paramsBuffer.toByteArray(), captured.params);
+
+    // Send the CGI response in 4KB FCGI_STDOUT chunks (exercises the streaming path).
+    Record stdout = new Record().setRequestId(requestId).setType(FastCgiConstants.FCGI_STDOUT);
+    int offset = 0;
+    while (offset < cgiResponse.length) {
+      int chunkLen = Math.min(4096, cgiResponse.length - offset);
+      byte[] chunk = new byte[chunkLen];
+      System.arraycopy(cgiResponse, offset, chunk, 0, chunkLen);
+      stdout.setContent(chunk);
+      stdout.writeTo(out);
+      offset += chunkLen;
+    }
+    // Empty FCGI_STDOUT marks end-of-stream.
+    stdout.setContent(new byte[0]);
+    stdout.writeTo(out);
+
+    // FCGI_END_REQUEST: protocolStatus=0 (FCGI_REQUEST_COMPLETE), appStatus=0
+    Record end = new Record();
+    end.setRequestId(requestId).setType(FastCgiConstants.FCGI_END_REQUEST);
+    end.setContent(new byte[] {0, 0, 0, 0, 0, 0, 0, 0});
+    end.writeTo(out);
+    out.flush();
+    return captured;
   }
 
   private static int readRequestId(Record record) {
@@ -439,6 +468,44 @@ public class FcgiHandlerTest {
     assertEquals("text/plain", responseHeaders.get("Content-Type"));
     // Unknown headers are canonicalized to lowercase by HttpHeaderName.canonicalize.
     assertEquals("keepme", responseHeaders.get("x-custom"));
+  }
+
+  @Test
+  public void unixDomainSocket_forwardsRequestAndResponse() throws Exception {
+    // Unix domain socket paths are limited to ~108 chars; use /tmp directly to avoid the long
+    // bazel sandbox path. Use the test's PID to avoid collisions with concurrent runs.
+    Path socketPath = Path.of("/tmp/cf-fcgi-test-" + ProcessHandle.current().pid() + ".sock");
+    byte[] cgiResponse =
+        ("Content-Type: text/plain\r\n\r\nhello-from-unix").getBytes(StandardCharsets.UTF_8);
+    Future<CapturedRequest> captured = startUnixMockBackend(socketPath, cgiResponse);
+
+    FcgiHandler handler = new FcgiHandler(socketPath, "/u", "/srv/u.php");
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, get("/u?q=1"), writer);
+
+    CapturedRequest req = captured.get(2, TimeUnit.SECONDS);
+    assertEquals("GET", req.params.get("REQUEST_METHOD"));
+    assertEquals("/u?q=1", req.params.get("REQUEST_URI"));
+    assertEquals("q=1", req.params.get("QUERY_STRING"));
+    assertEquals(200, writer.response.getStatusCode());
+    assertEquals("text/plain", writer.response.getHeaders().get("Content-Type"));
+    assertArrayEquals(
+        "hello-from-unix".getBytes(StandardCharsets.UTF_8), writer.body.toByteArray());
+  }
+
+  @Test
+  public void unixDomainSocket_backendUnreachable_returns502() throws Exception {
+    // A path that does not exist — connect should fail immediately.
+    Path missing = Path.of("/tmp/cf-fcgi-missing-" + ProcessHandle.current().pid() + ".sock");
+    Files.deleteIfExists(missing);
+
+    FcgiHandler handler = new FcgiHandler(missing, "/u", "/srv/u.php");
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, get("/u"), writer);
+
+    assertNotNull(writer.response);
+    assertEquals(502, writer.response.getStatusCode());
+    assertEquals("close", writer.response.getHeaders().get("Connection"));
   }
 
   @Test

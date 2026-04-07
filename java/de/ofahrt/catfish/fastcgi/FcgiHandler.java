@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -24,19 +25,27 @@ import java.util.TreeMap;
 
 /**
  * An {@link HttpHandler} that proxies a request to a FastCGI backend (e.g. PHP-FPM) and forwards
- * the CGI-style response back to the client. The backend address and the {@code SCRIPT_NAME} /
- * {@code SCRIPT_FILENAME} variables are configured at construction time.
+ * the CGI-style response back to the client. The backend can be reached over TCP or a Unix domain
+ * socket; {@code SCRIPT_NAME} and {@code SCRIPT_FILENAME} are configured at construction time.
  *
  * <p>Limitations:
  *
  * <ul>
- *   <li>One TCP connection per request — no connection pooling.
+ *   <li>One connection per request — no connection pooling.
  *   <li>Request body must already be buffered ({@link HttpRequest.InMemoryBody}); streaming request
  *       bodies are not yet supported.
+ *   <li>Unix domain sockets do not honor a read timeout (Java's {@link
+ *       java.nio.channels.SocketChannel} does not expose SO_RCVTIMEO).
  *   <li>{@code FCGI_STDERR} records from the backend are silently dropped.
  * </ul>
  */
 public final class FcgiHandler implements HttpHandler {
+
+  /** Opens a fresh connection to the configured backend. */
+  @FunctionalInterface
+  private interface Connector {
+    FastCgiConnection connect() throws IOException;
+  }
 
   private static final int REQUEST_ID = 1;
   // FCGI_BeginRequestBody: role=FCGI_RESPONDER (0x0001), flags=0 (don't keep connection alive).
@@ -60,13 +69,11 @@ public final class FcgiHandler implements HttpHandler {
           "upgrade",
           "content-length");
 
-  private final String backendHost;
-  private final int backendPort;
+  private final Connector connector;
   private final String scriptName;
   private final String scriptFilename;
-  private final Duration connectTimeout;
-  private final Duration readTimeout;
 
+  /** Connects to a FastCGI backend over TCP with default 5s connect / 30s read timeouts. */
   public FcgiHandler(
       String backendHost, int backendPort, String scriptName, String scriptFilename) {
     this(
@@ -78,6 +85,7 @@ public final class FcgiHandler implements HttpHandler {
         DEFAULT_READ_TIMEOUT);
   }
 
+  /** Connects to a FastCGI backend over TCP with explicit timeouts. */
   public FcgiHandler(
       String backendHost,
       int backendPort,
@@ -85,12 +93,21 @@ public final class FcgiHandler implements HttpHandler {
       String scriptFilename,
       Duration connectTimeout,
       Duration readTimeout) {
-    this.backendHost = backendHost;
-    this.backendPort = backendPort;
+    this(
+        () -> FastCgiConnection.connectTcp(backendHost, backendPort, connectTimeout, readTimeout),
+        scriptName,
+        scriptFilename);
+  }
+
+  /** Connects to a FastCGI backend over a Unix domain socket. */
+  public FcgiHandler(Path unixSocketPath, String scriptName, String scriptFilename) {
+    this(() -> FastCgiConnection.connectUnix(unixSocketPath), scriptName, scriptFilename);
+  }
+
+  private FcgiHandler(Connector connector, String scriptName, String scriptFilename) {
+    this.connector = connector;
     this.scriptName = scriptName;
     this.scriptFilename = scriptFilename;
-    this.connectTimeout = connectTimeout;
-    this.readTimeout = readTimeout;
   }
 
   @Override
@@ -100,8 +117,7 @@ public final class FcgiHandler implements HttpHandler {
     Map<String, String> params = buildParams(request, requestBody.length);
 
     ResponseAssembler assembler = new ResponseAssembler(writer);
-    try (FastCgiConnection fcgi =
-        FastCgiConnection.connect(backendHost, backendPort, connectTimeout, readTimeout)) {
+    try (FastCgiConnection fcgi = connector.connect()) {
       sendRequest(fcgi, params, requestBody);
       readResponse(fcgi, assembler);
     } catch (IOException e) {
