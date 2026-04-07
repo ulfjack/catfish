@@ -50,8 +50,8 @@ public class OpensslCertificateAuthorityTest {
 
     runOpenssl(
         "openssl", "genpkey",
-        "-algorithm", "RSA",
-        "-pkeyopt", "rsa_keygen_bits:2048",
+        "-algorithm", "EC",
+        "-pkeyopt", "ec_paramgen_curve:P-256",
         "-out", caKey.toString());
     runOpenssl(
         "openssl",

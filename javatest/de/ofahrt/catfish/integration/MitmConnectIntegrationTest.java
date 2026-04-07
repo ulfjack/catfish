@@ -78,8 +78,8 @@ public class MitmConnectIntegrationTest {
     // Generate MITM CA in workDir.
     runOpenssl(
         "openssl", "genpkey",
-        "-algorithm", "RSA",
-        "-pkeyopt", "rsa_keygen_bits:2048",
+        "-algorithm", "EC",
+        "-pkeyopt", "ec_paramgen_curve:P-256",
         "-out", workDir.resolve("ca.key").toString());
     runOpenssl(
         "openssl", "req",
