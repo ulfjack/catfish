@@ -817,7 +817,7 @@ public class MitmConnectIntegrationTest {
           @Override
           public RequestAction handleRequest(
               UUID requestId, String originHost, int originPort, HttpRequest request) {
-            if ("/cached".equals(request.getUri())) {
+            if (request.getUri().endsWith("/cached")) {
               return RequestAction.respond(StandardResponses.OK.withBody(cachedBody));
             }
             return RequestAction.forward();

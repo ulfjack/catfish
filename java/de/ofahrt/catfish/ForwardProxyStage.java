@@ -6,7 +6,6 @@ import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
-import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
@@ -115,7 +114,7 @@ final class ForwardProxyStage implements Stage {
     String rawQuery = uri.getRawQuery();
     String pathAndQuery = rawQuery != null ? rawPath + "?" + rawQuery : rawPath;
 
-    HttpRequest originRequest = new RelativeUriRequest(partialRequest, pathAndQuery);
+    HttpRequest originRequest = partialRequest.withUri(pathAndQuery);
 
     String originHost = decision.getHost() != null ? decision.getHost() : host;
     int originPort = decision.getPort() > 0 ? decision.getPort() : port;
@@ -222,45 +221,6 @@ final class ForwardProxyStage implements Stage {
     HttpResponseGeneratorStreamed gen = responseGen;
     if (gen != null) {
       gen.close();
-    }
-  }
-
-  /**
-   * Wrapper that presents a request with a relative URI while preserving all other fields from the
-   * original request.
-   */
-  private static final class RelativeUriRequest implements HttpRequest {
-    private final HttpRequest delegate;
-    private final String relativeUri;
-
-    RelativeUriRequest(HttpRequest delegate, String relativeUri) {
-      this.delegate = delegate;
-      this.relativeUri = relativeUri;
-    }
-
-    @Override
-    public String getMethod() {
-      return delegate.getMethod();
-    }
-
-    @Override
-    public String getUri() {
-      return relativeUri;
-    }
-
-    @Override
-    public HttpVersion getVersion() {
-      return delegate.getVersion();
-    }
-
-    @Override
-    public HttpHeaders getHeaders() {
-      return delegate.getHeaders();
-    }
-
-    @Override
-    public Body getBody() {
-      return delegate.getBody();
     }
   }
 }

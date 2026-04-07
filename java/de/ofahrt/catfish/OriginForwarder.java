@@ -15,6 +15,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -96,19 +97,53 @@ final class OriginForwarder {
 
   void run(HttpRequest headers) {
     UUID requestId = UUID.randomUUID();
-    RequestAction action = handler.handleRequest(requestId, originHost, originPort, headers);
+    String absoluteUri = buildAbsoluteUri(useTls, originHost, originPort, headers.getUri());
+    HttpRequest absoluteHeaders = headers.withUri(absoluteUri);
+    RequestAction action =
+        handler.handleRequest(requestId, originHost, originPort, absoluteHeaders);
     RequestOutcome outcome;
     try {
       if (action.localResponse() != null) {
-        outcome = runLocalResponse(requestId, headers, action);
+        outcome = runLocalResponse(requestId, absoluteHeaders, action);
       } else {
-        HttpRequest effectiveRequest = action.request() != null ? action.request() : headers;
-        outcome = runForwardToOrigin(requestId, headers, effectiveRequest, action.captureStream());
+        HttpRequest effectiveRequest =
+            action.request() != null ? action.request() : absoluteHeaders;
+        // The request sent to the origin must use a relative URI.
+        HttpRequest originRequest =
+            effectiveRequest.withUri(toRelativeUri(effectiveRequest.getUri()));
+        outcome =
+            runForwardToOrigin(requestId, absoluteHeaders, originRequest, action.captureStream());
       }
     } catch (Exception e) {
       outcome = RequestOutcome.error(e);
     }
-    handler.onRequestComplete(requestId, originHost, originPort, headers, outcome);
+    handler.onRequestComplete(requestId, originHost, originPort, absoluteHeaders, outcome);
+  }
+
+  static String buildAbsoluteUri(boolean useTls, String host, int port, String pathAndQuery) {
+    String scheme = useTls ? "https" : "http";
+    int defaultPort = useTls ? 443 : 80;
+    if (port == defaultPort) {
+      return scheme + "://" + host + pathAndQuery;
+    }
+    return scheme + "://" + host + ":" + port + pathAndQuery;
+  }
+
+  private static String toRelativeUri(String uri) {
+    if (uri.startsWith("/")) {
+      return uri;
+    }
+    try {
+      URI parsed = new URI(uri);
+      String path = parsed.getRawPath();
+      if (path == null || path.isEmpty()) {
+        path = "/";
+      }
+      String query = parsed.getRawQuery();
+      return query != null ? path + "?" + query : path;
+    } catch (Exception e) {
+      return uri;
+    }
   }
 
   private RequestOutcome runLocalResponse(
