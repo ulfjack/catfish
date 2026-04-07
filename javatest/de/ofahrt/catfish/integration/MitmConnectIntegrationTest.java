@@ -98,17 +98,65 @@ public class MitmConnectIntegrationTest {
 
     // Start shared origin HTTPS server on HTTPS_PORT and MITM proxy on MITM_PORT. Safe to share
     // because the proxy's SSLInfo cache is keyed by (host, port) and tests use unique ports.
+    // The origin is a path-router so most tests can avoid spinning up their own origin server.
     sharedServer = newServer();
-    sharedServer.addHttpHost(
-        "localhost",
-        new HttpVirtualHost(
-                (conn, request, writer) ->
-                    writer.commitBuffered(
-                        StandardResponses.OK.withBody("MITM-OK".getBytes(StandardCharsets.UTF_8))))
-            .ssl(testSslInfo));
+    sharedServer.addHttpHost("localhost", sharedOriginHost());
     sharedServer.listenHttpsLocal(HTTPS_PORT);
     sharedServer.listenConnectProxyLocal(
         MITM_PORT, ConnectHandler.mitmAll(ca), testSslInfo.sslContext().getSocketFactory());
+  }
+
+  /**
+   * Path-routing origin handler shared across most MITM tests. Routes:
+   *
+   * <ul>
+   *   <li>{@code /echo-body} → echoes the request body
+   *   <li>{@code /large/N} → returns N bytes where byte[i] = (byte)(i & 0xff)
+   *   <li>{@code /chunked} → streams "chunked-origin-data" via {@code commitStreamed}
+   *   <li>{@code /204} → 204 No Content
+   *   <li>{@code /echo-uri} (any subpath) → echoes the full request URI in the body
+   *   <li>{@code /intercept} → "intercept-ok"
+   *   <li>anything else → "MITM-OK"
+   * </ul>
+   */
+  private static HttpVirtualHost sharedOriginHost() {
+    return new HttpVirtualHost(
+            (conn, request, writer) -> {
+              String uri = request.getUri();
+              if ("/echo-body".equals(uri)) {
+                byte[] body = new byte[0];
+                HttpRequest.Body rb = request.getBody();
+                if (rb instanceof HttpRequest.InMemoryBody) {
+                  body = ((HttpRequest.InMemoryBody) rb).toByteArray();
+                }
+                writer.commitBuffered(StandardResponses.OK.withBody(body));
+              } else if (uri.startsWith("/large/")) {
+                int size = Integer.parseInt(uri.substring("/large/".length()));
+                byte[] body = new byte[size];
+                for (int i = 0; i < size; i++) {
+                  body[i] = (byte) (i & 0xff);
+                }
+                writer.commitBuffered(StandardResponses.OK.withBody(body));
+              } else if ("/chunked".equals(uri)) {
+                OutputStream out = writer.commitStreamed(StandardResponses.OK);
+                out.write("chunked-origin-data".getBytes(StandardCharsets.UTF_8));
+                out.flush(); // force chunked encoding
+                out.close();
+              } else if ("/204".equals(uri)) {
+                writer.commitBuffered(StandardResponses.NO_CONTENT);
+              } else if (uri.startsWith("/echo-uri")) {
+                writer.commitBuffered(
+                    StandardResponses.OK.withBody(uri.getBytes(StandardCharsets.UTF_8)));
+              } else if ("/intercept".equals(uri)) {
+                writer.commitBuffered(
+                    StandardResponses.OK.withBody("intercept-ok".getBytes(StandardCharsets.UTF_8)));
+              } else {
+                writer.commitBuffered(
+                    StandardResponses.OK.withBody("MITM-OK".getBytes(StandardCharsets.UTF_8)));
+              }
+            })
+        .uploadPolicy(UploadPolicy.ALLOW)
+        .ssl(testSslInfo);
   }
 
   @AfterClass
@@ -138,18 +186,6 @@ public class MitmConnectIntegrationTest {
     CatfishHttpServer s = newServer();
     s.addHttpHost("localhost", host.ssl(testSslInfo));
     s.listenHttpsLocal(port);
-    serversToStop.add(s);
-    return s;
-  }
-
-  /**
-   * Creates a new MITM proxy on {@code mitmPort} using the shared CA and test SSL context. The
-   * server is registered for teardown in {@code @After}.
-   */
-  private CatfishHttpServer startMitmProxy(int mitmPort) throws IOException, InterruptedException {
-    CatfishHttpServer s = newServer();
-    s.listenConnectProxyLocal(
-        mitmPort, ConnectHandler.mitmAll(ca), testSslInfo.sslContext().getSocketFactory());
     serversToStop.add(s);
     return s;
   }
@@ -185,20 +221,6 @@ public class MitmConnectIntegrationTest {
       socket.close();
       throw e;
     }
-  }
-
-  /** Returns a virtual host that echoes the request body, with upload allowed. */
-  private static HttpVirtualHost echoBodyHost() {
-    return new HttpVirtualHost(
-            (conn, request, writer) -> {
-              byte[] body = new byte[0];
-              HttpRequest.Body rb = request.getBody();
-              if (rb instanceof HttpRequest.InMemoryBody) {
-                body = ((HttpRequest.InMemoryBody) rb).toByteArray();
-              }
-              writer.commitBuffered(StandardResponses.OK.withBody(body));
-            })
-        .uploadPolicy(UploadPolicy.ALLOW);
   }
 
   // ---- Tests ----
@@ -324,18 +346,11 @@ public class MitmConnectIntegrationTest {
       expectedBody[i] = (byte) (i & 0xff);
     }
 
-    startHttpsServer(
-        9094,
-        new HttpVirtualHost(
-            (conn, request, writer) ->
-                writer.commitBuffered(StandardResponses.OK.withBody(expectedBody))));
-    startMitmProxy(9093);
-
-    try (SSLSocket sslSocket = connectViaMitm(9093, 9094)) {
+    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
-          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+          ("GET /large/" + bodySize + " HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
               .getBytes(StandardCharsets.ISO_8859_1));
       sslOut.flush();
 
@@ -357,14 +372,11 @@ public class MitmConnectIntegrationTest {
       sentBody[i] = (byte) (i & 0xff);
     }
 
-    startHttpsServer(9063, echoBodyHost());
-    startMitmProxy(9064);
-
-    try (SSLSocket sslSocket = connectViaMitm(9064, 9063)) {
+    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
-          ("POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: "
+          ("POST /echo-body HTTP/1.1\r\nHost: localhost\r\nContent-Length: "
                   + sentBody.length
                   + "\r\nConnection: close\r\n\r\n")
               .getBytes(StandardCharsets.ISO_8859_1));
@@ -382,14 +394,11 @@ public class MitmConnectIntegrationTest {
   public void mitmConnectProxy_postRequest_forwardsBodyToOrigin() throws Exception {
     byte[] sentBody = "POST-BODY-DATA".getBytes(StandardCharsets.UTF_8);
 
-    startHttpsServer(9086, echoBodyHost());
-    startMitmProxy(9087);
-
-    try (SSLSocket sslSocket = connectViaMitm(9087, 9086)) {
+    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
-          ("POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: "
+          ("POST /echo-body HTTP/1.1\r\nHost: localhost\r\nContent-Length: "
                   + sentBody.length
                   + "\r\nConnection: close\r\n\r\n")
               .getBytes(StandardCharsets.ISO_8859_1));
@@ -407,10 +416,7 @@ public class MitmConnectIntegrationTest {
   public void mitmConnectProxy_chunkedRequestBody_forwardsBodyToOrigin() throws Exception {
     byte[] sentBody = "chunked-body-data".getBytes(StandardCharsets.UTF_8);
 
-    startHttpsServer(9082, echoBodyHost());
-    startMitmProxy(9083);
-
-    try (SSLSocket sslSocket = connectViaMitm(9083, 9082)) {
+    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
 
@@ -420,7 +426,7 @@ public class MitmConnectIntegrationTest {
           (chunkSize + "\r\n" + new String(sentBody, StandardCharsets.UTF_8) + "\r\n0\r\n\r\n")
               .getBytes(StandardCharsets.UTF_8);
       sslOut.write(
-          ("POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n"
+          ("POST /echo-body HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n"
                   + "Connection: close\r\n\r\n")
               .getBytes(StandardCharsets.ISO_8859_1));
       sslOut.write(chunkedBody);
@@ -437,23 +443,11 @@ public class MitmConnectIntegrationTest {
   public void mitmConnectProxy_originChunkedResponse_streamed() throws Exception {
     byte[] originBody = "chunked-origin-data".getBytes(StandardCharsets.UTF_8);
 
-    // Origin streams the response (causes chunked Transfer-Encoding from origin).
-    startHttpsServer(
-        9084,
-        new HttpVirtualHost(
-            (conn, request, writer) -> {
-              OutputStream bodyOut = writer.commitStreamed(StandardResponses.OK);
-              bodyOut.write(originBody);
-              bodyOut.flush(); // force chunked encoding (prevents Content-Length optimization)
-              bodyOut.close();
-            }));
-    startMitmProxy(9085);
-
-    try (SSLSocket sslSocket = connectViaMitm(9085, 9084)) {
+    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
-          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+          "GET /chunked HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
               .getBytes(StandardCharsets.ISO_8859_1));
       sslOut.flush();
 
@@ -497,16 +491,15 @@ public class MitmConnectIntegrationTest {
 
   @Test
   public void mitmConnectProxy_originFailsDuringRequest_returns502() throws Exception {
-    // Start origin that is up for the CONNECT cert-mirror phase, then stop it.
+    // Start a dedicated origin (separate from the shared one so we can kill it mid-test).
     CatfishHttpServer failingOrigin =
         startHttpsServer(
             9080,
             new HttpVirtualHost(
                 (conn, request, writer) ->
                     writer.commitBuffered(StandardResponses.OK.withBody(new byte[0]))));
-    startMitmProxy(9081);
 
-    try (SSLSocket sslSocket = connectViaMitm(9081, 9080)) {
+    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, 9080)) {
       // cert-mirror succeeded (we got the 200); now kill origin before the first request.
       serversToStop.remove(failingOrigin);
       failingOrigin.stop();
@@ -527,7 +520,6 @@ public class MitmConnectIntegrationTest {
   @Test
   public void connectHandler_interceptsAndTunnels() throws Exception {
     int tunnelTargetPort = 9060;
-    int interceptTargetPort = 9061;
     int proxyPort = 9062;
 
     // Plain HTTP server as tunnel target.
@@ -540,15 +532,6 @@ public class MitmConnectIntegrationTest {
                     StandardResponses.OK.withBody("tunnel-ok".getBytes(StandardCharsets.UTF_8)))));
     httpServer.listenHttpLocal(tunnelTargetPort);
     serversToStop.add(httpServer);
-
-    // HTTPS server as intercept target.
-    startHttpsServer(
-        interceptTargetPort,
-        new HttpVirtualHost(
-            (conn, request, writer) ->
-                writer.commitBuffered(
-                    StandardResponses.OK.withBody(
-                        "intercept-ok".getBytes(StandardCharsets.UTF_8)))));
 
     // Mixed proxy: tunnel to tunnelTargetPort, intercept everything else.
     CatfishHttpServer proxy = newServer();
@@ -581,12 +564,12 @@ public class MitmConnectIntegrationTest {
       assertArrayEquals("tunnel-ok".getBytes(StandardCharsets.UTF_8), readBody(in, resp));
     }
 
-    // Test intercept path: TLS MITM.
-    try (SSLSocket sslSocket = connectViaMitm(proxyPort, interceptTargetPort)) {
+    // Test intercept path: TLS MITM, hits shared origin's /intercept route.
+    try (SSLSocket sslSocket = connectViaMitm(proxyPort, HTTPS_PORT)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
-          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+          "GET /intercept HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
               .getBytes(StandardCharsets.ISO_8859_1));
       sslOut.flush();
       String resp = readUntilBlankLine(sslIn);
@@ -598,18 +581,11 @@ public class MitmConnectIntegrationTest {
 
   @Test(timeout = 10_000)
   public void mitmConnectProxy_origin204NoContent_doesNotHang() throws Exception {
-    // Origin returns 204 No Content (no body, no Content-Length).
-    startHttpsServer(
-        9088,
-        new HttpVirtualHost(
-            (conn, request, writer) -> writer.commitBuffered(StandardResponses.NO_CONTENT)));
-    startMitmProxy(9089);
-
-    try (SSLSocket sslSocket = connectViaMitm(9089, 9088)) {
+    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
-          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+          "GET /204 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
               .getBytes(StandardCharsets.ISO_8859_1));
       sslOut.flush();
 
@@ -716,13 +692,7 @@ public class MitmConnectIntegrationTest {
 
   @Test
   public void handleRequest_forwardAndCapture_teesResponseBody() throws Exception {
-    byte[] originBody = "origin-body-to-capture".getBytes(StandardCharsets.UTF_8);
-
-    startHttpsServer(
-        9072,
-        new HttpVirtualHost(
-            (conn, request, writer) ->
-                writer.commitBuffered(StandardResponses.OK.withBody(originBody))));
+    byte[] expectedBody = "MITM-OK".getBytes(StandardCharsets.UTF_8);
 
     ByteArrayOutputStream captured = new ByteArrayOutputStream();
     startMitmProxyWithHandler(
@@ -740,7 +710,7 @@ public class MitmConnectIntegrationTest {
           }
         });
 
-    try (SSLSocket sslSocket = connectViaMitm(9073, 9072)) {
+    try (SSLSocket sslSocket = connectViaMitm(9073, HTTPS_PORT)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
@@ -752,24 +722,16 @@ public class MitmConnectIntegrationTest {
       assertTrue(
           "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
       byte[] clientBody = readBody(sslIn, responseHeaders);
-      assertArrayEquals("Client should receive origin body", originBody, clientBody);
+      assertArrayEquals("Client should receive origin body", expectedBody, clientBody);
     }
     // The captured stream should also contain the origin body.
     assertArrayEquals(
-        "Capture stream should contain origin body", originBody, captured.toByteArray());
+        "Capture stream should contain origin body", expectedBody, captured.toByteArray());
   }
 
   @Test
   public void handleRequest_requestRewrite_modifiesForwardedRequest() throws Exception {
-    // Origin echoes the request URI back in the response body.
-    startHttpsServer(
-        9074,
-        new HttpVirtualHost(
-            (conn, request, writer) ->
-                writer.commitBuffered(
-                    StandardResponses.OK.withBody(
-                        request.getUri().getBytes(StandardCharsets.UTF_8)))));
-
+    // The shared origin's /echo-uri endpoint echoes the URI back in the response body.
     startMitmProxyWithHandler(
         9075,
         new ConnectHandler() {
@@ -786,7 +748,7 @@ public class MitmConnectIntegrationTest {
                   new SimpleHttpRequest.Builder()
                       .setVersion(request.getVersion())
                       .setMethod(request.getMethod())
-                      .setUri("/rewritten-path")
+                      .setUri("/echo-uri/rewritten")
                       .addHeader(HttpHeaderName.HOST, request.getHeaders().get(HttpHeaderName.HOST))
                       .addHeader(HttpHeaderName.CONNECTION, "close")
                       .build();
@@ -797,11 +759,11 @@ public class MitmConnectIntegrationTest {
           }
         });
 
-    try (SSLSocket sslSocket = connectViaMitm(9075, 9074)) {
+    try (SSLSocket sslSocket = connectViaMitm(9075, HTTPS_PORT)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
-          "GET /original-path HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+          "GET /echo-uri/original HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
               .getBytes(StandardCharsets.ISO_8859_1));
       sslOut.flush();
 
@@ -809,7 +771,7 @@ public class MitmConnectIntegrationTest {
       assertTrue(
           "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
       String body = new String(readBody(sslIn, responseHeaders), StandardCharsets.UTF_8);
-      assertEquals("Origin should have received rewritten URI", "/rewritten-path", body);
+      assertEquals("Origin should have received rewritten URI", "/echo-uri/rewritten", body);
     }
   }
 
