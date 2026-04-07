@@ -54,8 +54,8 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
     try {
       runCommand(
           "openssl", "genpkey",
-          "-algorithm", "RSA",
-          "-pkeyopt", "rsa_keygen_bits:2048",
+          "-algorithm", "EC",
+          "-pkeyopt", "ec_paramgen_curve:P-256",
           "-out", keyFile.toString());
       runCommand(
           "openssl",

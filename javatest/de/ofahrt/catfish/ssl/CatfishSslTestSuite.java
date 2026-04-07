@@ -8,7 +8,6 @@ import org.junit.runners.Suite.SuiteClasses;
 @SuiteClasses({
   Asn1ParserTest.class,
   OpensslCertificateAuthorityTest.class,
-  PKCS1Test.class,
   SSLContextFactoryTest.class,
 })
 public class CatfishSslTestSuite {}

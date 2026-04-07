@@ -1,5 +1,7 @@
 package de.ofahrt.catfish.ssl;
 
+import de.ofahrt.catfish.ssl.Asn1Parser.Event;
+import de.ofahrt.catfish.ssl.Asn1Parser.ObjectIdentifier;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -16,8 +18,9 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.security.spec.RSAPrivateKeySpec;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Base64;
+import java.util.Map;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
@@ -49,15 +52,23 @@ public final class SSLContextFactory {
     return new SSLInfo(context, x509cert);
   }
 
+  /** Maps PKCS#8 algorithm OIDs to Java {@link KeyFactory} algorithm names. */
+  private static final Map<ObjectIdentifier, String> ALGORITHM_OIDS =
+      Map.of(
+          new ObjectIdentifier(new int[] {1, 2, 840, 113549, 1, 1, 1}), "RSA",
+          new ObjectIdentifier(new int[] {1, 2, 840, 10045, 2, 1}), "EC",
+          new ObjectIdentifier(new int[] {1, 3, 101, 112}), "Ed25519",
+          new ObjectIdentifier(new int[] {1, 3, 101, 113}), "Ed448");
+
   public static SSLInfo loadPemKeyAndCrtFiles(File sslKeyFile, File sslCrtFile)
       throws IOException, GeneralSecurityException {
     byte[] keyData;
     try (InputStream in = new FileInputStream(sslKeyFile)) {
       keyData = decodePem(in);
     }
-    RSAPrivateKeySpec keySpec = PKCS1.parse(keyData);
-    KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-    PrivateKey privateKey = keyFactory.generatePrivate(keySpec);
+    String algorithm = parsePkcs8Algorithm(keyData);
+    KeyFactory keyFactory = KeyFactory.getInstance(algorithm);
+    PrivateKey privateKey = keyFactory.generatePrivate(new PKCS8EncodedKeySpec(keyData));
 
     Certificate cert;
     try (InputStream in = new FileInputStream(sslCrtFile)) {
@@ -80,6 +91,37 @@ public final class SSLContextFactory {
     sslContext.init(
         keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
     return new SSLInfo(sslContext, x509cert);
+  }
+
+  /**
+   * Extracts the algorithm OID from a PKCS#8 PrivateKeyInfo and returns the matching Java {@link
+   * KeyFactory} algorithm name. PKCS#8 structure (RFC 5208):
+   *
+   * <pre>
+   * PrivateKeyInfo ::= SEQUENCE { version INTEGER, AlgorithmIdentifier, privateKey OCTET STRING }
+   * AlgorithmIdentifier ::= SEQUENCE { algorithm OBJECT IDENTIFIER, parameters ANY OPTIONAL }
+   * </pre>
+   */
+  private static String parsePkcs8Algorithm(byte[] keyData)
+      throws IOException, GeneralSecurityException {
+    Asn1Parser parser = new Asn1Parser(keyData);
+    expectEvent(parser, Event.SEQUENCE); // outer PrivateKeyInfo
+    expectEvent(parser, Event.INTEGER); // version
+    expectEvent(parser, Event.SEQUENCE); // AlgorithmIdentifier
+    expectEvent(parser, Event.OBJECT_IDENTIFIER);
+    ObjectIdentifier oid = parser.getObjectIdentifier();
+    String algorithm = ALGORITHM_OIDS.get(oid);
+    if (algorithm == null) {
+      throw new GeneralSecurityException("Unsupported PKCS#8 algorithm OID: " + oid);
+    }
+    return algorithm;
+  }
+
+  private static void expectEvent(Asn1Parser parser, Event expected) throws IOException {
+    Event actual = parser.nextEvent();
+    if (actual != expected) {
+      throw new IOException("Expected " + expected + " in PKCS#8, got " + actual);
+    }
   }
 
   private static Certificate readCertificate(InputStream in)
