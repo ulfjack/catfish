@@ -44,7 +44,7 @@ import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.TrustManagerFactory;
 import org.junit.After;
-import org.junit.Before;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -56,6 +56,7 @@ public class MitmConnectIntegrationTest {
   private static SSLInfo testSslInfo;
   private static CertificateAuthority ca;
   private static SSLContext clientCtx;
+  private static CatfishHttpServer sharedServer;
 
   private final List<CatfishHttpServer> serversToStop = new ArrayList<>();
 
@@ -94,24 +95,28 @@ public class MitmConnectIntegrationTest {
                 workDir.resolve("ca.key"), workDir.resolve("ca.crt"), workDir)
             .build();
     clientCtx = buildSslContextTrusting(workDir.resolve("ca.crt"));
-  }
 
-  @Before
-  public void startServer() throws Exception {
-    // Start origin HTTPS server on HTTPS_PORT and MITM proxy on MITM_PORT. Each test gets a fresh
-    // pair so the proxy's per-host SSLInfo cache doesn't bleed between tests.
-    CatfishHttpServer server = newServer();
-    server.addHttpHost(
+    // Start shared origin HTTPS server on HTTPS_PORT and MITM proxy on MITM_PORT. Safe to share
+    // because the proxy's SSLInfo cache is keyed by (host, port) and tests use unique ports.
+    sharedServer = newServer();
+    sharedServer.addHttpHost(
         "localhost",
         new HttpVirtualHost(
                 (conn, request, writer) ->
                     writer.commitBuffered(
                         StandardResponses.OK.withBody("MITM-OK".getBytes(StandardCharsets.UTF_8))))
             .ssl(testSslInfo));
-    server.listenHttpsLocal(HTTPS_PORT);
-    server.listenConnectProxyLocal(
+    sharedServer.listenHttpsLocal(HTTPS_PORT);
+    sharedServer.listenConnectProxyLocal(
         MITM_PORT, ConnectHandler.mitmAll(ca), testSslInfo.sslContext().getSocketFactory());
-    serversToStop.add(server);
+  }
+
+  @AfterClass
+  public static void tearDownClass() throws Exception {
+    if (sharedServer != null) {
+      sharedServer.stop();
+      sharedServer = null;
+    }
   }
 
   @After
