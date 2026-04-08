@@ -470,6 +470,38 @@ public class SslServerStageTest {
   // ---- 15. close_notify after handshake ----
 
   @Test
+  public void openState_tls12ClientRenegotiation_isRejectedAsReentrantHandshake() throws Exception {
+    // Catfish rejects TLS 1.2 client-initiated renegotiation: when the server's unwrap of the
+    // renegotiation ClientHello leaves the engine in a non-NOT_HANDSHAKING state, the OPEN-state
+    // read() throws IOException("Re-entering handshake mode"). This is the policy we want — the
+    // proxy doesn't have to handle the complexity of mid-stream rehandshake.
+    buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
+    stage.connect(null);
+    InMemoryTlsClient client = new InMemoryTlsClient(HOST, "TLSv1.2");
+    client.handshake();
+
+    // Client initiates renegotiation. The engine wraps a new ClientHello (encrypted with the
+    // current session keys) and we feed it to the server.
+    client.engine.beginHandshake();
+    client.clientNetOut.clear();
+    SSLEngineResult r = client.engine.wrap(ByteBuffer.allocate(0), client.clientNetOut);
+    assertEquals(SSLEngineResult.Status.OK, r.getStatus());
+    client.clientNetOut.flip();
+    byte[] reneg = new byte[client.clientNetOut.remaining()];
+    client.clientNetOut.get(reneg);
+    feedNetIn(reneg);
+
+    try {
+      stage.read();
+      fail("expected IOException for re-entered handshake");
+    } catch (IOException expected) {
+      assertTrue(
+          "message should mention handshake, got: " + expected.getMessage(),
+          expected.getMessage().contains("handshake"));
+    }
+  }
+
+  @Test
   public void handshake_tls12_completesAndAppDataRoundTrips() throws Exception {
     // Force the client to TLS 1.2 — exercises the engine's TLS 1.2 codepaths in the server stage.
     // (In both TLS 1.2 and 1.3 on JDK 21, the server's NOT_HANDSHAKING transition happens during
