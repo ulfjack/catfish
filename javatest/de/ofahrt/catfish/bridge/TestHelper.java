@@ -10,23 +10,18 @@ import javax.servlet.http.HttpSession;
 public class TestHelper {
 
   public static SSLInfo getSSLInfo() {
-    try {
-      return SSLContextFactory.loadPkcs12(getTestCertificate());
+    try (InputStream key = getResource("test-key.pem");
+        InputStream cert = getResource("test-cert.pem")) {
+      return SSLContextFactory.loadPem(key, cert);
     } catch (IOException | GeneralSecurityException e) {
       throw new RuntimeException(e);
     }
   }
 
-  private static InputStream getTestCertificate() {
-    InputStream in = TestHelper.class.getClassLoader().getResourceAsStream("test-certificate.p12");
+  private static InputStream getResource(String name) {
+    InputStream in = TestHelper.class.getClassLoader().getResourceAsStream(name);
     if (in == null) {
-      in =
-          TestHelper.class
-              .getClassLoader()
-              .getResourceAsStream("de/ofahrt/catfish/test-certificate.p12");
-    }
-    if (in == null) {
-      throw new RuntimeException("PKCS12 test certificate not found");
+      throw new RuntimeException("Test resource not found: " + name);
     }
     return in;
   }

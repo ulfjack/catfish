@@ -27,31 +27,6 @@ import javax.net.ssl.TrustManagerFactory;
 
 public final class SSLContextFactory {
 
-  public static SSLInfo loadPkcs12(InputStream certificate)
-      throws IOException, GeneralSecurityException {
-    char[] password = "".toCharArray();
-    KeyStore keyStore = KeyStore.getInstance("PKCS12");
-    keyStore.load(certificate, password);
-    if (keyStore.size() == 0) {
-      throw new RuntimeException("Could not load key");
-    }
-    String alias = keyStore.aliases().nextElement();
-    Certificate cert = keyStore.getCertificate(alias);
-    if (!(cert instanceof X509Certificate x509cert)) {
-      throw new GeneralSecurityException("Certificate is not an X.509 certificate");
-    }
-    KeyManagerFactory keyManagerFactory =
-        KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-    keyManagerFactory.init(keyStore, password);
-    TrustManagerFactory trustManagerFactory =
-        TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-    trustManagerFactory.init(keyStore);
-
-    SSLContext context = SSLContext.getInstance("TLS");
-    context.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
-    return new SSLInfo(context, x509cert);
-  }
-
   /** Maps PKCS#8 algorithm OIDs to Java {@link KeyFactory} algorithm names. */
   private static final Map<ObjectIdentifier, String> ALGORITHM_OIDS =
       Map.of(
@@ -62,22 +37,26 @@ public final class SSLContextFactory {
 
   public static SSLInfo loadPemKeyAndCrtFiles(File sslKeyFile, File sslCrtFile)
       throws IOException, GeneralSecurityException {
-    byte[] keyData;
-    try (InputStream in = new FileInputStream(sslKeyFile)) {
-      keyData = decodePem(in);
+    try (InputStream keyIn = new FileInputStream(sslKeyFile);
+        InputStream crtIn = new FileInputStream(sslCrtFile)) {
+      return loadPem(keyIn, crtIn);
     }
+  }
+
+  public static SSLInfo loadPem(InputStream sslKey, InputStream sslCrt)
+      throws IOException, GeneralSecurityException {
+    byte[] keyData = decodePem(sslKey);
     String algorithm = parsePkcs8Algorithm(keyData);
     KeyFactory keyFactory = KeyFactory.getInstance(algorithm);
     PrivateKey privateKey = keyFactory.generatePrivate(new PKCS8EncodedKeySpec(keyData));
 
     Certificate cert;
-    try (InputStream in = new FileInputStream(sslCrtFile)) {
+    try (InputStream in = sslCrt) {
       cert = readCertificate(in);
     }
-    if (!(cert instanceof X509Certificate)) {
+    if (!(cert instanceof X509Certificate x509cert)) {
       throw new GeneralSecurityException("Certificate is not an X.509 certificate");
     }
-    X509Certificate x509cert = (X509Certificate) cert;
     KeyStore keyStore = KeyStore.getInstance("PKCS12");
     keyStore.load(null, null);
     keyStore.setKeyEntry("xyz", privateKey, "no-password".toCharArray(), new Certificate[] {cert});

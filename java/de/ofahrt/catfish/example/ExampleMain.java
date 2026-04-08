@@ -14,8 +14,6 @@ import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.ssl.SSLContextFactory;
 import de.ofahrt.catfish.ssl.SSLInfo;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStream;
 
 public class ExampleMain {
 
@@ -24,11 +22,7 @@ public class ExampleMain {
     String sslCrtFile = null;
     SSLInfo sslInfo = null;
     for (String arg : args) {
-      if (arg.startsWith("--ssl=")) {
-        try (InputStream sslCert = new FileInputStream(arg.substring(6))) {
-          sslInfo = SSLContextFactory.loadPkcs12(sslCert);
-        }
-      } else if (arg.startsWith("--ssl_key=")) {
+      if (arg.startsWith("--ssl_key=")) {
         sslKeyFile = arg.substring(10);
       } else if (arg.startsWith("--ssl_crt=")) {
         sslCrtFile = arg.substring(10);

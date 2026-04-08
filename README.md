@@ -58,27 +58,21 @@ Call `server.stop()` to shut down.
 
 ## TLS / HTTPS
 
-`SSLContextFactory` provides two helpers for loading credentials:
+`SSLContextFactory` loads credentials from PEM key + certificate files. The CN
+of the certificate is used as the virtual-host name:
 
-**PKCS#12 bundle:**
 ```java
-try (InputStream in = new FileInputStream("server.p12")) {
-    SSLContext sslContext = SSLContextFactory.loadPkcs12(in);
-}
-```
-
-**PEM key + certificate files** (also extracts the CN as the virtual-host name):
-```java
-SSLContextFactory.SSLInfo sslInfo =
-    SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
+SSLInfo sslInfo = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
 
 server.addHttpHost(
-    sslInfo.getCertificateCommonName(),
-    handler,
-    sslInfo.getSSLContext());
+    sslInfo.certificateCommonName(),
+    new HttpVirtualHost(handler).ssl(sslInfo));
 
 server.listenHttps(8443);
 ```
+
+For loading from non-file sources (e.g. classpath resources in tests), use
+`SSLContextFactory.loadPem(InputStream key, InputStream cert)`.
 
 SNI is used to select the right `SSLContext` for each incoming connection. Connections that
 present an unknown hostname receive a TLS `unrecognized_name` alert before the handshake

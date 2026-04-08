@@ -3,7 +3,10 @@ load("@rules_java//java:defs.bzl", "java_test")
 java_test(
     name = "catfish",
     srcs = glob(["**/*.java"]),
-    classpath_resources = ["test-certificate.p12"],
+    classpath_resources = [
+        "test-cert.pem",
+        "test-key.pem",
+    ],
     data = [
         "ssl/test.key.pem",
         "ssl/test.cert.pem",
