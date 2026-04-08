@@ -155,13 +155,12 @@ final class SslServerStage implements Stage {
         return ConnectionControl.PAUSE;
       }
       if (sslEngine.getHandshakeStatus() == HandshakeStatus.NOT_HANDSHAKING) {
-        status = FlowStatus.OPEN;
-        if (postHandshakeState != InitialConnectionState.READ_ONLY) {
-          parent.encourageWrites();
-        }
-        return postHandshakeState == InitialConnectionState.WRITE_ONLY
-            ? ConnectionControl.PAUSE
-            : ConnectionControl.CONTINUE;
+        // Defensive: on JDK 21 (TLS 1.2 and 1.3), the server-side handshake always completes
+        // via wrap() because the server's last action is sending Finished (TLS 1.2) or
+        // NewSessionTicket (TLS 1.3). If a future JDK changes this and the server's unwrap of
+        // the client Finished completes the handshake, we'd want a loud signal to revisit this
+        // assumption rather than silently take an untested transition path.
+        throw new IOException("Unexpected NOT_HANDSHAKING during HANDSHAKE read");
       }
       return ConnectionControl.CONTINUE;
     } else {
