@@ -4,9 +4,7 @@ import de.ofahrt.catfish.internal.network.NetworkEngine.NetworkHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.server.ConnectHandler;
-import de.ofahrt.catfish.ssl.SSLInfo;
 import java.nio.ByteBuffer;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
@@ -25,7 +23,7 @@ final class MixedServerHandler implements NetworkHandler {
   private final CatfishHttpServer server;
   private final ConnectHandler connectHandler;
   private final SSLSocketFactory originSocketFactory;
-  private final ConcurrentHashMap<String, SSLInfo> sslInfoCache = new ConcurrentHashMap<>();
+  private final SslInfoCache sslInfoCache = new SslInfoCache();
 
   MixedServerHandler(
       CatfishHttpServer server,

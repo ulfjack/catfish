@@ -20,7 +20,6 @@ import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.KeepAlivePolicy;
-import de.ofahrt.catfish.ssl.SSLInfo;
 import de.ofahrt.catfish.upload.ChunkedBodyParser;
 import de.ofahrt.catfish.upload.InMemoryEntityParser;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
@@ -34,7 +33,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
@@ -212,7 +210,7 @@ final class HttpServerStage implements Stage {
   private final Function<String, HttpVirtualHost> virtualHostLookup;
   private final ConnectHandler connectHandler;
   private final SSLSocketFactory originSocketFactory;
-  private final ConcurrentHashMap<String, SSLInfo> sslInfoCache;
+  private final SslInfoCache sslInfoCache;
   private final Executor executor;
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
@@ -252,7 +250,7 @@ final class HttpServerStage implements Stage {
       Function<String, HttpVirtualHost> virtualHostLookup,
       ConnectHandler connectHandler,
       SSLSocketFactory originSocketFactory,
-      ConcurrentHashMap<String, SSLInfo> sslInfoCache,
+      SslInfoCache sslInfoCache,
       Executor executor,
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer) {

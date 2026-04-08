@@ -13,7 +13,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLContext;
@@ -51,7 +50,7 @@ final class ConnectStage implements Stage {
   private final int port;
   private final ConnectHandler handler;
   private final SSLSocketFactory originSocketFactory;
-  private final ConcurrentHashMap<String, SSLInfo> sslInfoCache;
+  private final SslInfoCache sslInfoCache;
 
   private ConnectState state = ConnectState.CONNECTING;
   private byte[] pendingResponseBytes;
@@ -76,7 +75,7 @@ final class ConnectStage implements Stage {
       int port,
       ConnectHandler handler,
       SSLSocketFactory originSocketFactory,
-      ConcurrentHashMap<String, SSLInfo> sslInfoCache) {
+      SslInfoCache sslInfoCache) {
     this.parent = parent;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
@@ -177,7 +176,7 @@ final class ConnectStage implements Stage {
       }
 
       if (sslInfoCache != null) {
-        sslInfoCache.putIfAbsent(cacheKey, info);
+        sslInfoCache.put(cacheKey, info);
       }
       ctx = info.sslContext();
     }
