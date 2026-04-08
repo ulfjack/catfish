@@ -9,5 +9,7 @@ import org.junit.runners.Suite.SuiteClasses;
   CompressionPolicyTest.class,
   DenyUploadPolicyTest.class,
   KeepAlivePolicyTest.class,
+  RequestActionTest.class,
+  RequestOutcomeTest.class,
 })
 public class ModelServerTestSuite {}
