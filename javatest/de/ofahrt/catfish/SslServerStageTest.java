@@ -426,7 +426,63 @@ public class SslServerStageTest {
     assertEquals(ConnectionControl.CONTINUE, cc);
   }
 
+  @Test
+  public void openState_nextWriteCloseOutputAfterFlush_drainsAndPropagates() throws Exception {
+    buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
+    stage.connect(null);
+    new InMemoryTlsClient(HOST).handshake();
+
+    // Queue more plaintext than fits in one TLS record so the OPEN-state switch fires (the
+    // outputBuffer still has bytes after wrap), and tell the next stage we want a half-close.
+    next.enqueueOutput(largePayload())
+        .withWriteResponse(ConnectionControl.CLOSE_OUTPUT_AFTER_FLUSH);
+
+    // First write: enters CLOSING state with pendingClose = CLOSE_OUTPUT_AFTER_FLUSH.
+    ConnectionControl first = stage.write();
+    assertEquals(ConnectionControl.CONTINUE, first);
+
+    // Drain the netOut + drive the write loop until CLOSING reports the deferred close.
+    ConnectionControl last = ConnectionControl.CONTINUE;
+    for (int i = 0; i < 16 && last == ConnectionControl.CONTINUE; i++) {
+      drainNetOut();
+      last = stage.write();
+    }
+    assertEquals(ConnectionControl.CLOSE_OUTPUT_AFTER_FLUSH, last);
+  }
+
+  @Test
+  public void openState_nextWriteCloseInput_throwsIllegalState() throws Exception {
+    buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
+    stage.connect(null);
+    new InMemoryTlsClient(HOST).handshake();
+
+    next.enqueueOutput(largePayload()).withWriteResponse(ConnectionControl.CLOSE_INPUT);
+    try {
+      stage.write();
+      fail("expected IllegalStateException");
+    } catch (IllegalStateException expected) {
+      assertTrue(
+          "message should mention close-input, got: " + expected.getMessage(),
+          expected.getMessage().contains("close-input"));
+    }
+  }
+
   // ---- 15. close_notify after handshake ----
+
+  @Test
+  public void handshake_tls12_completesAndAppDataRoundTrips() throws Exception {
+    // Force the client to TLS 1.2 — exercises the engine's TLS 1.2 codepaths in the server stage.
+    // (In both TLS 1.2 and 1.3 on JDK 21, the server's NOT_HANDSHAKING transition happens during
+    // write(), not read(), so this does not cover the dead read-side branch at line 157+.)
+    buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
+    stage.connect(null);
+    InMemoryTlsClient client = new InMemoryTlsClient(HOST, "TLSv1.2");
+    client.handshake();
+
+    byte[] payload = "GET /tls12 HTTP/1.1\r\n".getBytes(StandardCharsets.UTF_8);
+    client.sendAppData(payload);
+    assertArrayEquals(payload, next.received.toByteArray());
+  }
 
   @Test
   public void openState_clientCloseNotify_returnsCloseConnectionImmediately() throws Exception {
@@ -626,10 +682,17 @@ public class SslServerStageTest {
     private final ByteBuffer clientAppIn; // plaintext the client receives
 
     InMemoryTlsClient(String peerHost) throws Exception {
+      this(peerHost, null);
+    }
+
+    InMemoryTlsClient(String peerHost, String enabledProtocol) throws Exception {
       SSLContext ctx = SSLContext.getInstance("TLS");
       ctx.init(null, new TrustManager[] {TRUST_ALL}, new SecureRandom());
       this.engine = ctx.createSSLEngine(peerHost, 443);
       this.engine.setUseClientMode(true);
+      if (enabledProtocol != null) {
+        engine.setEnabledProtocols(new String[] {enabledProtocol});
+      }
       SSLParameters params = engine.getSSLParameters();
       params.setServerNames(List.of(new SNIHostName(peerHost)));
       engine.setSSLParameters(params);

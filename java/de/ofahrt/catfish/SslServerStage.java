@@ -40,6 +40,10 @@ final class SslServerStage implements Stage {
   private FlowStatus status = FlowStatus.FIND_SNI;
   private SSLEngine sslEngine;
   private volatile boolean taskPending = false;
+  // Set when the next stage requested CLOSE_OUTPUT_AFTER_FLUSH or CLOSE_CONNECTION_AFTER_FLUSH
+  // while we still have plaintext to wrap. The CLOSING state returns this value once the
+  // plaintext buffer has been fully drained through wrap().
+  private ConnectionControl pendingClose;
 
   public SslServerStage(
       Pipeline parent,
@@ -267,16 +271,19 @@ final class SslServerStage implements Stage {
           case PAUSE:
             return ConnectionControl.CONTINUE;
           case CLOSE_OUTPUT_AFTER_FLUSH:
-            throw new IllegalStateException("Not implemented yet!");
+            pendingClose = ConnectionControl.CLOSE_OUTPUT_AFTER_FLUSH;
+            status = FlowStatus.CLOSING;
+            return ConnectionControl.CONTINUE;
           case CLOSE_CONNECTION_AFTER_FLUSH:
+            pendingClose = ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
             status = FlowStatus.CLOSING;
             return ConnectionControl.CONTINUE;
           case CLOSE_INPUT:
-            throw new IllegalStateException("Not implemented yet!");
+            throw new IllegalStateException("Cannot close-input after write (" + this + ")");
           case CLOSE_CONNECTION_IMMEDIATELY:
             return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
         }
-        throw new IllegalStateException("Not implemented yet!");
+        throw new IllegalStateException("Unknown control: " + nextState);
       }
       return nextState;
     } else { // status == FlowStatus.CLOSING
@@ -297,9 +304,7 @@ final class SslServerStage implements Stage {
       if (sslEngine.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING) {
         throw new IOException("Re-entering handshake mode - what's up?");
       }
-      return outputBuffer.hasRemaining()
-          ? ConnectionControl.CONTINUE
-          : ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
+      return outputBuffer.hasRemaining() ? ConnectionControl.CONTINUE : pendingClose;
     }
   }
 
