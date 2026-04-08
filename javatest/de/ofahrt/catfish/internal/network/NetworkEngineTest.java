@@ -260,6 +260,24 @@ public class NetworkEngineTest {
     }
   }
 
+  // ---- 12b. Outgoing connect failure closes the stage and reports a warning ----
+
+  @Test
+  public void outgoingConnect_failsToReachPeer_closesStageAndReportsWarning() throws Exception {
+    // Port 1 is reserved and (almost certainly) not listening — connect fails with ECONNREFUSED.
+    // Before the fix, the SocketHandler.handleEvent CONNECTING branch would call current.close()
+    // and notifyInternalError but never close the SocketChannel, never cancel the SelectionKey,
+    // and never advance state out of CONNECTING. The connection sat forever and the FD leaked.
+    ProgrammableStage stage = new ProgrammableStage();
+    ProgrammableHandler handler = new ProgrammableHandler(stage);
+    engine.connect(InetAddress.getLoopbackAddress(), 1, handler);
+
+    // The stage's close() must fire (via doClose() in the catch path).
+    assertTrue(stage.awaitClose(TIMEOUT_MS));
+    // The listener gets a warning, not an internal error.
+    assertNotNull(listener.awaitWarning(TIMEOUT_MS));
+  }
+
   // ---- 13. EOF while bytes remain in buffer → CLOSE_AFTER_FLUSH loop ----
   //         (CONTINUE case: stage drains bytes, then buffer empty → inputClosed)
 
@@ -471,6 +489,9 @@ public class NetworkEngineTest {
     private final CountDownLatch internalErrorLatch = new CountDownLatch(1);
     private final AtomicReference<Throwable> internalError = new AtomicReference<>();
 
+    private final CountDownLatch warningLatch = new CountDownLatch(1);
+    private final AtomicReference<Throwable> warning = new AtomicReference<>();
+
     @Override
     public void portOpened(int port, boolean ssl) {
       this.boundPort = port;
@@ -492,6 +513,12 @@ public class NetworkEngineTest {
       internalErrorLatch.countDown();
     }
 
+    @Override
+    public void warning(Connection connection, Throwable throwable) {
+      warning.compareAndSet(null, throwable);
+      warningLatch.countDown();
+    }
+
     int waitForPortOpened() throws InterruptedException {
       if (!portOpenedLatch.await(TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
         throw new AssertionError("portOpened not fired in time");
@@ -502,6 +529,11 @@ public class NetworkEngineTest {
     Throwable awaitInternalError(long timeoutMs) throws InterruptedException {
       internalErrorLatch.await(timeoutMs, TimeUnit.MILLISECONDS);
       return internalError.get();
+    }
+
+    Throwable awaitWarning(long timeoutMs) throws InterruptedException {
+      warningLatch.await(timeoutMs, TimeUnit.MILLISECONDS);
+      return warning.get();
     }
   }
 

@@ -191,6 +191,29 @@ public final class NetworkEngine {
           });
     }
 
+    /**
+     * Tears down a connection: notifies the current stage, cancels the SelectionKey, closes the
+     * socket channel, and balances the open-connection counter. Idempotent — repeated calls are
+     * harmless because the state transition to {@link ConnectionState#CLOSED} prevents reentry via
+     * {@link #close()}, and the catch around {@code socketChannel.close()} swallows already-closed
+     * errors.
+     */
+    private void doClose() {
+      state = ConnectionState.CLOSED;
+      writeState = FlowState.CLOSED;
+      readState = FlowState.CLOSED;
+      // Release resources, we may have a worker thread blocked on writing to the connection.
+      current.close();
+      key.cancel();
+      try {
+        socketChannel.close();
+      } catch (IOException ignored) {
+        // There's nothing we can do if this fails.
+        networkEventListener.notifyInternalError(connection, ignored);
+      }
+      closedCounter.incrementAndGet();
+    }
+
     @Override
     public void handleEvent() {
       log("Event: state=%s readState=%s writeState=%s", state, readState, writeState);
@@ -199,19 +222,7 @@ public final class NetworkEngine {
           throw new IllegalStateException();
         }
       } else if (state == ConnectionState.CLOSING) {
-        state = ConnectionState.CLOSED;
-        writeState = FlowState.CLOSED;
-        readState = FlowState.CLOSED;
-        // Release resources, we may have a worker thread blocked on writing to the connection.
-        current.close();
-        key.cancel();
-        try {
-          socketChannel.close();
-        } catch (IOException ignored) {
-          // There's nothing we can do if this fails.
-          networkEventListener.notifyInternalError(connection, ignored);
-        }
-        closedCounter.incrementAndGet();
+        doClose();
       } else if (state == ConnectionState.CONNECTING) {
         if (key.isConnectable()) {
           try {
@@ -220,9 +231,9 @@ public final class NetworkEngine {
             }
             connect();
           } catch (IOException e) {
-            current.close();
-            // TODO: This is not really an error.
-            networkEventListener.notifyInternalError(connection, e);
+            // Outgoing connect failed: tear down the FD/key and balance the openCounter.
+            networkEventListener.warning(connection, e);
+            doClose();
           }
         }
       } else {
