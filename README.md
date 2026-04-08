@@ -80,6 +80,9 @@ completes.
 
 ## Design overview
 
+- **HTTP/1.1 only** — HTTP/1.0 and 0.9 requests are rejected with `505 HTTP Version
+  Not Supported` at the request line. Keep-alive, pipelining, and chunked transfer
+  encoding are all assumed to be available.
 - **Non-blocking NIO** — a selector-thread pool handles all socket I/O without blocking;
   application handlers run on a separate worker pool.
 - **Pipeline stages** — TLS and HTTP are independent, composable layers. For HTTPS the stack
