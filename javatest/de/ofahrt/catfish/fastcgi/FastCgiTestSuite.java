@@ -8,5 +8,6 @@ import org.junit.runners.Suite.SuiteClasses;
 @SuiteClasses({
   FcgiHandlerTest.class,
   IncrementalFcgiResponseParserTest.class,
+  RecordTest.class,
 })
 public class FastCgiTestSuite {}

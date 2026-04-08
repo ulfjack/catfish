@@ -147,4 +147,38 @@ public class IncrementalFcgiResponseParserTest {
     assertEquals(6, consumed);
     assertEquals("data", cb.data.toString(StandardCharsets.ISO_8859_1));
   }
+
+  @Test(expected = MalformedResponseException.class)
+  public void delCharInHeaderName_throws() throws Exception {
+    // DEL (0x7f) is a control character and illegal in token context.
+    TestCallback cb = new TestCallback();
+    IncrementalFcgiResponseParser parser = new IncrementalFcgiResponseParser(cb);
+    parser.parse(new byte[] {'K', (byte) 0x7f, ':', ' ', 'v', '\r', '\n', '\r', '\n'});
+  }
+
+  @Test(expected = MalformedResponseException.class)
+  public void separatorCharInHeaderName_throws() throws Exception {
+    // Non-space separator characters are also illegal in a token.
+    TestCallback cb = new TestCallback();
+    IncrementalFcgiResponseParser parser = new IncrementalFcgiResponseParser(cb);
+    parser.parse(bytes("Key{Name: value\r\n\r\n"));
+  }
+
+  @Test(expected = MalformedResponseException.class)
+  public void illegalCharAfterHeaderValueLine_throws() throws Exception {
+    // After "Key: value\r\n", state is MESSAGE_HEADER_NAME_OR_CONTINUATION. A separator char at
+    // the start of the next line is neither a continuation space, '\r', '\n', nor a token — it
+    // should trigger the "Illegal character" throw at the tail of that case.
+    TestCallback cb = new TestCallback();
+    IncrementalFcgiResponseParser parser = new IncrementalFcgiResponseParser(cb);
+    parser.parse(bytes("Key: value\r\n:nope\r\n\r\n"));
+  }
+
+  @Test(expected = MalformedResponseException.class)
+  public void crInsideHeaderName_expectingLf_butGotCr_throws() throws Exception {
+    // \r followed by another \r (not \n) — the expectLineFeed check fires.
+    TestCallback cb = new TestCallback();
+    IncrementalFcgiResponseParser parser = new IncrementalFcgiResponseParser(cb);
+    parser.parse(bytes("Key\r\r"));
+  }
 }

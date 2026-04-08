@@ -37,40 +37,15 @@ final class IncrementalFcgiResponseParser {
     this.callback = callback;
   }
 
-  //       CTL            = <any US-ASCII control character
-  //                        (octets 0 - 31) and DEL (127)>
-  private static boolean isControl(char c) {
-    return (c < 32) || (c == 127);
-  }
+  /** RFC 2616 §2.2 separators = "()<>@,;:\\\"/[]?={}" plus SP and HT. */
+  private static final String SEPARATORS = "()<>@,;:\\\"/[]?={} \t";
 
-  //       separators     = "(" | ")" | "<" | ">" | "@"
-  //                      | "," | ";" | ":" | "\" | <">
-  //                      | "/" | "[" | "]" | "?" | "="
-  //                      | "{" | "}" | SP | HT
-  private static boolean isSeparator(char c) {
-    return (c == '(')
-        || (c == ')')
-        || (c == '<')
-        || (c == '>')
-        || (c == '@')
-        || (c == ',')
-        || (c == ';')
-        || (c == ':')
-        || (c == '\\')
-        || (c == '"')
-        || (c == '/')
-        || (c == '[')
-        || (c == ']')
-        || (c == '?')
-        || (c == '=')
-        || (c == '{')
-        || (c == '}')
-        || (c == ' ')
-        || (c == '\t');
-  }
-
+  /** RFC 2616 §2.2 token = any CHAR except CTLs (0..31, 127) and separators. */
   private static boolean isTokenCharacter(char c) {
-    return !isControl(c) && !isSeparator(c);
+    if (c < 32 || c == 127) {
+      return false;
+    }
+    return SEPARATORS.indexOf(c) < 0;
   }
 
   private boolean isSpace(char c) {

@@ -56,17 +56,6 @@ final class Record {
     return this;
   }
 
-  public Record setContentAsKeys(String... keys) {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    for (int i = 0; i < keys.length; i++) {
-      byte[] key = keys[i].getBytes(StandardCharsets.UTF_8);
-      writeLength(out, key.length);
-      writeLength(out, 0);
-      out.write(key, 0, key.length);
-    }
-    return setContent(out.toByteArray());
-  }
-
   /**
    * Encodes the given map as an FCGI name-value-pair stream (spec §3.4). Returned bytes are not
    * length-bounded — callers writing this as record content must split into ≤{@link
@@ -102,34 +91,6 @@ final class Record {
       out.write((length >>> 8) & 0xff);
       out.write(length & 0xff);
     }
-  }
-
-  @Override
-  public String toString() {
-    StringBuilder result = new StringBuilder();
-    result.append("VERSION=").append(version).append('\n');
-    result.append("TYPE=").append(type).append('\n');
-    int requestId = ((requestIdB1 & 0xff) << 8) | (requestIdB0 & 0xff);
-    result.append("REQUEST_ID=").append(requestId).append('\n');
-    int contentLength = ((contentLengthB1 & 0xff) << 8) | (contentLengthB0 & 0xff);
-    result.append("CONTENT_LENGTH=").append(contentLength).append('\n');
-    if (type == FastCgiConstants.FCGI_GET_VALUES_RESULT) {
-      int i = 0;
-      while (i < contentData.length) {
-        int keyLength = contentData[i++];
-        int valueLength = contentData[i++];
-        String key = new String(contentData, i, keyLength);
-        i += keyLength;
-        String value = new String(contentData, i, valueLength);
-        i += valueLength;
-        result.append("  ").append(key).append("=").append(value).append('\n');
-      }
-    } else if (type == FastCgiConstants.FCGI_STDOUT) {
-      for (byte b : contentData) {
-        result.append((char) (b & 0xff));
-      }
-    }
-    return result.toString();
   }
 
   public void writeTo(OutputStream out) throws IOException {

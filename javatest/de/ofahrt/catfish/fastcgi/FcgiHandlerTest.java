@@ -443,6 +443,357 @@ public class FcgiHandlerTest {
   }
 
   @Test
+  public void emptyResponseBody_stillCommitsResponse() throws Exception {
+    // CGI response with headers but zero body bytes — exercises the finish() path where
+    // commitStreamed hasn't been called yet.
+    byte[] cgiResponse = "Content-Type: text/plain\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+    Future<CapturedRequest> captured = startMockBackend(cgiResponse);
+
+    FcgiHandler handler =
+        new FcgiHandler("localhost", serverSocket.getLocalPort(), "/x", "/srv/x.php");
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, get("/x"), writer);
+    captured.get(2, TimeUnit.SECONDS);
+
+    assertNotNull(writer.response);
+    assertEquals(200, writer.response.getStatusCode());
+    assertEquals("text/plain", writer.response.getHeaders().get("Content-Type"));
+    assertEquals(0, writer.body.size());
+  }
+
+  @Test
+  public void malformedCgiResponse_returns502BadGateway() throws Exception {
+    // Header line starting with ':' trips the IncrementalFcgiResponseParser — the handler must
+    // wrap the MalformedResponseException in IOException and route to failWithBadGateway.
+    byte[] cgiResponse = ": no name\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+    Future<CapturedRequest> captured = startMockBackend(cgiResponse);
+
+    FcgiHandler handler =
+        new FcgiHandler("localhost", serverSocket.getLocalPort(), "/x", "/srv/x.php");
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, get("/x"), writer);
+    captured.get(2, TimeUnit.SECONDS);
+
+    assertNotNull(writer.response);
+    assertEquals(502, writer.response.getStatusCode());
+  }
+
+  @Test
+  public void cgiStatusHeader_noReasonPhrase_usesDefaultMessage() throws Exception {
+    // Status header with only a code, no reason phrase — exercises the space-not-found branch
+    // of parseStatus().
+    byte[] cgiResponse =
+        "Status: 302\r\nLocation: /elsewhere\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+    Future<CapturedRequest> captured = startMockBackend(cgiResponse);
+
+    FcgiHandler handler =
+        new FcgiHandler("localhost", serverSocket.getLocalPort(), "/x", "/srv/x.php");
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, get("/x"), writer);
+    captured.get(2, TimeUnit.SECONDS);
+
+    assertEquals(302, writer.response.getStatusCode());
+    // No reason phrase → HttpStatusCode's default message.
+    assertEquals("Found", writer.response.getStatusMessage());
+  }
+
+  @Test
+  public void cgiStatusHeader_nonNumeric_ignoredKeepsDefault200() throws Exception {
+    // Status header with non-numeric code — parseStatus swallows the NumberFormatException and
+    // leaves the default 200 in place.
+    byte[] cgiResponse = "Status: abc\r\n\r\nbody".getBytes(StandardCharsets.UTF_8);
+    Future<CapturedRequest> captured = startMockBackend(cgiResponse);
+
+    FcgiHandler handler =
+        new FcgiHandler("localhost", serverSocket.getLocalPort(), "/x", "/srv/x.php");
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, get("/x"), writer);
+    captured.get(2, TimeUnit.SECONDS);
+
+    assertEquals(200, writer.response.getStatusCode());
+  }
+
+  @Test
+  public void malformedRequestUri_fallsBackToIndexOfParsing() throws Exception {
+    // URI with a raw space trips java.net.URI's parser → the extractQueryString fallback
+    // (indexOf('?')) runs instead.
+    byte[] cgiResponse = "Content-Type: text/plain\r\n\r\nok".getBytes(StandardCharsets.UTF_8);
+    Future<CapturedRequest> captured = startMockBackend(cgiResponse);
+
+    HttpRequest request =
+        new HttpRequest() {
+          @Override
+          public String getUri() {
+            return "/foo bar?q=1"; // space makes java.net.URI throw
+          }
+
+          @Override
+          public HttpHeaders getHeaders() {
+            return HttpHeaders.of(HttpHeaderName.HOST, "example.com");
+          }
+        };
+
+    FcgiHandler handler =
+        new FcgiHandler("localhost", serverSocket.getLocalPort(), "/x", "/srv/x.php");
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, request, writer);
+
+    CapturedRequest req = captured.get(2, TimeUnit.SECONDS);
+    assertEquals("q=1", req.params.get("QUERY_STRING"));
+    assertEquals(200, writer.response.getStatusCode());
+  }
+
+  /** HttpResponseWriter whose returned body OutputStream fails on first write. */
+  private static final class FailingOnWriteWriter implements HttpResponseWriter {
+    HttpResponse response;
+
+    @Override
+    public void commitBuffered(HttpResponse response) {
+      this.response = response;
+    }
+
+    @Override
+    public OutputStream commitStreamed(HttpResponse response) {
+      this.response = response;
+      return new OutputStream() {
+        @Override
+        public void write(int b) throws IOException {
+          throw new IOException("simulated client disconnect");
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+          throw new IOException("simulated client disconnect");
+        }
+      };
+    }
+  }
+
+  @Test
+  public void writerFailsOnFirstWrite_propagatesIOException() throws Exception {
+    // Exercises pendingError path: first addData() catches IOException, finish() rethrows.
+    byte[] cgiResponse =
+        "Content-Type: text/plain\r\n\r\nhello-there".getBytes(StandardCharsets.UTF_8);
+    Future<CapturedRequest> captured = startMockBackend(cgiResponse);
+
+    FcgiHandler handler =
+        new FcgiHandler("localhost", serverSocket.getLocalPort(), "/x", "/srv/x.php");
+    FailingOnWriteWriter writer = new FailingOnWriteWriter();
+    // handle() swallows the final IOException via failWithBadGateway. Because the body was
+    // committed before the write failure, failWithBadGateway sees body != null and rethrows.
+    IOException thrown = null;
+    try {
+      handler.handle((Connection) null, get("/x"), writer);
+    } catch (IOException e) {
+      thrown = e;
+    }
+    captured.get(2, TimeUnit.SECONDS);
+    assertNotNull(thrown);
+    assertEquals("simulated client disconnect", thrown.getMessage());
+    // The successful response headers were committed before the body write failed.
+    assertNotNull(writer.response);
+    assertEquals(200, writer.response.getStatusCode());
+  }
+
+  @Test
+  public void badGatewayResponse_hasCorrectStatusMessage() throws Exception {
+    // Complements backendUnreachable_returns502BadGateway by exercising getStatusMessage() on
+    // the 502 response object.
+    serverSocket.close();
+    FcgiHandler handler =
+        new FcgiHandler(
+            "127.0.0.1", 1, "/x", "/srv/x.php", Duration.ofMillis(500), Duration.ofMillis(500));
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, get("/x"), writer);
+    assertEquals("Bad Gateway", writer.response.getStatusMessage());
+  }
+
+  @Test
+  public void noHostHeader_skipsServerNameAndPort() throws Exception {
+    // Request without a Host header — the SERVER_NAME/SERVER_PORT block in buildParams is
+    // skipped entirely.
+    byte[] cgiResponse = "Content-Type: text/plain\r\n\r\nok".getBytes(StandardCharsets.UTF_8);
+    Future<CapturedRequest> captured = startMockBackend(cgiResponse);
+
+    HttpRequest request =
+        new HttpRequest() {
+          @Override
+          public String getUri() {
+            return "/x";
+          }
+
+          @Override
+          public HttpHeaders getHeaders() {
+            return HttpHeaders.NONE;
+          }
+        };
+
+    FcgiHandler handler =
+        new FcgiHandler("localhost", serverSocket.getLocalPort(), "/x", "/srv/x.php");
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, request, writer);
+
+    CapturedRequest req = captured.get(2, TimeUnit.SECONDS);
+    assertEquals(null, req.params.get("SERVER_NAME"));
+    assertEquals(null, req.params.get("SERVER_PORT"));
+    assertEquals(200, writer.response.getStatusCode());
+  }
+
+  @Test
+  public void malformedUriWithoutQueryString_returnsEmptyQueryString() throws Exception {
+    // URI with a space (invalid) and no '?' — fallback uri.indexOf('?') returns -1.
+    byte[] cgiResponse = "Content-Type: text/plain\r\n\r\nok".getBytes(StandardCharsets.UTF_8);
+    Future<CapturedRequest> captured = startMockBackend(cgiResponse);
+
+    HttpRequest request =
+        new HttpRequest() {
+          @Override
+          public String getUri() {
+            return "/no query";
+          }
+
+          @Override
+          public HttpHeaders getHeaders() {
+            return HttpHeaders.of(HttpHeaderName.HOST, "example.com");
+          }
+        };
+
+    FcgiHandler handler =
+        new FcgiHandler("localhost", serverSocket.getLocalPort(), "/x", "/srv/x.php");
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, request, writer);
+
+    CapturedRequest req = captured.get(2, TimeUnit.SECONDS);
+    assertEquals("", req.params.get("QUERY_STRING"));
+    assertEquals(200, writer.response.getStatusCode());
+  }
+
+  @Test
+  public void stderrRecords_silentlyIgnored() throws Exception {
+    // Custom mock: sends an FCGI_STDERR record before the real STDOUT payload. The handler must
+    // skip it and still forward the CGI response correctly.
+    Future<Void> done =
+        executor.submit(
+            () -> {
+              try (Socket socket = serverSocket.accept()) {
+                InputStream in = socket.getInputStream();
+                OutputStream out = socket.getOutputStream();
+                // Drain the client's BEGIN_REQUEST + PARAMS + STDIN records.
+                boolean stdinDone = false;
+                while (!stdinDone) {
+                  Record record = new Record();
+                  record.readFrom(in);
+                  if (record.getType() == FastCgiConstants.FCGI_STDIN
+                      && record.getContent().length == 0) {
+                    stdinDone = true;
+                  }
+                }
+                Record stderr = new Record().setRequestId(1).setType(FastCgiConstants.FCGI_STDERR);
+                stderr.setContent("warning: something".getBytes(StandardCharsets.UTF_8));
+                stderr.writeTo(out);
+                Record stdout = new Record().setRequestId(1).setType(FastCgiConstants.FCGI_STDOUT);
+                stdout.setContent(
+                    "Content-Type: text/plain\r\n\r\nok".getBytes(StandardCharsets.UTF_8));
+                stdout.writeTo(out);
+                stdout.setContent(new byte[0]);
+                stdout.writeTo(out);
+                Record end =
+                    new Record().setRequestId(1).setType(FastCgiConstants.FCGI_END_REQUEST);
+                end.setContent(new byte[] {0, 0, 0, 0, 0, 0, 0, 0});
+                end.writeTo(out);
+                out.flush();
+              }
+              return null;
+            });
+
+    FcgiHandler handler =
+        new FcgiHandler("localhost", serverSocket.getLocalPort(), "/x", "/srv/x.php");
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    handler.handle((Connection) null, get("/x"), writer);
+    done.get(2, TimeUnit.SECONDS);
+
+    assertEquals(200, writer.response.getStatusCode());
+    assertArrayEquals("ok".getBytes(StandardCharsets.UTF_8), writer.body.toByteArray());
+  }
+
+  @Test
+  public void multipleBodyChunks_writerFailsAfterFirst_pendingErrorSuppressesLater()
+      throws Exception {
+    // Response body > 4 KB so the mock backend splits it into multiple STDOUT records → multiple
+    // addData() calls. The failing writer throws on the first write; subsequent addData() calls
+    // must early-return via the pendingError check.
+    byte[] body = new byte[8192];
+    for (int i = 0; i < body.length; i++) {
+      body[i] = (byte) (i & 0xff);
+    }
+    byte[] header = "Content-Type: text/plain\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+    byte[] cgiResponse = new byte[header.length + body.length];
+    System.arraycopy(header, 0, cgiResponse, 0, header.length);
+    System.arraycopy(body, 0, cgiResponse, header.length, body.length);
+    Future<CapturedRequest> captured = startMockBackend(cgiResponse);
+
+    FcgiHandler handler =
+        new FcgiHandler("localhost", serverSocket.getLocalPort(), "/x", "/srv/x.php");
+    FailingOnWriteWriter writer = new FailingOnWriteWriter();
+    IOException thrown = null;
+    try {
+      handler.handle((Connection) null, get("/x"), writer);
+    } catch (IOException e) {
+      thrown = e;
+    }
+    captured.get(2, TimeUnit.SECONDS);
+    assertNotNull(thrown);
+  }
+
+  @Test
+  public void partialResponseThenBackendClose_failWithBadGatewayRethrows() throws Exception {
+    // Mock sends the STDOUT record containing headers + some body, then abruptly closes without
+    // sending FCGI_END_REQUEST. The handler reads the partial body OK (committing the response),
+    // then fcgi.read() hits EOF → IOException → failWithBadGateway with body != null → rethrows.
+    Future<Void> done =
+        executor.submit(
+            () -> {
+              try (Socket socket = serverSocket.accept()) {
+                InputStream in = socket.getInputStream();
+                OutputStream out = socket.getOutputStream();
+                boolean stdinDone = false;
+                while (!stdinDone) {
+                  Record record = new Record();
+                  record.readFrom(in);
+                  if (record.getType() == FastCgiConstants.FCGI_STDIN
+                      && record.getContent().length == 0) {
+                    stdinDone = true;
+                  }
+                }
+                Record stdout = new Record().setRequestId(1).setType(FastCgiConstants.FCGI_STDOUT);
+                stdout.setContent(
+                    "Content-Type: text/plain\r\n\r\npartial".getBytes(StandardCharsets.UTF_8));
+                stdout.writeTo(out);
+                out.flush();
+                // Abruptly close without sending END_REQUEST. The handler's next fcgi.read()
+                // will hit EOF inside Record.readFully.
+              }
+              return null;
+            });
+
+    FcgiHandler handler =
+        new FcgiHandler("localhost", serverSocket.getLocalPort(), "/x", "/srv/x.php");
+    RecordingResponseWriter writer = new RecordingResponseWriter();
+    IOException thrown = null;
+    try {
+      handler.handle((Connection) null, get("/x"), writer);
+    } catch (IOException e) {
+      thrown = e;
+    }
+    done.get(2, TimeUnit.SECONDS);
+    // The partial success response (200 OK with "partial") had already been committed before
+    // the backend failure, so failWithBadGateway takes the body != null branch and rethrows.
+    assertNotNull(thrown);
+    assertNotNull(writer.response);
+    assertEquals(200, writer.response.getStatusCode());
+  }
+
+  @Test
   public void hopByHopResponseHeaders_dropped() throws Exception {
     byte[] cgiResponse =
         ("Content-Type: text/plain\r\n"
