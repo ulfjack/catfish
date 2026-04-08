@@ -135,6 +135,27 @@ public class SslServerStageTest {
     return out;
   }
 
+  // ---- 0. requireOk helper ----
+
+  @Test
+  public void requireOk_okStatus_returnsNormally() throws Exception {
+    SslServerStage.requireOk(
+        new SSLEngineResult(SSLEngineResult.Status.OK, HandshakeStatus.NOT_HANDSHAKING, 0, 0));
+  }
+
+  @Test(expected = IOException.class)
+  public void requireOk_closedStatus_throwsIOException() throws Exception {
+    SslServerStage.requireOk(
+        new SSLEngineResult(SSLEngineResult.Status.CLOSED, HandshakeStatus.NOT_HANDSHAKING, 0, 0));
+  }
+
+  @Test(expected = IOException.class)
+  public void requireOk_bufferOverflow_throwsIOException() throws Exception {
+    SslServerStage.requireOk(
+        new SSLEngineResult(
+            SSLEngineResult.Status.BUFFER_OVERFLOW, HandshakeStatus.NOT_HANDSHAKING, 0, 0));
+  }
+
   // ---- 1. connect ----
 
   @Test

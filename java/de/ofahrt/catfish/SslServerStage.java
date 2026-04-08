@@ -90,6 +90,16 @@ final class SslServerStage implements Stage {
     }
   }
 
+  /**
+   * Throws if a wrap or unwrap result reports anything other than OK. Centralised so the three
+   * write-side call sites all get covered by a single unit test on this helper.
+   */
+  static void requireOk(SSLEngineResult result) throws IOException {
+    if (result.getStatus() != Status.OK) {
+      throw new IOException(result.toString());
+    }
+  }
+
   private void findSni() throws IOException {
     SNIParser.Result result = new SNIParser().parse(netInputBuffer);
     if (!result.isDone()) {
@@ -215,9 +225,7 @@ final class SslServerStage implements Stage {
             "After Wrapping: %d out, %d net",
             Integer.valueOf(outputBuffer.remaining()),
             Integer.valueOf(netOutputBuffer.remaining()));
-        if (result.getStatus() != Status.OK) {
-          throw new IOException(result.toString());
-        }
+        requireOk(result);
         checkStatus();
       }
       if (sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_UNWRAP) {
@@ -254,9 +262,7 @@ final class SslServerStage implements Stage {
             "After Wrapping: %d out, %d net",
             Integer.valueOf(outputBuffer.remaining()),
             Integer.valueOf(netOutputBuffer.remaining()));
-        if (result.getStatus() != Status.OK) {
-          throw new IOException(result.toString());
-        }
+        requireOk(result);
       }
       if (outputBuffer.hasRemaining()) {
         // We still have data buffered, so we may need to override the control from the next stage.
@@ -291,9 +297,7 @@ final class SslServerStage implements Stage {
             "After Wrapping: %d out, %d net",
             Integer.valueOf(outputBuffer.remaining()),
             Integer.valueOf(netOutputBuffer.remaining()));
-        if (result.getStatus() != Status.OK) {
-          throw new IOException(result.toString());
-        }
+        requireOk(result);
       }
       return outputBuffer.hasRemaining() ? ConnectionControl.CONTINUE : pendingClose;
     }
