@@ -136,18 +136,16 @@ final class SslServerStage implements Stage {
         inputBuffer.compact(); // prepare buffer for writing
         SSLEngineResult result = sslEngine.unwrap(netInputBuffer, inputBuffer);
         inputBuffer.flip(); // prepare buffer for reading
-        Status sslStatus = result.getStatus();
-        switch (sslStatus) {
-          case CLOSED:
+        switch (result.getStatus()) {
+          case CLOSED -> {
             return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
-          case BUFFER_UNDERFLOW:
+          }
+          case BUFFER_UNDERFLOW -> {
             return ConnectionControl.NEED_MORE_DATA;
-          case OK:
-            break;
-          default:
-            throw new IOException(result.toString());
+          }
+          case BUFFER_OVERFLOW -> throw new IOException(result.toString());
+          case OK -> {} // proceed
         }
-        //      parent.log("SSL STATUS=%s", result);
         checkStatus();
       }
       if (sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP) {
@@ -169,12 +167,15 @@ final class SslServerStage implements Stage {
         inputBuffer.compact(); // prepare buffer for writing
         SSLEngineResult result = sslEngine.unwrap(netInputBuffer, inputBuffer);
         inputBuffer.flip(); // prepare buffer for reading
-        if (result.getStatus() == Status.CLOSED) {
-          return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
-        } else if (result.getStatus() == Status.BUFFER_UNDERFLOW) {
-          return ConnectionControl.NEED_MORE_DATA;
-        } else if (result.getStatus() != Status.OK) {
-          throw new IOException(result.toString());
+        switch (result.getStatus()) {
+          case CLOSED -> {
+            return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
+          }
+          case BUFFER_UNDERFLOW -> {
+            return ConnectionControl.NEED_MORE_DATA;
+          }
+          case BUFFER_OVERFLOW -> throw new IOException(result.toString());
+          case OK -> {} // proceed
         }
       }
       if (sslEngine.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING) {
@@ -259,27 +260,24 @@ final class SslServerStage implements Stage {
       }
       if (outputBuffer.hasRemaining()) {
         // We still have data buffered, so we may need to override the control from the next stage.
-        switch (nextState) {
-          case CONTINUE:
-            return ConnectionControl.CONTINUE;
-          case NEED_MORE_DATA:
-            return ConnectionControl.NEED_MORE_DATA;
-          case PAUSE:
-            return ConnectionControl.CONTINUE;
-          case CLOSE_OUTPUT_AFTER_FLUSH:
+        return switch (nextState) {
+          case CONTINUE -> ConnectionControl.CONTINUE;
+          case NEED_MORE_DATA -> ConnectionControl.NEED_MORE_DATA;
+          case PAUSE -> ConnectionControl.CONTINUE;
+          case CLOSE_OUTPUT_AFTER_FLUSH -> {
             pendingClose = ConnectionControl.CLOSE_OUTPUT_AFTER_FLUSH;
             status = FlowStatus.CLOSING;
-            return ConnectionControl.CONTINUE;
-          case CLOSE_CONNECTION_AFTER_FLUSH:
+            yield ConnectionControl.CONTINUE;
+          }
+          case CLOSE_CONNECTION_AFTER_FLUSH -> {
             pendingClose = ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
             status = FlowStatus.CLOSING;
-            return ConnectionControl.CONTINUE;
-          case CLOSE_INPUT:
-            throw new IllegalStateException("Cannot close-input after write (" + this + ")");
-          case CLOSE_CONNECTION_IMMEDIATELY:
-            return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
-        }
-        throw new IllegalStateException("Unknown control: " + nextState);
+            yield ConnectionControl.CONTINUE;
+          }
+          case CLOSE_INPUT ->
+              throw new IllegalStateException("Cannot close-input after write (" + this + ")");
+          case CLOSE_CONNECTION_IMMEDIATELY -> ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
+        };
       }
       return nextState;
     } else { // status == FlowStatus.CLOSING
