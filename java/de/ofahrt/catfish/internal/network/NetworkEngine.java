@@ -5,11 +5,7 @@ import de.ofahrt.catfish.internal.network.Stage.InitialConnectionState;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.network.NetworkServer;
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.StandardProtocolFamily;
@@ -26,7 +22,6 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -37,7 +32,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public final class NetworkEngine {
   private static final boolean DEBUG = false;
-  private static final boolean LOG_TO_FILE = false;
   private static final int DEFAULT_BUFFER_SIZE = 65536;
 
   private static final boolean OUTGOING_CONNECTION = true;
@@ -70,51 +64,6 @@ public final class NetworkEngine {
     void handleEvent() throws IOException;
   }
 
-  private interface LogHandler {
-    void log(String text);
-  }
-
-  private static final class FileLogHandler implements LogHandler {
-    private static final String POISON_PILL = "poison pill";
-
-    private final BlockingQueue<String> queue = new ArrayBlockingQueue<>(100);
-    private final PrintWriter out;
-
-    FileLogHandler(File f) throws IOException {
-      out = new PrintWriter(new BufferedOutputStream(new FileOutputStream(f), 10000));
-      new Thread(this::run, "log-writer").start();
-    }
-
-    @Override
-    public void log(String text) {
-      try {
-        queue.put(text);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
-    }
-
-    private void run() {
-      try {
-        String line;
-        while ((line = queue.take()) != POISON_PILL) {
-          out.println(line);
-        }
-        out.close();
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        out.close();
-      }
-    }
-  }
-
-  private static final class ConsoleLogHandler implements LogHandler {
-    @Override
-    public void log(String text) {
-      System.out.println(text);
-    }
-  }
-
   private static final String[] SELECT_MODE = new String[] {"NONE", "READ", "WRITE", "READ+WRITE"};
 
   private enum ConnectionState {
@@ -140,7 +89,6 @@ public final class NetworkEngine {
     private final SelectionKey key;
     private final ByteBuffer inputBuffer;
     private final ByteBuffer outputBuffer;
-    private final LogHandler logHandler;
 
     private Stage current;
     private ConnectionState state;
@@ -153,13 +101,11 @@ public final class NetworkEngine {
         SocketChannel socketChannel,
         SelectionKey key,
         NetworkHandler handler,
-        LogHandler logHandler,
         boolean outgoing) {
       this.queue = queue;
       this.connection = connection;
       this.socketChannel = socketChannel;
       this.key = key;
-      this.logHandler = logHandler;
       this.inputBuffer = ByteBuffer.allocate(DEFAULT_BUFFER_SIZE);
       this.outputBuffer = ByteBuffer.allocate(DEFAULT_BUFFER_SIZE);
       inputBuffer.clear();
@@ -314,9 +260,12 @@ public final class NetworkEngine {
                 case CONTINUE:
                   break;
                 case NEED_MORE_DATA:
-                  // No more data is coming and the stage thinks it needs more. Close the
-                  // connection.
-                  inputBuffer.clear();
+                  // No more data is coming and the stage thinks it needs more. Discard any
+                  // remaining bytes so the next loop iteration reaches the empty-buffer branch
+                  // and calls inputClosed(). (Don't use buffer.clear() here — that puts the
+                  // buffer back into write mode, where hasRemaining() would report the full
+                  // capacity and spin forever.)
+                  inputBuffer.position(inputBuffer.limit());
                   break;
                 case PAUSE:
                   if (inputBuffer.hasRemaining()) {
@@ -484,16 +433,8 @@ public final class NetworkEngine {
 
     @Override
     public void log(String text, Object... params) {
-      if (DEBUG) {
-        long atNanos = System.nanoTime() - connection.startTimeNanos();
-        long atSeconds = TimeUnit.NANOSECONDS.toSeconds(atNanos);
-        long nanoFraction = atNanos - TimeUnit.SECONDS.toNanos(atSeconds);
-        String printedText = String.format(text, params);
-        logHandler.log(
-            String.format(
-                "%s[%3s.%9d] %s",
-                connection, Long.valueOf(atSeconds), Long.valueOf(nanoFraction), printedText));
-      }
+      // Debug logging is off by default (DEBUG = false). Flip DEBUG and inline a call to
+      // System.out.println(String.format(text, params)) here when chasing NIO state bugs.
     }
   }
 
@@ -621,13 +562,11 @@ public final class NetworkEngine {
     private final Selector selector;
     private final BlockingQueue<Runnable> eventQueue = new LinkedBlockingQueue<>();
     private final BlockingQueue<Runnable> shutdownQueue = new LinkedBlockingQueue<>();
-    private final LogHandler logHandler;
     private boolean shutdown;
     private final AtomicBoolean shutdownInitiated = new AtomicBoolean();
 
-    public SelectorQueue(int id, LogHandler logHandler) throws IOException {
+    public SelectorQueue(int id) throws IOException {
       this.id = id;
-      this.logHandler = logHandler;
       this.selector = Selector.open();
       Thread t = new Thread(this, "catfish-select-" + this.id);
       t.start();
@@ -765,13 +704,7 @@ public final class NetworkEngine {
               SelectionKey key = socketChannel.register(selector, 0);
               SocketHandler socketHandler =
                   new SocketHandler(
-                      this,
-                      connection,
-                      socketChannel,
-                      key,
-                      handler,
-                      logHandler,
-                      OUTGOING_CONNECTION);
+                      this, connection, socketChannel, key, handler, OUTGOING_CONNECTION);
               key.attach(socketHandler);
             } catch (IOException e) {
               thrownException.set(e);
@@ -807,13 +740,7 @@ public final class NetworkEngine {
               SelectionKey socketKey = socketChannel.register(selector, 0);
               SocketHandler socketHandler =
                   new SocketHandler(
-                      this,
-                      connection,
-                      socketChannel,
-                      socketKey,
-                      handler,
-                      logHandler,
-                      INCOMING_CONNECTION);
+                      this, connection, socketChannel, socketKey, handler, INCOMING_CONNECTION);
               socketKey.attach(socketHandler);
             } catch (ClosedChannelException e) {
               throw new RuntimeException(e);
@@ -881,14 +808,8 @@ public final class NetworkEngine {
   public NetworkEngine(NetworkEventListener networkEventListener) throws IOException {
     this.networkEventListener = networkEventListener;
     this.queues = new SelectorQueue[8];
-    LogHandler logHandler;
-    if (LOG_TO_FILE) {
-      logHandler = new FileLogHandler(new File("/tmp/catfish.log"));
-    } else {
-      logHandler = new ConsoleLogHandler();
-    }
     for (int i = 0; i < queues.length; i++) {
-      queues[i] = new SelectorQueue(i, logHandler);
+      queues[i] = new SelectorQueue(i);
     }
   }
 
