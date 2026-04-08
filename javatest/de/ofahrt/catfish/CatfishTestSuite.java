@@ -32,6 +32,7 @@ import org.junit.runners.Suite.SuiteClasses;
   PipeBufferTest.class,
   SNIParserTest.class,
   SslInfoCacheTest.class,
+  SslServerStageTest.class,
   FastCgiTestSuite.class,
   CatfishInternalTestSuite.class,
   CatfishSslTestSuite.class,
