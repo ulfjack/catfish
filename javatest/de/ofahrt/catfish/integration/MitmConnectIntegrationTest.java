@@ -870,6 +870,55 @@ public class MitmConnectIntegrationTest {
     }
   }
 
+  @Test
+  public void localIntercept_servesRequestLocally_withoutOpeningOriginSocket() throws Exception {
+    // Simulates a client (e.g. Claude Code) that auto-upgrades localhost HTTP requests to HTTPS
+    // via CONNECT, even though the target port speaks plain HTTP. The proxy's ConnectHandler
+    // returns localIntercept() so the MITM terminates TLS with a pre-made cert and routes the
+    // decrypted request through the local HTTP handler — no socket is opened to the CONNECT
+    // target. We pick port 1 as the CONNECT target; nothing is listening there, so if the MITM
+    // did try to open a socket the handshake would fail with ECONNREFUSED and the CONNECT would
+    // return 502.
+    //
+    // Mint a leaf cert for "localhost" signed by the shared MITM CA so the test client (which
+    // trusts that CA) will validate the chain.
+    SSLInfo localSslInfo = ca.create("localhost", testSslInfo.certificate());
+
+    CatfishHttpServer server = newServer();
+    server.addHttpHost(
+        "localhost",
+        new HttpVirtualHost(
+            (conn, request, writer) ->
+                writer.commitBuffered(
+                    StandardResponses.OK.withBody(
+                        "local-intercept-ok".getBytes(StandardCharsets.UTF_8)))));
+    server.listenConnectProxyLocal(
+        9120,
+        new ConnectHandler() {
+          @Override
+          public ConnectDecision apply(String host, int port) {
+            return ConnectDecision.localIntercept(localSslInfo);
+          }
+        },
+        testSslInfo.sslContext().getSocketFactory());
+    serversToStop.add(server);
+
+    try (SSLSocket sslSocket = connectViaMitm(9120, /* unreachable port */ 1)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+      sslOut.write(
+          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
+
+      String responseHeaders = readUntilBlankLine(sslIn);
+      assertTrue(
+          "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
+      byte[] body = readBody(sslIn, responseHeaders);
+      assertEquals("local-intercept-ok", new String(body, StandardCharsets.UTF_8));
+    }
+  }
+
   // ---- I/O helpers ----
 
   /** Reads the response body, honouring Transfer-Encoding: chunked, Content-Length, or EOF. */

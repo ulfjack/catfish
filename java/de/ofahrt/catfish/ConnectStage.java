@@ -30,6 +30,15 @@ import javax.net.ssl.SSLSocketFactory;
  */
 final class ConnectStage implements Stage {
 
+  /**
+   * Creates the inner stage used for {@link ConnectDecision#localIntercept local-intercept} mode —
+   * typically a fresh {@link HttpServerStage} wired to the current server's request dispatcher.
+   */
+  @FunctionalInterface
+  interface LocalStageFactory {
+    Stage create(Pipeline parent, ByteBuffer inputBuffer, ByteBuffer outputBuffer);
+  }
+
   private enum ConnectState {
     CONNECTING,
     SENDING_RESPONSE,
@@ -51,6 +60,7 @@ final class ConnectStage implements Stage {
   private final ConnectHandler handler;
   private final SSLSocketFactory originSocketFactory;
   private final SslInfoCache sslInfoCache;
+  private final LocalStageFactory localStageFactory;
 
   private ConnectState state = ConnectState.CONNECTING;
   private byte[] pendingResponseBytes;
@@ -59,6 +69,7 @@ final class ConnectStage implements Stage {
 
   // Set during doConnect(); read on NIO thread in setupMitm()/setupTunnel().
   private boolean isTunnel;
+  private boolean isLocalIntercept;
   private Socket tunnelSocket;
   private SSLContext fakeCtx;
   private String originHost;
@@ -75,7 +86,8 @@ final class ConnectStage implements Stage {
       int port,
       ConnectHandler handler,
       SSLSocketFactory originSocketFactory,
-      SslInfoCache sslInfoCache) {
+      SslInfoCache sslInfoCache,
+      LocalStageFactory localStageFactory) {
     this.parent = parent;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
@@ -85,6 +97,7 @@ final class ConnectStage implements Stage {
     this.handler = handler;
     this.originSocketFactory = originSocketFactory;
     this.sslInfoCache = sslInfoCache;
+    this.localStageFactory = localStageFactory;
   }
 
   @Override
@@ -130,6 +143,17 @@ final class ConnectStage implements Stage {
       } catch (IOException e) {
         parent.queue(parent::close);
       }
+      return;
+    }
+
+    if (decision.isLocalIntercept()) {
+      // Use the provided SSLInfo directly; don't mirror an origin cert (there's no origin).
+      // After TLS setup, decrypted requests are routed through the local HTTP handler instead
+      // of being forwarded to a remote origin.
+      isLocalIntercept = true;
+      fakeCtx = decision.getSslInfo().sslContext();
+      handler.onCertificateReady(connectHost, connectPort);
+      parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
       return;
     }
 
@@ -246,23 +270,33 @@ final class ConnectStage implements Stage {
     decryptedOut.clear();
     decryptedOut.flip();
 
-    MitmProxyStage proxyStage =
-        new MitmProxyStage(
-            parent,
-            decryptedIn,
-            decryptedOut,
-            executor,
-            originHost,
-            originPort,
-            originSocketFactory,
-            handler,
-            onClose);
+    Stage innerStage;
+    if (isLocalIntercept) {
+      if (localStageFactory == null) {
+        throw new IllegalStateException(
+            "local-intercept decision requires a LocalStageFactory; none was provided");
+      }
+      Stage localStage = localStageFactory.create(parent, decryptedIn, decryptedOut);
+      innerStage = wrapWithOnClose(localStage, onClose);
+    } else {
+      innerStage =
+          new MitmProxyStage(
+              parent,
+              decryptedIn,
+              decryptedOut,
+              executor,
+              originHost,
+              originPort,
+              originSocketFactory,
+              handler,
+              onClose);
+    }
 
     SSLContext capturedCtx = fakeCtx;
     SslServerStage ssl =
         new SslServerStage(
             parent,
-            proxyStage,
+            innerStage,
             ignored -> capturedCtx,
             executor,
             inputBuffer,
@@ -270,6 +304,46 @@ final class ConnectStage implements Stage {
             decryptedIn,
             decryptedOut);
     parent.replaceWith(ssl);
+  }
+
+  /**
+   * Wraps a Stage so that {@code onClose} runs after the delegate's {@link Stage#close()}. Used for
+   * local-intercept mode since the local inner stage ({@link HttpServerStage}) doesn't know about
+   * the {@link ConnectHandler#onConnectComplete} callback contract.
+   */
+  private static Stage wrapWithOnClose(Stage delegate, Runnable onClose) {
+    return new Stage() {
+      @Override
+      public InitialConnectionState connect(Connection connection) {
+        return delegate.connect(connection);
+      }
+
+      @Override
+      public ConnectionControl read() throws IOException {
+        return delegate.read();
+      }
+
+      @Override
+      public void inputClosed() throws IOException {
+        delegate.inputClosed();
+      }
+
+      @Override
+      public ConnectionControl write() throws IOException {
+        return delegate.write();
+      }
+
+      @Override
+      public void close() {
+        try {
+          delegate.close();
+        } finally {
+          if (onClose != null) {
+            onClose.run();
+          }
+        }
+      }
+    };
   }
 
   @Override

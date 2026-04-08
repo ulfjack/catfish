@@ -484,6 +484,12 @@ final class HttpServerStage implements Stage {
       startBuffered(request, StandardResponses.BAD_REQUEST);
       return ConnectionControl.CONTINUE;
     }
+    // Local-intercept mode needs to build a fresh HttpServerStage wired to the same request
+    // dispatcher, but with its own buffers and no connect handler (nested CONNECT would be
+    // meaningless once TLS is already terminated).
+    ConnectStage.LocalStageFactory localFactory =
+        (p, in, out) ->
+            new HttpServerStage(p, requestHandler, requestListener, virtualHostLookup, in, out);
     parent.replaceWith(
         new ConnectStage(
             parent,
@@ -494,7 +500,8 @@ final class HttpServerStage implements Stage {
             parsedPort,
             connectHandler,
             originSocketFactory,
-            sslInfoCache));
+            sslInfoCache,
+            localFactory));
     return ConnectionControl.PAUSE;
   }
 
