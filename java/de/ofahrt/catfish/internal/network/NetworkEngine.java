@@ -453,8 +453,9 @@ public final class NetworkEngine {
     @Override
     public void handleEvent() {
       if (key.isAcceptable()) {
-        // The socket channel is owned by the attachConnection call, which in turn has to guarantee
-        // that the channel is closed eventually.
+        // After successful accept(), the socket channel is owned by attachConnection. If any
+        // step before attachConnection throws, we close the per-connection socket channel — NOT
+        // the listener — and decrement openCounter, then keep the listener alive.
         SocketChannel socketChannel;
         try {
           socketChannel = serverChannel.accept();
@@ -476,12 +477,9 @@ public final class NetworkEngine {
           socketChannel.socket().setSoLinger(false, 0);
           getQueueForConnection().attachConnection(connection, socketChannel, handler);
         } catch (IOException e) {
-          try {
-            serverChannel.close();
-          } catch (IOException e1) {
-            e.addSuppressed(e1);
-          }
-          networkEventListener.notifyInternalError(connection, e);
+          closeAcceptedSocket(socketChannel, e);
+          closedCounter.incrementAndGet();
+          networkEventListener.warning(connection, e);
         }
       }
     }
@@ -493,6 +491,18 @@ public final class NetworkEngine {
       } catch (IOException ignored) {
         // Not much we can do at this point.
       }
+    }
+  }
+
+  /**
+   * Closes a freshly-accepted socket after a setup failure, suppressing close errors into the
+   * original exception.
+   */
+  private static void closeAcceptedSocket(SocketChannel socketChannel, IOException original) {
+    try {
+      socketChannel.close();
+    } catch (IOException e) {
+      original.addSuppressed(e);
     }
   }
 
@@ -517,6 +527,8 @@ public final class NetworkEngine {
     @Override
     public void handleEvent() {
       if (key.isAcceptable()) {
+        // See ServerSocketHandler.handleEvent for the rationale: a per-connection setup failure
+        // closes the accepted socket only, never the listener.
         SocketChannel socketChannel;
         try {
           socketChannel = serverChannel.accept();
@@ -531,12 +543,9 @@ public final class NetworkEngine {
           socketChannel.configureBlocking(false);
           getQueueForConnection().attachConnection(connection, socketChannel, handler);
         } catch (IOException e) {
-          try {
-            serverChannel.close();
-          } catch (IOException e1) {
-            e.addSuppressed(e1);
-          }
-          networkEventListener.notifyInternalError(connection, e);
+          closeAcceptedSocket(socketChannel, e);
+          closedCounter.incrementAndGet();
+          networkEventListener.warning(connection, e);
         }
       }
     }
