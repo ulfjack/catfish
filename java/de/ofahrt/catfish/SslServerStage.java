@@ -257,9 +257,6 @@ final class SslServerStage implements Stage {
           throw new IOException(result.toString());
         }
       }
-      if (sslEngine.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING) {
-        throw new IOException("Re-entering handshake mode - what's up?");
-      }
       if (outputBuffer.hasRemaining()) {
         // We still have data buffered, so we may need to override the control from the next stage.
         switch (nextState) {
@@ -299,9 +296,6 @@ final class SslServerStage implements Stage {
         if (result.getStatus() != Status.OK) {
           throw new IOException(result.toString());
         }
-      }
-      if (sslEngine.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING) {
-        throw new IOException("Re-entering handshake mode - what's up?");
       }
       return outputBuffer.hasRemaining() ? ConnectionControl.CONTINUE : pendingClose;
     }
