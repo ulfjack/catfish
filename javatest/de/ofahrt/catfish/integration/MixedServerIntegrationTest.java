@@ -14,6 +14,7 @@ import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
+import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import java.io.ByteArrayOutputStream;
@@ -112,6 +113,35 @@ public class MixedServerIntegrationTest {
                             RESPONSE_BODY.getBytes(StandardCharsets.UTF_8))))
             .uploadPolicy(UploadPolicy.ALLOW));
     s.listenConnectProxyLocal(port, ConnectHandler.tunnelAll());
+    extraServers.add(s);
+  }
+
+  /**
+   * Starts a proxy server on {@code port} that routes all absolute-URI requests through the local
+   * {@link de.ofahrt.catfish.model.server.HttpHandler} via {@link ConnectDecision#serveLocally}.
+   * The echo virtual host copies the request body back in the response so tests can assert that the
+   * body arrived. Upload policy is {@link UploadPolicy#ALLOW}.
+   */
+  private void startExtraServerServeLocallyEcho(int port) throws Exception {
+    CatfishHttpServer s = newServer();
+    s.addHttpHost(
+        "localhost",
+        new HttpVirtualHost(
+                (conn, request, writer) -> {
+                  byte[] body = new byte[0];
+                  if (request.getBody() instanceof HttpRequest.InMemoryBody inMem) {
+                    body = inMem.toByteArray();
+                  }
+                  // Echo method + URI + body so tests can verify all three.
+                  String prefix = request.getMethod() + " " + request.getUri() + "\n";
+                  byte[] prefixBytes = prefix.getBytes(StandardCharsets.UTF_8);
+                  byte[] out = new byte[prefixBytes.length + body.length];
+                  System.arraycopy(prefixBytes, 0, out, 0, prefixBytes.length);
+                  System.arraycopy(body, 0, out, prefixBytes.length, body.length);
+                  writer.commitBuffered(StandardResponses.OK.withBody(out));
+                })
+            .uploadPolicy(UploadPolicy.ALLOW));
+    s.listenConnectProxyLocal(port, (host, p) -> ConnectDecision.serveLocally());
     extraServers.add(s);
   }
 
@@ -307,6 +337,57 @@ public class MixedServerIntegrationTest {
                   .setBody(new HttpRequest.InMemoryBody(body))
                   .build());
       assertEquals(200, response.getStatusCode());
+    }
+  }
+
+  // ---- Tests: serveLocally forward-proxy dispatch ----
+
+  /**
+   * An absolute-URI GET where ConnectHandler.apply returns serveLocally() is dispatched to the
+   * local HttpHandler with the URI rewritten from absolute to relative.
+   */
+  @Test
+  public void serveLocally_get_dispatchesToLocalHandler() throws Exception {
+    int port = 9104;
+    startExtraServerServeLocallyEcho(port);
+    try (HttpConnection conn = HttpConnection.connect("localhost", port)) {
+      var response =
+          conn.send(
+              new SimpleHttpRequest.Builder()
+                  .setVersion(HttpVersion.HTTP_1_1)
+                  .setMethod(HttpMethodName.GET)
+                  .setUri("http://localhost:" + port + "/hello?q=world")
+                  .addHeader(HttpHeaderName.HOST, "localhost:" + port)
+                  .build());
+      assertEquals(200, response.getStatusCode());
+      assertEquals("GET /hello?q=world\n", new String(response.getBody(), StandardCharsets.UTF_8));
+    }
+  }
+
+  /**
+   * An absolute-URI POST with a body is dispatched to the local HttpHandler with the full body
+   * attached — the deadlock / silent-discard bug fix for HTTP_PROXY + POST.
+   */
+  @Test
+  public void serveLocally_postWithBody_bodyReachesHandler() throws Exception {
+    int port = 9105;
+    startExtraServerServeLocallyEcho(port);
+    byte[] body = "post-body-contents".getBytes(StandardCharsets.UTF_8);
+    try (HttpConnection conn = HttpConnection.connect("localhost", port)) {
+      var response =
+          conn.send(
+              new SimpleHttpRequest.Builder()
+                  .setVersion(HttpVersion.HTTP_1_1)
+                  .setMethod(HttpMethodName.POST)
+                  .setUri("http://localhost:" + port + "/submit")
+                  .addHeader(HttpHeaderName.HOST, "localhost:" + port)
+                  .addHeader(HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length))
+                  .setBody(new HttpRequest.InMemoryBody(body))
+                  .build());
+      assertEquals(200, response.getStatusCode());
+      assertEquals(
+          "POST /submit\npost-body-contents",
+          new String(response.getBody(), StandardCharsets.UTF_8));
     }
   }
 

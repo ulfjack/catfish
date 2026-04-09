@@ -15,6 +15,7 @@ import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.CompressionPolicy;
+import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
@@ -28,6 +29,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -222,6 +225,17 @@ final class HttpServerStage implements Stage {
   // Set after header parsing when the request has a body to buffer.
   private HttpRequestBodyParser bodyParser;
   private HttpRequest headersRequest;
+  // Non-null while waiting for ConnectHandler.apply() to return the routing decision for an
+  // absolute-URI (forward-proxy) request. While set, read() returns PAUSE so that body bytes
+  // remain buffered in inputBuffer until the decision arrives.
+  private HttpRequest pendingAbsoluteUriRequest;
+  // Set by the executor task once ConnectHandler.apply() has returned. Read and cleared by the
+  // next invocation of read() on the NIO thread. Null means "no decision yet" — the field is
+  // volatile because it crosses the executor↔NIO thread boundary.
+  private volatile ConnectDecision pendingRoutingDecision;
+  // Signals that ConnectHandler.apply() threw; produce a 403. Checked alongside
+  // pendingRoutingDecision.
+  private volatile boolean pendingRoutingFailed;
 
   HttpServerStage(
       Pipeline parent,
@@ -274,6 +288,14 @@ final class HttpServerStage implements Stage {
 
   @Override
   public ConnectionControl read() {
+    // While waiting for the forward-proxy routing decision, buffer bytes in inputBuffer but
+    // don't advance any state machine. The decision is consumed from write() (driven by
+    // encourageWrites → handleEvent), not from here — the read loop does not iterate when
+    // inputBuffer is empty, so we cannot rely on read() firing for a GET forward-proxy request.
+    if (pendingAbsoluteUriRequest != null) {
+      return ConnectionControl.PAUSE;
+    }
+
     // Phase 2: body parsing (if active).
     if (bodyParser != null) {
       return readBody();
@@ -303,20 +325,18 @@ final class HttpServerStage implements Stage {
       return handleConnect(headers);
     }
     if (connectHandler != null && isAbsoluteUri(headers.getUri())) {
-      parent.replaceWith(
-          new ForwardProxyStage(
-              parent,
-              inputBuffer,
-              outputBuffer,
-              executor,
-              headers,
-              connectHandler,
-              originSocketFactory != null
-                  ? originSocketFactory
-                  : (SSLSocketFactory) SSLSocketFactory.getDefault()));
-      return ConnectionControl.PAUSE;
+      return beginAbsoluteUriRouting(headers);
     }
 
+    return startBodyOrDispatch(headers);
+  }
+
+  /**
+   * Body-presence check, upload-policy check, body-parser setup, and {@code Expect: 100-continue}
+   * handling. Shared between the normal post-header path and the post-routing-decision path for
+   * absolute-URI forward-proxy requests that the {@link ConnectHandler} chose to serve locally.
+   */
+  private ConnectionControl startBodyOrDispatch(HttpRequest headers) {
     // Regular request — check if it has a body.
     String cl = headers.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
     String te = headers.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
@@ -365,6 +385,72 @@ final class HttpServerStage implements Stage {
     return readBody();
   }
 
+  /**
+   * An absolute-URI request arrived (forward-proxy case). Parse the target host/port and dispatch
+   * {@link ConnectHandler#apply} to the executor thread for the routing decision; the stage stays
+   * paused until the decision comes back via {@link #applyRoutingDecision}.
+   */
+  private ConnectionControl beginAbsoluteUriRouting(HttpRequest headers) {
+    String host;
+    int port;
+    try {
+      URI uri = new URI(headers.getUri());
+      if (uri.getHost() == null) {
+        startBuffered(headers, StandardResponses.BAD_REQUEST);
+        return ConnectionControl.CLOSE_INPUT;
+      }
+      host = uri.getHost();
+      boolean useTls = "https".equalsIgnoreCase(uri.getScheme());
+      int explicitPort = uri.getPort();
+      port = explicitPort >= 0 ? explicitPort : (useTls ? 443 : 80);
+    } catch (URISyntaxException e) {
+      startBuffered(headers, StandardResponses.BAD_REQUEST);
+      return ConnectionControl.CLOSE_INPUT;
+    }
+
+    pendingAbsoluteUriRequest = headers;
+    String finalHost = host;
+    int finalPort = port;
+    executor.execute(() -> runRoutingDecision(finalHost, finalPort));
+    return ConnectionControl.PAUSE;
+  }
+
+  /**
+   * Runs on the executor thread. Calls {@link ConnectHandler#apply} (which may block), stashes the
+   * result in the pending fields, and wakes the NIO thread via {@link Pipeline#encourageWrites} so
+   * that {@link #write} consumes the decision from inside {@code handleEvent} — where {@link
+   * Pipeline#replaceWith} and state transitions are safe. We use {@code encourageWrites} rather
+   * than {@code encourageReads} because the read loop does not iterate when {@code inputBuffer} is
+   * empty (e.g. a GET forward-proxy request), so relying on {@link #read} would deadlock.
+   */
+  private void runRoutingDecision(String host, int port) {
+    try {
+      ConnectDecision decision = connectHandler.apply(host, port);
+      pendingRoutingDecision = decision != null ? decision : ConnectDecision.deny();
+    } catch (Exception e) {
+      pendingRoutingFailed = true;
+    }
+    // Wake the NIO thread: write() (driven by the write loop inside handleEvent) consumes the
+    // pending decision. We deliberately use encourageWrites rather than encourageReads because
+    // the read loop does not iterate on an empty inputBuffer (e.g. a GET forward-proxy request
+    // with no body), so relying on read() would deadlock.
+    parent.encourageWrites();
+  }
+
+  private static String toRelativeUri(String absoluteUri) {
+    try {
+      URI uri = new URI(absoluteUri);
+      String path = uri.getRawPath();
+      if (path == null || path.isEmpty()) {
+        path = "/";
+      }
+      String query = uri.getRawQuery();
+      return query != null ? path + "?" + query : path;
+    } catch (URISyntaxException e) {
+      return absoluteUri;
+    }
+  }
+
   private ConnectionControl readBody() {
     if (!inputBuffer.hasRemaining()) {
       return ConnectionControl.CONTINUE;
@@ -402,6 +488,47 @@ final class HttpServerStage implements Stage {
   public ConnectionControl write() throws IOException {
     if (VERBOSE) {
       parent.log("write");
+    }
+    // Consume a pending forward-proxy routing decision on the NIO thread. This is driven by
+    // encourageWrites from the executor-thread runRoutingDecision. See beginAbsoluteUriRouting.
+    if (pendingAbsoluteUriRequest != null
+        && (pendingRoutingDecision != null || pendingRoutingFailed)) {
+      HttpRequest headers = pendingAbsoluteUriRequest;
+      ConnectDecision decision = pendingRoutingDecision;
+      boolean failed = pendingRoutingFailed;
+      pendingAbsoluteUriRequest = null;
+      pendingRoutingDecision = null;
+      pendingRoutingFailed = false;
+      if (failed || decision == null || decision.isDenied()) {
+        startBuffered(headers, StandardResponses.FORBIDDEN);
+        // Fall through: startBuffered set responseGenerator, the write below will generate it.
+      } else if (decision.isServeLocally()) {
+        HttpRequest rewritten = headers.withUri(toRelativeUri(headers.getUri()));
+        ConnectionControl cc = startBodyOrDispatch(rewritten);
+        // If body parsing needs to continue, reads must be re-enabled; write() is a dead end
+        // for that. Delegate by poking reads explicitly.
+        if (cc == ConnectionControl.CONTINUE || cc == ConnectionControl.NEED_MORE_DATA) {
+          parent.encourageReads();
+          return ConnectionControl.PAUSE;
+        }
+        // cc == PAUSE (either handler queued, or a buffered error response queued via
+        // startBuffered). Fall through — responseGenerator may now be set.
+      } else {
+        // Forward to origin — hand off to ForwardProxyStage with the pre-computed decision.
+        parent.replaceWith(
+            new ForwardProxyStage(
+                parent,
+                inputBuffer,
+                outputBuffer,
+                executor,
+                headers,
+                decision,
+                connectHandler,
+                originSocketFactory != null
+                    ? originSocketFactory
+                    : (SSLSocketFactory) SSLSocketFactory.getDefault()));
+        return ConnectionControl.PAUSE;
+      }
     }
     if (responseGenerator == null) {
       // Spurious write() call. Ignore.

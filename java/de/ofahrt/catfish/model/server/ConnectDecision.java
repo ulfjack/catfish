@@ -8,7 +8,8 @@ public final class ConnectDecision {
     DENY,
     TUNNEL,
     INTERCEPT,
-    LOCAL_INTERCEPT
+    LOCAL_INTERCEPT,
+    SERVE_LOCALLY
   }
 
   private final Kind kind;
@@ -49,6 +50,21 @@ public final class ConnectDecision {
     return new ConnectDecision(Kind.LOCAL_INTERCEPT, null, 0, null, sslInfo);
   }
 
+  /**
+   * Dispatch this request through the local {@link de.ofahrt.catfish.model.server.HttpHandler}
+   * instead of forwarding it to an origin server. Only meaningful on the HTTP forward-proxy path
+   * (absolute-URI requests handled by {@code HttpServerStage} / {@code ForwardProxyStage}); ignored
+   * on the CONNECT / MITM path (use {@link #localIntercept} there).
+   *
+   * <p>When returned, the in-flight request is rewritten from its absolute URI to the equivalent
+   * relative URI (path + query), its body is buffered via the usual upload-policy path, and the
+   * request is dispatched to the server's {@code HttpHandler} exactly as a normal HTTP request
+   * would be.
+   */
+  public static ConnectDecision serveLocally() {
+    return new ConnectDecision(Kind.SERVE_LOCALLY, null, 0, null, null);
+  }
+
   public boolean isDenied() {
     return kind == Kind.DENY;
   }
@@ -63,6 +79,10 @@ public final class ConnectDecision {
 
   public boolean isLocalIntercept() {
     return kind == Kind.LOCAL_INTERCEPT;
+  }
+
+  public boolean isServeLocally() {
+    return kind == Kind.SERVE_LOCALLY;
   }
 
   public String getHost() {

@@ -29,6 +29,7 @@ final class ForwardProxyStage implements Stage {
   private final ByteBuffer outputBuffer;
   private final Executor executor;
   private final HttpRequest partialRequest;
+  private final ConnectDecision decision;
   private final ConnectHandler connectHandler;
   private final SSLSocketFactory sslSocketFactory;
 
@@ -44,6 +45,7 @@ final class ForwardProxyStage implements Stage {
       ByteBuffer outputBuffer,
       Executor executor,
       HttpRequest partialRequest,
+      ConnectDecision decision,
       ConnectHandler connectHandler,
       SSLSocketFactory sslSocketFactory) {
     this.parent = parent;
@@ -51,6 +53,7 @@ final class ForwardProxyStage implements Stage {
     this.outputBuffer = outputBuffer;
     this.executor = executor;
     this.partialRequest = partialRequest;
+    this.decision = decision;
     this.connectHandler = connectHandler;
     this.sslSocketFactory = sslSocketFactory;
   }
@@ -91,19 +94,6 @@ final class ForwardProxyStage implements Stage {
     boolean useTls = "https".equalsIgnoreCase(uri.getScheme());
     if (port < 0) {
       port = useTls ? 443 : 80;
-    }
-
-    // Access control.
-    ConnectDecision decision;
-    try {
-      decision = connectHandler.apply(host, port);
-    } catch (Exception e) {
-      sendErrorResponse(403);
-      return;
-    }
-    if (decision.isDenied()) {
-      sendErrorResponse(403);
-      return;
     }
 
     // Rewrite absolute URI to relative for origin.
