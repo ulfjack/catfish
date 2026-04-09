@@ -43,8 +43,6 @@ public class SslServerStageTest {
   private FakePipeline pipeline;
   private ByteBuffer netIn;
   private ByteBuffer netOut;
-  private ByteBuffer plainIn;
-  private ByteBuffer plainOut;
   private CapturingNextStage next;
   private SyncExecutor executor;
   private SslServerStage stage;
@@ -59,8 +57,6 @@ public class SslServerStageTest {
         new SslServerStage(
             pipeline,
             (innerPipeline, plainInBuf, plainOutBuf) -> {
-              this.plainIn = plainInBuf;
-              this.plainOut = plainOutBuf;
               this.next = new CapturingNextStage(plainInBuf, plainOutBuf);
               return next;
             },
