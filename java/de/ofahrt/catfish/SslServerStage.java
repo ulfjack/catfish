@@ -18,6 +18,16 @@ final class SslServerStage implements Stage {
     SSLContext getSSLContext(String host);
   }
 
+  /**
+   * Factory for creating the inner (plaintext) stage. Receives the inner {@link Pipeline} whose
+   * {@link Pipeline#replaceWith} updates this {@code SslServerStage}'s inner stage instead of
+   * replacing the outer SSL wrapper.
+   */
+  @FunctionalInterface
+  interface InnerStageFactory {
+    Stage create(Pipeline innerPipeline);
+  }
+
   static final byte[] UNRECOGNIZED_NAME_ALERT = {0x15, 0x03, 0x01, 0x00, 0x02, 0x02, 0x70};
 
   private enum FlowStatus {
@@ -31,7 +41,9 @@ final class SslServerStage implements Stage {
   private final SSLContextProvider contextProvider;
   private final Executor taskExecutor;
   private final Pipeline parent;
-  private final Stage next;
+  private final Pipeline innerPipeline;
+  private Stage next;
+  private Connection connection;
   private final ByteBuffer netInputBuffer;
   private final ByteBuffer netOutputBuffer;
   private final ByteBuffer inputBuffer;
@@ -47,7 +59,7 @@ final class SslServerStage implements Stage {
 
   public SslServerStage(
       Pipeline parent,
-      Stage next,
+      InnerStageFactory innerStageFactory,
       SSLContextProvider contextProvider,
       Executor taskExecutor,
       ByteBuffer netInputBuffer,
@@ -57,7 +69,8 @@ final class SslServerStage implements Stage {
     this.contextProvider = contextProvider;
     this.taskExecutor = taskExecutor;
     this.parent = parent;
-    this.next = next;
+    this.innerPipeline = new InnerPipeline();
+    this.next = innerStageFactory.create(this.innerPipeline);
     this.netInputBuffer = netInputBuffer;
     this.netOutputBuffer = netOutputBuffer;
     this.inputBuffer = inputBuffer;
@@ -66,8 +79,53 @@ final class SslServerStage implements Stage {
 
   @Override
   public InitialConnectionState connect(Connection connection) {
+    this.connection = connection;
     postHandshakeState = next.connect(connection);
     return InitialConnectionState.READ_ONLY;
+  }
+
+  /**
+   * A {@link Pipeline} wrapper that intercepts {@link #replaceWith} to swap the inner stage of this
+   * {@code SslServerStage} rather than replacing the outer SSL wrapper on the real pipeline. All
+   * other methods delegate to the outer {@link #parent}.
+   */
+  private class InnerPipeline implements Pipeline {
+    @Override
+    public void replaceWith(Stage nextStage) {
+      next = nextStage;
+      InitialConnectionState s = nextStage.connect(connection);
+      if (s != InitialConnectionState.WRITE_ONLY) {
+        parent.encourageReads();
+      }
+      if (s != InitialConnectionState.READ_ONLY) {
+        parent.encourageWrites();
+      }
+    }
+
+    @Override
+    public void encourageWrites() {
+      parent.encourageWrites();
+    }
+
+    @Override
+    public void encourageReads() {
+      parent.encourageReads();
+    }
+
+    @Override
+    public void close() {
+      parent.close();
+    }
+
+    @Override
+    public void queue(Runnable runnable) {
+      parent.queue(runnable);
+    }
+
+    @Override
+    public void log(String text, Object... params) {
+      parent.log(text, params);
+    }
   }
 
   private void checkStatus() {

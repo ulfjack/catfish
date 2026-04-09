@@ -389,7 +389,7 @@ final class HttpServerStage implements Stage {
   /**
    * An absolute-URI request arrived (forward-proxy case). Parse the target host/port and dispatch
    * {@link ConnectHandler#apply} to the executor thread for the routing decision; the stage stays
-   * paused until the decision comes back via {@link #applyRoutingDecision}.
+   * paused until the decision comes back via {@link #runRoutingDecision}.
    */
   private ConnectionControl beginAbsoluteUriRouting(HttpRequest headers) {
     String host;
@@ -457,6 +457,25 @@ final class HttpServerStage implements Stage {
             : (uri.getPort() >= 0 ? uri.getPort() : defaultPort);
     SocketFactory factory = useTls ? sslFactory : SocketFactory.getDefault();
     return new ProxyStage.Origin(host, port, useTls, factory);
+  }
+
+  /**
+   * Creates a fresh {@link HttpServerStage} with the same configuration as this one, for use as the
+   * keep-alive successor after a {@link ProxyStage} completes a forwarded request. The new stage
+   * can parse the next request and make an independent routing decision.
+   */
+  private Stage createKeepAliveStage() {
+    return new HttpServerStage(
+        parent,
+        requestHandler,
+        requestListener,
+        virtualHostLookup,
+        connectHandler,
+        originSocketFactory,
+        sslInfoCache,
+        executor,
+        inputBuffer,
+        outputBuffer);
   }
 
   private static String toRelativeUri(String absoluteUri) {
@@ -553,7 +572,8 @@ final class HttpServerStage implements Stage {
                 connectHandler,
                 resolver,
                 /* onClose= */ null,
-                headers));
+                headers,
+                this::createKeepAliveStage));
         return ConnectionControl.PAUSE;
       }
     }

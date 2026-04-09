@@ -270,34 +270,38 @@ final class ConnectStage implements Stage {
     decryptedOut.clear();
     decryptedOut.flip();
 
-    Stage innerStage;
+    SslServerStage.InnerStageFactory innerFactory;
     if (isLocalIntercept) {
       if (localStageFactory == null) {
         throw new IllegalStateException(
             "local-intercept decision requires a LocalStageFactory; none was provided");
       }
-      Stage localStage = localStageFactory.create(parent, decryptedIn, decryptedOut);
-      innerStage = wrapWithOnClose(localStage, onClose);
+      innerFactory =
+          (innerPipeline) ->
+              wrapWithOnClose(
+                  localStageFactory.create(innerPipeline, decryptedIn, decryptedOut), onClose);
     } else {
       ProxyStage.Origin fixedOrigin =
           new ProxyStage.Origin(originHost, originPort, true, originSocketFactory);
-      innerStage =
-          new ProxyStage(
-              parent,
-              decryptedIn,
-              decryptedOut,
-              executor,
-              handler,
-              (req) -> fixedOrigin,
-              onClose,
-              /* firstRequest= */ null);
+      innerFactory =
+          (innerPipeline) ->
+              new ProxyStage(
+                  innerPipeline,
+                  decryptedIn,
+                  decryptedOut,
+                  executor,
+                  handler,
+                  (req) -> fixedOrigin,
+                  onClose,
+                  /* firstRequest= */ null,
+                  /* keepAliveStageFactory= */ null);
     }
 
     SSLContext capturedCtx = fakeCtx;
     SslServerStage ssl =
         new SslServerStage(
             parent,
-            innerStage,
+            innerFactory,
             ignored -> capturedCtx,
             executor,
             inputBuffer,

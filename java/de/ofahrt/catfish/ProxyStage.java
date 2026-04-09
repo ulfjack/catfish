@@ -13,6 +13,7 @@ import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Executor;
+import java.util.function.Supplier;
 import javax.net.SocketFactory;
 
 /**
@@ -48,6 +49,10 @@ final class ProxyStage implements Stage {
   private final ConnectHandler handler;
   private final OriginResolver originResolver;
   private final Runnable onClose;
+  // If non-null, on keep-alive the stage replaces itself with a fresh stage from this factory
+  // (typically an HttpServerStage that can make per-request routing decisions). If null, the
+  // stage uses its internal keep-alive loop (for the MITM path until reverse-proxy lands).
+  private final Supplier<Stage> keepAliveStageFactory;
 
   private State state = State.READING_REQUEST_HEADERS;
   private final IncrementalHttpRequestParser requestParser = new IncrementalHttpRequestParser();
@@ -68,7 +73,8 @@ final class ProxyStage implements Stage {
       ConnectHandler handler,
       OriginResolver originResolver,
       Runnable onClose,
-      HttpRequest firstRequest) {
+      HttpRequest firstRequest,
+      Supplier<Stage> keepAliveStageFactory) {
     this.parent = parent;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
@@ -77,6 +83,7 @@ final class ProxyStage implements Stage {
     this.originResolver = originResolver;
     this.onClose = onClose;
     this.firstRequest = firstRequest;
+    this.keepAliveStageFactory = keepAliveStageFactory;
   }
 
   @Override
@@ -202,8 +209,15 @@ final class ProxyStage implements Stage {
       case STOP:
         responseGen = null;
         if (keepAlive) {
-          resetForNextRequest();
-          parent.encourageReads();
+          if (keepAliveStageFactory != null) {
+            // Single-request mode: replace ourselves with a fresh decision stage
+            // (HttpServerStage) that can make per-request routing decisions.
+            parent.replaceWith(keepAliveStageFactory.get());
+          } else {
+            // Internal keep-alive loop (MITM path — no per-request routing yet).
+            resetForNextRequest();
+            parent.encourageReads();
+          }
           return ConnectionControl.PAUSE;
         } else {
           return ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;

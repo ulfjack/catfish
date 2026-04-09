@@ -391,6 +391,65 @@ public class MixedServerIntegrationTest {
     }
   }
 
+  /**
+   * Two absolute-URI requests on the same keep-alive connection: the first is forwarded to origin,
+   * the second is served locally. Verifies that ProxyStage hands back to HttpServerStage for
+   * per-request routing decisions.
+   */
+  @Test
+  public void keepAlive_firstForwarded_secondServedLocally() throws Exception {
+    int port = 9106;
+    // ConnectHandler that forwards the first request and serves the second locally.
+    int[] callCount = {0};
+    CatfishHttpServer s = newServer();
+    s.addHttpHost(
+        "localhost",
+        new HttpVirtualHost(
+                (conn, request, writer) -> {
+                  String body = "local:" + request.getMethod() + " " + request.getUri();
+                  writer.commitBuffered(
+                      StandardResponses.OK.withBody(body.getBytes(StandardCharsets.UTF_8)));
+                })
+            .uploadPolicy(UploadPolicy.ALLOW));
+    s.listenConnectProxyLocal(
+        port,
+        (host, p) -> {
+          callCount[0]++;
+          if (callCount[0] <= 1) {
+            return ConnectDecision.tunnel(host, p);
+          }
+          return ConnectDecision.serveLocally();
+        });
+    extraServers.add(s);
+
+    try (HttpConnection conn = HttpConnection.connect("localhost", port)) {
+      // First request: forwarded to origin (same server, so we get RESPONSE_BODY via tunnel).
+      var r1 =
+          conn.send(
+              new SimpleHttpRequest.Builder()
+                  .setVersion(HttpVersion.HTTP_1_1)
+                  .setMethod(HttpMethodName.GET)
+                  .setUri("http://localhost:" + port + "/first")
+                  .addHeader(HttpHeaderName.HOST, "localhost:" + port)
+                  .build());
+      assertEquals(200, r1.getStatusCode());
+
+      // Second request: served locally via HttpHandler.
+      var r2 =
+          conn.send(
+              new SimpleHttpRequest.Builder()
+                  .setVersion(HttpVersion.HTTP_1_1)
+                  .setMethod(HttpMethodName.GET)
+                  .setUri("http://localhost:" + port + "/second")
+                  .addHeader(HttpHeaderName.HOST, "localhost:" + port)
+                  .build());
+      assertEquals(200, r2.getStatusCode());
+      assertEquals("local:GET /second", new String(r2.getBody(), StandardCharsets.UTF_8));
+    }
+    // Verify apply was called twice (once per request).
+    assertEquals(2, callCount[0]);
+  }
+
   // ---- Tests: CONNECT tunnel ----
 
   /**

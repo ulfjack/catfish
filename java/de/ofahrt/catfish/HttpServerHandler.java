@@ -28,17 +28,16 @@ final class HttpServerHandler implements NetworkHandler {
       decryptedInputBuffer.flip(); // prepare for reading
       decryptedOutputBuffer.clear();
       decryptedOutputBuffer.flip(); // prepare for reading
-      HttpServerStage httpStage =
-          new HttpServerStage(
-              pipeline,
-              server::queueRequest,
-              (conn, req, res) -> server.notifySent(conn, req, res, 0),
-              server::determineHttpVirtualHost,
-              decryptedInputBuffer,
-              decryptedOutputBuffer);
       return new SslServerStage(
           pipeline,
-          httpStage,
+          (innerPipeline) ->
+              new HttpServerStage(
+                  innerPipeline,
+                  server::queueRequest,
+                  (conn, req, res) -> server.notifySent(conn, req, res, 0),
+                  server::determineHttpVirtualHost,
+                  decryptedInputBuffer,
+                  decryptedOutputBuffer),
           server::getSSLContext,
           server.executor,
           inputBuffer,

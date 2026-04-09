@@ -60,7 +60,14 @@ public class SslServerStageTest {
     this.next = new CapturingNextStage(plainIn, plainOut);
     this.stage =
         new SslServerStage(
-            pipeline, next, provider, taskExecutor, netIn, netOut, plainIn, plainOut);
+            pipeline,
+            (innerPipeline) -> next,
+            provider,
+            taskExecutor,
+            netIn,
+            netOut,
+            plainIn,
+            plainOut);
   }
 
   private void buildStage(SslServerStage.SSLContextProvider provider) {
