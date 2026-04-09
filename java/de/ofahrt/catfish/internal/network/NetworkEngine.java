@@ -261,13 +261,22 @@ public final class NetworkEngine {
           }
 
           // Process any data in the input buffer.
+          int drainAttempt = 0;
           while (readState == FlowState.CLOSE_AFTER_FLUSH) {
             // There's no more incoming data, but we only want to notify the stage once all data is
             // processed.
             if (inputBuffer.hasRemaining()) {
+              int before = inputBuffer.remaining();
               ConnectionControl control = current.read();
               switch (control) {
                 case CONTINUE:
+                  if ((inputBuffer.remaining() == before) && (drainAttempt++ == 10)) {
+                    throw new IllegalStateException(
+                        String.format(
+                            "Stage did not process remaining input data after 10 attempts"
+                                + " during input shutdown (%s)",
+                            current));
+                  }
                   break;
                 case NEED_MORE_DATA:
                   // No more data is coming and the stage thinks it needs more. Discard any

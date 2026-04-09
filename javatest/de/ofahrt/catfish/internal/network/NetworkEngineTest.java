@@ -434,6 +434,37 @@ public class NetworkEngineTest {
   // ---- 18. Stage spinning — returns CONTINUE without consuming data ----
 
   @Test
+  public void drainLoop_stageReturnsContinueWithoutProgress_reportsInternalError()
+      throws Exception {
+    // Regression test: the CLOSE_AFTER_FLUSH drain loop must detect a stage that returns CONTINUE
+    // without consuming any buffered bytes and throw after 10 attempts, just like the OPEN-state
+    // read loop does. Without the guard, this spins forever and pins the selector thread.
+    //
+    // Strategy: stage returns NEED_MORE_DATA on the first read() call (exits the OPEN-state loop
+    // cleanly without consuming data), then CONTINUE on all subsequent calls (hits the drain loop
+    // after the client closes its output and the driver sees EOF).
+    ProgrammableStage stage =
+        new ProgrammableStage()
+            .withInitialState(InitialConnectionState.READ_AND_WRITE)
+            .dontDrainInput()
+            .enqueueReadResponse(ConnectionControl.NEED_MORE_DATA) // OPEN loop: exit cleanly
+            .withDefaultReadResponse(ConnectionControl.CONTINUE); // drain loop: spin
+    int port = startListener(stage);
+    try (Socket client = connectClient(port)) {
+      client.getOutputStream().write("data".getBytes());
+      client.getOutputStream().flush();
+      // Wait for the stage to see the data (first read() returns NEED_MORE_DATA).
+      assertTrue("stage should have been called", stage.awaitReadCall(TIMEOUT_MS));
+      // Close client output → server sees EOF → enters CLOSE_AFTER_FLUSH drain loop.
+      // The buffer still has residual data from "data"; stage now returns CONTINUE without
+      // consuming → guard fires.
+      client.shutdownOutput();
+      Throwable t = listener.awaitInternalError(TIMEOUT_MS);
+      assertIllegalStateWithMessage(t, "input shutdown");
+    }
+  }
+
+  @Test
   public void readLoop_stageReturnsContinueWithoutProgress_reportsInternalError() throws Exception {
     ProgrammableStage stage =
         new ProgrammableStage()
