@@ -35,25 +35,15 @@ final class HttpClientHandler implements NetworkHandler {
   @Override
   public Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer) {
     if (usesSsl()) {
-      ByteBuffer decryptedInputBuffer = ByteBuffer.allocate(65536);
-      ByteBuffer decryptedOutputBuffer = ByteBuffer.allocate(65536);
-      decryptedInputBuffer.clear();
-      decryptedInputBuffer.flip(); // prepare for reading
-      decryptedOutputBuffer.clear();
-      decryptedOutputBuffer.flip(); // prepare for reading
-      HttpClientStage httpStage =
-          new HttpClientStage(
-              pipeline, request, responseHandler, decryptedInputBuffer, decryptedOutputBuffer);
       SSLEngine sslEngine = sslContext.createSSLEngine();
       sslEngine.setSSLParameters(sslParameters);
       return new SslClientStage(
           pipeline,
-          httpStage,
+          (plainIn, plainOut) ->
+              new HttpClientStage(pipeline, request, responseHandler, plainIn, plainOut),
           sslEngine,
           inputBuffer,
-          outputBuffer,
-          decryptedInputBuffer,
-          decryptedOutputBuffer);
+          outputBuffer);
     } else {
       return new HttpClientStage(pipeline, request, responseHandler, inputBuffer, outputBuffer);
     }

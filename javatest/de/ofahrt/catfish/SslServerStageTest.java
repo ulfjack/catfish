@@ -55,19 +55,19 @@ public class SslServerStageTest {
     this.pipeline = new FakePipeline();
     this.netIn = flippedEmpty(BUF_SIZE);
     this.netOut = flippedEmpty(BUF_SIZE);
-    this.plainIn = flippedEmpty(BUF_SIZE);
-    this.plainOut = flippedEmpty(BUF_SIZE);
-    this.next = new CapturingNextStage(plainIn, plainOut);
     this.stage =
         new SslServerStage(
             pipeline,
-            (innerPipeline) -> next,
+            (innerPipeline, plainInBuf, plainOutBuf) -> {
+              this.plainIn = plainInBuf;
+              this.plainOut = plainOutBuf;
+              this.next = new CapturingNextStage(plainInBuf, plainOutBuf);
+              return next;
+            },
             provider,
             taskExecutor,
             netIn,
-            netOut,
-            plainIn,
-            plainOut);
+            netOut);
   }
 
   private void buildStage(SslServerStage.SSLContextProvider provider) {

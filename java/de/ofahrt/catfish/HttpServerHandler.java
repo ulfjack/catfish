@@ -22,28 +22,20 @@ final class HttpServerHandler implements NetworkHandler {
   @Override
   public Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer) {
     if (ssl) {
-      ByteBuffer decryptedInputBuffer = ByteBuffer.allocate(65536);
-      ByteBuffer decryptedOutputBuffer = ByteBuffer.allocate(65536);
-      decryptedInputBuffer.clear();
-      decryptedInputBuffer.flip(); // prepare for reading
-      decryptedOutputBuffer.clear();
-      decryptedOutputBuffer.flip(); // prepare for reading
       return new SslServerStage(
           pipeline,
-          (innerPipeline) ->
+          (innerPipeline, plainIn, plainOut) ->
               new HttpServerStage(
                   innerPipeline,
                   server::queueRequest,
                   (conn, req, res) -> server.notifySent(conn, req, res, 0),
                   server::determineHttpVirtualHost,
-                  decryptedInputBuffer,
-                  decryptedOutputBuffer),
+                  plainIn,
+                  plainOut),
           server::getSSLContext,
           server.executor,
           inputBuffer,
-          outputBuffer,
-          decryptedInputBuffer,
-          decryptedOutputBuffer);
+          outputBuffer);
     } else {
       return new HttpServerStage(
           pipeline,

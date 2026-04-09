@@ -13,6 +13,12 @@ import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
 
 final class SslClientStage implements Stage {
+
+  @FunctionalInterface
+  interface InnerStageFactory {
+    Stage create(ByteBuffer inputBuffer, ByteBuffer outputBuffer);
+  }
+
   private final Pipeline parent;
   private final Stage next;
   private final ByteBuffer netInputBuffer;
@@ -25,18 +31,16 @@ final class SslClientStage implements Stage {
 
   public SslClientStage(
       Pipeline parent,
-      Stage next,
+      InnerStageFactory innerStageFactory,
       SSLEngine sslEngine,
       ByteBuffer netInputBuffer,
-      ByteBuffer netOutputBuffer,
-      ByteBuffer inputBuffer,
-      ByteBuffer outputBuffer) {
+      ByteBuffer netOutputBuffer) {
     this.parent = parent;
-    this.next = next;
     this.netInputBuffer = netInputBuffer;
     this.netOutputBuffer = netOutputBuffer;
-    this.inputBuffer = inputBuffer;
-    this.outputBuffer = outputBuffer;
+    this.inputBuffer = flippedEmpty(65536);
+    this.outputBuffer = flippedEmpty(65536);
+    this.next = innerStageFactory.create(inputBuffer, outputBuffer);
     this.sslEngine = sslEngine;
     this.sslEngine.setUseClientMode(true);
     parent.log(
@@ -154,5 +158,11 @@ final class SslClientStage implements Stage {
   @Override
   public void close() {
     next.close();
+  }
+
+  private static ByteBuffer flippedEmpty(int capacity) {
+    ByteBuffer b = ByteBuffer.allocate(capacity);
+    b.flip();
+    return b;
   }
 }

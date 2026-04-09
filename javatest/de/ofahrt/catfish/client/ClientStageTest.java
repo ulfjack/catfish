@@ -115,11 +115,7 @@ public class ClientStageTest {
     buf1.flip();
     ByteBuffer buf2 = ByteBuffer.allocate(32768);
     buf2.flip();
-    ByteBuffer buf3 = ByteBuffer.allocate(32768);
-    buf3.flip();
-    ByteBuffer buf4 = ByteBuffer.allocate(32768);
-    buf4.flip();
-    SslClientStage stage = new SslClientStage(pipeline, next, sslEngine, buf1, buf2, buf3, buf4);
+    SslClientStage stage = new SslClientStage(pipeline, (in, out) -> next, sslEngine, buf1, buf2);
     try {
       stage.inputClosed();
     } catch (SSLException e) {

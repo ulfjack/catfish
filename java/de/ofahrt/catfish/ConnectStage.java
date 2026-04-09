@@ -263,13 +263,6 @@ final class ConnectStage implements Stage {
   }
 
   private void setupMitm() {
-    ByteBuffer decryptedIn = ByteBuffer.allocate(65536);
-    ByteBuffer decryptedOut = ByteBuffer.allocate(65536);
-    decryptedIn.clear();
-    decryptedIn.flip();
-    decryptedOut.clear();
-    decryptedOut.flip();
-
     SslServerStage.InnerStageFactory innerFactory;
     if (isLocalIntercept) {
       if (localStageFactory == null) {
@@ -277,18 +270,17 @@ final class ConnectStage implements Stage {
             "local-intercept decision requires a LocalStageFactory; none was provided");
       }
       innerFactory =
-          (innerPipeline) ->
-              wrapWithOnClose(
-                  localStageFactory.create(innerPipeline, decryptedIn, decryptedOut), onClose);
+          (innerPipeline, plainIn, plainOut) ->
+              wrapWithOnClose(localStageFactory.create(innerPipeline, plainIn, plainOut), onClose);
     } else {
       ProxyStage.Origin fixedOrigin =
           new ProxyStage.Origin(originHost, originPort, true, originSocketFactory);
       innerFactory =
-          (innerPipeline) ->
+          (innerPipeline, plainIn, plainOut) ->
               new ProxyStage(
                   innerPipeline,
-                  decryptedIn,
-                  decryptedOut,
+                  plainIn,
+                  plainOut,
                   executor,
                   handler,
                   (req) -> fixedOrigin,
@@ -300,14 +292,7 @@ final class ConnectStage implements Stage {
     SSLContext capturedCtx = fakeCtx;
     SslServerStage ssl =
         new SslServerStage(
-            parent,
-            innerFactory,
-            ignored -> capturedCtx,
-            executor,
-            inputBuffer,
-            outputBuffer,
-            decryptedIn,
-            decryptedOut);
+            parent, innerFactory, ignored -> capturedCtx, executor, inputBuffer, outputBuffer);
     parent.replaceWith(ssl);
   }
 

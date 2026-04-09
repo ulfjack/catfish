@@ -21,11 +21,11 @@ final class SslServerStage implements Stage {
   /**
    * Factory for creating the inner (plaintext) stage. Receives the inner {@link Pipeline} whose
    * {@link Pipeline#replaceWith} updates this {@code SslServerStage}'s inner stage instead of
-   * replacing the outer SSL wrapper.
+   * replacing the outer SSL wrapper, plus the plaintext buffers allocated by the SSL stage.
    */
   @FunctionalInterface
   interface InnerStageFactory {
-    Stage create(Pipeline innerPipeline);
+    Stage create(Pipeline innerPipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer);
   }
 
   static final byte[] UNRECOGNIZED_NAME_ALERT = {0x15, 0x03, 0x01, 0x00, 0x02, 0x02, 0x70};
@@ -63,18 +63,22 @@ final class SslServerStage implements Stage {
       SSLContextProvider contextProvider,
       Executor taskExecutor,
       ByteBuffer netInputBuffer,
-      ByteBuffer netOutputBuffer,
-      ByteBuffer inputBuffer,
-      ByteBuffer outputBuffer) {
+      ByteBuffer netOutputBuffer) {
     this.contextProvider = contextProvider;
     this.taskExecutor = taskExecutor;
     this.parent = parent;
-    this.innerPipeline = new InnerPipeline();
-    this.next = innerStageFactory.create(this.innerPipeline);
     this.netInputBuffer = netInputBuffer;
     this.netOutputBuffer = netOutputBuffer;
-    this.inputBuffer = inputBuffer;
-    this.outputBuffer = outputBuffer;
+    this.inputBuffer = flippedEmpty(65536);
+    this.outputBuffer = flippedEmpty(65536);
+    this.innerPipeline = new InnerPipeline();
+    this.next = innerStageFactory.create(this.innerPipeline, inputBuffer, outputBuffer);
+  }
+
+  private static ByteBuffer flippedEmpty(int capacity) {
+    ByteBuffer b = ByteBuffer.allocate(capacity);
+    b.flip();
+    return b;
   }
 
   @Override
