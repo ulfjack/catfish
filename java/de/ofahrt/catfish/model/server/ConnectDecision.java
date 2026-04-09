@@ -53,8 +53,8 @@ public final class ConnectDecision {
   /**
    * Dispatch this request through the local {@link de.ofahrt.catfish.model.server.HttpHandler}
    * instead of forwarding it to an origin server. Only meaningful on the HTTP forward-proxy path
-   * (absolute-URI requests handled by {@code HttpServerStage} / {@code ForwardProxyStage}); ignored
-   * on the CONNECT / MITM path (use {@link #localIntercept} there).
+   * (absolute-URI requests handled by {@code HttpServerStage} / {@code ProxyStage}); ignored on the
+   * CONNECT / MITM path (use {@link #localIntercept} there).
    *
    * <p>When returned, the in-flight request is rewritten from its absolute URI to the equivalent
    * relative URI (path + query), its body is buffered via the usual upload-policy path, and the

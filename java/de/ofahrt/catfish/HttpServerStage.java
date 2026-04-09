@@ -40,6 +40,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.zip.GZIPOutputStream;
+import javax.net.SocketFactory;
 import javax.net.ssl.SSLSocketFactory;
 
 final class HttpServerStage implements Stage {
@@ -437,6 +438,27 @@ final class HttpServerStage implements Stage {
     parent.encourageWrites();
   }
 
+  /**
+   * Resolves a forward-proxy absolute-URI request to its origin, applying any host/port overrides
+   * from the {@link ConnectDecision}.
+   */
+  private static ProxyStage.Origin resolveForwardProxyOrigin(
+      HttpRequest request, ConnectDecision decision, SSLSocketFactory sslFactory) throws Exception {
+    URI uri = new URI(request.getUri());
+    if (uri.getHost() == null) {
+      throw new Exception("No host in absolute URI");
+    }
+    boolean useTls = "https".equalsIgnoreCase(uri.getScheme());
+    String host = decision.getHost() != null ? decision.getHost() : uri.getHost();
+    int defaultPort = useTls ? 443 : 80;
+    int port =
+        decision.getPort() > 0
+            ? decision.getPort()
+            : (uri.getPort() >= 0 ? uri.getPort() : defaultPort);
+    SocketFactory factory = useTls ? sslFactory : SocketFactory.getDefault();
+    return new ProxyStage.Origin(host, port, useTls, factory);
+  }
+
   private static String toRelativeUri(String absoluteUri) {
     try {
       URI uri = new URI(absoluteUri);
@@ -514,19 +536,24 @@ final class HttpServerStage implements Stage {
         // cc == PAUSE (either handler queued, or a buffered error response queued via
         // startBuffered). Fall through — responseGenerator may now be set.
       } else {
-        // Forward to origin — hand off to ForwardProxyStage with the pre-computed decision.
+        // Forward to origin — hand off to ProxyStage with the pre-computed decision.
+        SSLSocketFactory sslFactory =
+            originSocketFactory != null
+                ? originSocketFactory
+                : (SSLSocketFactory) SSLSocketFactory.getDefault();
+        ConnectDecision capturedDecision = decision;
+        ProxyStage.OriginResolver resolver =
+            (req) -> resolveForwardProxyOrigin(req, capturedDecision, sslFactory);
         parent.replaceWith(
-            new ForwardProxyStage(
+            new ProxyStage(
                 parent,
                 inputBuffer,
                 outputBuffer,
                 executor,
-                headers,
-                decision,
                 connectHandler,
-                originSocketFactory != null
-                    ? originSocketFactory
-                    : (SSLSocketFactory) SSLSocketFactory.getDefault()));
+                resolver,
+                /* onClose= */ null,
+                headers));
         return ConnectionControl.PAUSE;
       }
     }

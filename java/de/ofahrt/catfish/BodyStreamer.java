@@ -7,8 +7,7 @@ import java.nio.ByteBuffer;
 
 /**
  * Encapsulates request body streaming from an NIO buffer through a {@link PipeBuffer}. Handles
- * Content-Length and chunked Transfer-Encoding framing. Used by {@link MitmProxyStage} and {@link
- * ForwardProxyStage}.
+ * Content-Length and chunked Transfer-Encoding framing. Used by {@link ProxyStage}.
  */
 final class BodyStreamer {
 

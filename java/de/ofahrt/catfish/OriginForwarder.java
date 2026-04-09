@@ -35,8 +35,7 @@ import javax.net.ssl.SSLSocket;
  * from the pipe), parses the origin response headers, and streams the response body back through an
  * {@link HttpResponseGeneratorStreamed} that the NIO thread drains.
  *
- * <p>Used by both {@link MitmProxyStage} (HTTPS MITM) and {@link ForwardProxyStage} (HTTP forward
- * proxy).
+ * <p>Used by {@link ProxyStage} for both HTTPS MITM and HTTP forward proxy.
  */
 final class OriginForwarder {
 

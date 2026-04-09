@@ -279,17 +279,18 @@ final class ConnectStage implements Stage {
       Stage localStage = localStageFactory.create(parent, decryptedIn, decryptedOut);
       innerStage = wrapWithOnClose(localStage, onClose);
     } else {
+      ProxyStage.Origin fixedOrigin =
+          new ProxyStage.Origin(originHost, originPort, true, originSocketFactory);
       innerStage =
-          new MitmProxyStage(
+          new ProxyStage(
               parent,
               decryptedIn,
               decryptedOut,
               executor,
-              originHost,
-              originPort,
-              originSocketFactory,
               handler,
-              onClose);
+              (req) -> fixedOrigin,
+              onClose,
+              /* firstRequest= */ null);
     }
 
     SSLContext capturedCtx = fakeCtx;
