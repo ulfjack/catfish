@@ -20,7 +20,7 @@ public interface ConnectHandler {
    * response body.
    */
   default RequestAction handleRequest(
-      UUID requestId, String originHost, int originPort, HttpRequest request) {
+      UUID requestId, String originHost, int originPort, HttpRequest headers) {
     return RequestAction.forward();
   }
 
