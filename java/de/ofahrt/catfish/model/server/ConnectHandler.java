@@ -24,6 +24,14 @@ public interface ConnectHandler {
     return RequestAction.forward();
   }
 
+  /**
+   * Called on the executor thread when the upstream connection phase of a CONNECT request fails
+   * (DNS resolution failure, connection refused, TLS handshake error, certificate generation error,
+   * etc.). Fires before the 502 response is sent to the client. Not called for policy denials
+   * (those produce a 403).
+   */
+  default void onConnectFailed(String host, int port, Exception cause) {}
+
   /** Called when a CONNECT connection closes (tunnel disconnected or MITM session ended). */
   default void onConnectComplete(String host, int port) {}
 

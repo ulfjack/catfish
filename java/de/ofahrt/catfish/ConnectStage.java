@@ -141,7 +141,8 @@ final class ConnectStage implements Stage {
         tunnelSocket = sock;
         parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
       } catch (IOException e) {
-        parent.queue(parent::close);
+        handler.onConnectFailed(connectHost, connectPort, e);
+        parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
       }
       return;
     }
@@ -178,6 +179,7 @@ final class ConnectStage implements Stage {
         socket.startHandshake();
         originCert = (X509Certificate) socket.getSession().getPeerCertificates()[0];
       } catch (IOException e) {
+        handler.onConnectFailed(connectHost, connectPort, e);
         parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
         return;
       }
@@ -190,6 +192,7 @@ final class ConnectStage implements Stage {
           socket.close();
         } catch (IOException ignored) {
         }
+        handler.onConnectFailed(connectHost, connectPort, e);
         parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
         return;
       }
