@@ -523,6 +523,45 @@ public class SslServerStageTest {
   }
 
   @Test
+  public void handshake_tls12_resumedSession_completesViaUnwrap() throws Exception {
+    // Regression test for the "Unexpected NOT_HANDSHAKING during HANDSHAKE read" crash.
+    //
+    // In a TLS 1.2 abbreviated handshake (session resumption), the wire flow is:
+    //   1. Client → Server: ClientHello (with the previous session_id)
+    //   2. Server → Client: ServerHello, ChangeCipherSpec, Finished
+    //   3. Client → Server: ChangeCipherSpec, Finished
+    // The server's last handshake action is the unwrap of the client Finished, after which
+    // the engine transitions to NOT_HANDSHAKING during read() — not write(). The previous
+    // defensive guard threw on this transition; the fix transitions to OPEN instead.
+    //
+    // To reproduce reliably we share a single client SSLContext across two handshakes so the
+    // client session cache remembers the first session, and we use the same server SSLContext
+    // (TestHelper's singleton) so the server cache also remembers it.
+    SSLContext sharedClientContext = SSLContext.getInstance("TLS");
+    sharedClientContext.init(null, new TrustManager[] {TRUST_ALL}, new SecureRandom());
+
+    // First handshake — primes both session caches.
+    buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
+    stage.connect(null);
+    new InMemoryTlsClient(HOST, "TLSv1.2", sharedClientContext).handshake();
+
+    // Second handshake against a fresh stage with the same server SSLContext. This is the
+    // abbreviated handshake whose final unwrap drives the engine to NOT_HANDSHAKING during
+    // read(). Before the fix, this threw IOException("Unexpected NOT_HANDSHAKING during
+    // HANDSHAKE read").
+    buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
+    stage.connect(null);
+    InMemoryTlsClient resumed = new InMemoryTlsClient(HOST, "TLSv1.2", sharedClientContext);
+    resumed.handshake();
+
+    // App data must round-trip after the resumed handshake to confirm the OPEN-state
+    // transition was wired up correctly (next.read() forwarding, etc.).
+    byte[] payload = "GET /resumed HTTP/1.1\r\n".getBytes(StandardCharsets.UTF_8);
+    resumed.sendAppData(payload);
+    assertArrayEquals(payload, next.received.toByteArray());
+  }
+
+  @Test
   public void handshake_tls12_completesAndAppDataRoundTrips() throws Exception {
     // Force the client to TLS 1.2 — exercises the engine's TLS 1.2 codepaths in the server stage.
     // (In both TLS 1.2 and 1.3 on JDK 21, the server's NOT_HANDSHAKING transition happens during
@@ -739,8 +778,18 @@ public class SslServerStageTest {
     }
 
     InMemoryTlsClient(String peerHost, String enabledProtocol) throws Exception {
-      SSLContext ctx = SSLContext.getInstance("TLS");
-      ctx.init(null, new TrustManager[] {TRUST_ALL}, new SecureRandom());
+      this(peerHost, enabledProtocol, null);
+    }
+
+    InMemoryTlsClient(String peerHost, String enabledProtocol, SSLContext sharedContext)
+        throws Exception {
+      SSLContext ctx;
+      if (sharedContext != null) {
+        ctx = sharedContext;
+      } else {
+        ctx = SSLContext.getInstance("TLS");
+        ctx.init(null, new TrustManager[] {TRUST_ALL}, new SecureRandom());
+      }
       this.engine = ctx.createSSLEngine(peerHost, 443);
       this.engine.setUseClientMode(true);
       if (enabledProtocol != null) {
