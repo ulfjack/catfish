@@ -50,6 +50,11 @@ public final class NetworkEngine {
 
     void log(String text, Object... params);
 
+    /**
+     * Replaces the current stage with {@code nextStage}. The caller is responsible for closing or
+     * otherwise releasing resources held by the old stage before calling this method; the pipeline
+     * does not call {@link Stage#close} on the old stage.
+     */
     void replaceWith(Stage nextStage);
   }
 
