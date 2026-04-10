@@ -81,14 +81,9 @@ public final class HttpsEndpoint {
             ? originSslFactory
             : (SSLSocketFactory) SSLSocketFactory.getDefault();
     SslServerStage.SSLContextProvider sslContextProvider = this::getSSLContext;
-    NetworkEngine.NetworkHandler networkHandler;
-    if (connectHandler != null) {
-      networkHandler =
-          new MixedServerHandler(
-              server, lookup, connectHandler, effectiveOriginFactory, sslContextProvider);
-    } else {
-      networkHandler = new HttpServerHandler(server, lookup, sslContextProvider);
-    }
+    NetworkEngine.NetworkHandler networkHandler =
+        new HttpServerHandler(
+            server, lookup, connectHandler, effectiveOriginFactory, sslContextProvider);
     NetworkEngine engine = server.engine();
     switch (binding) {
       case ANY -> engine.listenAll(port, networkHandler);

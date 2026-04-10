@@ -70,13 +70,9 @@ public final class HttpEndpoint {
         originSslFactory != null
             ? originSslFactory
             : (SSLSocketFactory) SSLSocketFactory.getDefault();
-    NetworkEngine.NetworkHandler networkHandler;
-    if (connectHandler != null) {
-      networkHandler =
-          new MixedServerHandler(server, lookup, connectHandler, effectiveOriginFactory);
-    } else {
-      networkHandler = new HttpServerHandler(server, lookup);
-    }
+    NetworkEngine.NetworkHandler networkHandler =
+        new HttpServerHandler(
+            server, lookup, connectHandler, effectiveOriginFactory, /* sslContextProvider= */ null);
     NetworkEngine engine = server.engine();
     switch (binding) {
       case ANY -> engine.listenAll(port, networkHandler);
