@@ -15,9 +15,9 @@ public interface ConnectHandler {
   ConnectDecision apply(String host, int port);
 
   /**
-   * Called for normal (non-proxy) requests with relative URIs. The server decides whether to
-   * handle them locally or reverse-proxy them to a remote origin. Default: serve locally.
-   * May block. Runs on the executor thread.
+   * Called for normal (non-proxy) requests with relative URIs. The server decides whether to handle
+   * them locally or reverse-proxy them to a remote origin. Default: serve locally. May block. Runs
+   * on the executor thread.
    */
   default ConnectDecision applyLocal(String host, int port) {
     return ConnectDecision.serveLocally();

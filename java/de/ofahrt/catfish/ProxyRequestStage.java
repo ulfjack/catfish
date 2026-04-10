@@ -20,8 +20,8 @@ import javax.net.SocketFactory;
  * OriginForwarder}. The request body is streamed through a {@link PipeBuffer} to the executor
  * thread where the blocking origin socket I/O happens.
  *
- * <p>Replaces the forward-proxy path of {@link ProxyStage} (which implements {@link
- * de.ofahrt.catfish.internal.network.Stage} and is still used for the MITM path).
+ * <p>Used for both the forward-proxy path (absolute URIs) and the MITM intercept path (relative
+ * URIs forwarded to the CONNECT target).
  */
 final class ProxyRequestStage implements HttpRequestStage {
 

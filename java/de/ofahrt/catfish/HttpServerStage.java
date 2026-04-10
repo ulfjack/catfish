@@ -20,8 +20,6 @@ import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
-import de.ofahrt.catfish.upload.ChunkedBodyParser;
-import de.ofahrt.catfish.upload.InMemoryEntityParser;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.IOException;
 import java.net.URI;
@@ -86,6 +84,8 @@ final class HttpServerStage implements Stage {
   private HttpRequestBodyParser bodyParser;
   // For Content-Length bodies: remaining bytes to stream to the handler. -1 means not active.
   private long contentLengthRemaining = -1;
+  // For chunked bodies: scans raw chunked framing to detect completion without decoding.
+  private ChunkedBodyScanner chunkedScanner;
   private HttpRequest headersRequest;
   // Non-null while waiting for ConnectHandler.apply() to return the routing decision for an
   // absolute-URI (forward-proxy) request. While set, read() returns PAUSE so that body bytes
@@ -162,7 +162,7 @@ final class HttpServerStage implements Stage {
     }
 
     // Phase 2: body parsing/streaming (if active).
-    if (bodyParser != null || contentLengthRemaining >= 0) {
+    if (bodyParser != null || contentLengthRemaining >= 0 || chunkedScanner != null) {
       return readBody();
     }
 
@@ -204,16 +204,6 @@ final class HttpServerStage implements Stage {
     boolean hasBody =
         (cl != null && !"0".equals(cl)) || (te != null && "chunked".equalsIgnoreCase(te));
 
-    // Body present — check upload policy before creating the handler (matches old behavior:
-    // upload policy denial takes precedence over handler-level checks).
-    if (hasBody) {
-      HttpVirtualHost host = virtualHostLookup.apply(headers.getHeaders().get(HttpHeaderName.HOST));
-      if (host == null || !host.uploadPolicy().isAllowed(headers)) {
-        startBuffered(headers, StandardResponses.PAYLOAD_TOO_LARGE);
-        return ConnectionControl.CLOSE_INPUT;
-      }
-    }
-
     // Create the handler if not already set (the proxy path sets it before calling this method).
     if (currentHandler == null) {
       currentHandler =
@@ -231,9 +221,12 @@ final class HttpServerStage implements Stage {
       return ConnectionControl.PAUSE;
     }
 
-    // Set up body framing.
+    // Set up body framing. For chunked bodies, use a scanner (raw passthrough) so both local
+    // handlers (which need decoded bytes) and proxy handlers (which forward raw bytes) work.
+    // The handler receives raw chunked-encoded bytes; LocalHttpRequestStage decodes them,
+    // ProxyRequestStage passes them through.
     if (te != null && "chunked".equalsIgnoreCase(te)) {
-      bodyParser = new ChunkedBodyParser();
+      chunkedScanner = new ChunkedBodyScanner();
     } else {
       long contentLength;
       try {
@@ -323,8 +316,7 @@ final class HttpServerStage implements Stage {
     // Synchronous path: call inline.
     ConnectDecision decision;
     try {
-      decision =
-          isProxy ? connectHandler.apply(host, port) : connectHandler.applyLocal(host, port);
+      decision = isProxy ? connectHandler.apply(host, port) : connectHandler.applyLocal(host, port);
     } catch (Exception e) {
       startBuffered(headers, StandardResponses.FORBIDDEN);
       return ConnectionControl.CLOSE_INPUT;
@@ -454,31 +446,30 @@ final class HttpServerStage implements Stage {
       }
       return ConnectionControl.CONTINUE;
     }
-    // Chunked: use the parser to decode framing and buffer, deliver the full body on completion.
+    // Chunked: pass raw bytes through, using the scanner to detect completion.
+    if (chunkedScanner != null) {
+      int pos = inputBuffer.position();
+      int len = inputBuffer.remaining();
+      chunkedScanner.advance(inputBuffer.array(), pos, len);
+      ConnectionControl cc = currentHandler.onBodyChunk(inputBuffer.array(), pos, len);
+      inputBuffer.position(pos + len);
+      if (chunkedScanner.isDone()) {
+        chunkedScanner = null;
+        headersRequest = null;
+        currentHandler.onBodyComplete();
+        return ConnectionControl.PAUSE;
+      }
+      return cc == ConnectionControl.PAUSE ? ConnectionControl.PAUSE : ConnectionControl.CONTINUE;
+    }
+    // Fallback for bodyParser (shouldn't be reached with current code paths).
     int consumed =
         bodyParser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.remaining());
     inputBuffer.position(inputBuffer.position() + consumed);
     if (!bodyParser.isDone()) {
       return ConnectionControl.CONTINUE;
     }
-    HttpRequestBodyParser bp = bodyParser;
     headersRequest = null;
     bodyParser = null;
-    HttpRequest.Body body;
-    try {
-      body = bp.getParsedBody();
-    } catch (IOException e) {
-      currentHandler.close();
-      currentHandler = null;
-      startBuffered(null, StandardResponses.BAD_REQUEST);
-      return ConnectionControl.CLOSE_INPUT;
-    }
-    if (body instanceof HttpRequest.InMemoryBody inMem) {
-      byte[] bytes = inMem.toByteArray();
-      if (bytes.length > 0) {
-        currentHandler.onBodyChunk(bytes, 0, bytes.length);
-      }
-    }
     currentHandler.onBodyComplete();
     return ConnectionControl.PAUSE;
   }

@@ -14,7 +14,7 @@ import javax.net.ssl.SSLSocketFactory;
  * <ul>
  *   <li>{@code CONNECT} → MITM proxy via {@link ConnectStage}
  *   <li>absolute URI (e.g. {@code http://host/path}) → streaming forward proxy via {@link
- *       ProxyStage}
+ *       ProxyRequestStage}
  *   <li>relative URI (e.g. {@code /path}) → local virtual-host via {@link HttpServerStage}
  * </ul>
  */

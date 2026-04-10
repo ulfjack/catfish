@@ -30,8 +30,8 @@ public record RequestAction(
 
   /**
    * Reply to the proxied request with a locally-constructed response. Only supported on the MITM
-   * CONNECT path ({@code ProxyStage}). On the HTTP forward-proxy path (absolute-URI requests
-   * handled via {@code HttpServerStage}/{@code ProxyStage}), use {@link
+   * CONNECT path ({@code ProxyRequestStage}). On the HTTP forward-proxy path (absolute-URI requests
+   * handled via {@code HttpServerStage}/{@code ProxyRequestStage}), use {@link
    * ConnectDecision#serveLocally()} instead so the request can be dispatched to the local {@code
    * HttpHandler} with its body attached.
    */
@@ -41,8 +41,8 @@ public record RequestAction(
 
   /**
    * Reply to the proxied request with a locally-constructed streaming response. Only supported on
-   * the MITM CONNECT path ({@code ProxyStage}). See {@link #respond} for the HTTP forward-proxy
-   * alternative.
+   * the MITM CONNECT path ({@code ProxyRequestStage}). See {@link #respond} for the HTTP
+   * forward-proxy alternative.
    */
   public static RequestAction respondStreaming(HttpResponse headers, ResponseBodyWriter writer) {
     return new RequestAction(null, headers, writer, null);
