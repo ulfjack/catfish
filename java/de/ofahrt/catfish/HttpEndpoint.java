@@ -2,6 +2,7 @@ package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.server.ConnectHandler;
+import de.ofahrt.catfish.model.server.HttpServerListener;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -9,7 +10,7 @@ import java.util.Map;
 import java.util.function.Function;
 import javax.net.ssl.SSLSocketFactory;
 
-/** Configures a plain HTTP listener with per-listener virtual host isolation. */
+/** Configures a plain HTTP endpoint with per-listener virtual host isolation. */
 public final class HttpEndpoint {
 
   private enum Binding {
@@ -24,6 +25,7 @@ public final class HttpEndpoint {
   private final Map<String, HttpVirtualHost> hosts = new LinkedHashMap<>();
   private ConnectHandler connectHandler;
   private SSLSocketFactory originSslFactory;
+  private HttpServerListener requestListener = (conn, req, res, bytes) -> {};
 
   private HttpEndpoint(Binding binding, int port, Path unixSocketPath) {
     this.binding = binding;
@@ -64,6 +66,12 @@ public final class HttpEndpoint {
     return this;
   }
 
+  /** Set a listener for completed requests (logging, metrics). */
+  public HttpEndpoint requestListener(HttpServerListener listener) {
+    this.requestListener = listener;
+    return this;
+  }
+
   void listen(CatfishHttpServer server) throws IOException, InterruptedException {
     Function<String, HttpVirtualHost> lookup = buildLookup();
     SSLSocketFactory effectiveOriginFactory =
@@ -72,7 +80,12 @@ public final class HttpEndpoint {
             : (SSLSocketFactory) SSLSocketFactory.getDefault();
     NetworkEngine.NetworkHandler networkHandler =
         new HttpServerHandler(
-            server, lookup, connectHandler, effectiveOriginFactory, /* sslContextProvider= */ null);
+            server,
+            lookup,
+            connectHandler,
+            effectiveOriginFactory,
+            /* sslContextProvider= */ null,
+            (conn, req, res) -> requestListener.notifySent(conn, req, res, 0));
     NetworkEngine engine = server.engine();
     switch (binding) {
       case ANY -> engine.listenAll(port, networkHandler);

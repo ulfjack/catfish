@@ -1,14 +1,11 @@
 package de.ofahrt.catfish.example;
 
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.HttpsEndpoint;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.fastcgi.FcgiHandler;
-import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.HttpHandler;
@@ -56,18 +53,14 @@ public class ExampleMain {
                 throwable.printStackTrace();
               }
             });
-    server.addRequestListener(
-        new HttpServerListener() {
-          @Override
-          public void notifySent(
-              Connection connection, HttpRequest request, HttpResponse response, int bytesSent) {
-            if ((response.getStatusCode() / 100) == 5) {
-              System.out.printf(
-                  "[CATFISH] %d %s\n",
-                  Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
-            }
+    HttpServerListener errorLogger =
+        (connection, request, response, bytesSent) -> {
+          if ((response.getStatusCode() / 100) == 5) {
+            System.out.printf(
+                "[CATFISH] %d %s\n",
+                Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
           }
-        });
+        };
 
     HttpHandler handler =
         new ServletHttpHandler.Builder()
@@ -83,14 +76,17 @@ public class ExampleMain {
             .build();
 
     // Keep-alive and compression policies must be set before adding a host.
-    HttpEndpoint httpListener =
-        HttpEndpoint.onAny(8080).addHost("localhost", new HttpVirtualHost(handler));
-    server.listen(httpListener);
+    HttpEndpoint httpEndpoint =
+        HttpEndpoint.onAny(8080)
+            .addHost("localhost", new HttpVirtualHost(handler))
+            .requestListener(errorLogger);
+    server.listen(httpEndpoint);
     if (sslInfo != null) {
-      HttpsEndpoint httpsListener =
+      HttpsEndpoint httpsEndpoint =
           HttpsEndpoint.onAny(8081)
-              .addHost(sslInfo.certificateCommonName(), new HttpVirtualHost(handler), sslInfo);
-      server.listen(httpsListener);
+              .addHost(sslInfo.certificateCommonName(), new HttpVirtualHost(handler), sslInfo)
+              .requestListener(errorLogger);
+      server.listen(httpsEndpoint);
     }
   }
 }

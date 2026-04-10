@@ -29,6 +29,7 @@ final class HttpServerHandler implements NetworkHandler {
   private final SSLSocketFactory originSocketFactory;
   private final SslInfoCache sslInfoCache = new SslInfoCache();
   private final SslServerStage.SSLContextProvider sslContextProvider;
+  private final HttpServerStage.RequestListener requestListener;
 
   private static final ConnectHandler SERVE_LOCALLY =
       (host, port) -> ConnectDecision.serveLocally();
@@ -38,12 +39,14 @@ final class HttpServerHandler implements NetworkHandler {
       Function<String, HttpVirtualHost> virtualHostLookup,
       ConnectHandler connectHandler,
       SSLSocketFactory originSocketFactory,
-      SslServerStage.SSLContextProvider sslContextProvider) {
+      SslServerStage.SSLContextProvider sslContextProvider,
+      HttpServerStage.RequestListener requestListener) {
     this.server = server;
     this.virtualHostLookup = virtualHostLookup;
     this.connectHandler = connectHandler != null ? connectHandler : SERVE_LOCALLY;
     this.originSocketFactory = originSocketFactory;
     this.sslContextProvider = sslContextProvider;
+    this.requestListener = requestListener;
   }
 
   @Override
@@ -65,7 +68,7 @@ final class HttpServerHandler implements NetworkHandler {
               new HttpServerStage(
                   innerPipeline,
                   this::queueRequest,
-                  (conn, req, res) -> server.notifySent(conn, req, res, 0),
+                  requestListener,
                   virtualHostLookup,
                   connectHandler,
                   needsExecutor ? originSocketFactory : null,
@@ -81,7 +84,7 @@ final class HttpServerHandler implements NetworkHandler {
     return new HttpServerStage(
         pipeline,
         this::queueRequest,
-        (conn, req, res) -> server.notifySent(conn, req, res, 0),
+        requestListener,
         virtualHostLookup,
         connectHandler,
         needsExecutor ? originSocketFactory : null,

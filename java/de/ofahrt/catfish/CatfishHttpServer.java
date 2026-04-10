@@ -1,13 +1,8 @@
 package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.internal.network.NetworkEngine;
-import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpResponse;
-import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
-import de.ofahrt.catfish.model.server.HttpServerListener;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadFactory;
@@ -15,9 +10,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * A <code>CatfishHttpServer</code> manages a HTTP-Server.
- */
+/** A <code>CatfishHttpServer</code> manages a HTTP-Server. */
 public final class CatfishHttpServer {
 
   interface RequestCallback extends Runnable {
@@ -25,7 +18,6 @@ public final class CatfishHttpServer {
     void reject();
   }
 
-  private final ArrayList<HttpServerListener> listeners = new ArrayList<>();
   private final NetworkEngine engine;
 
   final ThreadPoolExecutor executor =
@@ -56,36 +48,6 @@ public final class CatfishHttpServer {
           }
         });
     this.engine = new NetworkEngine(serverListener);
-  }
-
-  public void addRequestListener(HttpServerListener l) {
-    synchronized (listeners) {
-      listeners.add(l);
-    }
-  }
-
-  public void removeRequestListener(HttpServerListener l) {
-    synchronized (listeners) {
-      listeners.remove(l);
-    }
-  }
-
-  public String getServerName() {
-    return "Catfish/13.0";
-  }
-
-  void notifySent(Connection connection, HttpRequest request, HttpResponse response, int amount) {
-    HttpServerListener[] snapshot;
-    synchronized (listeners) {
-      snapshot = listeners.toArray(new HttpServerListener[0]);
-    }
-    for (HttpServerListener l : snapshot) {
-      try {
-        l.notifySent(connection, request, response, amount);
-      } catch (Throwable error) {
-        error.printStackTrace();
-      }
-    }
   }
 
   public void listen(HttpEndpoint endpoint) throws IOException, InterruptedException {

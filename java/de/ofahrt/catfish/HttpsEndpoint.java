@@ -2,6 +2,7 @@ package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.server.ConnectHandler;
+import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.ssl.SSLInfo;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -27,6 +28,7 @@ public final class HttpsEndpoint {
   private final Map<String, SSLInfo> sslInfos = new LinkedHashMap<>();
   private ConnectHandler connectHandler;
   private SSLSocketFactory originSslFactory;
+  private HttpServerListener requestListener = (conn, req, res, bytes) -> {};
 
   private HttpsEndpoint(Binding binding, int port, Path unixSocketPath) {
     this.binding = binding;
@@ -74,6 +76,12 @@ public final class HttpsEndpoint {
     return this;
   }
 
+  /** Set a listener for completed requests (logging, metrics). */
+  public HttpsEndpoint requestListener(HttpServerListener listener) {
+    this.requestListener = listener;
+    return this;
+  }
+
   void listen(CatfishHttpServer server) throws IOException, InterruptedException {
     Function<String, HttpVirtualHost> lookup = buildLookup();
     SSLSocketFactory effectiveOriginFactory =
@@ -83,7 +91,12 @@ public final class HttpsEndpoint {
     SslServerStage.SSLContextProvider sslContextProvider = this::getSSLContext;
     NetworkEngine.NetworkHandler networkHandler =
         new HttpServerHandler(
-            server, lookup, connectHandler, effectiveOriginFactory, sslContextProvider);
+            server,
+            lookup,
+            connectHandler,
+            effectiveOriginFactory,
+            sslContextProvider,
+            (conn, req, res) -> requestListener.notifySent(conn, req, res, 0));
     NetworkEngine engine = server.engine();
     switch (binding) {
       case ANY -> engine.listenAll(port, networkHandler);
