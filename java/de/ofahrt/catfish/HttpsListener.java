@@ -83,9 +83,9 @@ public final class HttpsListener {
     SslServerStage.SSLContextProvider sslContextProvider = this::getSSLContext;
     NetworkEngine.NetworkHandler networkHandler;
     if (connectHandler != null) {
-      // TODO: MixedServerHandler needs an overload that takes both SSLContextProvider and
-      // origin SSLSocketFactory. For now, use the SSLContextProvider overload.
-      networkHandler = new MixedServerHandler(server, lookup, connectHandler, sslContextProvider);
+      networkHandler =
+          new MixedServerHandler(
+              server, lookup, connectHandler, effectiveOriginFactory, sslContextProvider);
     } else {
       networkHandler = new HttpServerHandler(server, lookup, sslContextProvider);
     }

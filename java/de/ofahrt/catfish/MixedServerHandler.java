@@ -64,7 +64,7 @@ final class MixedServerHandler implements NetworkHandler {
         sslContextProvider);
   }
 
-  private MixedServerHandler(
+  MixedServerHandler(
       CatfishHttpServer server,
       Function<String, HttpVirtualHost> virtualHostLookup,
       ConnectHandler connectHandler,
