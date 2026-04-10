@@ -212,9 +212,9 @@ public final class NetworkEngine {
       key.cancel();
       try {
         socketChannel.close();
-      } catch (IOException ignored) {
+      } catch (IOException e) {
         // There's nothing we can do if this fails.
-        networkEventListener.notifyInternalError(connection, ignored);
+        networkEventListener.notifyInternalError(connection, e);
       }
       closedCounter.incrementAndGet();
     }
