@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.example;
 
 import de.ofahrt.catfish.CatfishHttpServer;
+import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.HttpsEndpoint;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
@@ -54,11 +55,15 @@ public class ExampleMain {
               }
             });
     HttpServerListener errorLogger =
-        (connection, request, response, bytesSent) -> {
-          if ((response.getStatusCode() / 100) == 5) {
-            System.out.printf(
-                "[CATFISH] %d %s\n",
-                Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
+        new HttpServerListener() {
+          @Override
+          public void notifySent(
+              Connection connection, HttpRequest request, HttpResponse response, int bytesSent) {
+            if ((response.getStatusCode() / 100) == 5) {
+              System.out.printf(
+                  "[CATFISH] %d %s\n",
+                  Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
+            }
           }
         };
 

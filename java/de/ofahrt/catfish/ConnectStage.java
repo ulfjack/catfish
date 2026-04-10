@@ -3,12 +3,11 @@ package de.ofahrt.catfish;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
+import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.RequestAction;
-import de.ofahrt.catfish.model.server.RequestOutcome;
 import de.ofahrt.catfish.ssl.CertificateAuthority;
 import de.ofahrt.catfish.ssl.SSLInfo;
 import java.io.IOException;
@@ -71,6 +70,7 @@ final class ConnectStage implements Stage {
   private final String host;
   private final int port;
   private final ConnectHandler handler;
+  private final HttpServerListener serverListener;
   private final SSLSocketFactory originSocketFactory;
   private final SslInfoCache sslInfoCache;
   private final LocalStageFactory localStageFactory;
@@ -98,6 +98,7 @@ final class ConnectStage implements Stage {
       String host,
       int port,
       ConnectHandler handler,
+      HttpServerListener serverListener,
       SSLSocketFactory originSocketFactory,
       SslInfoCache sslInfoCache,
       LocalStageFactory localStageFactory) {
@@ -108,6 +109,7 @@ final class ConnectStage implements Stage {
     this.host = host;
     this.port = port;
     this.handler = handler;
+    this.serverListener = serverListener;
     this.originSocketFactory = originSocketFactory;
     this.sslInfoCache = sslInfoCache;
     this.localStageFactory = localStageFactory;
@@ -133,7 +135,8 @@ final class ConnectStage implements Stage {
   private void doConnect(String connectHost, int connectPort) {
     // Stage.close() runs on the NIO selector thread; dispatch onConnectComplete to the executor
     // so user callbacks don't block the selector.
-    onClose = () -> executor.execute(() -> handler.onConnectComplete(connectHost, connectPort));
+    onClose =
+        () -> executor.execute(() -> serverListener.onConnectComplete(connectHost, connectPort));
     ConnectDecision decision;
     try {
       decision = handler.apply(connectHost, connectPort);
@@ -154,7 +157,7 @@ final class ConnectStage implements Stage {
         tunnelSocket = sock;
         parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
       } catch (IOException e) {
-        handler.onConnectFailed(connectHost, connectPort, e);
+        serverListener.onConnectFailed(connectHost, connectPort, e);
         parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
       }
       return;
@@ -166,7 +169,7 @@ final class ConnectStage implements Stage {
       // of being forwarded to a remote origin.
       isLocalIntercept = true;
       fakeCtx = decision.getSslInfo().sslContext();
-      handler.onCertificateReady(connectHost, connectPort);
+      serverListener.onCertificateReady(connectHost, connectPort);
       parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
       return;
     }
@@ -192,7 +195,7 @@ final class ConnectStage implements Stage {
         socket.startHandshake();
         originCert = (X509Certificate) socket.getSession().getPeerCertificates()[0];
       } catch (IOException e) {
-        handler.onConnectFailed(connectHost, connectPort, e);
+        serverListener.onConnectFailed(connectHost, connectPort, e);
         parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
         return;
       }
@@ -205,7 +208,7 @@ final class ConnectStage implements Stage {
           socket.close();
         } catch (IOException ignored) {
         }
-        handler.onConnectFailed(connectHost, connectPort, e);
+        serverListener.onConnectFailed(connectHost, connectPort, e);
         parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
         return;
       }
@@ -221,7 +224,7 @@ final class ConnectStage implements Stage {
       ctx = info.sslContext();
     }
 
-    handler.onCertificateReady(connectHost, connectPort);
+    serverListener.onCertificateReady(connectHost, connectPort);
 
     fakeCtx = ctx;
     originHost = decision.getHost();
@@ -312,28 +315,6 @@ final class ConnectStage implements Stage {
             public RequestAction handleRequest(
                 UUID requestId, String oh, int op, HttpRequest request) {
               return handler.handleRequest(requestId, oh, op, request);
-            }
-
-            @Override
-            public void onConnectFailed(String host, int port, Exception cause) {
-              handler.onConnectFailed(host, port, cause);
-            }
-
-            @Override
-            public void onConnectComplete(String host, int port) {
-              handler.onConnectComplete(host, port);
-            }
-
-            @Override
-            public void onResponse(
-                UUID requestId, String oh, int op, HttpRequest request, HttpResponse response) {
-              handler.onResponse(requestId, oh, op, request, response);
-            }
-
-            @Override
-            public void onRequestComplete(
-                UUID requestId, String oh, int op, HttpRequest request, RequestOutcome outcome) {
-              handler.onRequestComplete(requestId, oh, op, request, outcome);
             }
           };
       if (localStageFactory == null) {

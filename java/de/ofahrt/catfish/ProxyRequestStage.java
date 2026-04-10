@@ -8,6 +8,7 @@ import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.server.ConnectHandler;
+import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -36,6 +37,7 @@ final class ProxyRequestStage implements HttpRequestStage {
   private final Pipeline parent;
   private final Executor executor;
   private final ConnectHandler handler;
+  private final HttpServerListener serverListener;
   private final OriginResolver originResolver;
 
   private final PipeBuffer bodyPipe = new PipeBuffer();
@@ -43,10 +45,15 @@ final class ProxyRequestStage implements HttpRequestStage {
   private boolean keepAlive;
 
   ProxyRequestStage(
-      Pipeline parent, Executor executor, ConnectHandler handler, OriginResolver originResolver) {
+      Pipeline parent,
+      Executor executor,
+      ConnectHandler handler,
+      HttpServerListener serverListener,
+      OriginResolver originResolver) {
     this.parent = parent;
     this.executor = executor;
     this.handler = handler;
+    this.serverListener = serverListener;
     this.originResolver = originResolver;
   }
 
@@ -74,6 +81,7 @@ final class ProxyRequestStage implements HttpRequestStage {
             origin.useTls(),
             origin.socketFactory(),
             handler,
+            serverListener,
             bodyPipe,
             keepAlive,
             (gen, ka) -> {

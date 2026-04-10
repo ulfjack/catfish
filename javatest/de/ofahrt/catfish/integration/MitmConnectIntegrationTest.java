@@ -20,6 +20,7 @@ import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
+import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.RequestAction;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.ssl.CertificateAuthority;
@@ -243,22 +244,18 @@ public class MitmConnectIntegrationTest {
 
     CatfishHttpServer server = newServer();
     serversToStop.add(server);
-    HttpEndpoint listener =
+    HttpEndpoint endpoint =
         HttpEndpoint.onLocalhost(9105)
-            .dispatcher(
-                new ConnectHandler() {
-                  @Override
-                  public ConnectDecision apply(String host, int port) {
-                    return ConnectDecision.tunnel(host, port);
-                  }
-
+            .dispatcher(ConnectHandler.tunnelAll())
+            .requestListener(
+                new HttpServerListener() {
                   @Override
                   public void onConnectComplete(String host, int port) {
                     threadName.set(Thread.currentThread().getName());
                     latch.countDown();
                   }
                 });
-    server.listen(listener);
+    server.listen(endpoint);
 
     // Open a CONNECT tunnel to HTTPS_PORT and immediately close — this triggers Stage.close()
     // which runs onClose → handler.onConnectComplete.

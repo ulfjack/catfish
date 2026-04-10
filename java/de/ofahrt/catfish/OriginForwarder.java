@@ -7,6 +7,7 @@ import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.server.ConnectHandler;
+import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.RequestAction;
 import de.ofahrt.catfish.model.server.RequestOutcome;
 import java.io.ByteArrayOutputStream;
@@ -60,6 +61,7 @@ final class OriginForwarder {
   private final boolean useTls;
   private final SocketFactory socketFactory;
   private final ConnectHandler handler;
+  private final HttpServerListener serverListener;
   private final PipeBuffer requestBodyPipe;
   private final boolean keepAlive;
 
@@ -78,6 +80,7 @@ final class OriginForwarder {
       boolean useTls,
       SocketFactory socketFactory,
       ConnectHandler handler,
+      HttpServerListener serverListener,
       PipeBuffer requestBodyPipe,
       boolean keepAlive,
       ResultCallback resultCallback,
@@ -88,6 +91,7 @@ final class OriginForwarder {
     this.useTls = useTls;
     this.socketFactory = socketFactory;
     this.handler = handler;
+    this.serverListener = serverListener;
     this.requestBodyPipe = requestBodyPipe;
     this.keepAlive = keepAlive;
     this.resultCallback = resultCallback;
@@ -116,7 +120,7 @@ final class OriginForwarder {
     } catch (Exception e) {
       outcome = RequestOutcome.error(e);
     }
-    handler.onRequestComplete(requestId, originHost, originPort, absoluteHeaders, outcome);
+    serverListener.onRequestComplete(requestId, originHost, originPort, absoluteHeaders, outcome);
   }
 
   static String buildAbsoluteUri(boolean useTls, String host, int port, String pathAndQuery) {
@@ -178,7 +182,7 @@ final class OriginForwarder {
       gen.close();
       return RequestOutcome.error(localResponse, e, counter.count());
     }
-    handler.onResponse(requestId, originHost, originPort, headers, localResponse);
+    serverListener.onResponse(requestId, originHost, originPort, headers, localResponse);
     return RequestOutcome.success(localResponse, counter.count());
   }
 
@@ -361,7 +365,7 @@ final class OriginForwarder {
       counter.close();
       closeCaptureStream(captureStream);
       socket.close();
-      handler.onResponse(requestId, originHost, originPort, originalHeaders, originResponse);
+      serverListener.onResponse(requestId, originHost, originPort, originalHeaders, originResponse);
       return RequestOutcome.success(originResponse, counter.count());
 
     } catch (IOException e) {

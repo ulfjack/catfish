@@ -12,6 +12,7 @@ import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
+import de.ofahrt.catfish.model.server.HttpServerListener;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.function.Function;
@@ -30,6 +31,7 @@ final class HttpServerHandler implements NetworkHandler {
   private final SslInfoCache sslInfoCache = new SslInfoCache();
   private final SslServerStage.SSLContextProvider sslContextProvider;
   private final HttpServerStage.RequestListener requestListener;
+  private final HttpServerListener serverListener;
 
   private static final ConnectHandler SERVE_LOCALLY =
       (host, port) -> ConnectDecision.serveLocally();
@@ -40,13 +42,14 @@ final class HttpServerHandler implements NetworkHandler {
       ConnectHandler connectHandler,
       SSLSocketFactory originSocketFactory,
       SslServerStage.SSLContextProvider sslContextProvider,
-      HttpServerStage.RequestListener requestListener) {
+      HttpServerListener serverListener) {
     this.server = server;
     this.virtualHostLookup = virtualHostLookup;
     this.connectHandler = connectHandler != null ? connectHandler : SERVE_LOCALLY;
     this.originSocketFactory = originSocketFactory;
     this.sslContextProvider = sslContextProvider;
-    this.requestListener = requestListener;
+    this.requestListener = (conn, req, res) -> serverListener.notifySent(conn, req, res, 0);
+    this.serverListener = serverListener;
   }
 
   @Override
@@ -71,6 +74,7 @@ final class HttpServerHandler implements NetworkHandler {
                   requestListener,
                   virtualHostLookup,
                   connectHandler,
+                  serverListener,
                   needsExecutor ? originSocketFactory : null,
                   needsExecutor ? sslInfoCache : null,
                   executor,
@@ -87,6 +91,7 @@ final class HttpServerHandler implements NetworkHandler {
         requestListener,
         virtualHostLookup,
         connectHandler,
+        serverListener,
         needsExecutor ? originSocketFactory : null,
         needsExecutor ? sslInfoCache : null,
         executor,

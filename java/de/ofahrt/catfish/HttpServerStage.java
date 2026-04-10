@@ -20,6 +20,7 @@ import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
+import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.IOException;
 import java.net.URI;
@@ -68,6 +69,7 @@ final class HttpServerStage implements Stage {
   private final RequestListener requestListener;
   private final Function<String, HttpVirtualHost> virtualHostLookup;
   private final ConnectHandler connectHandler;
+  private final HttpServerListener serverListener;
   private final SSLSocketFactory originSocketFactory;
   private final SslInfoCache sslInfoCache;
   private final Executor executor;
@@ -101,6 +103,7 @@ final class HttpServerStage implements Stage {
 
   private static final ConnectHandler SERVE_LOCALLY =
       (host, port) -> ConnectDecision.serveLocally();
+  private static final HttpServerListener NO_OP_LISTENER = new HttpServerListener() {};
 
   HttpServerStage(
       Pipeline parent,
@@ -115,6 +118,7 @@ final class HttpServerStage implements Stage {
         requestListener,
         virtualHostLookup,
         SERVE_LOCALLY,
+        NO_OP_LISTENER,
         /* originSocketFactory= */ null,
         /* sslInfoCache= */ null,
         /* executor= */ null,
@@ -128,6 +132,7 @@ final class HttpServerStage implements Stage {
       RequestListener requestListener,
       Function<String, HttpVirtualHost> virtualHostLookup,
       ConnectHandler connectHandler,
+      HttpServerListener serverListener,
       SSLSocketFactory originSocketFactory,
       SslInfoCache sslInfoCache,
       Executor executor,
@@ -138,6 +143,7 @@ final class HttpServerStage implements Stage {
     this.requestListener = requestListener;
     this.virtualHostLookup = virtualHostLookup;
     this.connectHandler = connectHandler;
+    this.serverListener = serverListener;
     this.originSocketFactory = originSocketFactory;
     this.sslInfoCache = sslInfoCache;
     this.executor = executor;
@@ -370,7 +376,8 @@ final class HttpServerStage implements Stage {
     ConnectDecision capturedDecision = decision;
     ProxyRequestStage.OriginResolver resolver =
         (req) -> resolveOrigin(headers, capturedDecision, sslFactory);
-    currentHandler = new ProxyRequestStage(parent, executor, connectHandler, resolver);
+    currentHandler =
+        new ProxyRequestStage(parent, executor, connectHandler, serverListener, resolver);
     return startBodyOrDispatch(effective);
   }
 
@@ -625,6 +632,7 @@ final class HttpServerStage implements Stage {
                 requestListener,
                 virtualHostLookup,
                 ch != null ? ch : SERVE_LOCALLY,
+                serverListener,
                 originSocketFactory,
                 sslInfoCache,
                 ex,
@@ -639,6 +647,7 @@ final class HttpServerStage implements Stage {
             parsedHost,
             parsedPort,
             connectHandler,
+            serverListener,
             originSocketFactory,
             sslInfoCache,
             localFactory));

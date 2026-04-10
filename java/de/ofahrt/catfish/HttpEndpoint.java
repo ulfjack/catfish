@@ -25,7 +25,7 @@ public final class HttpEndpoint {
   private final Map<String, HttpVirtualHost> hosts = new LinkedHashMap<>();
   private ConnectHandler connectHandler;
   private SSLSocketFactory originSslFactory;
-  private HttpServerListener requestListener = (conn, req, res, bytes) -> {};
+  private HttpServerListener requestListener = new HttpServerListener() {};
 
   private HttpEndpoint(Binding binding, int port, Path unixSocketPath) {
     this.binding = binding;
@@ -85,7 +85,7 @@ public final class HttpEndpoint {
             connectHandler,
             effectiveOriginFactory,
             /* sslContextProvider= */ null,
-            (conn, req, res) -> requestListener.notifySent(conn, req, res, 0));
+            requestListener);
     NetworkEngine engine = server.engine();
     switch (binding) {
       case ANY -> engine.listenAll(port, networkHandler);
