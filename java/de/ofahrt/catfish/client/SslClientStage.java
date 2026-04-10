@@ -113,7 +113,11 @@ final class SslClientStage implements Stage {
 
   @Override
   public void inputClosed() throws IOException {
-    sslEngine.closeInbound();
+    try {
+      sslEngine.closeInbound();
+    } catch (SSLException e) {
+      // Peer closed without sending close_notify - this is common in practice.
+    }
     next.inputClosed();
   }
 
