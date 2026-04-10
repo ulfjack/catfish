@@ -3,11 +3,8 @@ package de.ofahrt.catfish;
 import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
-import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
-import de.ofahrt.catfish.model.server.HttpHandler;
-import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -18,7 +15,9 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** A <code>CatfishHttpServer</code> manages a HTTP-Server. */
+/**
+ * A <code>CatfishHttpServer</code> manages a HTTP-Server.
+ */
 public final class CatfishHttpServer {
 
   interface RequestCallback extends Runnable {
@@ -89,12 +88,12 @@ public final class CatfishHttpServer {
     }
   }
 
-  public void listen(HttpEndpoint listener) throws IOException, InterruptedException {
-    listener.listen(this);
+  public void listen(HttpEndpoint endpoint) throws IOException, InterruptedException {
+    endpoint.listen(this);
   }
 
-  public void listen(HttpsEndpoint listener) throws IOException, InterruptedException {
-    listener.listen(this);
+  public void listen(HttpsEndpoint endpoint) throws IOException, InterruptedException {
+    endpoint.listen(this);
   }
 
   NetworkEngine engine() {
