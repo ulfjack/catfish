@@ -12,7 +12,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
 
 /** Configures an HTTPS listener with per-vhost TLS certificates and virtual host isolation. */
-public final class HttpsListener {
+public final class HttpsEndpoint {
 
   private enum Binding {
     ANY,
@@ -28,32 +28,32 @@ public final class HttpsListener {
   private ConnectHandler connectHandler;
   private SSLSocketFactory originSslFactory;
 
-  private HttpsListener(Binding binding, int port, Path unixSocketPath) {
+  private HttpsEndpoint(Binding binding, int port, Path unixSocketPath) {
     this.binding = binding;
     this.port = port;
     this.unixSocketPath = unixSocketPath;
   }
 
   /** Listen on all interfaces. */
-  public static HttpsListener onAny(int port) {
-    return new HttpsListener(Binding.ANY, port, null);
+  public static HttpsEndpoint onAny(int port) {
+    return new HttpsEndpoint(Binding.ANY, port, null);
   }
 
   /** Listen on localhost only. */
-  public static HttpsListener onLocalhost(int port) {
-    return new HttpsListener(Binding.LOCALHOST, port, null);
+  public static HttpsEndpoint onLocalhost(int port) {
+    return new HttpsEndpoint(Binding.LOCALHOST, port, null);
   }
 
   /** Listen on a Unix domain socket. */
-  public static HttpsListener onUnixSocket(Path path) {
-    return new HttpsListener(Binding.UNIX_SOCKET, 0, path);
+  public static HttpsEndpoint onUnixSocket(Path path) {
+    return new HttpsEndpoint(Binding.UNIX_SOCKET, 0, path);
   }
 
   /**
    * Register a virtual host with its TLS certificate. The certificate must cover the hostname
    * (checked via SAN/CN matching at registration time).
    */
-  public HttpsListener addHost(String hostname, HttpVirtualHost host, SSLInfo sslInfo) {
+  public HttpsEndpoint addHost(String hostname, HttpVirtualHost host, SSLInfo sslInfo) {
     if (!sslInfo.covers(hostname)) {
       throw new IllegalArgumentException("Certificate does not cover hostname '" + hostname + "'");
     }
@@ -63,13 +63,13 @@ public final class HttpsListener {
   }
 
   /** Set the connect/proxy handler for this listener. */
-  public HttpsListener dispatcher(ConnectHandler handler) {
+  public HttpsEndpoint dispatcher(ConnectHandler handler) {
     this.connectHandler = handler;
     return this;
   }
 
   /** Set the SSL socket factory for outgoing proxy connections to HTTPS origins. */
-  public HttpsListener originSslFactory(SSLSocketFactory factory) {
+  public HttpsEndpoint originSslFactory(SSLSocketFactory factory) {
     this.originSslFactory = factory;
     return this;
   }

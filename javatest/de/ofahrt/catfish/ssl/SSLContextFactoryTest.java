@@ -7,7 +7,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import de.ofahrt.catfish.HttpVirtualHost;
-import de.ofahrt.catfish.HttpsListener;
+import de.ofahrt.catfish.HttpsEndpoint;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import java.io.File;
 import org.junit.Test;
@@ -76,7 +76,7 @@ public class SSLContextFactoryTest {
     HttpHandler handler = (connection, request, responseWriter) -> {};
 
     try {
-      HttpsListener.onLocalhost(0).addHost("wronghost", new HttpVirtualHost(handler), sslInfo);
+      HttpsEndpoint.onLocalhost(0).addHost("wronghost", new HttpVirtualHost(handler), sslInfo);
       fail("Expected IllegalArgumentException");
     } catch (IllegalArgumentException e) {
       assertTrue(e.getMessage().contains("wronghost"));

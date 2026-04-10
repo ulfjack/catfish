@@ -3,7 +3,7 @@ package de.ofahrt.catfish.integration;
 import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.HttpListener;
+import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
@@ -47,10 +47,10 @@ public class ConnectTunnelIntegrationTest {
             (conn, request, writer) ->
                 writer.commitBuffered(
                     StandardResponses.OK.withBody("OK".getBytes(StandardCharsets.UTF_8))));
-    HttpListener httpListener = HttpListener.onLocalhost(HTTP_PORT).addHost("localhost", host);
+    HttpEndpoint httpListener = HttpEndpoint.onLocalhost(HTTP_PORT).addHost("localhost", host);
     server.listen(httpListener);
-    HttpListener proxyListener =
-        HttpListener.onLocalhost(PROXY_PORT).dispatcher(ConnectHandler.tunnelAll());
+    HttpEndpoint proxyListener =
+        HttpEndpoint.onLocalhost(PROXY_PORT).dispatcher(ConnectHandler.tunnelAll());
     server.listen(proxyListener);
   }
 
@@ -172,7 +172,7 @@ public class ConnectTunnelIntegrationTest {
               }
             });
     try {
-      HttpListener listener = HttpListener.onLocalhost(9092).dispatcher(ConnectHandler.denyAll());
+      HttpEndpoint listener = HttpEndpoint.onLocalhost(9092).dispatcher(ConnectHandler.denyAll());
       deniedServer.listen(listener);
 
       try (Socket socket = new Socket("localhost", 9092)) {
@@ -235,7 +235,7 @@ public class ConnectTunnelIntegrationTest {
               (conn, request, writer) ->
                   writer.commitBuffered(
                       StandardResponses.OK.withBody("OK".getBytes(StandardCharsets.UTF_8))));
-      HttpListener httpListener = HttpListener.onLocalhost(httpPort).addHost("localhost", host);
+      HttpEndpoint httpListener = HttpEndpoint.onLocalhost(httpPort).addHost("localhost", host);
       rewriteServer.listen(httpListener);
 
       // Policy rewrites bogusPort to the real HTTP port.
@@ -244,7 +244,7 @@ public class ConnectTunnelIntegrationTest {
               port == bogusPort
                   ? ConnectDecision.tunnel("localhost", httpPort)
                   : ConnectDecision.deny();
-      HttpListener proxyListener = HttpListener.onLocalhost(proxyPort).dispatcher(rewritePolicy);
+      HttpEndpoint proxyListener = HttpEndpoint.onLocalhost(proxyPort).dispatcher(rewritePolicy);
       rewriteServer.listen(proxyListener);
 
       try (Socket socket = new Socket("localhost", proxyPort)) {

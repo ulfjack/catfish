@@ -4,7 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.HttpListener;
+import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.ValidatingHttpHandler;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
@@ -190,8 +190,8 @@ public class HttpResponseValidationIntegrationTest {
             .exact("/validating/bad-xcto", new ValidatingHttpHandler(badXctoHandler))
             .exact("/validating/good", new ValidatingHttpHandler(validResponseHandler))
             .build();
-    HttpListener listener =
-        HttpListener.onLocalhost(HTTP_PORT).addHost(HOST, new HttpVirtualHost(handler));
+    HttpEndpoint listener =
+        HttpEndpoint.onLocalhost(HTTP_PORT).addHost(HOST, new HttpVirtualHost(handler));
     server.listen(listener);
   }
 

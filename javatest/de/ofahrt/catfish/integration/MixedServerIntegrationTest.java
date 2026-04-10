@@ -4,7 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.HttpListener;
+import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpHeaderName;
@@ -45,8 +45,8 @@ public class MixedServerIntegrationTest {
   @Before
   public void startServer() throws Exception {
     server = newServer();
-    HttpListener listener =
-        HttpListener.onLocalhost(MIXED_PORT)
+    HttpEndpoint listener =
+        HttpEndpoint.onLocalhost(MIXED_PORT)
             .addHost(
                 "localhost",
                 new HttpVirtualHost(
@@ -91,8 +91,8 @@ public class MixedServerIntegrationTest {
    */
   private void startExtraServer(int port, ConnectHandler handler) throws Exception {
     CatfishHttpServer s = newServer();
-    HttpListener listener =
-        HttpListener.onLocalhost(port)
+    HttpEndpoint listener =
+        HttpEndpoint.onLocalhost(port)
             .addHost(
                 "localhost",
                 new HttpVirtualHost(
@@ -111,8 +111,8 @@ public class MixedServerIntegrationTest {
    */
   private void startExtraServerWithUpload(int port) throws Exception {
     CatfishHttpServer s = newServer();
-    HttpListener listener =
-        HttpListener.onLocalhost(port)
+    HttpEndpoint listener =
+        HttpEndpoint.onLocalhost(port)
             .addHost(
                 "localhost",
                 new HttpVirtualHost(
@@ -134,8 +134,8 @@ public class MixedServerIntegrationTest {
    */
   private void startExtraServerServeLocallyEcho(int port) throws Exception {
     CatfishHttpServer s = newServer();
-    HttpListener listener =
-        HttpListener.onLocalhost(port)
+    HttpEndpoint listener =
+        HttpEndpoint.onLocalhost(port)
             .addHost(
                 "localhost",
                 new HttpVirtualHost(
@@ -414,8 +414,8 @@ public class MixedServerIntegrationTest {
     // ConnectHandler that forwards the first request and serves the second locally.
     int[] callCount = {0};
     CatfishHttpServer s = newServer();
-    HttpListener listener =
-        HttpListener.onLocalhost(port)
+    HttpEndpoint listener =
+        HttpEndpoint.onLocalhost(port)
             .addHost(
                 "localhost",
                 new HttpVirtualHost(

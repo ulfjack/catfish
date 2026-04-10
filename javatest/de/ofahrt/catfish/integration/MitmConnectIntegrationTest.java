@@ -6,9 +6,9 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.HttpListener;
+import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
-import de.ofahrt.catfish.HttpsListener;
+import de.ofahrt.catfish.HttpsEndpoint;
 import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
@@ -103,11 +103,11 @@ public class MitmConnectIntegrationTest {
     // because the proxy's SSLInfo cache is keyed by (host, port) and tests use unique ports.
     // The origin is a path-router so most tests can avoid spinning up their own origin server.
     sharedServer = newServer();
-    HttpsListener httpsListener =
-        HttpsListener.onLocalhost(HTTPS_PORT).addHost("localhost", sharedOriginHost(), testSslInfo);
+    HttpsEndpoint httpsListener =
+        HttpsEndpoint.onLocalhost(HTTPS_PORT).addHost("localhost", sharedOriginHost(), testSslInfo);
     sharedServer.listen(httpsListener);
-    HttpListener mitmListener =
-        HttpListener.onLocalhost(MITM_PORT)
+    HttpEndpoint mitmListener =
+        HttpEndpoint.onLocalhost(MITM_PORT)
             .dispatcher(ConnectHandler.mitmAll(ca))
             .originSslFactory(testSslInfo.sslContext().getSocketFactory());
     sharedServer.listen(mitmListener);
@@ -190,8 +190,8 @@ public class MitmConnectIntegrationTest {
   private CatfishHttpServer startHttpsServer(int port, HttpVirtualHost host)
       throws IOException, InterruptedException {
     CatfishHttpServer s = newServer();
-    HttpsListener listener =
-        HttpsListener.onLocalhost(port).addHost("localhost", host, testSslInfo);
+    HttpsEndpoint listener =
+        HttpsEndpoint.onLocalhost(port).addHost("localhost", host, testSslInfo);
     s.listen(listener);
     serversToStop.add(s);
     return s;
@@ -243,8 +243,8 @@ public class MitmConnectIntegrationTest {
 
     CatfishHttpServer server = newServer();
     serversToStop.add(server);
-    HttpListener listener =
-        HttpListener.onLocalhost(9105)
+    HttpEndpoint listener =
+        HttpEndpoint.onLocalhost(9105)
             .dispatcher(
                 new ConnectHandler() {
                   @Override
@@ -323,8 +323,8 @@ public class MitmConnectIntegrationTest {
   public void mitmConnectProxy_policyThrows_returns403() throws Exception {
     CatfishHttpServer s = newServer();
     serversToStop.add(s);
-    HttpListener listener =
-        HttpListener.onLocalhost(9098)
+    HttpEndpoint listener =
+        HttpEndpoint.onLocalhost(9098)
             .dispatcher(
                 (host, port) -> {
                   throw new RuntimeException("policy error");
@@ -354,8 +354,8 @@ public class MitmConnectIntegrationTest {
         (hostname, originCert) -> {
           throw new RuntimeException("CA failed");
         };
-    HttpListener listener =
-        HttpListener.onLocalhost(9099)
+    HttpEndpoint listener =
+        HttpEndpoint.onLocalhost(9099)
             .dispatcher(ConnectHandler.mitmAll(failingCa))
             .originSslFactory(testSslInfo.sslContext().getSocketFactory());
     s.listen(listener);
@@ -379,7 +379,7 @@ public class MitmConnectIntegrationTest {
   public void mitmConnectProxy_deniedByPolicy_returns403() throws Exception {
     CatfishHttpServer s = newServer();
     serversToStop.add(s);
-    HttpListener listener = HttpListener.onLocalhost(9097).dispatcher(ConnectHandler.denyAll());
+    HttpEndpoint listener = HttpEndpoint.onLocalhost(9097).dispatcher(ConnectHandler.denyAll());
     s.listen(listener);
 
     try (Socket socket = new Socket("localhost", 9097)) {
@@ -584,8 +584,8 @@ public class MitmConnectIntegrationTest {
 
     // Plain HTTP server as tunnel target.
     CatfishHttpServer httpServer = newServer();
-    HttpListener httpListener =
-        HttpListener.onLocalhost(tunnelTargetPort)
+    HttpEndpoint httpListener =
+        HttpEndpoint.onLocalhost(tunnelTargetPort)
             .addHost(
                 "default",
                 new HttpVirtualHost(
@@ -598,8 +598,8 @@ public class MitmConnectIntegrationTest {
 
     // Mixed proxy: tunnel to tunnelTargetPort, intercept everything else.
     CatfishHttpServer proxy = newServer();
-    HttpListener proxyListener =
-        HttpListener.onLocalhost(proxyPort)
+    HttpEndpoint proxyListener =
+        HttpEndpoint.onLocalhost(proxyPort)
             .dispatcher(
                 (host, port) ->
                     port == tunnelTargetPort
@@ -670,8 +670,8 @@ public class MitmConnectIntegrationTest {
   private CatfishHttpServer startMitmProxyWithHandler(int mitmPort, ConnectHandler handler)
       throws IOException, InterruptedException {
     CatfishHttpServer s = newServer();
-    HttpListener listener =
-        HttpListener.onLocalhost(mitmPort)
+    HttpEndpoint listener =
+        HttpEndpoint.onLocalhost(mitmPort)
             .dispatcher(handler)
             .originSslFactory(testSslInfo.sslContext().getSocketFactory());
     s.listen(listener);
@@ -908,8 +908,8 @@ public class MitmConnectIntegrationTest {
     SSLInfo localSslInfo = ca.create("localhost", testSslInfo.certificate());
 
     CatfishHttpServer server = newServer();
-    HttpListener listener =
-        HttpListener.onLocalhost(9120)
+    HttpEndpoint listener =
+        HttpEndpoint.onLocalhost(9120)
             .addHost(
                 "localhost",
                 new HttpVirtualHost(

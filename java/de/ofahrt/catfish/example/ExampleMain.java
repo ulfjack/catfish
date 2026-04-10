@@ -1,9 +1,9 @@
 package de.ofahrt.catfish.example;
 
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.HttpListener;
+import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
-import de.ofahrt.catfish.HttpsListener;
+import de.ofahrt.catfish.HttpsEndpoint;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.fastcgi.FcgiHandler;
@@ -83,12 +83,12 @@ public class ExampleMain {
             .build();
 
     // Keep-alive and compression policies must be set before adding a host.
-    HttpListener httpListener =
-        HttpListener.onAny(8080).addHost("localhost", new HttpVirtualHost(handler));
+    HttpEndpoint httpListener =
+        HttpEndpoint.onAny(8080).addHost("localhost", new HttpVirtualHost(handler));
     server.listen(httpListener);
     if (sslInfo != null) {
-      HttpsListener httpsListener =
-          HttpsListener.onAny(8081)
+      HttpsEndpoint httpsListener =
+          HttpsEndpoint.onAny(8081)
               .addHost(sslInfo.certificateCommonName(), new HttpVirtualHost(handler), sslInfo);
       server.listen(httpsListener);
     }

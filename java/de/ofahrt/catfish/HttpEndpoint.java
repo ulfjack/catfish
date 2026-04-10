@@ -10,7 +10,7 @@ import java.util.function.Function;
 import javax.net.ssl.SSLSocketFactory;
 
 /** Configures a plain HTTP listener with per-listener virtual host isolation. */
-public final class HttpListener {
+public final class HttpEndpoint {
 
   private enum Binding {
     ANY,
@@ -25,41 +25,41 @@ public final class HttpListener {
   private ConnectHandler connectHandler;
   private SSLSocketFactory originSslFactory;
 
-  private HttpListener(Binding binding, int port, Path unixSocketPath) {
+  private HttpEndpoint(Binding binding, int port, Path unixSocketPath) {
     this.binding = binding;
     this.port = port;
     this.unixSocketPath = unixSocketPath;
   }
 
   /** Listen on all interfaces. */
-  public static HttpListener onAny(int port) {
-    return new HttpListener(Binding.ANY, port, null);
+  public static HttpEndpoint onAny(int port) {
+    return new HttpEndpoint(Binding.ANY, port, null);
   }
 
   /** Listen on localhost only. */
-  public static HttpListener onLocalhost(int port) {
-    return new HttpListener(Binding.LOCALHOST, port, null);
+  public static HttpEndpoint onLocalhost(int port) {
+    return new HttpEndpoint(Binding.LOCALHOST, port, null);
   }
 
   /** Listen on a Unix domain socket. */
-  public static HttpListener onUnixSocket(Path path) {
-    return new HttpListener(Binding.UNIX_SOCKET, 0, path);
+  public static HttpEndpoint onUnixSocket(Path path) {
+    return new HttpEndpoint(Binding.UNIX_SOCKET, 0, path);
   }
 
   /** Register a virtual host. */
-  public HttpListener addHost(String hostname, HttpVirtualHost host) {
+  public HttpEndpoint addHost(String hostname, HttpVirtualHost host) {
     hosts.put(hostname, host);
     return this;
   }
 
   /** Set the connect/proxy handler for this listener. */
-  public HttpListener dispatcher(ConnectHandler handler) {
+  public HttpEndpoint dispatcher(ConnectHandler handler) {
     this.connectHandler = handler;
     return this;
   }
 
   /** Set the SSL socket factory for outgoing proxy connections to HTTPS origins. */
-  public HttpListener originSslFactory(SSLSocketFactory factory) {
+  public HttpEndpoint originSslFactory(SSLSocketFactory factory) {
     this.originSslFactory = factory;
     return this;
   }

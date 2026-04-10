@@ -1,9 +1,9 @@
 package de.ofahrt.catfish.integration;
 
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.HttpListener;
+import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
-import de.ofahrt.catfish.HttpsListener;
+import de.ofahrt.catfish.HttpsEndpoint;
 import de.ofahrt.catfish.TestServlet;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
@@ -75,11 +75,11 @@ final class LocalCatfishServer implements Server {
             .build();
 
     HttpVirtualHost host = new HttpVirtualHost(handler).uploadPolicy(uploadPolicy);
-    HttpListener httpListener = HttpListener.onAny(HTTP_PORT).addHost("localhost", host);
+    HttpEndpoint httpListener = HttpEndpoint.onAny(HTTP_PORT).addHost("localhost", host);
     server.listen(httpListener);
     if (startSsl) {
-      HttpsListener httpsListener =
-          HttpsListener.onAny(HTTPS_PORT).addHost("localhost", host, TestHelper.getSSLInfo());
+      HttpsEndpoint httpsListener =
+          HttpsEndpoint.onAny(HTTPS_PORT).addHost("localhost", host, TestHelper.getSSLInfo());
       server.listen(httpsListener);
     }
   }

@@ -67,7 +67,7 @@ public final class CatfishHttpServer {
   }
 
   /**
-   * @deprecated Use {@link HttpListener} or {@link HttpsListener} instead.
+   * @deprecated Use {@link HttpEndpoint} or {@link HttpsEndpoint} instead.
    */
   @Deprecated
   public void addHttpHost(String name, HttpVirtualHost host) {
@@ -155,11 +155,11 @@ public final class CatfishHttpServer {
     return actual != null ? actual : def;
   }
 
-  public void listen(HttpListener listener) throws IOException, InterruptedException {
+  public void listen(HttpEndpoint listener) throws IOException, InterruptedException {
     listener.listen(this);
   }
 
-  public void listen(HttpsListener listener) throws IOException, InterruptedException {
+  public void listen(HttpsEndpoint listener) throws IOException, InterruptedException {
     listener.listen(this);
   }
 
@@ -172,7 +172,7 @@ public final class CatfishHttpServer {
   }
 
   /**
-   * @deprecated Use {@link #listen(HttpListener)} instead.
+   * @deprecated Use {@link #listen(HttpEndpoint)} instead.
    */
   @Deprecated
   public void listenConnectProxy(int port, ConnectHandler handler)
@@ -181,7 +181,7 @@ public final class CatfishHttpServer {
   }
 
   /**
-   * @deprecated Use {@link #listen(HttpListener)} instead.
+   * @deprecated Use {@link #listen(HttpEndpoint)} instead.
    */
   @Deprecated
   public void listenConnectProxyLocal(int port, ConnectHandler handler)
@@ -191,7 +191,7 @@ public final class CatfishHttpServer {
   }
 
   /**
-   * @deprecated Use {@link #listen(HttpListener)} instead.
+   * @deprecated Use {@link #listen(HttpEndpoint)} instead.
    */
   @Deprecated
   public void listenConnectProxyLocal(
@@ -202,7 +202,7 @@ public final class CatfishHttpServer {
   }
 
   /**
-   * @deprecated Use {@link #listen(HttpListener)} instead.
+   * @deprecated Use {@link #listen(HttpEndpoint)} instead.
    */
   @Deprecated
   public void listenHttpLocal(int port) throws IOException, InterruptedException {
@@ -210,7 +210,7 @@ public final class CatfishHttpServer {
   }
 
   /**
-   * @deprecated Use {@link #listen(HttpsListener)} instead.
+   * @deprecated Use {@link #listen(HttpsEndpoint)} instead.
    */
   @Deprecated
   public void listenHttpsLocal(int port) throws IOException, InterruptedException {
@@ -219,7 +219,7 @@ public final class CatfishHttpServer {
   }
 
   /**
-   * @deprecated Use {@link #listen(HttpListener)} instead.
+   * @deprecated Use {@link #listen(HttpEndpoint)} instead.
    */
   @Deprecated
   public void listenHttp(int port) throws IOException, InterruptedException {
@@ -227,7 +227,7 @@ public final class CatfishHttpServer {
   }
 
   /**
-   * @deprecated Use {@link #listen(HttpsListener)} instead.
+   * @deprecated Use {@link #listen(HttpsEndpoint)} instead.
    */
   @Deprecated
   public void listenHttps(int port) throws IOException, InterruptedException {
@@ -236,7 +236,7 @@ public final class CatfishHttpServer {
   }
 
   /**
-   * @deprecated Use {@link #listen(HttpListener)} instead.
+   * @deprecated Use {@link #listen(HttpEndpoint)} instead.
    */
   @Deprecated
   public void listenHttpUnixSocket(Path path) throws IOException, InterruptedException {
@@ -244,7 +244,7 @@ public final class CatfishHttpServer {
   }
 
   /**
-   * @deprecated Use {@link #listen(HttpListener)} instead.
+   * @deprecated Use {@link #listen(HttpEndpoint)} instead.
    */
   @Deprecated
   public void listenConnectProxyUnixSocket(Path path, ConnectHandler handler)

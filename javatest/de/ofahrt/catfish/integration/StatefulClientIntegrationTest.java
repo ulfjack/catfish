@@ -4,7 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 import de.ofahrt.catfish.CatfishHttpServer;
-import de.ofahrt.catfish.HttpListener;
+import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.client.legacy.StatefulClient;
 import de.ofahrt.catfish.model.HttpHeaderName;
@@ -51,8 +51,8 @@ public class StatefulClientIntegrationTest {
   }
 
   private void startServer(de.ofahrt.catfish.model.server.HttpHandler handler) throws Exception {
-    HttpListener listener =
-        HttpListener.onLocalhost(HTTP_PORT)
+    HttpEndpoint listener =
+        HttpEndpoint.onLocalhost(HTTP_PORT)
             .addHost(HOST, new HttpVirtualHost(handler).uploadPolicy(new SimpleUploadPolicy(1024)));
     server.listen(listener);
   }
