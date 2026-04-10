@@ -19,6 +19,7 @@ java_test(
         "//java/de/ofahrt/catfish/bridge",
         "//java/de/ofahrt/catfish/client",
         "//java/de/ofahrt/catfish/fastcgi",
+        "//java/de/ofahrt/catfish/http",
         "//java/de/ofahrt/catfish/client/legacy",
         "//java/de/ofahrt/catfish/internal",
         "//java/de/ofahrt/catfish/internal/network",

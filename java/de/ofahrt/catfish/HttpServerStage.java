@@ -1,6 +1,8 @@
 package de.ofahrt.catfish;
 
-import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
+import de.ofahrt.catfish.http.HttpRequestStage;
+import de.ofahrt.catfish.http.HttpResponseGenerator;
+import de.ofahrt.catfish.http.HttpResponseGenerator.ContinuationToken;
 import de.ofahrt.catfish.internal.CoreHelper;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
@@ -10,46 +12,30 @@ import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
-import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
-import de.ofahrt.catfish.model.server.CompressionPolicy;
 import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
-import de.ofahrt.catfish.model.server.KeepAlivePolicy;
 import de.ofahrt.catfish.upload.ChunkedBodyParser;
 import de.ofahrt.catfish.upload.InMemoryEntityParser;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
-import de.ofahrt.catfish.utils.HttpContentType;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
-import java.util.zip.GZIPOutputStream;
 import javax.net.SocketFactory;
 import javax.net.ssl.SSLSocketFactory;
 
 final class HttpServerStage implements Stage {
 
   private static final boolean VERBOSE = false;
-  private static final byte[] EMPTY_BODY = new byte[0];
-  private static final String GZIP_ENCODING = "gzip";
-  private static final HttpHeaders OPTIONS_STAR_HEADERS =
-      HttpHeaders.of(HttpHeaderName.ALLOW, "GET, HEAD, POST, PUT, DELETE, OPTIONS, TRACE");
 
   // Incoming data:
   // Socket -> SSL Stage -> HTTP Stage -> Request Queue
@@ -79,135 +65,6 @@ final class HttpServerStage implements Stage {
     void notifySent(Connection connection, HttpRequest request, HttpResponse response);
   }
 
-  private final class HttpResponseWriterImpl implements HttpResponseWriter {
-
-    private final HttpRequest request;
-    private final KeepAlivePolicy keepAlivePolicy;
-    private final CompressionPolicy compressionPolicy;
-    private final AtomicBoolean committed = new AtomicBoolean();
-
-    HttpResponseWriterImpl(
-        HttpRequest request, KeepAlivePolicy keepAlivePolicy, CompressionPolicy compressionPolicy) {
-      this.request = request;
-      this.keepAlivePolicy = keepAlivePolicy;
-      this.compressionPolicy = compressionPolicy;
-    }
-
-    @Override
-    public void commitBuffered(HttpResponse responseToWrite) throws IOException {
-      if (responseToWrite.getHeaders().containsKey(HttpHeaderName.CONTENT_LENGTH)
-          && responseToWrite.getHeaders().containsKey(HttpHeaderName.TRANSFER_ENCODING)) {
-        throw new IllegalArgumentException(
-            "Response must not contain both Content-Length and Transfer-Encoding");
-      }
-      byte[] body = responseToWrite.getBody();
-      boolean bodyAllowed = HttpStatusCode.mayHaveBody(responseToWrite.getStatusCode());
-      if (!bodyAllowed && body != null && body.length != 0) {
-        throw new IllegalArgumentException(
-            String.format(
-                "Responses with status code %d are not allowed to have a body",
-                Integer.valueOf(responseToWrite.getStatusCode())));
-      }
-      if (!committed.compareAndSet(false, true)) {
-        throw new IllegalStateException("This response is already committed");
-      }
-      if (!bodyAllowed) {
-        // Silently strip Content-Length and Transfer-Encoding: they are meaningless for
-        // responses that must not have a body.
-        responseToWrite =
-            responseToWrite
-                .withoutHeader(HttpHeaderName.CONTENT_LENGTH)
-                .withoutHeader(HttpHeaderName.TRANSFER_ENCODING);
-        body = EMPTY_BODY;
-      }
-      if (body == null) {
-        body = EMPTY_BODY;
-      }
-
-      Map<String, String> overrides = new HashMap<>();
-      overrides.put(
-          HttpHeaderName.CONNECTION,
-          shouldKeepAlive() ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
-      overrides.put(HttpHeaderName.DATE, HttpDate.formatDate(Instant.now()));
-      if (shouldCompress(responseToWrite)) {
-        overrides.put(HttpHeaderName.CONTENT_ENCODING, GZIP_ENCODING);
-        overrides.put(HttpHeaderName.VARY, HttpHeaderName.ACCEPT_ENCODING);
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        try (GZIPOutputStream gzip = new GZIPOutputStream(buffer)) {
-          gzip.write(body);
-        }
-        body = buffer.toByteArray();
-      }
-      if (bodyAllowed) {
-        overrides.put(HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length));
-      }
-      responseToWrite =
-          responseToWrite.withHeaderOverrides(HttpHeaders.of(overrides)).withBody(body);
-      boolean headRequest = HttpMethodName.HEAD.equals(request.getMethod());
-      HttpResponse actualResponse = responseToWrite;
-      // We want to create the ResponseGenerator on the current thread.
-      HttpResponseGeneratorBuffered gen =
-          HttpResponseGeneratorBuffered.create(request, actualResponse, !headRequest);
-      parent.queue(() -> startResponse(gen));
-    }
-
-    @Override
-    public OutputStream commitStreamed(HttpResponse responseToWrite) throws IOException {
-      if (responseToWrite.getHeaders().containsKey(HttpHeaderName.CONTENT_LENGTH)
-          && responseToWrite.getHeaders().containsKey(HttpHeaderName.TRANSFER_ENCODING)) {
-        throw new IllegalArgumentException(
-            "Response must not contain both Content-Length and Transfer-Encoding");
-      }
-      if (!HttpStatusCode.mayHaveBody(responseToWrite.getStatusCode())) {
-        throw new IllegalArgumentException(
-            String.format(
-                "Responses with status code %d are not allowed to have a body",
-                Integer.valueOf(responseToWrite.getStatusCode())));
-      }
-      if (!committed.compareAndSet(false, true)) {
-        throw new IllegalStateException("This response is already committed");
-      }
-
-      Map<String, String> overrides = new HashMap<>();
-      overrides.put(
-          HttpHeaderName.CONNECTION,
-          shouldKeepAlive() ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
-      overrides.put(HttpHeaderName.DATE, HttpDate.formatDate(Instant.now()));
-      boolean compress = shouldCompress(responseToWrite);
-      if (compress) {
-        overrides.put(HttpHeaderName.CONTENT_ENCODING, GZIP_ENCODING);
-        overrides.put(HttpHeaderName.VARY, HttpHeaderName.ACCEPT_ENCODING);
-      }
-      responseToWrite = responseToWrite.withHeaderOverrides(HttpHeaders.of(overrides));
-      boolean headRequest = HttpMethodName.HEAD.equals(request.getMethod());
-      HttpResponseGeneratorStreamed gen =
-          HttpResponseGeneratorStreamed.create(
-              parent::encourageWrites, request, responseToWrite, !headRequest);
-      parent.queue(() -> startResponse(gen));
-      return compress ? new GZIPOutputStream(gen.getOutputStream()) : gen.getOutputStream();
-    }
-
-    private boolean shouldKeepAlive() {
-      return HttpConnectionHeader.mayKeepAlive(request) && keepAlivePolicy.allowsKeepAlive();
-    }
-
-    private boolean shouldCompress(HttpResponse responseToWrite) {
-      if (responseToWrite.getHeaders().get(HttpHeaderName.CONTENT_ENCODING) != null) {
-        return false;
-      }
-      String contentType = responseToWrite.getHeaders().get(HttpHeaderName.CONTENT_TYPE);
-      if (contentType == null) {
-        return false;
-      }
-      try {
-        String mimeType = HttpContentType.getMimeTypeFromContentType(contentType);
-        return compressionPolicy.shouldCompress(request, mimeType);
-      } catch (IllegalArgumentException e) {
-        return false;
-      }
-    }
-  }
-
   private final Pipeline parent;
   private final RequestQueue requestHandler;
   private final RequestListener requestListener;
@@ -220,9 +77,11 @@ final class HttpServerStage implements Stage {
   private final ByteBuffer outputBuffer;
   private final IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
   private Connection connection;
-  private boolean processing;
   private boolean keepAlive = true;
   private HttpResponseGenerator responseGenerator;
+  // The current request handler. Non-null while processing a request (from after header routing
+  // until response complete). Null between requests (keep-alive idle).
+  private HttpRequestStage currentHandler;
   // Set after header parsing when the request has a body to buffer.
   private HttpRequestBodyParser bodyParser;
   private HttpRequest headersRequest;
@@ -338,24 +197,38 @@ final class HttpServerStage implements Stage {
    * absolute-URI forward-proxy requests that the {@link ConnectHandler} chose to serve locally.
    */
   private ConnectionControl startBodyOrDispatch(HttpRequest headers) {
-    // Regular request — check if it has a body.
+    // Check if there's a body to stream.
     String cl = headers.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
     String te = headers.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
     boolean hasBody =
         (cl != null && !"0".equals(cl)) || (te != null && "chunked".equalsIgnoreCase(te));
 
+    // Body present — check upload policy before creating the handler (matches old behavior:
+    // upload policy denial takes precedence over handler-level checks).
+    if (hasBody) {
+      HttpVirtualHost host = virtualHostLookup.apply(headers.getHeaders().get(HttpHeaderName.HOST));
+      if (host == null || !host.uploadPolicy().isAllowed(headers)) {
+        startBuffered(headers, StandardResponses.PAYLOAD_TOO_LARGE);
+        return ConnectionControl.CLOSE_INPUT;
+      }
+    }
+
+    // Create the handler and let it inspect headers (virtual host, method validation, etc.).
+    currentHandler =
+        new LocalHttpRequestStage(parent, requestHandler, virtualHostLookup, connection);
+    HttpRequestStage.Decision decision = currentHandler.onHeaders(headers);
+    if (decision == HttpRequestStage.Decision.REJECT) {
+      // Handler prepared an error response. Pause reading, start writing.
+      parent.encourageWrites();
+      return ConnectionControl.PAUSE;
+    }
+
     if (!hasBody) {
-      return processRequest(headers);
+      currentHandler.onBodyComplete();
+      return ConnectionControl.PAUSE;
     }
 
-    // Body present — check upload policy.
-    HttpVirtualHost host = virtualHostLookup.apply(headers.getHeaders().get(HttpHeaderName.HOST));
-    if (host == null || !host.uploadPolicy().isAllowed(headers)) {
-      startBuffered(headers, StandardResponses.PAYLOAD_TOO_LARGE);
-      return ConnectionControl.CLOSE_INPUT;
-    }
-
-    // Set up body parser.
+    // Set up body framing parser.
     if (te != null && "chunked".equalsIgnoreCase(te)) {
       bodyParser = new ChunkedBodyParser();
     } else {
@@ -363,10 +236,14 @@ final class HttpServerStage implements Stage {
       try {
         contentLength = Long.parseLong(cl);
       } catch (NumberFormatException e) {
+        currentHandler.close();
+        currentHandler = null;
         startBuffered(headers, StandardResponses.BAD_REQUEST);
         return ConnectionControl.CLOSE_INPUT;
       }
       if (contentLength < 0 || contentLength > Integer.MAX_VALUE) {
+        currentHandler.close();
+        currentHandler = null;
         startBuffered(headers, StandardResponses.PAYLOAD_TOO_LARGE);
         return ConnectionControl.CLOSE_INPUT;
       }
@@ -502,7 +379,6 @@ final class HttpServerStage implements Stage {
     if (!bodyParser.isDone()) {
       return ConnectionControl.CONTINUE;
     }
-    HttpRequest headers = headersRequest;
     HttpRequestBodyParser bp = bodyParser;
     headersRequest = null;
     bodyParser = null;
@@ -510,15 +386,25 @@ final class HttpServerStage implements Stage {
     try {
       body = bp.getParsedBody();
     } catch (IOException e) {
-      startBuffered(headers, StandardResponses.BAD_REQUEST);
+      currentHandler.close();
+      currentHandler = null;
+      startBuffered(null, StandardResponses.BAD_REQUEST);
       return ConnectionControl.CLOSE_INPUT;
     }
-    return processRequest(headers.withBody(body));
+    // Feed the buffered body to the handler as a single chunk.
+    if (body instanceof HttpRequest.InMemoryBody inMem) {
+      byte[] bytes = inMem.toByteArray();
+      if (bytes.length > 0) {
+        currentHandler.onBodyChunk(bytes, 0, bytes.length);
+      }
+    }
+    currentHandler.onBodyComplete();
+    return ConnectionControl.PAUSE;
   }
 
   @Override
   public void inputClosed() {
-    if (responseGenerator == null) {
+    if (responseGenerator == null && currentHandler == null) {
       parent.close();
     } else {
       keepAlive = false;
@@ -577,13 +463,19 @@ final class HttpServerStage implements Stage {
         return ConnectionControl.PAUSE;
       }
     }
-    if (responseGenerator == null) {
+    // Generate response bytes. The responseGenerator takes priority (used for 100-continue
+    // and pre-handler error responses). Otherwise delegate to the current handler.
+    ContinuationToken token;
+    if (responseGenerator != null) {
+      outputBuffer.compact();
+      token = responseGenerator.generate(outputBuffer);
+      outputBuffer.flip();
+    } else if (currentHandler != null) {
+      token = currentHandler.generateResponse(outputBuffer);
+    } else {
       // Spurious write() call. Ignore.
       return ConnectionControl.PAUSE;
     }
-    outputBuffer.compact(); // prepare buffer for writing
-    ContinuationToken token = responseGenerator.generate(outputBuffer);
-    outputBuffer.flip(); // prepare buffer for reading
     switch (token) {
       case CONTINUE:
         return ConnectionControl.CONTINUE;
@@ -595,10 +487,17 @@ final class HttpServerStage implements Stage {
           parent.log("Sent 100 Continue, resuming body read");
           return readAndResume();
         }
-        requestListener.notifySent(
-            connection, responseGenerator.getRequest(), responseGenerator.getResponse());
-        responseGenerator = null;
-        processing = false;
+        if (currentHandler != null) {
+          requestListener.notifySent(
+              connection, currentHandler.getRequest(), currentHandler.getResponse());
+          keepAlive = currentHandler.keepAlive();
+          currentHandler = null;
+        } else {
+          requestListener.notifySent(
+              connection, responseGenerator.getRequest(), responseGenerator.getResponse());
+          keepAlive = responseGenerator.keepAlive();
+          responseGenerator = null;
+        }
         parent.log("Completed. keepAlive=%s", Boolean.valueOf(keepAlive));
         if (keepAlive) {
           return readAndResume();
@@ -630,6 +529,10 @@ final class HttpServerStage implements Stage {
 
   @Override
   public void close() {
+    if (currentHandler != null) {
+      currentHandler.close();
+      currentHandler = null;
+    }
     if (responseGenerator != null) {
       responseGenerator.close();
       responseGenerator = null;
@@ -679,67 +582,8 @@ final class HttpServerStage implements Stage {
     return ConnectionControl.PAUSE;
   }
 
-  private ConnectionControl processRequest(HttpRequest request) {
-    if (processing) {
-      return ConnectionControl.PAUSE;
-    }
-    processing = true;
-    parent.log("%s %s %s", request.getMethod(), request.getUri(), request.getVersion());
-    if (VERBOSE) {
-      System.out.println(CoreHelper.requestToString(request));
-    }
-    HttpVirtualHost host = virtualHostLookup.apply(request.getHeaders().get(HttpHeaderName.HOST));
-    if (host == null) {
-      startBuffered(request, StandardResponses.MISDIRECTED_REQUEST);
-      return ConnectionControl.CONTINUE;
-    } else {
-      String expectValue = request.getHeaders().get(HttpHeaderName.EXPECT);
-      if (expectValue != null && !"100-continue".equalsIgnoreCase(expectValue)) {
-        startBuffered(request, StandardResponses.EXPECTATION_FAILED);
-      } else if (request.getHeaders().get(HttpHeaderName.CONTENT_ENCODING) != null) {
-        startBuffered(request, StandardResponses.UNSUPPORTED_MEDIA_TYPE);
-      } else if (HttpMethodName.TRACE.equals(request.getMethod())) {
-        startBuffered(request, buildTraceResponse(request));
-      } else if ("*".equals(request.getUri())) {
-        if (HttpMethodName.OPTIONS.equals(request.getMethod())) {
-          startBuffered(request, StandardResponses.OK.withHeaderOverrides(OPTIONS_STAR_HEADERS));
-        } else {
-          startBuffered(request, StandardResponses.BAD_REQUEST);
-        }
-      } else {
-        HttpResponseWriter writer =
-            new HttpResponseWriterImpl(request, host.keepAlivePolicy(), host.compressionPolicy());
-        requestHandler.queueRequest(host.handler(), connection, request, writer);
-        return ConnectionControl.PAUSE;
-      }
-      return ConnectionControl.CONTINUE;
-    }
-  }
-
   private static boolean isAbsoluteUri(String uri) {
     return uri.startsWith("http://") || uri.startsWith("https://");
-  }
-
-  private static HttpResponse buildTraceResponse(HttpRequest request) {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    try (OutputStreamWriter writer = new OutputStreamWriter(baos, StandardCharsets.UTF_8)) {
-      writer
-          .append(request.getMethod())
-          .append(" ")
-          .append(request.getUri())
-          .append(" ")
-          .append(request.getVersion().toString());
-      writer.append("\r\n");
-      for (Map.Entry<String, String> e : request.getHeaders()) {
-        writer.append(e.getKey()).append(": ").append(e.getValue());
-        writer.append("\r\n");
-      }
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
-    return StandardResponses.OK
-        .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, "message/http"))
-        .withBody(baos.toByteArray());
   }
 
   private void startBuffered(HttpRequest request, HttpResponse responseToWrite) {

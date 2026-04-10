@@ -5,7 +5,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
+import de.ofahrt.catfish.http.HttpResponseGenerator.ContinuationToken;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.utils.ConnectionClosedException;
 import java.io.ByteArrayOutputStream;

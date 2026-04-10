@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.http;
 
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -9,7 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
 
-abstract class HttpResponseGenerator {
+public abstract class HttpResponseGenerator {
   protected static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
   protected static final String CRLF = "\r\n";
   protected static final byte[] CRLF_BYTES = CRLF.getBytes(StandardCharsets.UTF_8);

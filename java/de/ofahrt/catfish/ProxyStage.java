@@ -1,5 +1,6 @@
 package de.ofahrt.catfish;
 
+import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.HttpHeaderName;

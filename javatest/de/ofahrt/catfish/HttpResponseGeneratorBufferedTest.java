@@ -2,7 +2,8 @@ package de.ofahrt.catfish;
 
 import static org.junit.Assert.assertEquals;
 
-import de.ofahrt.catfish.HttpResponseGenerator.ContinuationToken;
+import de.ofahrt.catfish.http.HttpResponseGenerator;
+import de.ofahrt.catfish.http.HttpResponseGenerator.ContinuationToken;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.StandardResponses;

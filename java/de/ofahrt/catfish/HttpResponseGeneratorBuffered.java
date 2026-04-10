@@ -1,5 +1,6 @@
 package de.ofahrt.catfish;
 
+import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
