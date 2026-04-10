@@ -1,63 +1,52 @@
 load("@rules_java//java:defs.bzl", "java_library", "java_test")
 
-exports_files([
-    "test-cert.pem",
-    "test-key.pem",
-])
-
 java_library(
-    name = "test_helpers",
+    name = "test_helper",
     testonly = True,
     srcs = [
-        "CollectionsUtils.java",
-        "HashConflictGenerator.java",
-        "HttpParserTest.java",
-        "InputStreams.java",
-        "TestServlet.java",
+        "HttpResponseParserTest.java",
+        "TestingCatfishHttpClient.java",
     ],
     visibility = ["//javatest/de/ofahrt/catfish:__subpackages__"],
     deps = [
         "//java/de/ofahrt/catfish/bridge",
         "//java/de/ofahrt/catfish/model",
+        "//java/de/ofahrt/catfish/model/network",
         "//java/de/ofahrt/catfish/model/server",
-        "//java/de/ofahrt/catfish/utils",
+        "//javatest/de/ofahrt/catfish:test_helpers",
+        "//javatest/de/ofahrt/catfish/bridge:test_helper",
         "//third_party/junit",
         "//third_party/servlet-api",
     ],
 )
 
 java_test(
-    name = "catfish",
+    name = "client",
     srcs = glob(
         ["*.java"],
         exclude = [
-            "CollectionsUtils.java",
-            "HashConflictGenerator.java",
-            "HttpParserTest.java",
-            "InputStreams.java",
-            "TestServlet.java",
+            "HttpResponseParserTest.java",
+            "TestingCatfishHttpClient.java",
         ],
     ),
-    test_class = "de.ofahrt.catfish.CatfishTestSuite",
     classpath_resources = [
-        "test-cert.pem",
-        "test-key.pem",
+        "//javatest/de/ofahrt/catfish:test-cert.pem",
+        "//javatest/de/ofahrt/catfish:test-key.pem",
     ],
+    test_class = "de.ofahrt.catfish.client.ClientTestSuite",
     deps = [
+        ":test_helper",
         "//java/de/ofahrt/catfish",
-        "//java/de/ofahrt/catfish/bridge",
-        "//java/de/ofahrt/catfish/http",
-        "//java/de/ofahrt/catfish/internal",
+        "//java/de/ofahrt/catfish/client",
+        "//java/de/ofahrt/catfish/client/legacy",
         "//java/de/ofahrt/catfish/internal/network",
         "//java/de/ofahrt/catfish/model",
         "//java/de/ofahrt/catfish/model/network",
         "//java/de/ofahrt/catfish/model/server",
         "//java/de/ofahrt/catfish/ssl",
-        "//java/de/ofahrt/catfish/upload",
         "//java/de/ofahrt/catfish/utils",
-        ":test_helpers",
+        "//javatest/de/ofahrt/catfish:test_helpers",
         "//javatest/de/ofahrt/catfish/bridge:test_helper",
-        "//javatest/de/ofahrt/catfish/utils:test_helper",
         "//javatest/info/adams/junit",
     ],
 )

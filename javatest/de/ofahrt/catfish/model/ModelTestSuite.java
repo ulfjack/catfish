@@ -1,6 +1,5 @@
 package de.ofahrt.catfish.model;
 
-import de.ofahrt.catfish.model.network.ModelNetworkTestSuite;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 import org.junit.runners.Suite.SuiteClasses;
@@ -15,6 +14,5 @@ import org.junit.runners.Suite.SuiteClasses;
   RedirectResponseTest.class,
   SimpleHttpResponseBuilderTest.class,
   StandardResponsesTest.class,
-  ModelNetworkTestSuite.class,
 })
 public class ModelTestSuite {}
