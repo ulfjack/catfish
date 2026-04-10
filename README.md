@@ -42,19 +42,87 @@ HttpHandler handler = (connection, request, writer) -> {
 
 ```java
 CatfishHttpServer server = new CatfishHttpServer(eventListener);
-
-server.addHttpHost(
-    "localhost",
-    UploadPolicy.DENY,
-    ResponsePolicy.KEEP_ALIVE,
-    handler,
-    /* sslContext= */ null);
-
+server.addHttpHost("localhost", new HttpVirtualHost(handler));
 server.listenHttp(8080);
-server.listenHttps(8443);   // requires an SSLContext — see TLS section below
 ```
 
 Call `server.stop()` to shut down.
+
+## Request routing
+
+By default, all requests are handled locally by the `HttpHandler` registered for the matching
+virtual host. To forward requests to a remote origin instead, use a `ConnectHandler` with
+`listenConnectProxy`:
+
+```java
+server.listenConnectProxy(8080, new ConnectHandler() {
+    @Override
+    public ConnectDecision apply(String host, int port) {
+        // Forward proxy: client sends absolute URIs (e.g. GET http://example.com/path)
+        // or CONNECT requests. Decide per-request: forward, deny, or serve locally.
+        return ConnectDecision.tunnel(host, port);
+    }
+});
+```
+
+`ConnectHandler` has two routing methods:
+
+- **`apply(host, port)`** is called for explicit proxy requests: `CONNECT` method and
+  absolute-URI requests (e.g. `GET http://host/path`). The client asked to be proxied.
+- **`applyLocal(host, port)`** is called for normal requests with relative URIs
+  (e.g. `GET /path`). Override this to reverse-proxy selected requests to a remote origin.
+  Default: serve locally.
+
+Both methods return a `ConnectDecision`:
+
+| Decision | Effect |
+|---|---|
+| `serveLocally()` | Handle the request with the local `HttpHandler` (body is buffered) |
+| `tunnel(host, port)` | Forward the request to the specified origin (body is streamed) |
+| `deny()` | Reject with 403 Forbidden |
+| `intercept(host, port, ca)` | MITM-intercept a CONNECT tunnel (mirror the origin's TLS cert) |
+
+### Forward proxy
+
+A forward proxy handles requests where the client explicitly targets a remote origin.
+Set `HTTP_PROXY=http://localhost:8080/` on the client side:
+
+```java
+server.listenConnectProxy(8080, ConnectHandler.tunnelAll());
+```
+
+### Reverse proxy
+
+A reverse proxy forwards normal (relative-URI) requests to a backend server. Override
+`applyLocal`:
+
+```java
+server.listenConnectProxy(8080, new ConnectHandler() {
+    @Override
+    public ConnectDecision apply(String host, int port) {
+        return ConnectDecision.deny(); // no forward proxying
+    }
+
+    @Override
+    public ConnectDecision applyLocal(String host, int port) {
+        return ConnectDecision.tunnel("backend-server", 9090);
+    }
+});
+```
+
+### MITM interception
+
+For HTTPS traffic, `intercept` terminates the client's TLS connection with a dynamically
+generated certificate (mirroring the origin's cert) and forwards the decrypted requests
+to the origin:
+
+```java
+CertificateAuthority ca = ...;  // your root CA for signing leaf certs
+server.listenConnectProxy(8080, ConnectHandler.mitmAll(ca));
+```
+
+Each decrypted request inside the tunnel gets its own routing decision via `applyLocal`,
+so you can serve some requests locally and forward others.
 
 ## TLS / HTTPS
 
