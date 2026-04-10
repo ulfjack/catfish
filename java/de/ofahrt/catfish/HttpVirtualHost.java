@@ -13,9 +13,8 @@ public record HttpVirtualHost(
     UploadPolicy uploadPolicy,
     KeepAlivePolicy keepAlivePolicy,
     CompressionPolicy compressionPolicy,
-    SSLInfo sslInfo // null == HTTP-only
+    SSLInfo sslInfo // null == HTTP-only; deprecated — use HttpsListener instead
     ) {
-  /** Validates required fields; sslInfo is intentionally nullable (absent = HTTP-only). */
   public HttpVirtualHost {
     Objects.requireNonNull(handler, "handler");
     Objects.requireNonNull(uploadPolicy, "uploadPolicy");
@@ -23,7 +22,6 @@ public record HttpVirtualHost(
     Objects.requireNonNull(compressionPolicy, "compressionPolicy");
   }
 
-  /** Creates an HTTP-only host with default policies (DENY uploads, KEEP_ALIVE, no compression). */
   public HttpVirtualHost(HttpHandler handler) {
     this(handler, UploadPolicy.DENY, KeepAlivePolicy.KEEP_ALIVE, CompressionPolicy.NONE, null);
   }
@@ -43,13 +41,15 @@ public record HttpVirtualHost(
         handler, uploadPolicy, keepAlivePolicy, Objects.requireNonNull(p), sslInfo);
   }
 
-  /** Enables HTTPS. If never called, the host remains HTTP-only. */
+  /**
+   * @deprecated Use {@link HttpsListener} instead.
+   */
+  @Deprecated
   public HttpVirtualHost ssl(SSLInfo info) {
     return new HttpVirtualHost(
         handler, uploadPolicy, keepAlivePolicy, compressionPolicy, Objects.requireNonNull(info));
   }
 
-  /** Package-private: used by CatfishHttpServer to extract the raw SSLContext for TLS. */
   SSLContext sslContext() {
     return sslInfo != null ? sslInfo.sslContext() : null;
   }

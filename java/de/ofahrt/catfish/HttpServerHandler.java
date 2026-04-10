@@ -4,24 +4,36 @@ import de.ofahrt.catfish.internal.network.NetworkEngine.NetworkHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
 import java.nio.ByteBuffer;
+import java.util.function.Function;
 
 final class HttpServerHandler implements NetworkHandler {
   private final CatfishHttpServer server;
-  private final boolean ssl;
+  private final Function<String, HttpVirtualHost> virtualHostLookup;
+  private final SslServerStage.SSLContextProvider sslContextProvider;
 
-  HttpServerHandler(CatfishHttpServer server, boolean ssl) {
+  /** Plain HTTP handler. */
+  HttpServerHandler(CatfishHttpServer server, Function<String, HttpVirtualHost> virtualHostLookup) {
+    this(server, virtualHostLookup, null);
+  }
+
+  /** HTTPS handler. */
+  HttpServerHandler(
+      CatfishHttpServer server,
+      Function<String, HttpVirtualHost> virtualHostLookup,
+      SslServerStage.SSLContextProvider sslContextProvider) {
     this.server = server;
-    this.ssl = ssl;
+    this.virtualHostLookup = virtualHostLookup;
+    this.sslContextProvider = sslContextProvider;
   }
 
   @Override
   public boolean usesSsl() {
-    return ssl;
+    return sslContextProvider != null;
   }
 
   @Override
   public Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer) {
-    if (ssl) {
+    if (sslContextProvider != null) {
       return new SslServerStage(
           pipeline,
           (innerPipeline, plainIn, plainOut) ->
@@ -29,10 +41,10 @@ final class HttpServerHandler implements NetworkHandler {
                   innerPipeline,
                   server::queueRequest,
                   (conn, req, res) -> server.notifySent(conn, req, res, 0),
-                  server::determineHttpVirtualHost,
+                  virtualHostLookup,
                   plainIn,
                   plainOut),
-          server::getSSLContext,
+          sslContextProvider,
           server.executor,
           inputBuffer,
           outputBuffer);
@@ -41,7 +53,7 @@ final class HttpServerHandler implements NetworkHandler {
           pipeline,
           server::queueRequest,
           (conn, req, res) -> server.notifySent(conn, req, res, 0),
-          server::determineHttpVirtualHost,
+          virtualHostLookup,
           inputBuffer,
           outputBuffer);
     }

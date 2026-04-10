@@ -66,6 +66,10 @@ public final class CatfishHttpServer {
     this.engine = new NetworkEngine(serverListener);
   }
 
+  /**
+   * @deprecated Use {@link HttpListener} or {@link HttpsListener} instead.
+   */
+  @Deprecated
   public void addHttpHost(String name, HttpVirtualHost host) {
     if (host.sslInfo() != null && !host.sslInfo().covers(name)) {
       throw new IllegalArgumentException("Certificate does not cover host '" + name + "'");
@@ -151,53 +155,102 @@ public final class CatfishHttpServer {
     return actual != null ? actual : def;
   }
 
+  public void listen(HttpListener listener) throws IOException, InterruptedException {
+    listener.listen(this);
+  }
+
+  public void listen(HttpsListener listener) throws IOException, InterruptedException {
+    listener.listen(this);
+  }
+
+  NetworkEngine engine() {
+    return engine;
+  }
+
   public void stop() throws InterruptedException {
     engine.shutdown();
   }
 
+  /**
+   * @deprecated Use {@link #listen(HttpListener)} instead.
+   */
+  @Deprecated
   public void listenConnectProxy(int port, ConnectHandler handler)
       throws IOException, InterruptedException {
-    engine.listenAll(
-        port,
-        new MixedServerHandler(this, handler, (SSLSocketFactory) SSLSocketFactory.getDefault()));
+    engine.listenAll(port, new MixedServerHandler(this, this::determineHttpVirtualHost, handler));
   }
 
+  /**
+   * @deprecated Use {@link #listen(HttpListener)} instead.
+   */
+  @Deprecated
   public void listenConnectProxyLocal(int port, ConnectHandler handler)
       throws IOException, InterruptedException {
-    listenConnectProxyLocal(port, handler, (SSLSocketFactory) SSLSocketFactory.getDefault());
+    engine.listenLocalhost(
+        port, new MixedServerHandler(this, this::determineHttpVirtualHost, handler));
   }
 
+  /**
+   * @deprecated Use {@link #listen(HttpListener)} instead.
+   */
+  @Deprecated
   public void listenConnectProxyLocal(
       int port, ConnectHandler handler, SSLSocketFactory originFactory)
       throws IOException, InterruptedException {
-    engine.listenLocalhost(port, new MixedServerHandler(this, handler, originFactory));
+    engine.listenLocalhost(
+        port, new MixedServerHandler(this, this::determineHttpVirtualHost, handler, originFactory));
   }
 
+  /**
+   * @deprecated Use {@link #listen(HttpListener)} instead.
+   */
+  @Deprecated
   public void listenHttpLocal(int port) throws IOException, InterruptedException {
-    engine.listenLocalhost(port, new HttpServerHandler(this, /* ssl= */ false));
+    engine.listenLocalhost(port, new HttpServerHandler(this, this::determineHttpVirtualHost));
   }
 
+  /**
+   * @deprecated Use {@link #listen(HttpsListener)} instead.
+   */
+  @Deprecated
   public void listenHttpsLocal(int port) throws IOException, InterruptedException {
-    engine.listenLocalhost(port, new HttpServerHandler(this, /* ssl= */ true));
+    engine.listenLocalhost(
+        port, new HttpServerHandler(this, this::determineHttpVirtualHost, this::getSSLContext));
   }
 
+  /**
+   * @deprecated Use {@link #listen(HttpListener)} instead.
+   */
+  @Deprecated
   public void listenHttp(int port) throws IOException, InterruptedException {
-    engine.listenAll(port, new HttpServerHandler(this, /* ssl= */ false));
+    engine.listenAll(port, new HttpServerHandler(this, this::determineHttpVirtualHost));
   }
 
+  /**
+   * @deprecated Use {@link #listen(HttpsListener)} instead.
+   */
+  @Deprecated
   public void listenHttps(int port) throws IOException, InterruptedException {
-    engine.listenAll(port, new HttpServerHandler(this, /* ssl= */ true));
+    engine.listenAll(
+        port, new HttpServerHandler(this, this::determineHttpVirtualHost, this::getSSLContext));
   }
 
+  /**
+   * @deprecated Use {@link #listen(HttpListener)} instead.
+   */
+  @Deprecated
   public void listenHttpUnixSocket(Path path) throws IOException, InterruptedException {
-    engine.listenUnixSocket(path, new HttpServerHandler(this, /* ssl= */ false));
+    engine.listenUnixSocket(path, new HttpServerHandler(this, this::determineHttpVirtualHost));
   }
 
+  /**
+   * @deprecated Use {@link #listen(HttpListener)} instead.
+   */
+  @Deprecated
   public void listenConnectProxyUnixSocket(Path path, ConnectHandler handler)
       throws IOException, InterruptedException {
     engine.listenUnixSocket(
-        path,
-        new MixedServerHandler(this, handler, (SSLSocketFactory) SSLSocketFactory.getDefault()));
+        path, new MixedServerHandler(this, this::determineHttpVirtualHost, handler));
   }
 
   public int getOpenConnections() {
