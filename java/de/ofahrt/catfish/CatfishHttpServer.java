@@ -6,22 +6,17 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
-import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSocketFactory;
 
 /** A <code>CatfishHttpServer</code> manages a HTTP-Server. */
 public final class CatfishHttpServer {
@@ -30,8 +25,6 @@ public final class CatfishHttpServer {
 
     void reject();
   }
-
-  private final ConcurrentHashMap<String, HttpVirtualHost> hosts = new ConcurrentHashMap<>();
 
   private final ArrayList<HttpServerListener> listeners = new ArrayList<>();
   private final NetworkEngine engine;
@@ -66,17 +59,6 @@ public final class CatfishHttpServer {
     this.engine = new NetworkEngine(serverListener);
   }
 
-  /**
-   * @deprecated Use {@link HttpEndpoint} or {@link HttpsEndpoint} instead.
-   */
-  @Deprecated
-  public void addHttpHost(String name, HttpVirtualHost host) {
-    if (host.sslInfo() != null && !host.sslInfo().covers(name)) {
-      throw new IllegalArgumentException("Certificate does not cover host '" + name + "'");
-    }
-    hosts.put(name, host);
-  }
-
   public void addRequestListener(HttpServerListener l) {
     synchronized (listeners) {
       listeners.add(l);
@@ -107,11 +89,6 @@ public final class CatfishHttpServer {
     }
   }
 
-  SSLContext getSSLContext(String host) {
-    HttpVirtualHost domain = host == null ? null : hosts.get(host);
-    return domain != null ? domain.sslContext() : null;
-  }
-
   void queueRequest(
       HttpHandler httpHandler,
       Connection connection,
@@ -140,21 +117,6 @@ public final class CatfishHttpServer {
         });
   }
 
-  HttpVirtualHost determineHttpVirtualHost(String hostHeader) {
-    HttpVirtualHost def = hosts.get("default");
-    if (hostHeader == null) {
-      return def;
-    }
-    if (hostHeader.indexOf(':') >= 0) {
-      hostHeader = hostHeader.substring(0, hostHeader.indexOf(':'));
-    }
-    if (hostHeader.endsWith(".localhost")) {
-      hostHeader = hostHeader.substring(0, hostHeader.length() - ".localhost".length());
-    }
-    HttpVirtualHost actual = hosts.get(hostHeader);
-    return actual != null ? actual : def;
-  }
-
   public void listen(HttpEndpoint listener) throws IOException, InterruptedException {
     listener.listen(this);
   }
@@ -169,88 +131,6 @@ public final class CatfishHttpServer {
 
   public void stop() throws InterruptedException {
     engine.shutdown();
-  }
-
-  /**
-   * @deprecated Use {@link #listen(HttpEndpoint)} instead.
-   */
-  @Deprecated
-  public void listenConnectProxy(int port, ConnectHandler handler)
-      throws IOException, InterruptedException {
-    engine.listenAll(port, new MixedServerHandler(this, this::determineHttpVirtualHost, handler));
-  }
-
-  /**
-   * @deprecated Use {@link #listen(HttpEndpoint)} instead.
-   */
-  @Deprecated
-  public void listenConnectProxyLocal(int port, ConnectHandler handler)
-      throws IOException, InterruptedException {
-    engine.listenLocalhost(
-        port, new MixedServerHandler(this, this::determineHttpVirtualHost, handler));
-  }
-
-  /**
-   * @deprecated Use {@link #listen(HttpEndpoint)} instead.
-   */
-  @Deprecated
-  public void listenConnectProxyLocal(
-      int port, ConnectHandler handler, SSLSocketFactory originFactory)
-      throws IOException, InterruptedException {
-    engine.listenLocalhost(
-        port, new MixedServerHandler(this, this::determineHttpVirtualHost, handler, originFactory));
-  }
-
-  /**
-   * @deprecated Use {@link #listen(HttpEndpoint)} instead.
-   */
-  @Deprecated
-  public void listenHttpLocal(int port) throws IOException, InterruptedException {
-    engine.listenLocalhost(port, new HttpServerHandler(this, this::determineHttpVirtualHost));
-  }
-
-  /**
-   * @deprecated Use {@link #listen(HttpsEndpoint)} instead.
-   */
-  @Deprecated
-  public void listenHttpsLocal(int port) throws IOException, InterruptedException {
-    engine.listenLocalhost(
-        port, new HttpServerHandler(this, this::determineHttpVirtualHost, this::getSSLContext));
-  }
-
-  /**
-   * @deprecated Use {@link #listen(HttpEndpoint)} instead.
-   */
-  @Deprecated
-  public void listenHttp(int port) throws IOException, InterruptedException {
-    engine.listenAll(port, new HttpServerHandler(this, this::determineHttpVirtualHost));
-  }
-
-  /**
-   * @deprecated Use {@link #listen(HttpsEndpoint)} instead.
-   */
-  @Deprecated
-  public void listenHttps(int port) throws IOException, InterruptedException {
-    engine.listenAll(
-        port, new HttpServerHandler(this, this::determineHttpVirtualHost, this::getSSLContext));
-  }
-
-  /**
-   * @deprecated Use {@link #listen(HttpEndpoint)} instead.
-   */
-  @Deprecated
-  public void listenHttpUnixSocket(Path path) throws IOException, InterruptedException {
-    engine.listenUnixSocket(path, new HttpServerHandler(this, this::determineHttpVirtualHost));
-  }
-
-  /**
-   * @deprecated Use {@link #listen(HttpEndpoint)} instead.
-   */
-  @Deprecated
-  public void listenConnectProxyUnixSocket(Path path, ConnectHandler handler)
-      throws IOException, InterruptedException {
-    engine.listenUnixSocket(
-        path, new MixedServerHandler(this, this::determineHttpVirtualHost, handler));
   }
 
   public int getOpenConnections() {
