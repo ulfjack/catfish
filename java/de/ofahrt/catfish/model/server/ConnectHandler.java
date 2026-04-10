@@ -7,8 +7,21 @@ import java.util.UUID;
 
 @FunctionalInterface
 public interface ConnectHandler {
-  /** Called on the executor thread during CONNECT. May block (e.g. DNS lookup, DB check). */
+  /**
+   * Called for proxy requests (CONNECT method, absolute-URI forward proxy). The client explicitly
+   * asked to proxy this request. May block (e.g. DNS lookup, DB check). Runs on the executor
+   * thread.
+   */
   ConnectDecision apply(String host, int port);
+
+  /**
+   * Called for normal (non-proxy) requests with relative URIs. The server decides whether to
+   * handle them locally or reverse-proxy them to a remote origin. Default: serve locally.
+   * May block. Runs on the executor thread.
+   */
+  default ConnectDecision applyLocal(String host, int port) {
+    return ConnectDecision.serveLocally();
+  }
 
   /** Called on the executor thread after a leaf cert is obtained (INTERCEPT only). */
   default void onCertificateReady(String host, int port) {}

@@ -42,8 +42,10 @@ final class ProxyRequestStage implements HttpRequestStage {
   private final PipeBuffer bodyPipe = new PipeBuffer();
   private HttpResponseGeneratorStreamed responseGen;
   private boolean keepAlive;
-  // Track whether onHeaders resolved the origin successfully.
-  private boolean originResolved;
+  // Bytes that couldn't be written to the pipe in onBodyChunk (pipe was full).
+  private byte[] pendingData;
+  private int pendingOffset;
+  private int pendingLength;
 
   ProxyRequestStage(
       Pipeline parent, Executor executor, ConnectHandler handler, OriginResolver originResolver) {
@@ -69,7 +71,6 @@ final class ProxyRequestStage implements HttpRequestStage {
       return Decision.REJECT;
     }
 
-    originResolved = true;
     OriginForwarder forwarder =
         new OriginForwarder(
             parent,
@@ -85,17 +86,37 @@ final class ProxyRequestStage implements HttpRequestStage {
               keepAlive = ka;
               parent.encourageWrites();
             },
-            () -> parent.queue(parent::encourageReads));
+            () ->
+                parent.queue(
+                    () -> {
+                      flushPendingBytes();
+                      parent.encourageReads();
+                    }));
     executor.execute(() -> forwarder.run(headers));
     return Decision.CONTINUE;
   }
 
   @Override
   public ConnectionControl onBodyChunk(byte[] data, int offset, int length) {
+    // Flush any pending bytes from a previous partial write first.
+    if (pendingData != null) {
+      int written = bodyPipe.tryWrite(pendingData, pendingOffset, pendingLength);
+      if (written < pendingLength) {
+        pendingOffset += written;
+        pendingLength -= written;
+        return ConnectionControl.PAUSE;
+      }
+      pendingData = null;
+    }
     int written = bodyPipe.tryWrite(data, offset, length);
     if (written < length) {
-      // Pipe full — tell HttpServerStage to pause reads. The OriginForwarder's pipeSpaceCallback
-      // will re-enable reads when it drains the pipe.
+      // Pipe full — save the remainder and tell HttpServerStage to pause reads.
+      // The OriginForwarder's pipeSpaceCallback will re-enable reads when it drains the pipe.
+      int remaining = length - written;
+      pendingData = new byte[remaining];
+      System.arraycopy(data, offset + written, pendingData, 0, remaining);
+      pendingOffset = 0;
+      pendingLength = remaining;
       return ConnectionControl.PAUSE;
     }
     return ConnectionControl.CONTINUE;
@@ -103,6 +124,13 @@ final class ProxyRequestStage implements HttpRequestStage {
 
   @Override
   public void onBodyComplete() {
+    // Flush any remaining pending bytes. At this point the body is fully parsed, so the pipe
+    // should have been drained by the OriginForwarder. If there are still pending bytes, write
+    // what we can — the pipe close will signal EOF to the reader.
+    if (pendingData != null) {
+      bodyPipe.tryWrite(pendingData, pendingOffset, pendingLength);
+      pendingData = null;
+    }
     bodyPipe.closeWrite();
   }
 
@@ -139,6 +167,18 @@ final class ProxyRequestStage implements HttpRequestStage {
     HttpResponseGeneratorStreamed gen = responseGen;
     if (gen != null) {
       gen.close();
+    }
+  }
+
+  /** Flush any pending bytes that couldn't be written to the pipe on the last onBodyChunk call. */
+  private void flushPendingBytes() {
+    if (pendingData != null) {
+      int written = bodyPipe.tryWrite(pendingData, pendingOffset, pendingLength);
+      pendingOffset += written;
+      pendingLength -= written;
+      if (pendingLength == 0) {
+        pendingData = null;
+      }
     }
   }
 

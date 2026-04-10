@@ -2,9 +2,13 @@ package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
+import de.ofahrt.catfish.model.server.RequestAction;
+import de.ofahrt.catfish.model.server.RequestOutcome;
 import de.ofahrt.catfish.ssl.CertificateAuthority;
 import de.ofahrt.catfish.ssl.SSLInfo;
 import java.io.IOException;
@@ -13,6 +17,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLContext;
@@ -36,8 +41,16 @@ final class ConnectStage implements Stage {
    */
   @FunctionalInterface
   interface LocalStageFactory {
-    Stage create(Pipeline parent, ByteBuffer inputBuffer, ByteBuffer outputBuffer);
+    Stage create(
+        Pipeline parent,
+        ByteBuffer inputBuffer,
+        ByteBuffer outputBuffer,
+        ConnectHandler connectHandler,
+        Executor executor);
   }
+
+  private static final ConnectHandler SERVE_LOCALLY =
+      (host, port) -> ConnectDecision.serveLocally();
 
   private enum ConnectState {
     CONNECTING,
@@ -274,22 +287,64 @@ final class ConnectStage implements Stage {
       }
       innerFactory =
           (innerPipeline, plainIn, plainOut) ->
-              wrapWithOnClose(localStageFactory.create(innerPipeline, plainIn, plainOut), onClose);
+              wrapWithOnClose(
+                  localStageFactory.create(
+                      innerPipeline, plainIn, plainOut, SERVE_LOCALLY, /* executor= */ null),
+                  onClose);
     } else {
-      ProxyStage.Origin fixedOrigin =
-          new ProxyStage.Origin(originHost, originPort, true, originSocketFactory);
+      // MITM intercept: create an HttpServerStage as the inner stage. Its ConnectHandler's
+      // applyLocal forwards all relative-URI requests to the CONNECT target origin.
+      String capturedOriginHost = originHost;
+      int capturedOriginPort = originPort;
+      ConnectHandler mitmHandler =
+          new ConnectHandler() {
+            @Override
+            public ConnectDecision apply(String host, int port) {
+              return handler.apply(host, port);
+            }
+
+            @Override
+            public ConnectDecision applyLocal(String host, int port) {
+              return ConnectDecision.tunnel(capturedOriginHost, capturedOriginPort);
+            }
+
+            @Override
+            public RequestAction handleRequest(
+                UUID requestId, String oh, int op, HttpRequest request) {
+              return handler.handleRequest(requestId, oh, op, request);
+            }
+
+            @Override
+            public void onConnectFailed(String host, int port, Exception cause) {
+              handler.onConnectFailed(host, port, cause);
+            }
+
+            @Override
+            public void onConnectComplete(String host, int port) {
+              handler.onConnectComplete(host, port);
+            }
+
+            @Override
+            public void onResponse(
+                UUID requestId, String oh, int op, HttpRequest request, HttpResponse response) {
+              handler.onResponse(requestId, oh, op, request, response);
+            }
+
+            @Override
+            public void onRequestComplete(
+                UUID requestId, String oh, int op, HttpRequest request, RequestOutcome outcome) {
+              handler.onRequestComplete(requestId, oh, op, request, outcome);
+            }
+          };
+      if (localStageFactory == null) {
+        throw new IllegalStateException(
+            "MITM intercept requires a LocalStageFactory; none was provided");
+      }
       innerFactory =
           (innerPipeline, plainIn, plainOut) ->
-              new ProxyStage(
-                  innerPipeline,
-                  plainIn,
-                  plainOut,
-                  executor,
-                  handler,
-                  (req) -> fixedOrigin,
-                  onClose,
-                  /* firstRequest= */ null,
-                  /* keepAliveStageFactory= */ null);
+              wrapWithOnClose(
+                  localStageFactory.create(innerPipeline, plainIn, plainOut, mitmHandler, executor),
+                  onClose);
     }
 
     SSLContext capturedCtx = fakeCtx;

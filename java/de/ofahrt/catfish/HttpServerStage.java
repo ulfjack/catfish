@@ -84,6 +84,8 @@ final class HttpServerStage implements Stage {
   private HttpRequestStage currentHandler;
   // Set after header parsing when the request has a body to buffer.
   private HttpRequestBodyParser bodyParser;
+  // For Content-Length bodies: remaining bytes to stream to the handler. -1 means not active.
+  private long contentLengthRemaining = -1;
   private HttpRequest headersRequest;
   // Non-null while waiting for ConnectHandler.apply() to return the routing decision for an
   // absolute-URI (forward-proxy) request. While set, read() returns PAUSE so that body bytes
@@ -159,8 +161,8 @@ final class HttpServerStage implements Stage {
       return ConnectionControl.PAUSE;
     }
 
-    // Phase 2: body parsing (if active).
-    if (bodyParser != null) {
+    // Phase 2: body parsing/streaming (if active).
+    if (bodyParser != null || contentLengthRemaining >= 0) {
       return readBody();
     }
 
@@ -229,7 +231,7 @@ final class HttpServerStage implements Stage {
       return ConnectionControl.PAUSE;
     }
 
-    // Set up body framing parser.
+    // Set up body framing.
     if (te != null && "chunked".equalsIgnoreCase(te)) {
       bodyParser = new ChunkedBodyParser();
     } else {
@@ -248,7 +250,8 @@ final class HttpServerStage implements Stage {
         startBuffered(headers, StandardResponses.PAYLOAD_TOO_LARGE);
         return ConnectionControl.CLOSE_INPUT;
       }
-      bodyParser = new InMemoryEntityParser((int) contentLength);
+      // Stream Content-Length bodies directly to the handler via a byte counter (no buffering).
+      contentLengthRemaining = contentLength;
     }
     headersRequest = headers;
 
@@ -269,42 +272,59 @@ final class HttpServerStage implements Stage {
    * (forward proxy). Relative URIs are served locally.
    */
   private ConnectionControl beginRouting(HttpRequest headers) {
-    if (!isAbsoluteUri(headers.getUri())) {
-      // Relative URI — serve locally (no routing decision needed).
-      return applyRoutingDecision(headers, ConnectDecision.serveLocally());
-    }
-
-    // Absolute URI — extract host/port and route via ConnectHandler.
+    // Extract host/port for the routing decision.
     String host;
     int port;
-    try {
-      URI uri = new URI(headers.getUri());
-      if (uri.getHost() == null) {
+    boolean isProxy;
+    if (isAbsoluteUri(headers.getUri())) {
+      isProxy = true;
+      try {
+        URI uri = new URI(headers.getUri());
+        if (uri.getHost() == null) {
+          startBuffered(headers, StandardResponses.BAD_REQUEST);
+          return ConnectionControl.CLOSE_INPUT;
+        }
+        host = uri.getHost();
+        boolean useTls = "https".equalsIgnoreCase(uri.getScheme());
+        int explicitPort = uri.getPort();
+        port = explicitPort >= 0 ? explicitPort : (useTls ? 443 : 80);
+      } catch (URISyntaxException e) {
         startBuffered(headers, StandardResponses.BAD_REQUEST);
         return ConnectionControl.CLOSE_INPUT;
       }
-      host = uri.getHost();
-      boolean useTls = "https".equalsIgnoreCase(uri.getScheme());
-      int explicitPort = uri.getPort();
-      port = explicitPort >= 0 ? explicitPort : (useTls ? 443 : 80);
-    } catch (URISyntaxException e) {
-      startBuffered(headers, StandardResponses.BAD_REQUEST);
-      return ConnectionControl.CLOSE_INPUT;
+    } else {
+      isProxy = false;
+      String hostHeader = headers.getHeaders().get(HttpHeaderName.HOST);
+      if (hostHeader != null && hostHeader.contains(":")) {
+        int colonIdx = hostHeader.lastIndexOf(':');
+        host = hostHeader.substring(0, colonIdx);
+        try {
+          port = Integer.parseInt(hostHeader.substring(colonIdx + 1));
+        } catch (NumberFormatException e) {
+          host = hostHeader;
+          port = 80;
+        }
+      } else {
+        host = hostHeader != null ? hostHeader : "localhost";
+        port = 80;
+      }
     }
 
     if (executor != null) {
-      // Async path: dispatch to executor thread (ConnectHandler.apply may block).
+      // Async path: dispatch to executor thread (apply/applyLocal may block).
       pendingAbsoluteUriRequest = headers;
       String finalHost = host;
       int finalPort = port;
-      executor.execute(() -> runRoutingDecision(finalHost, finalPort));
+      boolean finalIsProxy = isProxy;
+      executor.execute(() -> runRoutingDecision(finalHost, finalPort, finalIsProxy));
       return ConnectionControl.PAUSE;
     }
 
-    // Synchronous path: call apply inline.
+    // Synchronous path: call inline.
     ConnectDecision decision;
     try {
-      decision = connectHandler.apply(host, port);
+      decision =
+          isProxy ? connectHandler.apply(host, port) : connectHandler.applyLocal(host, port);
     } catch (Exception e) {
       startBuffered(headers, StandardResponses.FORBIDDEN);
       return ConnectionControl.CLOSE_INPUT;
@@ -317,9 +337,10 @@ final class HttpServerStage implements Stage {
    * result in the pending fields, and wakes the NIO thread via {@link Pipeline#encourageWrites} so
    * that {@link #write} consumes the decision from inside {@code handleEvent}.
    */
-  private void runRoutingDecision(String host, int port) {
+  private void runRoutingDecision(String host, int port, boolean isProxy) {
     try {
-      ConnectDecision decision = connectHandler.apply(host, port);
+      ConnectDecision decision =
+          isProxy ? connectHandler.apply(host, port) : connectHandler.applyLocal(host, port);
       pendingRoutingDecision = decision != null ? decision : ConnectDecision.deny();
     } catch (Exception e) {
       pendingRoutingFailed = true;
@@ -389,7 +410,8 @@ final class HttpServerStage implements Stage {
     if (host == null || port <= 0) {
       throw new Exception("Decision does not specify origin for relative URI");
     }
-    boolean useTls = decision.isIntercept() || decision.isLocalIntercept();
+    // Use the configured SSLSocketFactory if available — for MITM, the origin is behind TLS.
+    boolean useTls = sslFactory != null;
     SocketFactory factory = useTls ? sslFactory : SocketFactory.getDefault();
     return new ProxyRequestStage.Origin(host, port, useTls, factory);
   }
@@ -412,6 +434,27 @@ final class HttpServerStage implements Stage {
     if (!inputBuffer.hasRemaining()) {
       return ConnectionControl.CONTINUE;
     }
+    // Content-Length: stream raw bytes directly to the handler (no parser buffering).
+    if (contentLengthRemaining >= 0) {
+      int toFeed = (int) Math.min(inputBuffer.remaining(), contentLengthRemaining);
+      if (toFeed > 0) {
+        ConnectionControl cc =
+            currentHandler.onBodyChunk(inputBuffer.array(), inputBuffer.position(), toFeed);
+        inputBuffer.position(inputBuffer.position() + toFeed);
+        contentLengthRemaining -= toFeed;
+        if (cc == ConnectionControl.PAUSE && contentLengthRemaining > 0) {
+          return ConnectionControl.PAUSE;
+        }
+      }
+      if (contentLengthRemaining <= 0) {
+        contentLengthRemaining = -1;
+        headersRequest = null;
+        currentHandler.onBodyComplete();
+        return ConnectionControl.PAUSE;
+      }
+      return ConnectionControl.CONTINUE;
+    }
+    // Chunked: use the parser to decode framing and buffer, deliver the full body on completion.
     int consumed =
         bodyParser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.remaining());
     inputBuffer.position(inputBuffer.position() + consumed);
@@ -430,7 +473,6 @@ final class HttpServerStage implements Stage {
       startBuffered(null, StandardResponses.BAD_REQUEST);
       return ConnectionControl.CLOSE_INPUT;
     }
-    // Feed the buffered body to the handler as a single chunk.
     if (body instanceof HttpRequest.InMemoryBody inMem) {
       byte[] bytes = inMem.toByteArray();
       if (bytes.length > 0) {
@@ -579,8 +621,18 @@ final class HttpServerStage implements Stage {
     // dispatcher, but with its own buffers and no connect handler (nested CONNECT would be
     // meaningless once TLS is already terminated).
     ConnectStage.LocalStageFactory localFactory =
-        (p, in, out) ->
-            new HttpServerStage(p, requestHandler, requestListener, virtualHostLookup, in, out);
+        (p, in, out, ch, ex) ->
+            new HttpServerStage(
+                p,
+                requestHandler,
+                requestListener,
+                virtualHostLookup,
+                ch != null ? ch : SERVE_LOCALLY,
+                originSocketFactory,
+                sslInfoCache,
+                ex,
+                in,
+                out);
     parent.replaceWith(
         new ConnectStage(
             parent,
