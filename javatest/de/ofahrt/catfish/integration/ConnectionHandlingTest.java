@@ -4,7 +4,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
 import de.ofahrt.catfish.CatfishHttpServer;
+import de.ofahrt.catfish.HttpListener;
 import de.ofahrt.catfish.HttpVirtualHost;
+import de.ofahrt.catfish.HttpsListener;
 import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.client.CatfishHttpClient;
 import de.ofahrt.catfish.client.legacy.HttpConnection;
@@ -73,13 +75,13 @@ public class ConnectionHandlingTest {
             });
     HttpVirtualHost host = new HttpVirtualHost(handler);
     if (startSsl) {
-      host = host.ssl(TestHelper.getSSLInfo());
-    }
-    server.addHttpHost(HTTP_SERVER_NAME, host);
-    if (startSsl) {
-      server.listenHttpsLocal(HTTPS_PORT);
+      HttpsListener listener =
+          HttpsListener.onLocalhost(HTTPS_PORT)
+              .addHost(HTTP_SERVER_NAME, host, TestHelper.getSSLInfo());
+      server.listen(listener);
     } else {
-      server.listenHttpLocal(HTTP_PORT);
+      HttpListener listener = HttpListener.onLocalhost(HTTP_PORT).addHost(HTTP_SERVER_NAME, host);
+      server.listen(listener);
     }
   }
 
@@ -104,8 +106,8 @@ public class ConnectionHandlingTest {
               }
             });
     HttpVirtualHost host = new HttpVirtualHost(handler).uploadPolicy(uploadPolicy);
-    server.addHttpHost(HTTP_SERVER_NAME, host);
-    server.listenHttpLocal(HTTP_PORT);
+    HttpListener listener = HttpListener.onLocalhost(HTTP_PORT).addHost(HTTP_SERVER_NAME, host);
+    server.listen(listener);
   }
 
   @After

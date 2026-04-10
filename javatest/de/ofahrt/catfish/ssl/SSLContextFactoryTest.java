@@ -6,9 +6,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpVirtualHost;
-import de.ofahrt.catfish.model.network.NetworkEventListener;
+import de.ofahrt.catfish.HttpsListener;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import java.io.File;
 import org.junit.Test;
@@ -68,29 +67,16 @@ public class SSLContextFactoryTest {
   }
 
   @Test
-  public void addHttpHost_rejectsWrongCert() throws Exception {
+  public void httpsListenerAddHost_rejectsWrongCert() throws Exception {
     // test.cert.pem has CN=testhost; registering "wronghost" must throw
     File keyFile = new File("javatest/de/ofahrt/catfish/ssl/test.key.pem");
     File certFile = new File("javatest/de/ofahrt/catfish/ssl/test.cert.pem");
     SSLInfo sslInfo = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
 
-    CatfishHttpServer server =
-        new CatfishHttpServer(
-            new NetworkEventListener() {
-              @Override
-              public void shutdown() {}
-
-              @Override
-              public void portOpened(int port, boolean ssl) {}
-
-              @Override
-              public void notifyInternalError(
-                  de.ofahrt.catfish.model.network.Connection id, Throwable t) {}
-            });
     HttpHandler handler = (connection, request, responseWriter) -> {};
 
     try {
-      server.addHttpHost("wronghost", new HttpVirtualHost(handler).ssl(sslInfo));
+      HttpsListener.onLocalhost(0).addHost("wronghost", new HttpVirtualHost(handler), sslInfo);
       fail("Expected IllegalArgumentException");
     } catch (IllegalArgumentException e) {
       assertTrue(e.getMessage().contains("wronghost"));

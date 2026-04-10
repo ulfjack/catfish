@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.CatfishHttpServer;
+import de.ofahrt.catfish.HttpListener;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpHeaderName;
@@ -44,14 +45,17 @@ public class MixedServerIntegrationTest {
   @Before
   public void startServer() throws Exception {
     server = newServer();
-    server.addHttpHost(
-        "localhost",
-        new HttpVirtualHost(
-            (conn, request, writer) ->
-                writer.commitBuffered(
-                    StandardResponses.OK.withBody(
-                        RESPONSE_BODY.getBytes(StandardCharsets.UTF_8)))));
-    server.listenConnectProxyLocal(MIXED_PORT, ConnectHandler.tunnelAll());
+    HttpListener listener =
+        HttpListener.onLocalhost(MIXED_PORT)
+            .addHost(
+                "localhost",
+                new HttpVirtualHost(
+                    (conn, request, writer) ->
+                        writer.commitBuffered(
+                            StandardResponses.OK.withBody(
+                                RESPONSE_BODY.getBytes(StandardCharsets.UTF_8)))))
+            .dispatcher(ConnectHandler.tunnelAll());
+    server.listen(listener);
   }
 
   @After
@@ -87,14 +91,17 @@ public class MixedServerIntegrationTest {
    */
   private void startExtraServer(int port, ConnectHandler handler) throws Exception {
     CatfishHttpServer s = newServer();
-    s.addHttpHost(
-        "localhost",
-        new HttpVirtualHost(
-            (conn, request, writer) ->
-                writer.commitBuffered(
-                    StandardResponses.OK.withBody(
-                        RESPONSE_BODY.getBytes(StandardCharsets.UTF_8)))));
-    s.listenConnectProxyLocal(port, handler);
+    HttpListener listener =
+        HttpListener.onLocalhost(port)
+            .addHost(
+                "localhost",
+                new HttpVirtualHost(
+                    (conn, request, writer) ->
+                        writer.commitBuffered(
+                            StandardResponses.OK.withBody(
+                                RESPONSE_BODY.getBytes(StandardCharsets.UTF_8)))))
+            .dispatcher(handler);
+    s.listen(listener);
     extraServers.add(s);
   }
 
@@ -104,15 +111,18 @@ public class MixedServerIntegrationTest {
    */
   private void startExtraServerWithUpload(int port) throws Exception {
     CatfishHttpServer s = newServer();
-    s.addHttpHost(
-        "localhost",
-        new HttpVirtualHost(
-                (conn, request, writer) ->
-                    writer.commitBuffered(
-                        StandardResponses.OK.withBody(
-                            RESPONSE_BODY.getBytes(StandardCharsets.UTF_8))))
-            .uploadPolicy(UploadPolicy.ALLOW));
-    s.listenConnectProxyLocal(port, ConnectHandler.tunnelAll());
+    HttpListener listener =
+        HttpListener.onLocalhost(port)
+            .addHost(
+                "localhost",
+                new HttpVirtualHost(
+                        (conn, request, writer) ->
+                            writer.commitBuffered(
+                                StandardResponses.OK.withBody(
+                                    RESPONSE_BODY.getBytes(StandardCharsets.UTF_8))))
+                    .uploadPolicy(UploadPolicy.ALLOW))
+            .dispatcher(ConnectHandler.tunnelAll());
+    s.listen(listener);
     extraServers.add(s);
   }
 
@@ -124,24 +134,26 @@ public class MixedServerIntegrationTest {
    */
   private void startExtraServerServeLocallyEcho(int port) throws Exception {
     CatfishHttpServer s = newServer();
-    s.addHttpHost(
-        "localhost",
-        new HttpVirtualHost(
-                (conn, request, writer) -> {
-                  byte[] body = new byte[0];
-                  if (request.getBody() instanceof HttpRequest.InMemoryBody inMem) {
-                    body = inMem.toByteArray();
-                  }
-                  // Echo method + URI + body so tests can verify all three.
-                  String prefix = request.getMethod() + " " + request.getUri() + "\n";
-                  byte[] prefixBytes = prefix.getBytes(StandardCharsets.UTF_8);
-                  byte[] out = new byte[prefixBytes.length + body.length];
-                  System.arraycopy(prefixBytes, 0, out, 0, prefixBytes.length);
-                  System.arraycopy(body, 0, out, prefixBytes.length, body.length);
-                  writer.commitBuffered(StandardResponses.OK.withBody(out));
-                })
-            .uploadPolicy(UploadPolicy.ALLOW));
-    s.listenConnectProxyLocal(port, (host, p) -> ConnectDecision.serveLocally());
+    HttpListener listener =
+        HttpListener.onLocalhost(port)
+            .addHost(
+                "localhost",
+                new HttpVirtualHost(
+                        (conn, request, writer) -> {
+                          byte[] body = new byte[0];
+                          if (request.getBody() instanceof HttpRequest.InMemoryBody inMem) {
+                            body = inMem.toByteArray();
+                          }
+                          String prefix = request.getMethod() + " " + request.getUri() + "\n";
+                          byte[] prefixBytes = prefix.getBytes(StandardCharsets.UTF_8);
+                          byte[] out = new byte[prefixBytes.length + body.length];
+                          System.arraycopy(prefixBytes, 0, out, 0, prefixBytes.length);
+                          System.arraycopy(body, 0, out, prefixBytes.length, body.length);
+                          writer.commitBuffered(StandardResponses.OK.withBody(out));
+                        })
+                    .uploadPolicy(UploadPolicy.ALLOW))
+            .dispatcher((host, p) -> ConnectDecision.serveLocally());
+    s.listen(listener);
     extraServers.add(s);
   }
 
@@ -402,24 +414,26 @@ public class MixedServerIntegrationTest {
     // ConnectHandler that forwards the first request and serves the second locally.
     int[] callCount = {0};
     CatfishHttpServer s = newServer();
-    s.addHttpHost(
-        "localhost",
-        new HttpVirtualHost(
-                (conn, request, writer) -> {
-                  String body = "local:" + request.getMethod() + " " + request.getUri();
-                  writer.commitBuffered(
-                      StandardResponses.OK.withBody(body.getBytes(StandardCharsets.UTF_8)));
-                })
-            .uploadPolicy(UploadPolicy.ALLOW));
-    s.listenConnectProxyLocal(
-        port,
-        (host, p) -> {
-          callCount[0]++;
-          if (callCount[0] <= 1) {
-            return ConnectDecision.tunnel(host, p);
-          }
-          return ConnectDecision.serveLocally();
-        });
+    HttpListener listener =
+        HttpListener.onLocalhost(port)
+            .addHost(
+                "localhost",
+                new HttpVirtualHost(
+                        (conn, request, writer) -> {
+                          String body = "local:" + request.getMethod() + " " + request.getUri();
+                          writer.commitBuffered(
+                              StandardResponses.OK.withBody(body.getBytes(StandardCharsets.UTF_8)));
+                        })
+                    .uploadPolicy(UploadPolicy.ALLOW))
+            .dispatcher(
+                (host, p) -> {
+                  callCount[0]++;
+                  if (callCount[0] <= 1) {
+                    return ConnectDecision.tunnel(host, p);
+                  }
+                  return ConnectDecision.serveLocally();
+                });
+    s.listen(listener);
     extraServers.add(s);
 
     try (HttpConnection conn = HttpConnection.connect("localhost", port)) {

@@ -3,6 +3,7 @@ package de.ofahrt.catfish.integration;
 import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.CatfishHttpServer;
+import de.ofahrt.catfish.HttpListener;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
@@ -57,10 +58,15 @@ public class UnixSocketIntegrationTest {
             (conn, request, writer) ->
                 writer.commitBuffered(
                     StandardResponses.OK.withBody("OK".getBytes(StandardCharsets.UTF_8))));
-    server.addHttpHost("localhost", host);
-    server.listenHttpUnixSocket(httpSocketPath);
-    server.listenConnectProxyUnixSocket(proxySocketPath, ConnectHandler.tunnelAll());
-    server.listenHttpLocal(ORIGIN_HTTP_PORT);
+    HttpListener httpUnixListener =
+        HttpListener.onUnixSocket(httpSocketPath).addHost("localhost", host);
+    server.listen(httpUnixListener);
+    HttpListener proxyUnixListener =
+        HttpListener.onUnixSocket(proxySocketPath).dispatcher(ConnectHandler.tunnelAll());
+    server.listen(proxyUnixListener);
+    HttpListener httpListener =
+        HttpListener.onLocalhost(ORIGIN_HTTP_PORT).addHost("localhost", host);
+    server.listen(httpListener);
   }
 
   @After

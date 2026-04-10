@@ -5,6 +5,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 import de.ofahrt.catfish.CatfishHttpServer;
+import de.ofahrt.catfish.HttpListener;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpHeaderName;
@@ -69,9 +70,11 @@ public class CompressionIntegrationTest {
                 t.printStackTrace();
               }
             });
-    server.addHttpHost(
-        HOST, new HttpVirtualHost(HANDLER).compressionPolicy(CompressionPolicy.COMPRESS));
-    server.listenHttpLocal(HTTP_PORT);
+    HttpListener listener =
+        HttpListener.onLocalhost(HTTP_PORT)
+            .addHost(
+                HOST, new HttpVirtualHost(HANDLER).compressionPolicy(CompressionPolicy.COMPRESS));
+    server.listen(listener);
   }
 
   @AfterClass

@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpVirtualHost;
+import de.ofahrt.catfish.HttpsListener;
 import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.client.CatfishHttpClient;
 import de.ofahrt.catfish.model.HttpHeaderName;
@@ -48,11 +49,14 @@ public class CatfishHttpClientIntegrationTest {
                 throwable.printStackTrace();
               }
             });
-    server.addHttpHost(
-        HOST,
-        new HttpVirtualHost((conn, req, writer) -> writer.commitBuffered(StandardResponses.OK))
-            .ssl(TestHelper.getSSLInfo()));
-    server.listenHttpsLocal(HTTPS_PORT);
+    HttpsListener listener =
+        HttpsListener.onLocalhost(HTTPS_PORT)
+            .addHost(
+                HOST,
+                new HttpVirtualHost(
+                    (conn, req, writer) -> writer.commitBuffered(StandardResponses.OK)),
+                TestHelper.getSSLInfo());
+    server.listen(listener);
 
     client =
         new CatfishHttpClient(
