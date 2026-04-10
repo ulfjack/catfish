@@ -89,34 +89,6 @@ public final class CatfishHttpServer {
     }
   }
 
-  void queueRequest(
-      HttpHandler httpHandler,
-      Connection connection,
-      HttpRequest request,
-      HttpResponseWriter responseWriter) {
-    executor.execute(
-        new RequestCallback() {
-          @Override
-          public void run() {
-            try {
-              httpHandler.handle(connection, request, responseWriter);
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          }
-
-          @Override
-          public void reject() {
-            try {
-              HttpResponse responseToWrite = StandardResponses.SERVICE_UNAVAILABLE;
-              responseWriter.commitBuffered(responseToWrite);
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          }
-        });
-  }
-
   public void listen(HttpEndpoint listener) throws IOException, InterruptedException {
     listener.listen(this);
   }

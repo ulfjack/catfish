@@ -1,10 +1,18 @@
 package de.ofahrt.catfish;
 
+import de.ofahrt.catfish.CatfishHttpServer.RequestCallback;
 import de.ofahrt.catfish.internal.network.NetworkEngine.NetworkHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.StandardResponses;
+import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
+import de.ofahrt.catfish.model.server.HttpHandler;
+import de.ofahrt.catfish.model.server.HttpResponseWriter;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.function.Function;
 import javax.net.ssl.SSLSocketFactory;
@@ -56,7 +64,7 @@ final class HttpServerHandler implements NetworkHandler {
           (innerPipeline, plainIn, plainOut) ->
               new HttpServerStage(
                   innerPipeline,
-                  server::queueRequest,
+                  this::queueRequest,
                   (conn, req, res) -> server.notifySent(conn, req, res, 0),
                   virtualHostLookup,
                   connectHandler,
@@ -72,7 +80,7 @@ final class HttpServerHandler implements NetworkHandler {
     }
     return new HttpServerStage(
         pipeline,
-        server::queueRequest,
+        this::queueRequest,
         (conn, req, res) -> server.notifySent(conn, req, res, 0),
         virtualHostLookup,
         connectHandler,
@@ -81,5 +89,33 @@ final class HttpServerHandler implements NetworkHandler {
         executor,
         inputBuffer,
         outputBuffer);
+  }
+
+  void queueRequest(
+      HttpHandler httpHandler,
+      Connection connection,
+      HttpRequest request,
+      HttpResponseWriter responseWriter) {
+    server.executor.execute(
+        new RequestCallback() {
+          @Override
+          public void run() {
+            try {
+              httpHandler.handle(connection, request, responseWriter);
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          }
+
+          @Override
+          public void reject() {
+            try {
+              HttpResponse responseToWrite = StandardResponses.SERVICE_UNAVAILABLE;
+              responseWriter.commitBuffered(responseToWrite);
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          }
+        });
   }
 }
