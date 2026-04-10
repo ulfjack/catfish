@@ -9,7 +9,6 @@ java_test(
         "//java/de/ofahrt/catfish/model/server",
         "//java/de/ofahrt/catfish/servlets",
         "//javatest/de/ofahrt/catfish/client:test_helper",
-        "//javatest/de/ofahrt/catfish/validator",
         "//third_party/servlet-api",
     ],
 )
