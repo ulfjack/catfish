@@ -6,6 +6,7 @@ import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.network.NetworkServer;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.StandardProtocolFamily;
@@ -30,6 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class NetworkEngine {
+
   private static final boolean DEBUG = false;
   private static final int DEFAULT_BUFFER_SIZE = 65536;
 
@@ -40,6 +42,7 @@ public final class NetworkEngine {
       DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSS");
 
   public interface Pipeline {
+
     void encourageWrites();
 
     void encourageReads();
@@ -59,12 +62,14 @@ public final class NetworkEngine {
   }
 
   public interface NetworkHandler {
+
     boolean usesSsl();
 
     Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer);
   }
 
   private interface EventHandler {
+
     void handleEvent() throws IOException;
   }
 
@@ -87,6 +92,7 @@ public final class NetworkEngine {
   }
 
   private final class SocketHandler implements EventHandler, Pipeline {
+
     private final SelectorQueue queue;
     private final Connection connection;
     private final SocketChannel socketChannel;
@@ -463,6 +469,7 @@ public final class NetworkEngine {
   }
 
   private final class ServerSocketHandler implements EventHandler {
+
     private final ServerSocketChannel serverChannel;
     private final SelectionKey key;
     private final NetworkHandler handler;
@@ -532,6 +539,7 @@ public final class NetworkEngine {
   }
 
   private final class UnixServerSocketHandler implements EventHandler {
+
     private final ServerSocketChannel serverChannel;
     private final SelectionKey key;
     private final NetworkHandler handler;
@@ -591,6 +599,7 @@ public final class NetworkEngine {
   }
 
   private final class SelectorQueue implements Runnable {
+
     private final int id;
     private final Selector selector;
     private final BlockingQueue<Runnable> eventQueue = new LinkedBlockingQueue<>();
@@ -778,7 +787,7 @@ public final class NetworkEngine {
                       this, connection, socketChannel, socketKey, handler, INCOMING_CONNECTION);
               socketKey.attach(socketHandler);
             } catch (ClosedChannelException e) {
-              throw new RuntimeException(e);
+              throw new UncheckedIOException(e);
             }
           });
     }
