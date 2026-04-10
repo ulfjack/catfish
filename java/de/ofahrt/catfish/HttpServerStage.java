@@ -213,9 +213,11 @@ final class HttpServerStage implements Stage {
       }
     }
 
-    // Create the handler and let it inspect headers (virtual host, method validation, etc.).
-    currentHandler =
-        new LocalHttpRequestStage(parent, requestHandler, virtualHostLookup, connection);
+    // Create the handler if not already set (the proxy path sets it before calling this method).
+    if (currentHandler == null) {
+      currentHandler =
+          new LocalHttpRequestStage(parent, requestHandler, virtualHostLookup, connection);
+    }
     HttpRequestStage.Decision decision = currentHandler.onHeaders(headers);
     if (decision == HttpRequestStage.Decision.REJECT) {
       // Handler prepared an error response. Pause reading, start writing.
@@ -319,7 +321,7 @@ final class HttpServerStage implements Stage {
    * Resolves a forward-proxy absolute-URI request to its origin, applying any host/port overrides
    * from the {@link ConnectDecision}.
    */
-  private static ProxyStage.Origin resolveForwardProxyOrigin(
+  private static ProxyRequestStage.Origin resolveForwardProxyOrigin(
       HttpRequest request, ConnectDecision decision, SSLSocketFactory sslFactory) throws Exception {
     URI uri = new URI(request.getUri());
     if (uri.getHost() == null) {
@@ -333,26 +335,7 @@ final class HttpServerStage implements Stage {
             ? decision.getPort()
             : (uri.getPort() >= 0 ? uri.getPort() : defaultPort);
     SocketFactory factory = useTls ? sslFactory : SocketFactory.getDefault();
-    return new ProxyStage.Origin(host, port, useTls, factory);
-  }
-
-  /**
-   * Creates a fresh {@link HttpServerStage} with the same configuration as this one, for use as the
-   * keep-alive successor after a {@link ProxyStage} completes a forwarded request. The new stage
-   * can parse the next request and make an independent routing decision.
-   */
-  private Stage createKeepAliveStage() {
-    return new HttpServerStage(
-        parent,
-        requestHandler,
-        requestListener,
-        virtualHostLookup,
-        connectHandler,
-        originSocketFactory,
-        sslInfoCache,
-        executor,
-        inputBuffer,
-        outputBuffer);
+    return new ProxyRequestStage.Origin(host, port, useTls, factory);
   }
 
   private static String toRelativeUri(String absoluteUri) {
@@ -441,26 +424,21 @@ final class HttpServerStage implements Stage {
         // cc == PAUSE (either handler queued, or a buffered error response queued via
         // startBuffered). Fall through — responseGenerator may now be set.
       } else {
-        // Forward to origin — hand off to ProxyStage with the pre-computed decision.
+        // Forward to origin — create a ProxyRequestStage handler.
         SSLSocketFactory sslFactory =
             originSocketFactory != null
                 ? originSocketFactory
                 : (SSLSocketFactory) SSLSocketFactory.getDefault();
         ConnectDecision capturedDecision = decision;
-        ProxyStage.OriginResolver resolver =
+        ProxyRequestStage.OriginResolver resolver =
             (req) -> resolveForwardProxyOrigin(req, capturedDecision, sslFactory);
-        parent.replaceWith(
-            new ProxyStage(
-                parent,
-                inputBuffer,
-                outputBuffer,
-                executor,
-                connectHandler,
-                resolver,
-                /* onClose= */ null,
-                headers,
-                this::createKeepAliveStage));
-        return ConnectionControl.PAUSE;
+        currentHandler = new ProxyRequestStage(parent, executor, connectHandler, resolver);
+        ConnectionControl cc = startBodyOrDispatch(headers);
+        if (cc == ConnectionControl.CONTINUE || cc == ConnectionControl.NEED_MORE_DATA) {
+          parent.encourageReads();
+          return ConnectionControl.PAUSE;
+        }
+        // Fall through — handler may already have a response (error) or is waiting.
       }
     }
     // Generate response bytes. The responseGenerator takes priority (used for 100-continue
