@@ -611,6 +611,7 @@ public final class NetworkEngine {
           () -> {
             try {
               if (shutdown) {
+                thrownException.set(new IOException("Engine is shutting down"));
                 return;
               }
               @SuppressWarnings("resource")
@@ -669,6 +670,7 @@ public final class NetworkEngine {
           () -> {
             try {
               if (shutdown) {
+                thrownException.set(new IOException("Engine is shutting down"));
                 return;
               }
               Files.deleteIfExists(path);
@@ -712,6 +714,7 @@ public final class NetworkEngine {
           () -> {
             try {
               if (shutdown) {
+                thrownException.set(new IOException("Engine is shutting down"));
                 return;
               }
               @SuppressWarnings("resource")
@@ -719,9 +722,6 @@ public final class NetworkEngine {
               socketChannel.configureBlocking(false);
               socketChannel.socket().setTcpNoDelay(true);
               socketChannel.socket().setKeepAlive(true);
-              //          socketChannel.socket().setReuseAddress(true);
-              //          socketChannel.socket().bind(new InetSocketAddress(address, port));
-              //        socketChannel.socket().setSoLinger(false, 0);
               InetSocketAddress remoteAddress = new InetSocketAddress(address, port);
               socketChannel.connect(remoteAddress);
               Connection connection =
@@ -729,6 +729,7 @@ public final class NetworkEngine {
                       (InetSocketAddress) socketChannel.socket().getLocalSocketAddress(),
                       remoteAddress,
                       handler.usesSsl());
+              openCounter.incrementAndGet();
               SelectionKey key = socketChannel.register(selector, 0);
               SocketHandler socketHandler =
                   new SocketHandler(
@@ -736,8 +737,9 @@ public final class NetworkEngine {
               key.attach(socketHandler);
             } catch (IOException e) {
               thrownException.set(e);
+            } finally {
+              latch.countDown();
             }
-            latch.countDown();
           });
       latch.await();
       IOException e = thrownException.get();
@@ -816,6 +818,14 @@ public final class NetworkEngine {
         }
         while (!shutdownQueue.isEmpty()) {
           shutdownQueue.remove().run();
+        }
+        // Close any remaining connections (both incoming and outgoing) that weren't
+        // cleaned up by the shutdownQueue. Server socket handlers are shut down above;
+        // this catches SocketHandlers for active connections that are still open.
+        for (SelectionKey key : selector.keys()) {
+          if (key.isValid() && key.attachment() instanceof SocketHandler) {
+            ((SocketHandler) key.attachment()).doClose();
+          }
         }
       } catch (Throwable e) {
         // Last resort: print, notify listener of fatal error. We expect this to exit the Jvm.

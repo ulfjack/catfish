@@ -493,6 +493,78 @@ public class NetworkEngineTest {
     }
   }
 
+  // ---- 19. Outgoing connection: openCounter is balanced ----
+
+  @Test
+  public void outgoingConnection_openCounterIsBalanced() throws Exception {
+    // Regression test for #40: outgoing connections must increment openCounter so
+    // getOpenConnections() doesn't drift negative when they close.
+    try (java.net.ServerSocket server = new java.net.ServerSocket(0)) {
+      int port = server.getLocalPort();
+      ProgrammableStage stage =
+          new ProgrammableStage()
+              .withInitialState(InitialConnectionState.WRITE_ONLY)
+              .withFinalWriteResponse(ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH);
+      engine.connect(InetAddress.getLoopbackAddress(), port, new ProgrammableHandler(stage));
+      // Accept on the server side so the connect completes.
+      try (Socket accepted = server.accept()) {
+        assertTrue("stage should close", stage.awaitClose(TIMEOUT_MS));
+      }
+      // After the outgoing connection closes, the counter must be balanced (not negative).
+      // Give a moment for closedCounter to be incremented.
+      Thread.sleep(50);
+      assertTrue(
+          "getOpenConnections should be >= 0, got " + engine.getOpenConnections(),
+          engine.getOpenConnections() >= 0);
+    }
+  }
+
+  // ---- 20. Shutdown closes outgoing connections ----
+
+  @Test
+  public void shutdown_closesOutgoingConnections() throws Exception {
+    // Regression test for #43: outgoing connections must be closed during shutdown
+    // so stages can release resources and blocked threads are unblocked.
+    try (java.net.ServerSocket server = new java.net.ServerSocket(0)) {
+      int port = server.getLocalPort();
+      ProgrammableStage stage =
+          new ProgrammableStage().withInitialState(InitialConnectionState.READ_AND_WRITE);
+      engine.connect(InetAddress.getLoopbackAddress(), port, new ProgrammableHandler(stage));
+      try (Socket accepted = server.accept()) {
+        // Connection is established. Stage is in PAUSE (default read response).
+        // Now shut down the engine — the outgoing connection should be closed cleanly.
+        engine.shutdown();
+        engine = null; // prevent @After from shutting down again
+        assertTrue("stage.close() should have been called", stage.awaitClose(TIMEOUT_MS));
+      }
+    }
+  }
+
+  // ---- 21. connect during shutdown throws instead of deadlocking ----
+
+  @Test
+  public void connect_duringShutdown_throwsInsteadOfDeadlocking() throws Exception {
+    // Regression test for #41: if connect's queued runnable executes after shutdown=true,
+    // it must set thrownException and count down the latch instead of returning silently
+    // (which previously deadlocked the caller on latch.await()).
+    engine.shutdown();
+    engine = null; // prevent @After from shutting down again
+
+    // Create a new engine that we immediately shut down, then try to connect.
+    TestListener listener2 = new TestListener();
+    NetworkEngine engine2 = new NetworkEngine(listener2);
+    engine2.shutdown();
+    try {
+      engine2.connect(
+          InetAddress.getLoopbackAddress(),
+          12345,
+          new ProgrammableHandler(new ProgrammableStage()));
+      org.junit.Assert.fail("expected exception from connect after shutdown");
+    } catch (IllegalStateException | IOException expected) {
+      // Either the entry check (ISE) or the runnable check (IOException) fires.
+    }
+  }
+
   // ---- helpers ----
 
   private static byte[] readExactly(InputStream in, int n) throws IOException {
