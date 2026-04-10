@@ -1,6 +1,5 @@
 package de.ofahrt.catfish.http;
 
-import de.ofahrt.catfish.internal.network.Stage.ConnectionControl;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import java.nio.ByteBuffer;
@@ -36,10 +35,11 @@ public interface HttpRequestStage {
 
   /**
    * Called with each chunk of decoded request body data. Only called if {@link #onHeaders} returned
-   * {@link Decision#CONTINUE}. Returns a {@link ConnectionControl} to signal backpressure ({@code
-   * PAUSE} if the handler cannot accept more data, {@code CONTINUE} if ready for more).
+   * {@link Decision#CONTINUE}. Returns the number of bytes actually consumed (written to a pipe,
+   * buffered, etc.). If fewer than {@code length} bytes are consumed, the caller pauses and retries
+   * later (backpressure).
    */
-  ConnectionControl onBodyChunk(byte[] data, int offset, int length);
+  int onBodyData(byte[] data, int offset, int length);
 
   /**
    * Called when the request body is complete, or immediately after {@link #onHeaders} if there is

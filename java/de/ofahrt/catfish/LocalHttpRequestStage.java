@@ -6,7 +6,6 @@ import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.http.HttpResponseGenerator.ContinuationToken;
 import de.ofahrt.catfish.internal.CoreHelper;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
-import de.ofahrt.catfish.internal.network.Stage.ConnectionControl;
 import de.ofahrt.catfish.model.HttpDate;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
@@ -114,9 +113,9 @@ final class LocalHttpRequestStage implements HttpRequestStage {
   }
 
   @Override
-  public ConnectionControl onBodyChunk(byte[] data, int offset, int length) {
+  public int onBodyData(byte[] data, int offset, int length) {
     bodyBuffer.write(data, offset, length);
-    return ConnectionControl.CONTINUE;
+    return length;
   }
 
   @Override

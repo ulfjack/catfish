@@ -113,7 +113,25 @@ final class SslServerStage implements Stage {
 
     @Override
     public void encourageReads() {
-      parent.encourageReads();
+      // If the plaintext buffer has data that the inner stage hasn't consumed (e.g., it returned
+      // PAUSE due to pipe backpressure), retry next.read() directly. The outer SocketHandler's
+      // read loop won't fire if the network buffer is empty (all TLS records already unwrapped).
+      if (status == FlowStatus.OPEN && inputBuffer.hasRemaining()) {
+        parent.queue(
+            () -> {
+              try {
+                ConnectionControl cc = next.read();
+                if (cc == ConnectionControl.CONTINUE || cc == ConnectionControl.NEED_MORE_DATA) {
+                  parent.encourageReads();
+                }
+                // If PAUSE: the inner stage will encourageReads again when ready.
+              } catch (IOException e) {
+                parent.close();
+              }
+            });
+      } else {
+        parent.encourageReads();
+      }
     }
 
     @Override

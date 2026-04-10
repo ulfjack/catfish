@@ -430,11 +430,14 @@ final class HttpServerStage implements Stage {
     if (contentLengthRemaining >= 0) {
       int toFeed = (int) Math.min(inputBuffer.remaining(), contentLengthRemaining);
       if (toFeed > 0) {
-        ConnectionControl cc =
-            currentHandler.onBodyChunk(inputBuffer.array(), inputBuffer.position(), toFeed);
-        inputBuffer.position(inputBuffer.position() + toFeed);
-        contentLengthRemaining -= toFeed;
-        if (cc == ConnectionControl.PAUSE && contentLengthRemaining > 0) {
+        // Let the handler write what it can. It returns how many bytes it consumed.
+        int consumed =
+            currentHandler.onBodyData(inputBuffer.array(), inputBuffer.position(), toFeed);
+        inputBuffer.position(inputBuffer.position() + consumed);
+        contentLengthRemaining -= consumed;
+        if (consumed < toFeed) {
+          // Handler couldn't accept all data (e.g., pipe full). Pause — the handler's
+          // backpressure callback will trigger encourageReads when space is available.
           return ConnectionControl.PAUSE;
         }
       }
@@ -451,15 +454,18 @@ final class HttpServerStage implements Stage {
       int pos = inputBuffer.position();
       int len = inputBuffer.remaining();
       chunkedScanner.advance(inputBuffer.array(), pos, len);
-      ConnectionControl cc = currentHandler.onBodyChunk(inputBuffer.array(), pos, len);
-      inputBuffer.position(pos + len);
+      int consumed = currentHandler.onBodyData(inputBuffer.array(), pos, len);
+      inputBuffer.position(pos + consumed);
+      if (consumed < len) {
+        return ConnectionControl.PAUSE;
+      }
       if (chunkedScanner.isDone()) {
         chunkedScanner = null;
         headersRequest = null;
         currentHandler.onBodyComplete();
         return ConnectionControl.PAUSE;
       }
-      return cc == ConnectionControl.PAUSE ? ConnectionControl.PAUSE : ConnectionControl.CONTINUE;
+      return ConnectionControl.CONTINUE;
     }
     // Fallback for bodyParser (shouldn't be reached with current code paths).
     int consumed =
