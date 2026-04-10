@@ -267,7 +267,7 @@ final class IncrementalHttpResponseParser {
             }
             elementBuffer.append(c);
           } else {
-            return setBadResponse("Illegal character in request method");
+            return setBadResponse("Illegal character in response header name");
           }
           break;
         case MESSAGE_HEADER_VALUE:
@@ -346,7 +346,7 @@ final class IncrementalHttpResponseParser {
             }
             elementBuffer.append(c);
           } else {
-            return setBadResponse("Illegal character in request header name");
+            return setBadResponse("Illegal character in response header name");
           }
           break;
         case CONTENT:
