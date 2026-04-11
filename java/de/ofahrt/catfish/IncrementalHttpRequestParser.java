@@ -138,7 +138,7 @@ final class IncrementalHttpRequestParser {
         }
       }
       switch (state) {
-        case REQUEST_METHOD:
+        case REQUEST_METHOD -> {
           if (c == ' ') {
             if (elementBuffer.length() == 0) {
               return setBadRequest("Expected request method, but <space> found");
@@ -158,8 +158,8 @@ final class IncrementalHttpRequestParser {
           } else {
             return setBadRequest("Illegal character in request method");
           }
-          break;
-        case REQUEST_URI: // "*" | absoluteURI | abs_path | authority
+        }
+        case REQUEST_URI -> { // "*" | absoluteURI | abs_path | authority
           if (c == ' ') {
             unparsedUri = elementBuffer.toString();
             builder.setUri(unparsedUri);
@@ -185,9 +185,9 @@ final class IncrementalHttpRequestParser {
               elementBuffer.append(c);
             }
           }
-          break;
+        }
         // HTTP-Version   = "HTTP" "/" 1*DIGIT "." 1*DIGIT
-        case REQUEST_VERSION_HTTP:
+        case REQUEST_VERSION_HTTP -> {
           if ((counter == 0) && (c != 'H')) {
             return setBadRequest("Expected 'H' of request version string");
           } else if ((counter == 1) && (c != 'T')) {
@@ -206,8 +206,8 @@ final class IncrementalHttpRequestParser {
             elementBuffer.setLength(0);
             state = State.REQUEST_VERSION_MAJOR;
           }
-          break;
-        case REQUEST_VERSION_MAJOR:
+        }
+        case REQUEST_VERSION_MAJOR -> {
           if (isDigit(c)) {
             // Leading zeros MUST be ignored by recipients.
             if ((elementBuffer.length() == 1) && (elementBuffer.charAt(0) == '0')) {
@@ -232,8 +232,8 @@ final class IncrementalHttpRequestParser {
           } else {
             return setBadRequest("Expected '.' of request version string");
           }
-          break;
-        case REQUEST_VERSION_MINOR:
+        }
+        case REQUEST_VERSION_MINOR -> {
           if (isDigit(c)) {
             // Leading zeros MUST be ignored by recipients.
             if ((elementBuffer.length() == 1) && (elementBuffer.charAt(0) == '0')) {
@@ -260,8 +260,8 @@ final class IncrementalHttpRequestParser {
           } else {
             return setBadRequest("Expected end of request version string");
           }
-          break;
-        case MESSAGE_HEADER_NAME:
+        }
+        case MESSAGE_HEADER_NAME -> {
           if (c == ':') {
             if (elementBuffer.length() == 0) {
               return setBadRequest("Expected header field name, but ':' found");
@@ -286,8 +286,8 @@ final class IncrementalHttpRequestParser {
           } else {
             return setBadRequest("Illegal character in header field name");
           }
-          break;
-        case MESSAGE_HEADER_VALUE:
+        }
+        case MESSAGE_HEADER_VALUE -> {
           if (c == '\r') {
             expectLineFeed = true;
           } else if (c == '\n') {
@@ -311,39 +311,36 @@ final class IncrementalHttpRequestParser {
             }
             elementBuffer.append(c);
           }
-          break;
-        case MESSAGE_HEADER_NAME_OR_CONTINUATION:
+        }
+        case MESSAGE_HEADER_NAME_OR_CONTINUATION -> {
           if (isSpace(c)) {
             return setBadRequest("Line folding is obsolete and illegal (RFC 7230 s3.2.4)");
           }
 
-          if (c == '\r') {
-            expectLineFeed = true;
-            break;
-          }
+          if (c != '\r') {
+            if (headerFieldCount >= MAX_HEADER_FIELD_COUNT) {
+              return setError(
+                  HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Too many header fields");
+            }
+            headerFieldCount++;
+            builder.addHeader(messageHeaderName, messageHeaderValue);
+            messageHeaderName = null;
+            messageHeaderValue = null;
 
-          if (headerFieldCount >= MAX_HEADER_FIELD_COUNT) {
-            return setError(
-                HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Too many header fields");
-          }
-          headerFieldCount++;
-          builder.addHeader(messageHeaderName, messageHeaderValue);
-          messageHeaderName = null;
-          messageHeaderValue = null;
-
-          if (c == '\n') {
-            return validateAndFinish(i);
-          } else if (isTokenCharacter(c)) {
-            counter = 0;
-            elementBuffer.setLength(0);
-            state = State.MESSAGE_HEADER_NAME;
-            elementBuffer.append(c);
+            if (c == '\n') {
+              return validateAndFinish(i);
+            } else if (isTokenCharacter(c)) {
+              counter = 0;
+              elementBuffer.setLength(0);
+              state = State.MESSAGE_HEADER_NAME;
+              elementBuffer.append(c);
+            } else {
+              return setBadRequest("Illegal character in header field name");
+            }
           } else {
-            return setBadRequest("Illegal character in header field name");
+            expectLineFeed = true;
           }
-          break;
-        default:
-          throw new RuntimeException("Not implemented!");
+        }
       }
     }
     return length;

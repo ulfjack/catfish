@@ -83,7 +83,7 @@ final class ChunkedBodyScanner {
     for (int i = 0; i < len; i++) {
       char c = (char) (arr[off + i] & 0xff);
       switch (state) {
-        case SIZE:
+        case SIZE -> {
           if (c == '\r') {
             state = State.SIZE_CR;
           } else if (c == ';') {
@@ -107,14 +107,14 @@ final class ChunkedBodyScanner {
             }
             currentChunkSize = currentChunkSize * 16 + (c - 'A' + 10);
           }
-          break;
-        case SIZE_EXT:
+        }
+        case SIZE_EXT -> {
           if (c == '\r') {
             state = State.SIZE_CR;
           }
           // else: skip extension characters
-          break;
-        case SIZE_CR:
+        }
+        case SIZE_CR -> {
           if (c == '\n') {
             if (currentChunkSize == 0) {
               state = State.TRAILER;
@@ -124,39 +124,37 @@ final class ChunkedBodyScanner {
               state = State.DATA;
             }
           }
-          break;
-        case DATA:
-          {
-            // Bulk-skip data bytes.
-            long bulk = Math.min(chunkDataLeft, len - i);
-            i += (int) bulk - 1; // loop will increment by 1
-            chunkDataLeft -= bulk;
-            if (chunkDataLeft == 0) {
-              state = State.DATA_CR;
-            }
+        }
+        case DATA -> {
+          // Bulk-skip data bytes.
+          long bulk = Math.min(chunkDataLeft, len - i);
+          i += (int) bulk - 1; // loop will increment by 1
+          chunkDataLeft -= bulk;
+          if (chunkDataLeft == 0) {
+            state = State.DATA_CR;
           }
-          break;
-        case DATA_CR:
+        }
+        case DATA_CR -> {
           if (c == '\r') {
             state = State.DATA_LF;
           }
-          break;
-        case DATA_LF:
+        }
+        case DATA_LF -> {
           if (c == '\n') {
             currentChunkSize = 0;
             chunkSizeDigits = 0;
             state = State.SIZE;
           }
-          break;
-        case TRAILER:
+        }
+        case TRAILER -> {
           // At start of a new trailer line.
           if (c == '\r') {
             state = State.TRAILER_CR;
           } else if (c != '\n') {
             state = State.TRAILER_LINE;
           }
-          break;
-        case TRAILER_CR:
+        }
+        case TRAILER_CR -> {
           if (c == '\n') {
             // Empty line: end of trailers.
             done = true;
@@ -164,19 +162,19 @@ final class ChunkedBodyScanner {
           } else {
             state = State.TRAILER_LINE;
           }
-          break;
-        case TRAILER_LINE:
+        }
+        case TRAILER_LINE -> {
           if (c == '\r') {
             state = State.TRAILER_LINE_CR;
           }
-          break;
-        case TRAILER_LINE_CR:
+        }
+        case TRAILER_LINE_CR -> {
           if (c == '\n') {
             state = State.TRAILER; // start of next trailer line
           } else {
             state = State.TRAILER_LINE;
           }
-          break;
+        }
       }
     }
     return len;
