@@ -235,31 +235,29 @@ final class ConnectStage implements Stage {
 
   @Override
   public ConnectionControl write() throws IOException {
-    switch (state) {
-      case SENDING_RESPONSE:
-        {
-          outputBuffer.compact();
-          int toCopy =
-              Math.min(outputBuffer.remaining(), pendingResponseBytes.length - responseOffset);
-          outputBuffer.put(pendingResponseBytes, responseOffset, toCopy);
-          responseOffset += toCopy;
-          outputBuffer.flip();
-          if (responseOffset >= pendingResponseBytes.length) {
-            if (closeAfterSend) {
-              return ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
-            }
-            if (isTunnel) {
-              setupTunnel();
-            } else {
-              setupMitm();
-            }
-            return ConnectionControl.PAUSE;
+    return switch (state) {
+      case CONNECTING -> ConnectionControl.PAUSE;
+      case SENDING_RESPONSE -> {
+        outputBuffer.compact();
+        int toCopy =
+            Math.min(outputBuffer.remaining(), pendingResponseBytes.length - responseOffset);
+        outputBuffer.put(pendingResponseBytes, responseOffset, toCopy);
+        responseOffset += toCopy;
+        outputBuffer.flip();
+        if (responseOffset >= pendingResponseBytes.length) {
+          if (closeAfterSend) {
+            yield ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
           }
-          return ConnectionControl.CONTINUE;
+          if (isTunnel) {
+            setupTunnel();
+          } else {
+            setupMitm();
+          }
+          yield ConnectionControl.PAUSE;
         }
-      default:
-        return ConnectionControl.PAUSE;
-    }
+        yield ConnectionControl.CONTINUE;
+      }
+    };
   }
 
   private void setupTunnel() throws IOException {
