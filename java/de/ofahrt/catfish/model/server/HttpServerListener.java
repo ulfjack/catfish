@@ -20,8 +20,8 @@ public interface HttpServerListener {
   default void onConnectComplete(UUID connectId, String host, int port) {}
 
   /**
-   * Called on the executor thread after origin response headers are received. Only fires on success
-   * (not on connection errors). For local responses, fires with the local response.
+   * Called on the executor thread after origin response headers are received for a proxied request.
+   * Only fires on success (not on connection errors). Not called for locally served requests.
    */
   default void onResponse(
       UUID requestId,
