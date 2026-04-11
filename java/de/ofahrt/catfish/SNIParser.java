@@ -109,6 +109,9 @@ final class SNIParser {
       return PARSE_ERROR;
     }
     while (length > 0) {
+      if (length < 4) {
+        return PARSE_ERROR;
+      }
       int extensionType = getInt16(temp);
       int extensionLength = getInt16(temp);
       length -= 4;
@@ -137,6 +140,9 @@ final class SNIParser {
     temp.limit(listLength);
     String serverName = null;
     while (temp.remaining() > 0) {
+      if (temp.remaining() < 3) {
+        return PARSE_ERROR;
+      }
       int code = getInt8(temp);
       int nameLength = getInt16(temp);
       if ((nameLength == 0) || (nameLength > temp.remaining())) {

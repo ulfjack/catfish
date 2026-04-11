@@ -168,6 +168,52 @@ public class SNIParserTest {
   }
 
   @Test
+  public void truncatedExtensionHeader_returnsError() {
+    // Extensions block claims 3 bytes, but each extension entry needs at least 4 (type + length).
+    // Before the fix, this throws BufferUnderflowException instead of returning PARSE_ERROR.
+    SNIParser.Result result =
+        parse(
+            new byte[] {
+              22, 3, 1, 0, 47, // TLS record header (length=47)
+              1, 0, 0, 43, // Handshake header (ClientHello, length=43)
+              3, 1, // version
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random, cont.
+              0, // session_id length
+              0, 0, // cipher_suites length
+              0, // compression_methods length
+              0, 3, // extensions length = 3 (too short for type+length)
+              0, 0, 0, // 3 bytes of truncated extension data
+            });
+    assertTrue(result.isDone());
+    assertTrue(result.hasError());
+  }
+
+  @Test
+  public void truncatedSniEntry_returnsError() {
+    // SNI extension found, but its list entry is truncated: only 1 byte for code, not enough for
+    // the 2-byte nameLength field. Before the fix, throws BufferUnderflowException.
+    SNIParser.Result result =
+        parse(
+            new byte[] {
+              22, 3, 1, 0, 51, // TLS record header (length=51)
+              1, 0, 0, 47, // Handshake header (ClientHello, length=47)
+              3, 1, // version
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random
+              0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random, cont.
+              0, // session_id length
+              0, 0, // cipher_suites length
+              0, // compression_methods length
+              0, 7, // extensions length = 7
+              0, 0, 0, 3, // extension type=0 (SNI), length=3
+              0, 1, // SNI list length = 1 (only 1 byte of list data follows)
+              0, // code byte — then getInt16 for nameLength underflows
+            });
+    assertTrue(result.isDone());
+    assertTrue(result.hasError());
+  }
+
+  @Test
   public void invalidRequestOverflowAnyOfSessionIdCipherOrCompression() {
     for (int i = 0; i < 4; i++) {
       byte[] data =

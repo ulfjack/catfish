@@ -75,6 +75,17 @@ public class ChunkedBodyIntegrationTest {
   }
 
   @Test
+  public void chunkedBodyWithOversizedChunkSize_returns400() throws IOException {
+    // 16 hex digits exceeds the scanner's 15-digit limit, triggering a 400 Bad Request.
+    HttpResponse response =
+        localServer.send(
+            ("POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n"
+                    + "FFFFFFFFFFFFFFFF\r\n")
+                .getBytes());
+    assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+  }
+
+  @Test
   public void unknownTransferEncodingStillReturns501() throws IOException {
     HttpResponse response =
         localServer.send(
