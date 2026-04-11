@@ -143,6 +143,85 @@ public class ChunkedBodyScannerTest {
     assertTrue(scanner.isDone());
   }
 
+  /**
+   * Regression test for the HttpServerStage chunked body scanner/handler desync bug: when the
+   * handler consumes fewer bytes than available (backpressure), the scanner must only advance by
+   * the consumed count. This test simulates the correct (fixed) behavior: advancing the scanner in
+   * two sequential, non-overlapping pieces.
+   */
+  @Test
+  public void partialAdvance_thenRemainder_parsesCorrectly() {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    // 20-byte chunk (0x14) with body containing \r\nFF (would corrupt if re-fed).
+    byte[] body = new byte[20];
+    java.util.Arrays.fill(body, (byte) 'A');
+    body[14] = '\r';
+    body[15] = '\n';
+    body[16] = 'F';
+    body[17] = 'F';
+    byte[] header = bytes("14\r\n");
+    byte[] trailer = bytes("\r\n0\r\n\r\n");
+    byte[] data = new byte[header.length + body.length + trailer.length];
+    System.arraycopy(header, 0, data, 0, header.length);
+    System.arraycopy(body, 0, data, header.length, body.length);
+    System.arraycopy(trailer, 0, data, header.length + body.length, trailer.length);
+
+    // Simulate backpressure: handler consumed only 8 of 14 available bytes.
+    // With the fix, scanner advances only through the consumed 8 bytes.
+    int firstAdvance = 8;
+    scanner.advance(data, 0, firstAdvance);
+    assertFalse(scanner.isDone());
+
+    // On resume, scanner advances through the remaining bytes.
+    scanner.advance(data, firstAdvance, data.length - firstAdvance);
+    assertTrue(scanner.isDone());
+  }
+
+  /**
+   * Demonstrates the bug that the HttpServerStage fix prevents: if the scanner advances through ALL
+   * available bytes but the handler consumed fewer, re-feeding the unconsumed bytes on resume
+   * causes the scanner to double-count chunk data bytes. This makes chunkDataLeft reach zero
+   * prematurely, and if the body contains \r\n followed by hex digits at the wrong offset, the
+   * scanner misinterprets body data as a new chunk header with a bogus size — and then never
+   * reaches isDone.
+   */
+  @Test
+  public void overEagerAdvance_thenReAdvance_corruptsScanner() {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    // 20-byte chunk (0x14). Body contains \r\nFF at bytes 14-17 — if the scanner premature
+    // transitions to DATA_CR at the wrong offset, it will interpret these as a chunk boundary
+    // followed by a 0xFF-byte chunk that never arrives.
+    byte[] body = new byte[20];
+    java.util.Arrays.fill(body, (byte) 'A');
+    body[14] = '\r';
+    body[15] = '\n';
+    body[16] = 'F';
+    body[17] = 'F';
+    byte[] header = bytes("14\r\n");
+    byte[] trailer = bytes("\r\n0\r\n\r\n");
+    byte[] data = new byte[header.length + body.length + trailer.length];
+    System.arraycopy(header, 0, data, 0, header.length);
+    System.arraycopy(body, 0, data, header.length, body.length);
+    System.arraycopy(trailer, 0, data, header.length + body.length, trailer.length);
+
+    // Bug scenario: scanner sees first 14 bytes (header + 10 data bytes).
+    int overEagerAdvance = 14;
+    scanner.advance(data, 0, overEagerAdvance);
+    assertFalse(scanner.isDone());
+    // Scanner state: DATA, chunkDataLeft = 10.
+
+    // But handler only consumed 8 bytes. On resume, the unconsumed bytes (8..30) are re-fed.
+    // The scanner re-processes bytes 8-13 as chunk data, double-decrementing chunkDataLeft.
+    // After 10 more bytes, it prematurely enters DATA_CR in the middle of chunk data, hits
+    // the embedded \r\nFF, and interprets it as a 0xFF-byte chunk header.
+    int handlerConsumed = 8;
+    scanner.advance(data, handlerConsumed, data.length - handlerConsumed);
+    // With the bug, the scanner is stuck waiting for 0xFF bytes of a phantom chunk.
+    assertFalse(
+        "Scanner should NOT reach isDone when bytes are re-fed (demonstrates the desync bug)",
+        scanner.isDone());
+  }
+
   @Test
   public void offset_respected() {
     ChunkedBodyScanner scanner = new ChunkedBodyScanner();

@@ -148,7 +148,8 @@ final class HttpServerStage implements Stage {
     // Phase 1: header parsing.
     // invariant: inputBuffer is readable
     if (inputBuffer.hasRemaining()) {
-      int consumed = parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.remaining());
+      int consumed =
+          parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.remaining());
       inputBuffer.position(inputBuffer.position() + consumed);
     }
     if (!parser.isDone()) {
@@ -385,9 +386,9 @@ final class HttpServerStage implements Stage {
     if (chunkedScanner != null) {
       int pos = inputBuffer.position();
       int len = inputBuffer.remaining();
-      chunkedScanner.advance(inputBuffer.array(), pos, len);
       int consumed = currentHandler.onBodyData(inputBuffer.array(), pos, len);
       inputBuffer.position(pos + consumed);
+      chunkedScanner.advance(inputBuffer.array(), pos, consumed);
       if (consumed < len) {
         return ConnectionControl.PAUSE;
       }
@@ -530,13 +531,13 @@ final class HttpServerStage implements Stage {
           request,
           StandardResponses.methodNotAllowed()
               .allowing("GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"));
-      return ConnectionControl.CONTINUE;
+      return ConnectionControl.CLOSE_INPUT;
     }
     String uri = request.getUri();
     int colonIdx = uri.lastIndexOf(':');
     if (colonIdx < 0) {
       startBuffered(request, StandardResponses.BAD_REQUEST);
-      return ConnectionControl.CONTINUE;
+      return ConnectionControl.CLOSE_INPUT;
     }
     String parsedHost = uri.substring(0, colonIdx);
     int parsedPort;
@@ -544,7 +545,7 @@ final class HttpServerStage implements Stage {
       parsedPort = Integer.parseInt(uri.substring(colonIdx + 1));
     } catch (NumberFormatException e) {
       startBuffered(request, StandardResponses.BAD_REQUEST);
-      return ConnectionControl.CONTINUE;
+      return ConnectionControl.CLOSE_INPUT;
     }
     // Local-intercept mode needs to build a fresh HttpServerStage wired to the same request
     // dispatcher, but with its own buffers and no connect handler (nested CONNECT would be

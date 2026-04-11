@@ -496,6 +496,38 @@ public class MitmConnectIntegrationTest {
     }
   }
 
+  @Test(timeout = 10_000)
+  public void mitmConnectProxy_largeChunkedPostBody_forwardsWithoutCorruption() throws Exception {
+    // Large chunked POST body through MITM proxy. The body exceeds PipeBuffer capacity (64KB),
+    // but backpressure may not reliably trigger in a local test since the pipe drains quickly.
+    // The targeted regression test for the scanner/handler desync bug is in ChunkedBodyScannerTest.
+    byte[] sentBody = new byte[80_000];
+    for (int i = 0; i < sentBody.length; i++) {
+      sentBody[i] = (byte) (i & 0xff);
+    }
+
+    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+
+      // Send as a single chunk.
+      String chunkSize = Integer.toHexString(sentBody.length);
+      sslOut.write(
+          ("POST /echo-body HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n"
+                  + "Connection: close\r\n\r\n")
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.write((chunkSize + "\r\n").getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.write(sentBody);
+      sslOut.write("\r\n0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
+
+      String responseHeaders = readUntilBlankLine(sslIn);
+      assertTrue(
+          "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
+      assertArrayEquals(sentBody, readBody(sslIn, responseHeaders));
+    }
+  }
+
   @Test
   public void mitmConnectProxy_originChunkedResponse_streamed() throws Exception {
     byte[] originBody = "chunked-origin-data".getBytes(StandardCharsets.UTF_8);
