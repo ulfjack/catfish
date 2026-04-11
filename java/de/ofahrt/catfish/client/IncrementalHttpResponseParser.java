@@ -138,7 +138,7 @@ final class IncrementalHttpResponseParser {
         }
       }
       switch (state) {
-        case RESPONSE_VERSION_HTTP:
+        case RESPONSE_VERSION_HTTP -> {
           if ((counter == 0) && (c != 'H')) {
             return setBadResponse("Expected 'H' of response version string");
           } else if ((counter == 1) && (c != 'T')) {
@@ -157,8 +157,8 @@ final class IncrementalHttpResponseParser {
             elementBuffer.setLength(0);
             state = State.RESPONSE_VERSION_MAJOR;
           }
-          break;
-        case RESPONSE_VERSION_MAJOR:
+        }
+        case RESPONSE_VERSION_MAJOR -> {
           if (isDigit(c)) {
             // Leading zeros MUST be ignored by recipients.
             if ((elementBuffer.length() == 1) && (elementBuffer.charAt(0) == '0')) {
@@ -183,8 +183,8 @@ final class IncrementalHttpResponseParser {
           } else {
             return setBadResponse("Expected '.' of response version string");
           }
-          break;
-        case RESPONSE_VERSION_MINOR:
+        }
+        case RESPONSE_VERSION_MINOR -> {
           if (isDigit(c)) {
             // Leading zeros MUST be ignored by recipients.
             if ((elementBuffer.length() == 1) && (elementBuffer.charAt(0) == '0')) {
@@ -208,8 +208,8 @@ final class IncrementalHttpResponseParser {
           } else {
             return setBadResponse("Expected end of response version string");
           }
-          break;
-        case RESPONSE_CODE:
+        }
+        case RESPONSE_CODE -> {
           if (isDigit(c)) {
             if (elementBuffer.length() > 2) {
               return setBadResponse("Status code is too long");
@@ -229,8 +229,8 @@ final class IncrementalHttpResponseParser {
           } else {
             return setBadResponse("Expected status code digit");
           }
-          break;
-        case RESPONSE_REASON_PHRASE:
+        }
+        case RESPONSE_REASON_PHRASE -> {
           if (c == '\r') {
             expectLineFeed = true;
           } else if (c == '\n') {
@@ -243,8 +243,8 @@ final class IncrementalHttpResponseParser {
             }
             elementBuffer.append(c);
           }
-          break;
-        case MESSAGE_HEADER_NAME:
+        }
+        case MESSAGE_HEADER_NAME -> {
           if (c == ':') {
             if (elementBuffer.length() == 0) {
               return setBadResponse("Expected message header field name, but ':' found");
@@ -269,8 +269,8 @@ final class IncrementalHttpResponseParser {
           } else {
             return setBadResponse("Illegal character in response header name");
           }
-          break;
-        case MESSAGE_HEADER_VALUE:
+        }
+        case MESSAGE_HEADER_VALUE -> {
           if (c == '\r') {
             expectLineFeed = true;
           } else if (c == '\n') {
@@ -291,75 +291,69 @@ final class IncrementalHttpResponseParser {
             }
             elementBuffer.append(c);
           }
-          break;
-        case MESSAGE_HEADER_NAME_OR_CONTINUATION:
+        }
+        case MESSAGE_HEADER_NAME_OR_CONTINUATION -> {
           if (isSpace(c)) {
             state = State.MESSAGE_HEADER_VALUE;
             elementBuffer.append(messageHeaderValue);
             trimAndAppendSpace();
-            break;
-          }
-
-          if (c == '\r') {
+          } else if (c == '\r') {
             expectLineFeed = true;
-            break;
-          }
+          } else {
+            response.addHeader(messageHeaderName, messageHeaderValue);
+            messageHeaderName = null;
+            messageHeaderValue = null;
 
-          response.addHeader(messageHeaderName, messageHeaderValue);
-          messageHeaderName = null;
-          messageHeaderValue = null;
-
-          if (c == '\n') {
-            String contentLengthValue = response.getHeader(HttpHeaderName.CONTENT_LENGTH);
-            if (contentLengthValue != null) {
-              long contentLength;
-              try {
-                contentLength = Long.parseLong(contentLengthValue);
-              } catch (NumberFormatException e) {
-                return setBadResponse("Illegal content length value");
-              }
-              if (contentLength > maxContentLength) {
-                return setBadResponse("Too large content length");
-              }
-              if (contentLength == 0) {
+            if (c == '\n') {
+              String contentLengthValue = response.getHeader(HttpHeaderName.CONTENT_LENGTH);
+              if (contentLengthValue != null) {
+                long contentLength;
+                try {
+                  contentLength = Long.parseLong(contentLengthValue);
+                } catch (NumberFormatException e) {
+                  return setBadResponse("Illegal content length value");
+                }
+                if (contentLength > maxContentLength) {
+                  return setBadResponse("Too large content length");
+                }
+                if (contentLength == 0) {
+                  done = true;
+                  return i + 1;
+                }
+                content = new byte[(int) contentLength];
+                contentIndex = 0;
+                state = State.CONTENT;
+              } else if (response.getHeader(HttpHeaderName.TRANSFER_ENCODING) != null) {
+                String transferEncoding = response.getHeader(HttpHeaderName.TRANSFER_ENCODING);
+                if ("chunked".equals(transferEncoding)) {
+                  state = State.CHUNKED_CONTENT_LENGTH;
+                }
+              } else {
                 done = true;
                 return i + 1;
               }
-              content = new byte[(int) contentLength];
-              contentIndex = 0;
-              state = State.CONTENT;
-            } else if (response.getHeader(HttpHeaderName.TRANSFER_ENCODING) != null) {
-              String transferEncoding = response.getHeader(HttpHeaderName.TRANSFER_ENCODING);
-              if ("chunked".equals(transferEncoding)) {
-                state = State.CHUNKED_CONTENT_LENGTH;
-              }
+            } else if (isTokenCharacter(c)) {
+              counter = 0;
+              elementBuffer.setLength(0);
+              state = State.MESSAGE_HEADER_NAME;
+              elementBuffer.append(c);
             } else {
-              done = true;
-              return i + 1;
-            }
-          } else if (isTokenCharacter(c)) {
-            counter = 0;
-            elementBuffer.setLength(0);
-            state = State.MESSAGE_HEADER_NAME;
-            elementBuffer.append(c);
-          } else {
-            return setBadResponse("Illegal character in response header name");
-          }
-          break;
-        case CONTENT:
-          {
-            int maxCopy = Math.min(length - i, content.length - contentIndex);
-            System.arraycopy(input, offset + i, content, contentIndex, maxCopy);
-            i += maxCopy;
-            contentIndex += maxCopy;
-            if (contentIndex == content.length) {
-              response.setBody(content);
-              done = true;
-              return i;
+              return setBadResponse("Illegal character in response header name");
             }
           }
-          break;
-        case CHUNKED_CONTENT_LENGTH:
+        }
+        case CONTENT -> {
+          int maxCopy = Math.min(length - i, content.length - contentIndex);
+          System.arraycopy(input, offset + i, content, contentIndex, maxCopy);
+          i += maxCopy;
+          contentIndex += maxCopy;
+          if (contentIndex == content.length) {
+            response.setBody(content);
+            done = true;
+            return i;
+          }
+        }
+        case CHUNKED_CONTENT_LENGTH -> {
           if (c == '\r') {
             expectLineFeed = true;
           } else if (c == '\n') {
@@ -368,20 +362,20 @@ final class IncrementalHttpResponseParser {
             int parsedChunkLength = Integer.parseInt(chunkLength, 16);
             if (parsedChunkLength == 0) {
               state = State.CHUNKED_CONTENT_END;
-              break;
-            }
-            if (content == null) {
-              content = new byte[parsedChunkLength];
             } else {
-              if (parsedChunkLength > maxContentLength) {
-                return setBadResponse("Too large chunk");
+              if (content == null) {
+                content = new byte[parsedChunkLength];
+              } else {
+                if (parsedChunkLength > maxContentLength) {
+                  return setBadResponse("Too large chunk");
+                }
+                if (content.length > maxContentLength - parsedChunkLength) {
+                  return setBadResponse("Too large content length");
+                }
+                content = Arrays.copyOf(content, content.length + parsedChunkLength);
               }
-              if (content.length > maxContentLength - parsedChunkLength) {
-                return setBadResponse("Too large content length");
-              }
-              content = Arrays.copyOf(content, content.length + parsedChunkLength);
+              state = State.CHUNKED_CONTENT_DATA;
             }
-            state = State.CHUNKED_CONTENT_DATA;
           } else if (isHexDigit(c)) {
             if (elementBuffer.length() > 8) {
               return setBadResponse("Chunk length field is too long");
@@ -390,19 +384,17 @@ final class IncrementalHttpResponseParser {
           } else {
             return setBadResponse("Illegal character in chunked content length");
           }
-          break;
-        case CHUNKED_CONTENT_DATA:
-          {
-            int maxCopy = Math.min(length - i, content.length - contentIndex);
-            System.arraycopy(input, offset + i, content, contentIndex, maxCopy);
-            i += maxCopy - 1;
-            contentIndex += maxCopy;
-            if (contentIndex == content.length) {
-              state = State.CHUNKED_CONTENT_NEXT;
-            }
+        }
+        case CHUNKED_CONTENT_DATA -> {
+          int maxCopy = Math.min(length - i, content.length - contentIndex);
+          System.arraycopy(input, offset + i, content, contentIndex, maxCopy);
+          i += maxCopy - 1;
+          contentIndex += maxCopy;
+          if (contentIndex == content.length) {
+            state = State.CHUNKED_CONTENT_NEXT;
           }
-          break;
-        case CHUNKED_CONTENT_NEXT:
+        }
+        case CHUNKED_CONTENT_NEXT -> {
           if (c == '\r') {
             expectLineFeed = true;
           } else if (c == '\n') {
@@ -410,8 +402,8 @@ final class IncrementalHttpResponseParser {
           } else {
             return setBadResponse("Expected line break");
           }
-          break;
-        case CHUNKED_CONTENT_END:
+        }
+        case CHUNKED_CONTENT_END -> {
           if (c == '\r') {
             expectLineFeed = true;
           } else if (c == '\n') {
@@ -421,9 +413,7 @@ final class IncrementalHttpResponseParser {
           } else {
             return setBadResponse("Expected line break");
           }
-          break;
-        default:
-          throw new RuntimeException("Not implemented!");
+        }
       }
     }
     return length;

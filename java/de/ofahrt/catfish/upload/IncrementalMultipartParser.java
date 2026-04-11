@@ -167,12 +167,12 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
       boolean isBoundaryMatch = searchPosition == boundary.length;
       if (isBoundaryMatch) searchPosition = 0;
       switch (state) {
-        case PREAMBLE:
+        case PREAMBLE -> {
           if (isBoundaryMatch) {
             state = State.END_BOUNDARY_EXPECT_CR;
           }
-          break;
-        case END_BOUNDARY:
+        }
+        case END_BOUNDARY -> {
           if (c == '-') {
             state = State.END_BOUNDARY_EXPECT_HYPHEN;
           } else if (c == '\r') {
@@ -182,8 +182,8 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
                 new MalformedMultipartException("At end of boundary line: unexpected character.");
             return i;
           }
-          break;
-        case END_BOUNDARY_EXPECT_HYPHEN:
+        }
+        case END_BOUNDARY_EXPECT_HYPHEN -> {
           if (c == '-') {
             state = State.EPILOGUE;
           } else {
@@ -191,8 +191,8 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
                 new MalformedMultipartException("At end of boundary line: unexpected character.");
             return i;
           }
-          break;
-        case END_BOUNDARY_EXPECT_CR:
+        }
+        case END_BOUNDARY_EXPECT_CR -> {
           if (c == '\r') {
             state = State.END_BOUNDARY_EXPECT_LF;
           } else if (c == ' ') {
@@ -206,8 +206,8 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
                 new MalformedMultipartException("At end of boundary line: unexpected character.");
             return i;
           }
-          break;
-        case END_BOUNDARY_EXPECT_LF:
+        }
+        case END_BOUNDARY_EXPECT_LF -> {
           if (c == '\n') {
             state = State.FIELD_NAME;
             partBody = new ByteArrayOutputStream();
@@ -216,8 +216,8 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
                 new MalformedMultipartException("At end of boundary line: CR not followed by LF.");
             return i;
           }
-          break;
-        case FIELD_NAME:
+        }
+        case FIELD_NAME -> {
           if (c == ':') {
             if (elementBuffer.length() == 0) {
               error = new MalformedMultipartException("Expected field name, but ':' found.");
@@ -238,8 +238,8 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
           } else {
             elementBuffer.append(c);
           }
-          break;
-        case FIELD_VALUE:
+        }
+        case FIELD_VALUE -> {
           if (c == '\r') {
             int end = elementBuffer.length();
             while ((end > 0) && (elementBuffer.charAt(end - 1) == ' ')) {
@@ -254,8 +254,8 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
           } else {
             elementBuffer.append(c);
           }
-          break;
-        case FIELD_VALUE_EXPECT_LF:
+        }
+        case FIELD_VALUE_EXPECT_LF -> {
           if (c == '\n') {
             state = State.FIELD_NAME_OR_CONTINUATION_OR_END;
           } else {
@@ -274,31 +274,30 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
               elementBuffer.append(c);
             }
           }
-          break;
-        case FIELD_NAME_OR_CONTINUATION_OR_END:
+        }
+        case FIELD_NAME_OR_CONTINUATION_OR_END -> {
           if (isSpace(c)) {
             state = State.FIELD_VALUE;
             elementBuffer.append(fieldValue);
             trimAndAppendSpace();
-            break;
-          }
-
-          addField(fieldName, fieldValue);
-          fieldName = null;
-          fieldValue = null;
-
-          if (c == '\r') {
-            state = State.HEADERS_END_EXPECT_LF;
-          } else if (!isFieldNameCharacter(c)) {
-            error = new MalformedMultipartException("Illegal character in header field");
-            return i;
           } else {
-            elementBuffer.setLength(0);
-            state = State.FIELD_NAME;
-            elementBuffer.append(c);
+            addField(fieldName, fieldValue);
+            fieldName = null;
+            fieldValue = null;
+
+            if (c == '\r') {
+              state = State.HEADERS_END_EXPECT_LF;
+            } else if (!isFieldNameCharacter(c)) {
+              error = new MalformedMultipartException("Illegal character in header field");
+              return i;
+            } else {
+              elementBuffer.setLength(0);
+              state = State.FIELD_NAME;
+              elementBuffer.append(c);
+            }
           }
-          break;
-        case HEADERS_END_EXPECT_LF:
+        }
+        case HEADERS_END_EXPECT_LF -> {
           if (c == '\n') {
             state = State.PART_BODY;
           } else {
@@ -307,8 +306,8 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
                     "At end of field definition: CR not followed by LF.");
             return i;
           }
-          break;
-        case PART_BODY:
+        }
+        case PART_BODY -> {
           partBody.write(c);
           if (isBoundaryMatch) {
             FormEntry entry = constructEntry();
@@ -320,9 +319,8 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
             partBody = null;
             state = State.END_BOUNDARY;
           }
-          break;
-        case EPILOGUE:
-          break;
+        }
+        case EPILOGUE -> {}
       }
     }
     return length;

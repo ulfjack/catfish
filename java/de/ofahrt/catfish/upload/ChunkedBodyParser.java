@@ -40,14 +40,14 @@ public final class ChunkedBodyParser implements HttpRequestBodyParser {
     while (i < length && state != State.DONE && state != State.ERROR) {
       byte b = input[offset + i];
       switch (state) {
-        case CHUNK_SIZE:
+        case CHUNK_SIZE -> {
           if (isHexDigit(b)) {
             chunkSize = chunkSize * 16 + hexValue(b);
             if (chunkSize > Integer.MAX_VALUE) {
               setError("Chunk size too large");
-              break;
+            } else {
+              sawHexDigit = true;
             }
-            sawHexDigit = true;
           } else if (!sawHexDigit) {
             setError("Expected hex digit in chunk size");
           } else if (b == ';') {
@@ -59,34 +59,34 @@ public final class ChunkedBodyParser implements HttpRequestBodyParser {
           } else {
             setError("Unexpected character in chunk size line");
           }
-          break;
+        }
 
-        case CHUNK_EXT:
+        case CHUNK_EXT -> {
           if (b == '\r') {
             state = State.CHUNK_SIZE_LF;
           } else if (b == '\n') {
             handleChunkSizeEnd();
           }
           // else: skip extension characters
-          break;
+        }
 
-        case CHUNK_SIZE_LF:
+        case CHUNK_SIZE_LF -> {
           if (b == '\n') {
             handleChunkSizeEnd();
           } else {
             setError("Expected LF after CR in chunk size line");
           }
-          break;
+        }
 
-        case CHUNK_DATA:
+        case CHUNK_DATA -> {
           body.write(b);
           bytesRemaining--;
           if (bytesRemaining == 0) {
             state = State.CHUNK_DATA_CR;
           }
-          break;
+        }
 
-        case CHUNK_DATA_CR:
+        case CHUNK_DATA_CR -> {
           if (b == '\r') {
             state = State.CHUNK_DATA_LF;
           } else if (b == '\n') {
@@ -94,17 +94,17 @@ public final class ChunkedBodyParser implements HttpRequestBodyParser {
           } else {
             setError("Expected CRLF after chunk data");
           }
-          break;
+        }
 
-        case CHUNK_DATA_LF:
+        case CHUNK_DATA_LF -> {
           if (b == '\n') {
             resetForNextChunk();
           } else {
             setError("Expected LF after CR following chunk data");
           }
-          break;
+        }
 
-        case TRAILER_OR_END:
+        case TRAILER_OR_END -> {
           if (b == '\r') {
             state = State.FINAL_LF;
           } else if (b == '\n') {
@@ -112,25 +112,24 @@ public final class ChunkedBodyParser implements HttpRequestBodyParser {
           } else {
             state = State.SKIP_TRAILER;
           }
-          break;
+        }
 
-        case SKIP_TRAILER:
+        case SKIP_TRAILER -> {
           if (b == '\n') {
             state = State.TRAILER_OR_END;
           }
           // else: skip
-          break;
+        }
 
-        case FINAL_LF:
+        case FINAL_LF -> {
           if (b == '\n') {
             state = State.DONE;
           } else {
             setError("Expected LF at end of chunked body");
           }
-          break;
+        }
 
-        default:
-          throw new IllegalStateException(state.toString());
+        case DONE, ERROR -> throw new IllegalStateException(state.toString());
       }
       i++;
     }
