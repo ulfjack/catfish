@@ -38,7 +38,10 @@ import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
@@ -235,9 +238,8 @@ public class MitmConnectIntegrationTest {
     // onConnectComplete used to fire on the NIO selector thread (catfish-select-*), which would
     // block the selector if the user callback did any real work. Verify it now runs on the
     // executor pool (catfish-worker-*).
-    java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-    java.util.concurrent.atomic.AtomicReference<String> threadName =
-        new java.util.concurrent.atomic.AtomicReference<>();
+    CountDownLatch latch = new CountDownLatch(1);
+    AtomicReference<String> threadName = new AtomicReference<>();
 
     CatfishHttpServer server = newServer();
     serversToStop.add(server);
@@ -247,7 +249,7 @@ public class MitmConnectIntegrationTest {
             .requestListener(
                 new HttpServerListener() {
                   @Override
-                  public void onConnectComplete(String host, int port) {
+                  public void onConnectComplete(UUID connectId, String host, int port) {
                     threadName.set(Thread.currentThread().getName());
                     latch.countDown();
                   }

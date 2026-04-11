@@ -16,6 +16,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLContext;
@@ -63,6 +64,7 @@ final class ConnectStage implements Stage {
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
   private final Executor executor;
+  private final UUID connectId;
   private final String host;
   private final int port;
   private final ConnectHandler handler;
@@ -89,6 +91,7 @@ final class ConnectStage implements Stage {
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer,
       Executor executor,
+      UUID connectId,
       String host,
       int port,
       ConnectHandler handler,
@@ -100,6 +103,7 @@ final class ConnectStage implements Stage {
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
     this.executor = executor;
+    this.connectId = connectId;
     this.host = host;
     this.port = port;
     this.handler = handler;
@@ -113,7 +117,7 @@ final class ConnectStage implements Stage {
   public InitialConnectionState connect(Connection connection) {
     // Set onClose before dispatching to the executor so that onConnectComplete fires for every
     // CONNECT connection, regardless of whether doConnect succeeds or fails.
-    onClose = () -> executor.execute(() -> serverListener.onConnectComplete(host, port));
+    onClose = () -> executor.execute(() -> serverListener.onConnectComplete(connectId, host, port));
     executor.execute(() -> doConnect(host, port));
     return InitialConnectionState.READ_ONLY;
   }
@@ -208,14 +212,14 @@ final class ConnectStage implements Stage {
 
   private void notifyConnectFailed(String host, int port, Exception cause) {
     try {
-      serverListener.onConnectFailed(host, port, cause);
+      serverListener.onConnectFailed(connectId, host, port, cause);
     } catch (Exception ignored) {
     }
   }
 
   private void notifyCertificateReady(String host, int port) {
     try {
-      serverListener.onCertificateReady(host, port);
+      serverListener.onCertificateReady(connectId, host, port);
     } catch (Exception ignored) {
     }
   }

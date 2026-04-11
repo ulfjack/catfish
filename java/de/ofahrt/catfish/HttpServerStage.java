@@ -576,6 +576,7 @@ final class HttpServerStage implements Stage {
             inputBuffer,
             outputBuffer,
             executor,
+            UUID.randomUUID(),
             parsedHost,
             parsedPort,
             connectHandler,

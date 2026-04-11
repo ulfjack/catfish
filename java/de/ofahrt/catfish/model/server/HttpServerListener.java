@@ -7,17 +7,17 @@ import java.util.UUID;
 public interface HttpServerListener {
 
   /** Called on the executor thread after a leaf cert is obtained (MITM INTERCEPT only). */
-  default void onCertificateReady(String host, int port) {}
+  default void onCertificateReady(UUID connectId, String host, int port) {}
 
   /**
    * Called on the executor thread when the upstream connection phase of a CONNECT request fails
    * (DNS resolution failure, connection refused, TLS handshake error, certificate generation
    * error). Fires before the 502 response is sent to the client.
    */
-  default void onConnectFailed(String host, int port, Exception cause) {}
+  default void onConnectFailed(UUID connectId, String host, int port, Exception cause) {}
 
   /** Called when a CONNECT connection closes (tunnel disconnected or MITM session ended). */
-  default void onConnectComplete(String host, int port) {}
+  default void onConnectComplete(UUID connectId, String host, int port) {}
 
   /**
    * Called on the executor thread after origin response headers are received. Only fires on success
