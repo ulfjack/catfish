@@ -8,6 +8,7 @@ import java.time.format.DateTimeParseException;
 import java.time.format.SignStyle;
 import java.time.temporal.ChronoField;
 import java.util.Locale;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Parses and formats HTTP date values as defined by RFC 7231 §7.1.1.1.
@@ -89,7 +90,7 @@ public final class HttpDate {
    * @param date the date string to parse
    * @return the parsed instant, or {@code null} if parsing fails
    */
-  public static Instant parseDate(String date) {
+  public static @Nullable Instant parseDate(String date) {
     for (DateTimeFormatter fmt : PARSE_FORMATTERS) {
       try {
         return Instant.from(fmt.parse(date));

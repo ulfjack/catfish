@@ -6,6 +6,7 @@ import java.math.BigInteger;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Deque;
+import org.jspecify.annotations.Nullable;
 
 /** Parser for ASN.1. */
 final class Asn1Parser {
@@ -75,8 +76,8 @@ final class Asn1Parser {
   private int index;
   private int endOfData;
   private Deque<Section> deque = new ArrayDeque<>();
-  private Event currentTag;
-  private Object currentObject;
+  private @Nullable Event currentTag;
+  private @Nullable Object currentObject;
 
   Asn1Parser(byte[] data) {
     this.data = data;

@@ -4,18 +4,22 @@ import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.util.UUID;
 import javax.net.ssl.SSLSession;
+import org.jspecify.annotations.Nullable;
 
 public final class Connection {
   private final UUID id;
   private final long startTimeMillis;
   private final long startTimeNanos;
-  private final InetSocketAddress localAddress;
-  private final InetSocketAddress remoteAddress;
+  private final @Nullable InetSocketAddress localAddress;
+  private final @Nullable InetSocketAddress remoteAddress;
   private final boolean ssl;
-  private final SSLSession sslSession;
-  private final Path socketPath;
+  private final @Nullable SSLSession sslSession;
+  private final @Nullable Path socketPath;
 
-  public Connection(InetSocketAddress localAddress, InetSocketAddress remoteAddress, boolean ssl) {
+  public Connection(
+      @Nullable InetSocketAddress localAddress,
+      @Nullable InetSocketAddress remoteAddress,
+      boolean ssl) {
     this.id = UUID.randomUUID();
     this.startTimeMillis = System.currentTimeMillis();
     this.startTimeNanos = System.nanoTime();
@@ -27,7 +31,9 @@ public final class Connection {
   }
 
   public Connection(
-      InetSocketAddress localAddress, InetSocketAddress remoteAddress, SSLSession sslSession) {
+      @Nullable InetSocketAddress localAddress,
+      @Nullable InetSocketAddress remoteAddress,
+      @Nullable SSLSession sslSession) {
     this.id = UUID.randomUUID();
     this.startTimeMillis = System.currentTimeMillis();
     this.startTimeNanos = System.nanoTime();
@@ -61,11 +67,11 @@ public final class Connection {
     return startTimeNanos;
   }
 
-  public InetSocketAddress getLocalAddress() {
+  public @Nullable InetSocketAddress getLocalAddress() {
     return localAddress;
   }
 
-  public InetSocketAddress getRemoteAddress() {
+  public @Nullable InetSocketAddress getRemoteAddress() {
     return remoteAddress;
   }
 
@@ -73,11 +79,11 @@ public final class Connection {
     return ssl;
   }
 
-  public SSLSession getSSLSession() {
+  public @Nullable SSLSession getSSLSession() {
     return sslSession;
   }
 
-  public Path getSocketPath() {
+  public @Nullable Path getSocketPath() {
     return socketPath;
   }
 

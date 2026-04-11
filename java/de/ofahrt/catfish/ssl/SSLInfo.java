@@ -11,6 +11,7 @@ import javax.naming.InvalidNameException;
 import javax.naming.ldap.LdapName;
 import javax.naming.ldap.Rdn;
 import javax.net.ssl.SSLContext;
+import org.jspecify.annotations.Nullable;
 
 public record SSLInfo(SSLContext sslContext, X509Certificate certificate) {
 
@@ -20,7 +21,7 @@ public record SSLInfo(SSLContext sslContext, X509Certificate certificate) {
   }
 
   /** Returns the CN from the certificate's subject, or null if absent. */
-  public String certificateCommonName() {
+  public @Nullable String certificateCommonName() {
     try {
       // X500Principal.getName() returns RFC 2253 format, which is the LDAP DN string format.
       // LdapName is the standard JDK class for parsing it.

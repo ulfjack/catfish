@@ -4,14 +4,16 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Map;
 import java.util.TreeMap;
+import org.jspecify.annotations.Nullable;
 
 public final class SimpleHttpRequest implements HttpRequest {
   private final HttpVersion version;
   private final String method;
   private final String uri;
   private final HttpHeaders headers;
-  private final Body body;
+  private final @Nullable Body body;
 
+  @SuppressWarnings("NullAway") // buildPartialRequest creates instances with null uri/body
   SimpleHttpRequest(Builder builder) {
     this.version = builder.version;
     this.method = builder.method;
@@ -41,19 +43,20 @@ public final class SimpleHttpRequest implements HttpRequest {
   }
 
   @Override
-  public Body getBody() {
+  public @Nullable Body getBody() {
     return body;
   }
 
   public static class Builder {
     private HttpVersion version;
     private String method;
-    private String unparsedUri;
+    private @Nullable String unparsedUri;
     private Map<String, String> headers;
-    private Body body;
+    private @Nullable Body body;
 
-    private HttpResponse errorResponse;
+    private @Nullable HttpResponse errorResponse;
 
+    @SuppressWarnings("NullAway") // reset() initializes all non-null fields
     public Builder() {
       reset();
     }
@@ -78,7 +81,7 @@ public final class SimpleHttpRequest implements HttpRequest {
       return new SimpleHttpRequest(this);
     }
 
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"unused", "NullAway"}) // setError() guarantees errorResponse is non-null
     public HttpRequest build() throws MalformedRequestException {
       if (errorResponse != null) {
         throw new MalformedRequestException(errorResponse);
@@ -159,7 +162,7 @@ public final class SimpleHttpRequest implements HttpRequest {
       return this;
     }
 
-    public String getHeader(String key) {
+    public @Nullable String getHeader(String key) {
       return headers.get(key);
     }
 

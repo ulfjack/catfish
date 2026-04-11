@@ -2,6 +2,7 @@ package de.ofahrt.catfish.model;
 
 import java.util.HashMap;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 public final class SimpleHttpResponse implements HttpResponse {
   private final HttpVersion version;
@@ -50,11 +51,11 @@ public final class SimpleHttpResponse implements HttpResponse {
     private int majorVersion = 1;
     private int minorVersion = 1;
     private int statusCode;
-    private String reasonPhrase;
+    private @Nullable String reasonPhrase;
     private final Map<String, String> headers = new HashMap<>();
     private byte[] content = new byte[0];
 
-    private String errorMessage;
+    private @Nullable String errorMessage;
 
     public SimpleHttpResponse build() throws MalformedResponseException {
       if (errorMessage != null) {
@@ -115,7 +116,7 @@ public final class SimpleHttpResponse implements HttpResponse {
       return this;
     }
 
-    public String getHeader(String name) {
+    public @Nullable String getHeader(String name) {
       return headers.get(name);
     }
   }

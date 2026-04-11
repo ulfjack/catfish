@@ -4,6 +4,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Locale;
+import org.jspecify.annotations.Nullable;
 
 public class HttpResponseValidator {
   private static final List<String> COEP_TOKENS =
@@ -26,7 +27,7 @@ public class HttpResponseValidator {
    * @param request may be {@code null} if no request context is available; method-dependent checks
    *     are skipped when {@code null}
    */
-  public void validate(HttpRequest request, HttpResponse response)
+  public void validate(@Nullable HttpRequest request, HttpResponse response)
       throws MalformedResponseException {
     int status = response.getStatusCode();
     HttpHeaders headers = response.getHeaders();

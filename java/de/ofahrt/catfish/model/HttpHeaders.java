@@ -5,6 +5,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import org.jspecify.annotations.Nullable;
 
 public final class HttpHeaders implements Iterable<Map.Entry<String, String>> {
   public static final HttpHeaders NONE = new HttpHeaders();
@@ -62,7 +63,7 @@ public final class HttpHeaders implements Iterable<Map.Entry<String, String>> {
     this.entries = entries;
   }
 
-  public String get(String key) {
+  public @Nullable String get(String key) {
     return entries.get(key);
   }
 

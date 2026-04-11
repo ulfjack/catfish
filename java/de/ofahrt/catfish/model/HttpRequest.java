@@ -1,5 +1,7 @@
 package de.ofahrt.catfish.model;
 
+import org.jspecify.annotations.Nullable;
+
 public interface HttpRequest {
   interface Body {}
 
@@ -29,7 +31,7 @@ public interface HttpRequest {
     return HttpHeaders.NONE;
   }
 
-  default Body getBody() {
+  default @Nullable Body getBody() {
     return null;
   }
 
@@ -56,7 +58,7 @@ public interface HttpRequest {
       }
 
       @Override
-      public Body getBody() {
+      public @Nullable Body getBody() {
         return HttpRequest.this.getBody();
       }
     };
@@ -85,7 +87,7 @@ public interface HttpRequest {
       }
 
       @Override
-      public Body getBody() {
+      public @Nullable Body getBody() {
         return body;
       }
     };
@@ -115,7 +117,7 @@ public interface HttpRequest {
       }
 
       @Override
-      public Body getBody() {
+      public @Nullable Body getBody() {
         return HttpRequest.this.getBody();
       }
     };

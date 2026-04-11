@@ -2,6 +2,7 @@ package de.ofahrt.catfish.model.layout;
 
 import java.util.Map;
 import java.util.TreeMap;
+import org.jspecify.annotations.Nullable;
 
 public final class SiteLayout<T> {
   private final Map<String, T> exact;
@@ -14,7 +15,7 @@ public final class SiteLayout<T> {
     this.recursive = new TreeMap<>(builder.recursive);
   }
 
-  public T resolve(String path) {
+  public @Nullable T resolve(String path) {
     T page = exact.get(path);
     if (page != null) {
       return page;

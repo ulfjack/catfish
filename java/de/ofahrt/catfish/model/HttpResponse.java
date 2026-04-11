@@ -1,5 +1,7 @@
 package de.ofahrt.catfish.model;
 
+import org.jspecify.annotations.Nullable;
+
 public interface HttpResponse {
   default HttpVersion getProtocolVersion() {
     return HttpVersion.HTTP_1_1;
@@ -15,7 +17,7 @@ public interface HttpResponse {
     return HttpHeaders.NONE;
   }
 
-  default byte[] getBody() {
+  default byte @Nullable [] getBody() {
     return null;
   }
 
@@ -42,7 +44,7 @@ public interface HttpResponse {
       }
 
       @Override
-      public byte[] getBody() {
+      public byte @Nullable [] getBody() {
         return HttpResponse.this.getBody();
       }
     };
@@ -72,7 +74,7 @@ public interface HttpResponse {
       }
 
       @Override
-      public byte[] getBody() {
+      public byte @Nullable [] getBody() {
         return HttpResponse.this.getBody();
       }
     };
@@ -102,7 +104,7 @@ public interface HttpResponse {
       }
 
       @Override
-      public byte[] getBody() {
+      public byte @Nullable [] getBody() {
         return HttpResponse.this.getBody();
       }
     };
@@ -131,7 +133,7 @@ public interface HttpResponse {
       }
 
       @Override
-      public byte[] getBody() {
+      public byte @Nullable [] getBody() {
         return body;
       }
     };

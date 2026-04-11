@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 public final class OpensslCertificateAuthority implements CertificateAuthority {
   private static final Duration DEFAULT_VALIDITY = Duration.ofDays(1);
@@ -122,7 +123,7 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
   }
 
   /** Extracts the CN from the certificate's subject DN, or null if absent. */
-  private static String extractCn(X509Certificate cert) {
+  private static @Nullable String extractCn(X509Certificate cert) {
     // getSubjectX500Principal().getName() returns RFC 2253 format: CN=example.com,O=Org,...
     for (String part : cert.getSubjectX500Principal().getName().split(",")) {
       part = part.trim();
