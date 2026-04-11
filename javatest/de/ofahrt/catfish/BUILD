@@ -1,4 +1,4 @@
-load("@rules_java//java:defs.bzl", "java_library", "java_test")
+load("@rules_java//java:defs.bzl", "java_binary", "java_library", "java_test")
 
 exports_files([
     "test-cert.pem",
@@ -26,6 +26,18 @@ java_library(
     ],
 )
 
+java_binary(
+    name = "benchmark",
+    testonly = True,
+    srcs = ["IncrementalHttpRequestParserBenchmark.java"],
+    main_class = "org.openjdk.jmh.Main",
+    plugins = ["//third_party/jmh:jmh_annprocess"],
+    deps = [
+        "//java/de/ofahrt/catfish",
+        "//third_party/jmh",
+    ],
+)
+
 java_test(
     name = "catfish",
     srcs = glob(
@@ -34,6 +46,7 @@ java_test(
             "CollectionsUtils.java",
             "HashConflictGenerator.java",
             "HttpParserTest.java",
+            "IncrementalHttpRequestParserBenchmark.java",
             "InputStreams.java",
             "TestServlet.java",
         ],
