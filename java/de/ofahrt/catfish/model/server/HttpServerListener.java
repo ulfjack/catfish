@@ -2,13 +2,9 @@ package de.ofahrt.catfish.model.server;
 
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
-import de.ofahrt.catfish.model.network.Connection;
 import java.util.UUID;
 
 public interface HttpServerListener {
-  /** Called when an HTTP response has been fully sent to the client. */
-  default void notifySent(
-      Connection connection, HttpRequest request, HttpResponse response, int bytesSent) {}
 
   /** Called on the executor thread after a leaf cert is obtained (MITM INTERCEPT only). */
   default void onCertificateReady(String host, int port) {}
@@ -35,9 +31,9 @@ public interface HttpServerListener {
       HttpResponse response) {}
 
   /**
-   * Called on the executor thread when a proxied request completes, whether successfully or not.
-   * Always fires exactly once per request. Fires after response body streaming is complete (or
-   * after an error).
+   * Called when a request completes, whether locally served or proxied. Always fires exactly once
+   * per request. For proxied requests, {@code originHost} and {@code originPort} identify the
+   * upstream server; for locally served requests, {@code originHost} is null.
    */
   default void onRequestComplete(
       UUID requestId,

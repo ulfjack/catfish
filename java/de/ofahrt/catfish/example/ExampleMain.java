@@ -8,14 +8,15 @@ import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.fastcgi.FcgiHandler;
 import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
+import de.ofahrt.catfish.model.server.RequestOutcome;
 import de.ofahrt.catfish.ssl.SSLContextFactory;
 import de.ofahrt.catfish.ssl.SSLInfo;
 import java.io.File;
+import java.util.UUID;
 
 public class ExampleMain {
 
@@ -59,12 +60,17 @@ public class ExampleMain {
     HttpServerListener errorLogger =
         new HttpServerListener() {
           @Override
-          public void notifySent(
-              Connection connection, HttpRequest request, HttpResponse response, int bytesSent) {
-            if ((response.getStatusCode() / 100) == 5) {
+          public void onRequestComplete(
+              UUID requestId,
+              String originHost,
+              int originPort,
+              HttpRequest request,
+              RequestOutcome outcome) {
+            if (outcome.response() != null && (outcome.response().getStatusCode() / 100) == 5) {
               System.out.printf(
                   "[CATFISH] %d %s\n",
-                  Integer.valueOf(response.getStatusCode()), response.getStatusMessage());
+                  Integer.valueOf(outcome.response().getStatusCode()),
+                  outcome.response().getStatusMessage());
             }
           }
         };

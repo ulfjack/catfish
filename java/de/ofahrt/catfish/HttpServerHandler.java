@@ -27,7 +27,6 @@ final class HttpServerHandler implements NetworkHandler {
   private final SSLSocketFactory originSocketFactory;
   private final SslInfoCache sslInfoCache = new SslInfoCache();
   private final SslServerStage.SSLContextProvider sslContextProvider;
-  private final HttpServerStage.RequestListener requestListener;
   private final HttpServerListener serverListener;
 
   private final boolean needsExecutor;
@@ -44,7 +43,6 @@ final class HttpServerHandler implements NetworkHandler {
     this.needsExecutor = needsExecutor;
     this.originSocketFactory = originSocketFactory;
     this.sslContextProvider = sslContextProvider;
-    this.requestListener = (conn, req, res) -> serverListener.notifySent(conn, req, res, 0);
     this.serverListener = serverListener;
   }
 
@@ -62,7 +60,6 @@ final class HttpServerHandler implements NetworkHandler {
               new HttpServerStage(
                   innerPipeline,
                   this::queueRequest,
-                  requestListener,
                   connectHandler,
                   serverListener,
                   originSocketFactory,
@@ -78,7 +75,6 @@ final class HttpServerHandler implements NetworkHandler {
     return new HttpServerStage(
         pipeline,
         this::queueRequest,
-        requestListener,
         connectHandler,
         serverListener,
         originSocketFactory,

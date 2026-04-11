@@ -1,13 +1,13 @@
 package de.ofahrt.catfish.webalizer;
 
 import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpResponse;
-import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.HttpServerListener;
+import de.ofahrt.catfish.model.server.RequestOutcome;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -70,9 +70,17 @@ public final class WebalizerLogger implements HttpServerListener {
   }
 
   @Override
-  public void notifySent(
-      Connection connection, HttpRequest request, HttpResponse response, int amount) {
-    String logentry = formatter.format(connection, request, response, amount);
+  public void onRequestComplete(
+      UUID requestId,
+      String originHost,
+      int originPort,
+      HttpRequest request,
+      RequestOutcome outcome) {
+    if (outcome.response() == null) {
+      return;
+    }
+    String logentry =
+        formatter.format(null, request, outcome.response(), (int) outcome.bytesSent());
     try {
       jobs.put(logentry);
     } catch (InterruptedException e) {

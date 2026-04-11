@@ -35,10 +35,6 @@ final class HttpClientStage implements Stage {
     void failed(Exception exception);
   }
 
-  //  public interface RequestListener {
-  //    void notifySent(Connection connection, HttpRequest request, HttpResponse response);
-  //  }
-
   private final Pipeline parent;
   private final ResponseHandler responseHandler;
   //  private final RequestListener requestListener;

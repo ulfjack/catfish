@@ -21,12 +21,14 @@ import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.RequestAction;
+import de.ofahrt.catfish.model.server.RequestOutcome;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 import javax.net.SocketFactory;
 import javax.net.ssl.SSLSocketFactory;
@@ -58,14 +60,8 @@ final class HttpServerStage implements Stage {
         HttpResponseWriter responseWriter);
   }
 
-  public interface RequestListener {
-
-    void notifySent(Connection connection, HttpRequest request, HttpResponse response);
-  }
-
   private final Pipeline parent;
   private final RequestQueue requestHandler;
-  private final RequestListener requestListener;
   private final ConnectHandler connectHandler;
   private final HttpServerListener serverListener;
   private final SSLSocketFactory originSocketFactory;
@@ -104,7 +100,6 @@ final class HttpServerStage implements Stage {
   HttpServerStage(
       Pipeline parent,
       RequestQueue requestHandler,
-      RequestListener requestListener,
       ConnectHandler connectHandler,
       HttpServerListener serverListener,
       SSLSocketFactory originSocketFactory,
@@ -114,7 +109,6 @@ final class HttpServerStage implements Stage {
       ByteBuffer outputBuffer) {
     this.parent = parent;
     this.requestHandler = requestHandler;
-    this.requestListener = requestListener;
     this.connectHandler = connectHandler;
     this.serverListener = serverListener;
     this.originSocketFactory = originSocketFactory;
@@ -480,13 +474,21 @@ final class HttpServerStage implements Stage {
           yield readAndResume();
         }
         if (currentHandler != null) {
-          requestListener.notifySent(
-              connection, currentHandler.getRequest(), currentHandler.getResponse());
+          serverListener.onRequestComplete(
+              UUID.randomUUID(),
+              null,
+              0,
+              currentHandler.getRequest(),
+              RequestOutcome.success(currentHandler.getResponse(), 0));
           keepAlive = currentHandler.keepAlive();
           currentHandler = null;
         } else {
-          requestListener.notifySent(
-              connection, responseGenerator.getRequest(), responseGenerator.getResponse());
+          serverListener.onRequestComplete(
+              UUID.randomUUID(),
+              null,
+              0,
+              responseGenerator.getRequest(),
+              RequestOutcome.success(responseGenerator.getResponse(), 0));
           keepAlive = responseGenerator.keepAlive();
           responseGenerator = null;
         }
@@ -558,7 +560,6 @@ final class HttpServerStage implements Stage {
             new HttpServerStage(
                 p,
                 requestHandler,
-                requestListener,
                 ch != null ? ch : connectHandler,
                 serverListener,
                 originSocketFactory,
