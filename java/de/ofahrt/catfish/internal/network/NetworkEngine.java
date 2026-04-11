@@ -313,7 +313,7 @@ public final class NetworkEngine {
                   // called; in particular, local processing and remote shutdown may race, so it
                   // could just as well not have arrived before we close input locally.
                   readState = FlowState.CLOSED;
-                  // This is probably unnecessary.
+                  // Redundant since the remote already closed, but makes our intent explicit.
                   socketChannel.shutdownInput();
                   break;
                 case CLOSE_OUTPUT_AFTER_FLUSH:
