@@ -3,6 +3,7 @@ package de.ofahrt.catfish.model;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import org.jspecify.annotations.Nullable;
 
@@ -13,12 +14,11 @@ public final class SimpleHttpRequest implements HttpRequest {
   private final HttpHeaders headers;
   private final @Nullable Body body;
 
-  @SuppressWarnings("NullAway") // buildPartialRequest creates instances with null uri/body
   SimpleHttpRequest(Builder builder) {
-    this.version = builder.version;
-    this.method = builder.method;
-    this.uri = builder.unparsedUri;
-    this.headers = HttpHeaders.of(builder.headers);
+    this.version = Objects.requireNonNull(builder.version, "version");
+    this.method = Objects.requireNonNull(builder.method, "method");
+    this.uri = Objects.requireNonNull(builder.unparsedUri, "uri");
+    this.headers = HttpHeaders.of(Objects.requireNonNull(builder.headers, "headers"));
     this.body = builder.body;
   }
 
