@@ -320,8 +320,11 @@ public class MitmConnectIntegrationTest {
     HttpEndpoint listener =
         HttpEndpoint.onLocalhost(9098)
             .dispatcher(
-                (host, port) -> {
-                  throw new RuntimeException("policy error");
+                new ConnectHandler() {
+                  @Override
+                  public ConnectDecision applyConnect(String host, int port) {
+                    throw new RuntimeException("policy error");
+                  }
                 });
     s.listen(listener);
 

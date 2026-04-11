@@ -240,10 +240,14 @@ public class ConnectTunnelIntegrationTest {
 
       // Policy rewrites bogusPort to the real HTTP port.
       ConnectHandler rewritePolicy =
-          (targetHost, port) ->
-              port == bogusPort
+          new ConnectHandler() {
+            @Override
+            public ConnectDecision applyConnect(String targetHost, int port) {
+              return port == bogusPort
                   ? ConnectDecision.tunnel("localhost", httpPort)
                   : ConnectDecision.deny();
+            }
+          };
       HttpEndpoint proxyListener = HttpEndpoint.onLocalhost(proxyPort).dispatcher(rewritePolicy);
       rewriteServer.listen(proxyListener);
 

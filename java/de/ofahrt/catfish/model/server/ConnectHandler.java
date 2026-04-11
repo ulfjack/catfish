@@ -12,11 +12,12 @@ import de.ofahrt.catfish.ssl.CertificateAuthority;
  *   <li>{@link #applyLocal} — relative-URI normal request (sees full headers)
  * </ul>
  */
-@FunctionalInterface
 public interface ConnectHandler {
 
-  /** Route a CONNECT request. Only sees host:port (no HTTP headers parsed yet). */
-  ConnectDecision applyConnect(String host, int port);
+  /** Route a CONNECT request. Only sees host:port (no HTTP headers parsed yet). Default: deny. */
+  default ConnectDecision applyConnect(String host, int port) {
+    return ConnectDecision.deny();
+  }
 
   /**
    * Route an absolute-URI proxy request (e.g. {@code GET http://host/path}). The client explicitly
@@ -49,7 +50,7 @@ public interface ConnectHandler {
   }
 
   static ConnectHandler denyAll() {
-    return (h, p) -> ConnectDecision.deny();
+    return new ConnectHandler() {};
   }
 
   static ConnectHandler mitmAll(CertificateAuthority ca) {
