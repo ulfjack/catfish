@@ -268,37 +268,32 @@ final class ConnectStage implements Stage {
   }
 
   private void setupMitm() {
-    // MITM intercept: create an HttpServerStage as the inner stage. Its ConnectHandler's
-    // applyLocal forwards all relative-URI requests to the CONNECT target origin.
+    if (localStageFactory == null) {
+      throw new IllegalStateException(
+          "MITM intercept requires a LocalStageFactory; none was provided");
+    }
+    // The inner HttpServerStage gets a ConnectHandler scoped to the MITM tunnel:
+    // - applyConnect: deny (nested CONNECT inside a decrypted tunnel is meaningless)
+    // - applyLocal: reconstruct the absolute URI and call the user's applyProxy, so the user
+    //   sees all proxied requests (forward-proxy and MITM) through one method. On Deny,
+    //   fall back to forwarding to the CONNECT target origin.
     String capturedOriginHost = originHost;
     int capturedOriginPort = originPort;
     ConnectHandler mitmHandler =
         new ConnectHandler() {
           @Override
           public ConnectDecision applyConnect(String host, int port) {
-            return handler.applyConnect(host, port);
-          }
-
-          @Override
-          public RequestAction applyProxy(HttpRequest request) {
-            return handler.applyProxy(request);
+            return ConnectDecision.deny();
           }
 
           @Override
           public RequestAction applyLocal(HttpRequest request) {
-            // Delegate to the user's handler first; if it returns Deny (the default),
-            // forward to the CONNECT target origin.
-            RequestAction userAction = handler.applyLocal(request);
-            if (userAction instanceof RequestAction.Deny) {
-              return RequestAction.forward(capturedOriginHost, capturedOriginPort, true);
-            }
-            return userAction;
+            String absoluteUri =
+                OriginForwarder.buildAbsoluteUri(
+                    true, capturedOriginHost, capturedOriginPort, request.getUri());
+            return handler.applyProxy(request.withUri(absoluteUri));
           }
         };
-    if (localStageFactory == null) {
-      throw new IllegalStateException(
-          "MITM intercept requires a LocalStageFactory; none was provided");
-    }
     SslServerStage.InnerStageFactory innerFactory =
         (innerPipeline, plainIn, plainOut) ->
             wrapWithOnClose(
@@ -313,9 +308,10 @@ final class ConnectStage implements Stage {
   }
 
   /**
-   * Wraps a Stage so that {@code onClose} runs after the delegate's {@link Stage#close()}. Used for
-   * local-intercept mode since the local inner stage ({@link HttpServerStage}) doesn't know about
-   * the {@link HttpServerListener#onConnectComplete} callback contract.
+   * Wraps a Stage so that {@code onClose} runs after the delegate's {@link Stage#close()}. The
+   * inner {@link HttpServerStage} doesn't know about the {@link
+   * HttpServerListener#onConnectComplete} callback, so this wrapper ensures it fires when the MITM
+   * session ends.
    */
   private static Stage wrapWithOnClose(Stage delegate, Runnable onClose) {
     return new Stage() {

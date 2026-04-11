@@ -654,7 +654,7 @@ public class MitmConnectIntegrationTest {
     }
   }
 
-  // ---- applyLocal routing tests ----
+  // ---- applyProxy routing tests ----
 
   /**
    * Creates a MITM proxy on {@code mitmPort} with a custom {@link ConnectHandler} that intercepts
@@ -674,7 +674,7 @@ public class MitmConnectIntegrationTest {
   }
 
   @Test
-  public void applyLocal_serveLocally_skipsOrigin() throws Exception {
+  public void applyProxy_serveLocally_skipsOrigin() throws Exception {
     byte[] cachedBody = "cached-response".getBytes(StandardCharsets.UTF_8);
 
     startMitmProxyWithHandler(
@@ -686,7 +686,7 @@ public class MitmConnectIntegrationTest {
           }
 
           @Override
-          public RequestAction applyLocal(HttpRequest request) {
+          public RequestAction applyProxy(HttpRequest request) {
             return RequestAction.serveLocally(
                 (conn, req, writer) ->
                     writer.commitBuffered(
@@ -714,7 +714,7 @@ public class MitmConnectIntegrationTest {
   }
 
   @Test
-  public void applyLocal_serveLocally_streamsLargeBody() throws Exception {
+  public void applyProxy_serveLocally_streamsLargeBody() throws Exception {
     int bodySize = 2 * 1024 * 1024; // 2 MB
     byte[] largeBody = new byte[bodySize];
     for (int i = 0; i < bodySize; i++) {
@@ -730,7 +730,7 @@ public class MitmConnectIntegrationTest {
           }
 
           @Override
-          public RequestAction applyLocal(HttpRequest request) {
+          public RequestAction applyProxy(HttpRequest request) {
             return RequestAction.serveLocally(
                 (conn, req, writer) -> {
                   OutputStream out = writer.commitStreamed(StandardResponses.OK);
@@ -758,7 +758,7 @@ public class MitmConnectIntegrationTest {
   }
 
   @Test
-  public void applyLocal_forwardAndCapture_teesResponseBody() throws Exception {
+  public void applyProxy_forwardAndCapture_teesResponseBody() throws Exception {
     byte[] expectedBody = "MITM-OK".getBytes(StandardCharsets.UTF_8);
 
     ByteArrayOutputStream captured = new ByteArrayOutputStream();
@@ -771,7 +771,7 @@ public class MitmConnectIntegrationTest {
           }
 
           @Override
-          public RequestAction applyLocal(HttpRequest request) {
+          public RequestAction applyProxy(HttpRequest request) {
             return new RequestAction.ForwardAndCapture("localhost", HTTPS_PORT, true, captured);
           }
         });
@@ -796,7 +796,7 @@ public class MitmConnectIntegrationTest {
   }
 
   @Test
-  public void applyLocal_keepAlive_secondRequestForwarded() throws Exception {
+  public void applyProxy_keepAlive_secondRequestForwarded() throws Exception {
     byte[] cachedBody = "cached".getBytes(StandardCharsets.UTF_8);
 
     startMitmProxyWithHandler(
@@ -808,7 +808,7 @@ public class MitmConnectIntegrationTest {
           }
 
           @Override
-          public RequestAction applyLocal(HttpRequest request) {
+          public RequestAction applyProxy(HttpRequest request) {
             if (request.getUri().endsWith("/cached")) {
               return RequestAction.serveLocally(
                   (conn, req, writer) ->
