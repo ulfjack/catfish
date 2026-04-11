@@ -171,9 +171,8 @@ final class IncrementalHttpRequestParser {
             counter = 0;
             elementBuffer.setLength(0);
             state = State.REQUEST_VERSION_HTTP;
-          } else if ((c == '\r') || (c == '\n')) {
-            // TODO: This probably shouldn't allow any control characters.
-            return setBadRequest("Unexpected end of line in request uri");
+          } else if (isControl(c)) {
+            return setBadRequest("Illegal character in request URI");
           } else {
             if (elementBuffer.length() >= MAX_URI_LENGTH) {
               return setError(HttpStatusCode.URI_TOO_LONG);
@@ -305,10 +304,9 @@ final class IncrementalHttpRequestParser {
             state = State.MESSAGE_HEADER_NAME_OR_CONTINUATION;
           } else if (isSpace(c)) {
             trimAndAppendSpace();
+          } else if (isControl(c)) {
+            return setBadRequest("Illegal character in header field value");
           } else {
-            if (isControl(c)) {
-              return setBadRequest("Illegal character in header field value");
-            }
             if (elementBuffer.length() >= MAX_HEADER_VALUE_LENGTH) {
               return setError(
                   HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Header value is too long");

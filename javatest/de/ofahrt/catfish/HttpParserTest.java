@@ -204,7 +204,7 @@ public abstract class HttpParserTest {
   public void badRequestLine() throws Exception {
     checkError("400 Illegal character in request method", "GET\n\n");
     checkError("400 Expected request method, but <space> found", " \n\nGET\n\n");
-    checkError("400 Unexpected end of line in request uri", "GET /\n\n");
+    checkError("400 Illegal character in request URI", "GET /\n\n");
     checkError("400 Expected 'H' of request version string", "GET / x\n\n");
     checkError("400 Expected 'T' of request version string", "GET / H\n\n");
     checkError("400 Expected 'T' of request version string", "GET / HT\n\n");
