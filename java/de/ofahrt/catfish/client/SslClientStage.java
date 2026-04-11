@@ -88,15 +88,15 @@ final class SslClientStage implements Stage {
       parent.log("STATUS=%s", result);
       Status sslStatus = result.getStatus();
       switch (sslStatus) {
-        case CLOSED:
+        case CLOSED -> {
           parent.close();
           return ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY;
-        case BUFFER_UNDERFLOW:
+        }
+        case BUFFER_UNDERFLOW -> {
           return ConnectionControl.NEED_MORE_DATA;
-        case OK:
-          break;
-        default:
-          throw new IOException(result.toString());
+        }
+        case OK -> {}
+        default -> throw new IOException(result.toString());
       }
     }
     checkStatus();

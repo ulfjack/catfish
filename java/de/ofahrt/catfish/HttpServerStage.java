@@ -470,16 +470,14 @@ final class HttpServerStage implements Stage {
       // Spurious write() call. Ignore.
       return ConnectionControl.PAUSE;
     }
-    switch (token) {
-      case CONTINUE:
-        return ConnectionControl.CONTINUE;
-      case PAUSE:
-        return ConnectionControl.PAUSE;
-      case STOP:
+    return switch (token) {
+      case CONTINUE -> ConnectionControl.CONTINUE;
+      case PAUSE -> ConnectionControl.PAUSE;
+      case STOP -> {
         if (responseGenerator instanceof ContinueResponseGenerator) {
           responseGenerator = null;
           parent.log("Sent 100 Continue, resuming body read");
-          return readAndResume();
+          yield readAndResume();
         }
         if (currentHandler != null) {
           requestListener.notifySent(
@@ -494,33 +492,28 @@ final class HttpServerStage implements Stage {
         }
         parent.log("Completed. keepAlive=%s", Boolean.valueOf(keepAlive));
         if (keepAlive) {
-          return readAndResume();
+          yield readAndResume();
         } else {
-          return ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
+          yield ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
         }
-    }
-    throw new IllegalStateException(token.toString());
+      }
+    };
   }
 
   private ConnectionControl readAndResume() {
     ConnectionControl control = read();
-    switch (control) {
-      case CONTINUE:
-      case NEED_MORE_DATA:
+    return switch (control) {
+      case CONTINUE, NEED_MORE_DATA -> {
         parent.encourageReads();
-        break;
-      case PAUSE:
-        break;
-      case CLOSE_INPUT:
-        // An error response is already queued (via startBuffered + encourageWrites).
-        // Return PAUSE so the write loop can send it.
-        break;
-      case CLOSE_CONNECTION_AFTER_FLUSH:
-      case CLOSE_OUTPUT_AFTER_FLUSH:
-      case CLOSE_CONNECTION_IMMEDIATELY:
-        return control;
-    }
-    return ConnectionControl.PAUSE;
+        yield ConnectionControl.PAUSE;
+      }
+      case PAUSE -> ConnectionControl.PAUSE;
+      // An error response is already queued (via startBuffered + encourageWrites).
+      // Return PAUSE so the write loop can send it.
+      case CLOSE_INPUT -> ConnectionControl.PAUSE;
+      case CLOSE_CONNECTION_AFTER_FLUSH, CLOSE_OUTPUT_AFTER_FLUSH, CLOSE_CONNECTION_IMMEDIATELY ->
+          control;
+    };
   }
 
   @Override

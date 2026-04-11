@@ -103,19 +103,16 @@ final class HttpClientStage implements Stage {
     outputBuffer.compact(); // prepare buffer for writing
     ContinuationToken token = requestGenerator.generate(outputBuffer);
     outputBuffer.flip(); // prepare buffer for reading
-    switch (token) {
-      case CONTINUE:
-        return ConnectionControl.CONTINUE;
-      case PAUSE:
-        return ConnectionControl.PAUSE;
-      case STOP:
+    return switch (token) {
+      case CONTINUE -> ConnectionControl.CONTINUE;
+      case PAUSE -> ConnectionControl.PAUSE;
+      case STOP -> {
         parent.encourageReads();
         requestGenerator = null;
         parent.log("Request completed.");
-        return ConnectionControl.PAUSE;
-      default:
-        throw new IllegalStateException();
-    }
+        yield ConnectionControl.PAUSE;
+      }
+    };
   }
 
   @Override
