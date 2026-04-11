@@ -76,7 +76,6 @@ public final class MimeTypeRegistry {
     result.put("gz", MimeType.getInstance("application", "x-gzip"));
     result.put("tgz", MimeType.getInstance("application", "x-gzip"));
     result.put("hdf", MimeType.getInstance("application", "x-hdf"));
-    result.put("js", MimeType.getInstance("application", "x-javascript"));
     result.put("kwd", MimeType.getInstance("application", "x-kword"));
     result.put("kwt", MimeType.getInstance("application", "x-kword"));
     result.put("ksp", MimeType.getInstance("application", "x-kspread"));

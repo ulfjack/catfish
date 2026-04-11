@@ -1,7 +1,7 @@
 package de.ofahrt.catfish.upload;
 
 import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
-import de.ofahrt.catfish.utils.HttpContentType;
+import de.ofahrt.catfish.utils.MediaType;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -45,35 +45,22 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
   private MalformedMultipartException error;
 
   public IncrementalMultipartParser(String contentType) {
-    String[] parsedContentType;
-    try {
-      parsedContentType = HttpContentType.parseContentType(contentType);
-    } catch (IllegalArgumentException e) {
-      error = new MalformedMultipartException(e.getMessage());
-      parsedContentType = null;
-    }
+    MediaType mt = MediaType.parse(contentType);
     char[] foundBoundary = null;
-    if (parsedContentType == null) {
-      // We've already set an error above.
-    } else if (!"multipart/form-data".equals(parsedContentType[0])) {
+    if (mt == null) {
+      error = new MalformedMultipartException("Invalid content type");
+    } else if (!"multipart/form-data".equals(mt.mimeType())) {
       error = new MalformedMultipartException("Content type must be multipart/form-data");
     } else {
-      for (int i = 1; i < parsedContentType.length; i += 2) {
-        if ("boundary".equals(parsedContentType[i])) {
-          if (foundBoundary != null) {
-            error =
-                new MalformedMultipartException("duplicate boundary specification in content type");
-            continue;
-          }
-          try {
-            foundBoundary = validateBoundary(parsedContentType[i + 1]);
-          } catch (IllegalArgumentException e) {
-            error = new MalformedMultipartException(e.getMessage());
-          }
-        }
-      }
-      if (foundBoundary == null) {
+      String boundaryValue = mt.parameters().get("boundary");
+      if (boundaryValue == null) {
         error = new MalformedMultipartException("no boundary specification in content type");
+      } else {
+        try {
+          foundBoundary = validateBoundary(boundaryValue);
+        } catch (IllegalArgumentException e) {
+          error = new MalformedMultipartException(e.getMessage());
+        }
       }
     }
     boundary = foundBoundary;

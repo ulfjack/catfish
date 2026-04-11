@@ -11,7 +11,7 @@ import org.junit.Test;
 public class HttpContentTypeTest {
 
   public static boolean isTokenCharacter(char c) {
-    return HttpContentType.isTokenCharacter(c);
+    return MediaType.isTokenChar(c);
   }
 
   @Test

@@ -196,7 +196,9 @@ public class IncrementalHttpParserTest {
   @SuppressWarnings("boxing")
   @Test
   public void isTokenCharShouldAgreeWithIncrementalParser() {
-    for (char c = 0; c < 256; c++) {
+    // Compare only ASCII (0-127). The request parser accepts bytes 128-255 as token chars
+    // (legacy behavior), while MediaType strictly follows RFC 9110 §5.6.2 (ASCII-only tchar).
+    for (char c = 0; c < 128; c++) {
       assertEquals(
           "Odd result for " + (int) c,
           IncrementalHttpRequestParser.isTokenCharacter(c),

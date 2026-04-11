@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 public final class MimeType implements Serializable {
   private static final long serialVersionUID = 3902904509160688751L;
 
-  private static final Pattern MIME_PATTERN = Pattern.compile("(\\w+)/(\\w+)");
+  private static final Pattern MIME_PATTERN = Pattern.compile("([\\w]+)/([\\w.+-]+)");
   private static final ConcurrentHashMap<String, MimeType> cache = new ConcurrentHashMap<>(30);
 
   public static MimeType getInstance(String primary, String subtype) {
