@@ -150,6 +150,36 @@ public class MediaTypeTest {
     assertNull(MediaType.parse("text/html; charset= utf-8"));
   }
 
+  @Test
+  public void parse_trailingWhitespace_accepted() {
+    // Trailing OWS after last param is tolerated (OWS consumed, then i >= len breaks the loop).
+    MediaType mt = MediaType.parse("text/html; charset=utf-8 ");
+    assertNotNull(mt);
+    assertEquals("utf-8", mt.parameters().get("charset"));
+  }
+
+  @Test
+  public void parse_nonSemicolonAfterOws_returnsNull() {
+    assertNull(MediaType.parse("text/html x"));
+  }
+
+  @Test
+  public void parse_paramNameWithoutEquals_returnsNull() {
+    assertNull(MediaType.parse("text/html; charset"));
+  }
+
+  @Test
+  public void parse_trailingBackslashInQuotedString_returnsNull() {
+    assertNull(MediaType.parse("text/html; charset=\"\\"));
+  }
+
+  @Test
+  public void parse_tabAsOws() {
+    MediaType mt = MediaType.parse("text/html\t;\tcharset=utf-8");
+    assertNotNull(mt);
+    assertEquals("utf-8", mt.parameters().get("charset"));
+  }
+
   // ---- isTokenChar ----
 
   @Test
