@@ -27,6 +27,18 @@ java_library(
 )
 
 java_binary(
+    name = "blob_server",
+    testonly = True,
+    srcs = ["BlobServer.java"],
+    main_class = "de.ofahrt.catfish.BlobServer",
+    deps = [
+        "//java/de/ofahrt/catfish",
+        "//java/de/ofahrt/catfish/model",
+        "//java/de/ofahrt/catfish/model/network",
+    ],
+)
+
+java_binary(
     name = "benchmark",
     testonly = True,
     srcs = [
@@ -49,6 +61,7 @@ java_test(
     srcs = glob(
         ["*.java"],
         exclude = [
+            "BlobServer.java",
             "ChunkedBodyScannerBenchmark.java",
             "HttpServerBenchmark.java",
             "CollectionsUtils.java",
