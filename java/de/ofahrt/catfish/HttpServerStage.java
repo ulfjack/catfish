@@ -15,12 +15,12 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
-import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
+import de.ofahrt.catfish.model.server.RequestAction;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.IOException;
 import java.net.URI;
@@ -28,7 +28,6 @@ import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.concurrent.Executor;
-import java.util.function.Function;
 import javax.net.SocketFactory;
 import javax.net.ssl.SSLSocketFactory;
 
@@ -67,7 +66,6 @@ final class HttpServerStage implements Stage {
   private final Pipeline parent;
   private final RequestQueue requestHandler;
   private final RequestListener requestListener;
-  private final Function<String, HttpVirtualHost> virtualHostLookup;
   private final ConnectHandler connectHandler;
   private final HttpServerListener serverListener;
   private final SSLSocketFactory originSocketFactory;
@@ -89,48 +87,24 @@ final class HttpServerStage implements Stage {
   // For chunked bodies: scans raw chunked framing to detect completion without decoding.
   private ChunkedBodyScanner chunkedScanner;
   private HttpRequest headersRequest;
-  // Non-null while waiting for ConnectHandler.apply() to return the routing decision for an
-  // absolute-URI (forward-proxy) request. While set, read() returns PAUSE so that body bytes
-  // remain buffered in inputBuffer until the decision arrives.
+  // Non-null while waiting for ConnectHandler.applyProxy/applyLocal to return the routing
+  // decision for a request. While set, read() returns PAUSE so that body bytes remain buffered
+  // in inputBuffer until the decision arrives.
   private HttpRequest pendingAbsoluteUriRequest;
-  // Set by the executor task once ConnectHandler.apply() has returned. Read and cleared by the
+  // Set by the executor task once the routing method has returned. Read and cleared by the
   // next invocation of read() on the NIO thread. Null means "no decision yet" — the field is
   // volatile because it crosses the executor↔NIO thread boundary.
-  private volatile ConnectDecision pendingRoutingDecision;
-  // Signals that ConnectHandler.apply() threw; produce a 403. Checked alongside
-  // pendingRoutingDecision.
+  private volatile RequestAction pendingRequestAction;
+  // Signals that the routing method threw; produce a 403. Checked alongside
+  // pendingRequestAction.
   private volatile boolean pendingRoutingFailed;
 
-  private static final ConnectHandler SERVE_LOCALLY =
-      (host, port) -> ConnectDecision.serveLocally();
   private static final HttpServerListener NO_OP_LISTENER = new HttpServerListener() {};
 
   HttpServerStage(
       Pipeline parent,
       RequestQueue requestHandler,
       RequestListener requestListener,
-      Function<String, HttpVirtualHost> virtualHostLookup,
-      ByteBuffer inputBuffer,
-      ByteBuffer outputBuffer) {
-    this(
-        parent,
-        requestHandler,
-        requestListener,
-        virtualHostLookup,
-        SERVE_LOCALLY,
-        NO_OP_LISTENER,
-        /* originSocketFactory= */ null,
-        /* sslInfoCache= */ null,
-        /* executor= */ null,
-        inputBuffer,
-        outputBuffer);
-  }
-
-  HttpServerStage(
-      Pipeline parent,
-      RequestQueue requestHandler,
-      RequestListener requestListener,
-      Function<String, HttpVirtualHost> virtualHostLookup,
       ConnectHandler connectHandler,
       HttpServerListener serverListener,
       SSLSocketFactory originSocketFactory,
@@ -141,7 +115,6 @@ final class HttpServerStage implements Stage {
     this.parent = parent;
     this.requestHandler = requestHandler;
     this.requestListener = requestListener;
-    this.virtualHostLookup = virtualHostLookup;
     this.connectHandler = connectHandler;
     this.serverListener = serverListener;
     this.originSocketFactory = originSocketFactory;
@@ -209,12 +182,6 @@ final class HttpServerStage implements Stage {
     String te = headers.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
     boolean hasBody =
         (cl != null && !"0".equals(cl)) || (te != null && "chunked".equalsIgnoreCase(te));
-
-    // Create the handler if not already set (the proxy path sets it before calling this method).
-    if (currentHandler == null) {
-      currentHandler =
-          new LocalHttpRequestStage(parent, requestHandler, virtualHostLookup, connection);
-    }
     HttpRequestStage.Decision decision = currentHandler.onHeaders(headers);
     if (decision == HttpRequestStage.Decision.REJECT) {
       // Handler prepared an error response. Pause reading, start writing.
@@ -267,79 +234,55 @@ final class HttpServerStage implements Stage {
   }
 
   /**
-   * Routes a request via {@link ConnectHandler#apply}. Absolute URIs are routed through the handler
-   * (forward proxy). Relative URIs are served locally.
+   * Routes a request via {@link ConnectHandler#applyProxy} or {@link ConnectHandler#applyLocal}.
+   * Absolute URIs are routed through applyProxy (forward proxy). Relative URIs use applyLocal.
    */
   private ConnectionControl beginRouting(HttpRequest headers) {
-    // Extract host/port for the routing decision.
-    String host;
-    int port;
-    boolean isProxy;
-    if (isAbsoluteUri(headers.getUri())) {
-      isProxy = true;
+    boolean isProxy = isAbsoluteUri(headers.getUri());
+    if (isProxy) {
+      // Validate the absolute URI before routing.
       try {
         URI uri = new URI(headers.getUri());
         if (uri.getHost() == null) {
           startBuffered(headers, StandardResponses.BAD_REQUEST);
           return ConnectionControl.CLOSE_INPUT;
         }
-        host = uri.getHost();
-        boolean useTls = "https".equalsIgnoreCase(uri.getScheme());
-        int explicitPort = uri.getPort();
-        port = explicitPort >= 0 ? explicitPort : (useTls ? 443 : 80);
       } catch (URISyntaxException e) {
         startBuffered(headers, StandardResponses.BAD_REQUEST);
         return ConnectionControl.CLOSE_INPUT;
       }
-    } else {
-      isProxy = false;
-      String hostHeader = headers.getHeaders().get(HttpHeaderName.HOST);
-      if (hostHeader != null && hostHeader.contains(":")) {
-        int colonIdx = hostHeader.lastIndexOf(':');
-        host = hostHeader.substring(0, colonIdx);
-        try {
-          port = Integer.parseInt(hostHeader.substring(colonIdx + 1));
-        } catch (NumberFormatException e) {
-          host = hostHeader;
-          port = 80;
-        }
-      } else {
-        host = hostHeader != null ? hostHeader : "localhost";
-        port = 80;
-      }
     }
 
     if (executor != null) {
-      // Async path: dispatch to executor thread (apply/applyLocal may block).
+      // Async path: dispatch to executor thread (applyProxy/applyLocal may block).
       pendingAbsoluteUriRequest = headers;
-      String finalHost = host;
-      int finalPort = port;
       boolean finalIsProxy = isProxy;
-      executor.execute(() -> runRoutingDecision(finalHost, finalPort, finalIsProxy));
+      executor.execute(() -> runRoutingDecision(headers, finalIsProxy));
       return ConnectionControl.PAUSE;
     }
 
     // Synchronous path: call inline.
-    ConnectDecision decision;
+    RequestAction action;
     try {
-      decision = isProxy ? connectHandler.apply(host, port) : connectHandler.applyLocal(host, port);
+      action = isProxy ? connectHandler.applyProxy(headers) : connectHandler.applyLocal(headers);
     } catch (Exception e) {
       startBuffered(headers, StandardResponses.FORBIDDEN);
       return ConnectionControl.CLOSE_INPUT;
     }
-    return applyRoutingDecision(headers, decision);
+    return applyRoutingDecision(headers, action);
   }
 
   /**
-   * Runs on the executor thread. Calls {@link ConnectHandler#apply} (which may block), stashes the
-   * result in the pending fields, and wakes the NIO thread via {@link Pipeline#encourageWrites} so
-   * that {@link #write} consumes the decision from inside {@code handleEvent}.
+   * Runs on the executor thread. Calls {@link ConnectHandler#applyProxy} or {@link
+   * ConnectHandler#applyLocal} (which may block), stashes the result in the pending fields, and
+   * wakes the NIO thread via {@link Pipeline#encourageWrites} so that {@link #write} consumes the
+   * decision from inside {@code handleEvent}.
    */
-  private void runRoutingDecision(String host, int port, boolean isProxy) {
+  private void runRoutingDecision(HttpRequest request, boolean isProxy) {
     try {
-      ConnectDecision decision =
-          isProxy ? connectHandler.apply(host, port) : connectHandler.applyLocal(host, port);
-      pendingRoutingDecision = decision != null ? decision : ConnectDecision.deny();
+      RequestAction action =
+          isProxy ? connectHandler.applyProxy(request) : connectHandler.applyLocal(request);
+      pendingRequestAction = action != null ? action : RequestAction.deny();
     } catch (Exception e) {
       pendingRoutingFailed = true;
     }
@@ -350,21 +293,7 @@ final class HttpServerStage implements Stage {
    * Applies a routing decision: serve locally, deny, or forward to origin. Called from both the
    * synchronous path (non-proxy server) and the async path (after executor returns decision).
    */
-  private ConnectionControl applyRoutingDecision(HttpRequest headers, ConnectDecision decision) {
-    if (decision.isDenied()) {
-      startBuffered(headers, StandardResponses.FORBIDDEN);
-      return ConnectionControl.PAUSE;
-    }
-    if (decision.isServeLocally()) {
-      // Rewrite absolute URI → relative if needed.
-      HttpRequest effective =
-          isAbsoluteUri(headers.getUri())
-              ? headers.withUri(toRelativeUri(headers.getUri()))
-              : headers;
-      return startBodyOrDispatch(effective);
-    }
-    // Forward to origin. Rewrite absolute URI → relative if needed (OriginForwarder expects
-    // relative URIs and builds the absolute URI internally for handleRequest logging).
+  private ConnectionControl applyRoutingDecision(HttpRequest headers, RequestAction action) {
     HttpRequest effective =
         isAbsoluteUri(headers.getUri())
             ? headers.withUri(toRelativeUri(headers.getUri()))
@@ -373,46 +302,42 @@ final class HttpServerStage implements Stage {
         originSocketFactory != null
             ? originSocketFactory
             : (SSLSocketFactory) SSLSocketFactory.getDefault();
-    ConnectDecision capturedDecision = decision;
-    ProxyRequestStage.OriginResolver resolver =
-        (req) -> resolveOrigin(headers, capturedDecision, sslFactory);
-    currentHandler =
-        new ProxyRequestStage(parent, executor, connectHandler, serverListener, resolver);
-    return startBodyOrDispatch(effective);
-  }
-
-  /**
-   * Resolves a request to its origin, applying any host/port overrides from the {@link
-   * ConnectDecision}. For absolute URIs, host/port come from the URI. For relative URIs (reverse
-   * proxy / MITM), host/port come from the decision.
-   */
-  private static ProxyRequestStage.Origin resolveOrigin(
-      HttpRequest request, ConnectDecision decision, SSLSocketFactory sslFactory) throws Exception {
-    if (isAbsoluteUri(request.getUri())) {
-      URI uri = new URI(request.getUri());
-      if (uri.getHost() == null) {
-        throw new Exception("No host in absolute URI");
-      }
-      boolean useTls = "https".equalsIgnoreCase(uri.getScheme());
-      String host = decision.getHost() != null ? decision.getHost() : uri.getHost();
-      int defaultPort = useTls ? 443 : 80;
-      int port =
-          decision.getPort() > 0
-              ? decision.getPort()
-              : (uri.getPort() >= 0 ? uri.getPort() : defaultPort);
-      SocketFactory factory = useTls ? sslFactory : SocketFactory.getDefault();
-      return new ProxyRequestStage.Origin(host, port, useTls, factory);
+    if (action instanceof RequestAction.Deny) {
+      startBuffered(headers, StandardResponses.FORBIDDEN);
+      return ConnectionControl.PAUSE;
+    } else if (action instanceof RequestAction.ServeLocally s) {
+      currentHandler =
+          new LocalHttpRequestStage(
+              parent,
+              requestHandler,
+              s.handler(),
+              s.uploadPolicy(),
+              s.keepAlivePolicy(),
+              s.compressionPolicy(),
+              connection);
+      return startBodyOrDispatch(effective);
+    } else if (action instanceof RequestAction.ForwardAndCapture fc) {
+      SocketFactory factory = fc.useTls() ? sslFactory : SocketFactory.getDefault();
+      currentHandler =
+          new ProxyRequestStage(
+              parent,
+              executor,
+              serverListener,
+              fc.host(),
+              fc.port(),
+              fc.useTls(),
+              factory,
+              fc.captureStream());
+      return startBodyOrDispatch(effective);
+    } else if (action instanceof RequestAction.Forward f) {
+      SocketFactory factory = f.useTls() ? sslFactory : SocketFactory.getDefault();
+      currentHandler =
+          new ProxyRequestStage(
+              parent, executor, serverListener, f.host(), f.port(), f.useTls(), factory);
+      return startBodyOrDispatch(effective);
+    } else {
+      throw new IllegalStateException("Unknown RequestAction: " + action);
     }
-    // Relative URI (reverse proxy / MITM): host/port come from the decision.
-    String host = decision.getHost();
-    int port = decision.getPort();
-    if (host == null || port <= 0) {
-      throw new Exception("Decision does not specify origin for relative URI");
-    }
-    // Use the configured SSLSocketFactory if available — for MITM, the origin is behind TLS.
-    boolean useTls = sslFactory != null;
-    SocketFactory factory = useTls ? sslFactory : SocketFactory.getDefault();
-    return new ProxyRequestStage.Origin(host, port, useTls, factory);
   }
 
   private static String toRelativeUri(String absoluteUri) {
@@ -504,18 +429,18 @@ final class HttpServerStage implements Stage {
     // Consume a pending routing decision on the NIO thread. Driven by encourageWrites from the
     // executor-thread runRoutingDecision.
     if (pendingAbsoluteUriRequest != null
-        && (pendingRoutingDecision != null || pendingRoutingFailed)) {
+        && (pendingRequestAction != null || pendingRoutingFailed)) {
       HttpRequest headers = pendingAbsoluteUriRequest;
-      ConnectDecision decision = pendingRoutingDecision;
+      RequestAction action = pendingRequestAction;
       boolean failed = pendingRoutingFailed;
       pendingAbsoluteUriRequest = null;
-      pendingRoutingDecision = null;
+      pendingRequestAction = null;
       pendingRoutingFailed = false;
-      if (failed || decision == null) {
+      if (failed || action == null) {
         startBuffered(headers, StandardResponses.FORBIDDEN);
         // Fall through to response generation below.
       } else {
-        ConnectionControl cc = applyRoutingDecision(headers, decision);
+        ConnectionControl cc = applyRoutingDecision(headers, action);
         if (cc == ConnectionControl.CONTINUE || cc == ConnectionControl.NEED_MORE_DATA) {
           parent.encourageReads();
           return ConnectionControl.PAUSE;
@@ -630,8 +555,7 @@ final class HttpServerStage implements Stage {
                 p,
                 requestHandler,
                 requestListener,
-                virtualHostLookup,
-                ch != null ? ch : SERVE_LOCALLY,
+                ch != null ? ch : connectHandler,
                 serverListener,
                 originSocketFactory,
                 sslInfoCache,

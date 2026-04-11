@@ -1,87 +1,63 @@
 package de.ofahrt.catfish.model.server;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
-import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
 import java.io.ByteArrayOutputStream;
 import org.junit.Test;
 
 public class RequestActionTest {
 
-  private static HttpRequest request() {
-    try {
-      return new SimpleHttpRequest.Builder().setUri("/").build();
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
+  @Test
+  public void deny_isDenyInstance() {
+    RequestAction a = RequestAction.deny();
+    assertTrue(a instanceof RequestAction.Deny);
   }
 
   @Test
-  public void forward_allFieldsNull() {
-    RequestAction a = RequestAction.forward();
-    assertNull(a.request());
-    assertNull(a.localResponse());
-    assertNull(a.bodyWriter());
-    assertNull(a.captureStream());
+  public void forward_setsHostAndPort() {
+    RequestAction a = RequestAction.forward("example.com", 8080);
+    assertTrue(a instanceof RequestAction.Forward);
+    RequestAction.Forward f = (RequestAction.Forward) a;
+    assertEquals("example.com", f.host());
+    assertEquals(8080, f.port());
   }
 
   @Test
-  public void forward_sameSingletonOnRepeatedCalls() {
-    assertSame(RequestAction.forward(), RequestAction.forward());
+  public void serveLocally_setsHandlerWithDefaults() {
+    HttpHandler handler = (conn, req, writer) -> writer.commitBuffered(StandardResponses.OK);
+    RequestAction a = RequestAction.serveLocally(handler);
+    assertTrue(a instanceof RequestAction.ServeLocally);
+    RequestAction.ServeLocally s = (RequestAction.ServeLocally) a;
+    assertSame(handler, s.handler());
+    assertSame(UploadPolicy.DENY, s.uploadPolicy());
+    assertSame(KeepAlivePolicy.KEEP_ALIVE, s.keepAlivePolicy());
+    assertSame(CompressionPolicy.NONE, s.compressionPolicy());
   }
 
   @Test
-  public void forwardWithRewrittenRequest_setsOnlyRequest() {
-    HttpRequest r = request();
-    RequestAction a = RequestAction.forward(r);
-    assertSame(r, a.request());
-    assertNull(a.localResponse());
-    assertNull(a.bodyWriter());
-    assertNull(a.captureStream());
+  public void serveLocally_setsAllPolicies() {
+    HttpHandler handler = (conn, req, writer) -> writer.commitBuffered(StandardResponses.OK);
+    RequestAction a =
+        new RequestAction.ServeLocally(
+            handler, UploadPolicy.ALLOW, KeepAlivePolicy.CLOSE, CompressionPolicy.COMPRESS);
+    RequestAction.ServeLocally s = (RequestAction.ServeLocally) a;
+    assertSame(handler, s.handler());
+    assertSame(UploadPolicy.ALLOW, s.uploadPolicy());
+    assertSame(KeepAlivePolicy.CLOSE, s.keepAlivePolicy());
+    assertSame(CompressionPolicy.COMPRESS, s.compressionPolicy());
   }
 
   @Test
-  public void forwardAndCapture_setsOnlyCaptureStream() {
+  public void forwardAndCapture_setsHostPortAndCaptureStream() {
     ByteArrayOutputStream capture = new ByteArrayOutputStream();
-    RequestAction a = RequestAction.forwardAndCapture(capture);
-    assertNull(a.request());
-    assertNull(a.localResponse());
-    assertNull(a.bodyWriter());
-    assertSame(capture, a.captureStream());
-  }
-
-  @Test
-  public void forwardAndCaptureWithRewrittenRequest_setsRequestAndCapture() {
-    HttpRequest r = request();
-    ByteArrayOutputStream capture = new ByteArrayOutputStream();
-    RequestAction a = RequestAction.forwardAndCapture(r, capture);
-    assertSame(r, a.request());
-    assertSame(capture, a.captureStream());
-    assertNull(a.localResponse());
-    assertNull(a.bodyWriter());
-  }
-
-  @Test
-  public void respond_setsOnlyLocalResponse() {
-    RequestAction a = RequestAction.respond(StandardResponses.OK);
-    assertNull(a.request());
-    assertSame(StandardResponses.OK, a.localResponse());
-    assertNull(a.bodyWriter());
-    assertNull(a.captureStream());
-  }
-
-  @Test
-  public void respondStreaming_setsLocalResponseAndBodyWriter() {
-    ResponseBodyWriter writer = out -> out.write(new byte[] {1, 2, 3});
-    RequestAction a = RequestAction.respondStreaming(StandardResponses.OK, writer);
-    assertNull(a.request());
-    assertSame(StandardResponses.OK, a.localResponse());
-    assertSame(writer, a.bodyWriter());
-    assertNull(a.captureStream());
-    assertNotNull(a.bodyWriter()); // defensive
+    RequestAction a = new RequestAction.ForwardAndCapture("host", 443, true, capture);
+    assertTrue(a instanceof RequestAction.ForwardAndCapture);
+    RequestAction.ForwardAndCapture fc = (RequestAction.ForwardAndCapture) a;
+    assertEquals("host", fc.host());
+    assertEquals(443, fc.port());
+    assertSame(capture, fc.captureStream());
   }
 }

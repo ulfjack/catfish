@@ -3,14 +3,11 @@ package de.ofahrt.catfish;
 import de.ofahrt.catfish.http.HttpRequestStage;
 import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
-import de.ofahrt.catfish.model.HttpHeaderName;
-import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
-import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
-import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Executor;
 import javax.net.SocketFactory;
@@ -25,20 +22,14 @@ import javax.net.SocketFactory;
  */
 final class ProxyRequestStage implements HttpRequestStage {
 
-  /** Resolved origin for a single request. */
-  record Origin(String host, int port, boolean useTls, SocketFactory socketFactory) {}
-
-  /** Resolves a request to the origin it should be forwarded to. */
-  @FunctionalInterface
-  interface OriginResolver {
-    Origin resolve(HttpRequest request) throws Exception;
-  }
-
   private final Pipeline parent;
   private final Executor executor;
-  private final ConnectHandler handler;
   private final HttpServerListener serverListener;
-  private final OriginResolver originResolver;
+  private final String host;
+  private final int port;
+  private final boolean useTls;
+  private final SocketFactory socketFactory;
+  private final OutputStream captureStream;
 
   private final PipeBuffer bodyPipe = new PipeBuffer();
   private HttpResponseGeneratorStreamed responseGen;
@@ -47,43 +38,48 @@ final class ProxyRequestStage implements HttpRequestStage {
   ProxyRequestStage(
       Pipeline parent,
       Executor executor,
-      ConnectHandler handler,
       HttpServerListener serverListener,
-      OriginResolver originResolver) {
+      String host,
+      int port,
+      boolean useTls,
+      SocketFactory socketFactory) {
+    this(parent, executor, serverListener, host, port, useTls, socketFactory, null);
+  }
+
+  ProxyRequestStage(
+      Pipeline parent,
+      Executor executor,
+      HttpServerListener serverListener,
+      String host,
+      int port,
+      boolean useTls,
+      SocketFactory socketFactory,
+      OutputStream captureStream) {
     this.parent = parent;
     this.executor = executor;
-    this.handler = handler;
     this.serverListener = serverListener;
-    this.originResolver = originResolver;
+    this.host = host;
+    this.port = port;
+    this.useTls = useTls;
+    this.socketFactory = socketFactory;
+    this.captureStream = captureStream;
   }
 
   @Override
   public Decision onHeaders(HttpRequest headers) {
     keepAlive = HttpConnectionHeader.mayKeepAlive(headers);
 
-    Origin origin;
-    try {
-      origin = originResolver.resolve(headers);
-    } catch (Exception e) {
-      setErrorResponse(502);
-      return Decision.REJECT;
-    }
-    if (origin == null) {
-      setErrorResponse(502);
-      return Decision.REJECT;
-    }
-
     OriginForwarder forwarder =
         new OriginForwarder(
             parent,
-            origin.host(),
-            origin.port(),
-            origin.useTls(),
-            origin.socketFactory(),
-            handler,
+            host,
+            port,
+            useTls,
+            socketFactory,
             serverListener,
             bodyPipe,
             keepAlive,
+            captureStream,
             (gen, ka) -> {
               responseGen = gen;
               keepAlive = ka;
@@ -138,29 +134,5 @@ final class ProxyRequestStage implements HttpRequestStage {
     if (gen != null) {
       gen.close();
     }
-  }
-
-  private void setErrorResponse(int statusCode) {
-    HttpResponse errResp =
-        new HttpResponse() {
-          @Override
-          public int getStatusCode() {
-            return statusCode;
-          }
-
-          @Override
-          public HttpHeaders getHeaders() {
-            return HttpHeaders.of(HttpHeaderName.CONNECTION, "close");
-          }
-        };
-    HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(
-            parent::encourageWrites, null, errResp, /* includeBody= */ false);
-    try {
-      gen.getOutputStream().close();
-    } catch (IOException ignored) {
-    }
-    responseGen = gen;
-    keepAlive = false;
   }
 }

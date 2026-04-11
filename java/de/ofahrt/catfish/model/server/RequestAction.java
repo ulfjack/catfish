@@ -1,50 +1,48 @@
 package de.ofahrt.catfish.model.server;
 
-import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpResponse;
 import java.io.OutputStream;
 
-public record RequestAction(
-    HttpRequest request,
-    HttpResponse localResponse,
-    ResponseBodyWriter bodyWriter,
-    OutputStream captureStream) {
+/**
+ * The result of an HTTP routing decision. Returned by {@link ConnectHandler#applyProxy} and {@link
+ * ConnectHandler#applyLocal} to indicate how a request should be handled.
+ */
+public sealed interface RequestAction {
 
-  private static final RequestAction FORWARD = new RequestAction(null, null, null, null);
-
-  public static RequestAction forward() {
-    return FORWARD;
+  /** Serve this request locally with the given handler and policies. */
+  record ServeLocally(
+      HttpHandler handler,
+      UploadPolicy uploadPolicy,
+      KeepAlivePolicy keepAlivePolicy,
+      CompressionPolicy compressionPolicy)
+      implements RequestAction {
+    public ServeLocally(HttpHandler handler) {
+      this(handler, UploadPolicy.DENY, KeepAlivePolicy.KEEP_ALIVE, CompressionPolicy.NONE);
+    }
   }
 
-  public static RequestAction forward(HttpRequest rewritten) {
-    return new RequestAction(rewritten, null, null, null);
+  /** Forward the request to the specified origin. Body is streamed. */
+  record Forward(String host, int port, boolean useTls) implements RequestAction {}
+
+  /** Forward to origin and tee the response body to a capture stream. */
+  record ForwardAndCapture(String host, int port, boolean useTls, OutputStream captureStream)
+      implements RequestAction {}
+
+  /** Deny with 403 Forbidden. */
+  record Deny() implements RequestAction {}
+
+  static RequestAction deny() {
+    return new Deny();
   }
 
-  public static RequestAction forwardAndCapture(OutputStream capture) {
-    return new RequestAction(null, null, null, capture);
+  static RequestAction forward(String host, int port) {
+    return new Forward(host, port, false);
   }
 
-  public static RequestAction forwardAndCapture(HttpRequest rewritten, OutputStream capture) {
-    return new RequestAction(rewritten, null, null, capture);
+  static RequestAction forward(String host, int port, boolean useTls) {
+    return new Forward(host, port, useTls);
   }
 
-  /**
-   * Reply to the proxied request with a locally-constructed response. Only supported on the MITM
-   * CONNECT path ({@code ProxyRequestStage}). On the HTTP forward-proxy path (absolute-URI requests
-   * handled via {@code HttpServerStage}/{@code ProxyRequestStage}), use {@link
-   * ConnectDecision#serveLocally()} instead so the request can be dispatched to the local {@code
-   * HttpHandler} with its body attached.
-   */
-  public static RequestAction respond(HttpResponse response) {
-    return new RequestAction(null, response, null, null);
-  }
-
-  /**
-   * Reply to the proxied request with a locally-constructed streaming response. Only supported on
-   * the MITM CONNECT path ({@code ProxyRequestStage}). See {@link #respond} for the HTTP
-   * forward-proxy alternative.
-   */
-  public static RequestAction respondStreaming(HttpResponse headers, ResponseBodyWriter writer) {
-    return new RequestAction(null, headers, writer, null);
+  static RequestAction serveLocally(HttpHandler handler) {
+    return new ServeLocally(handler);
   }
 }

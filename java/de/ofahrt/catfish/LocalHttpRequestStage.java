@@ -16,8 +16,10 @@ import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.CompressionPolicy;
+import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.KeepAlivePolicy;
+import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import de.ofahrt.catfish.utils.HttpContentType;
 import java.io.ByteArrayOutputStream;
@@ -30,7 +32,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
 import java.util.zip.GZIPOutputStream;
 
 /**
@@ -47,22 +48,30 @@ final class LocalHttpRequestStage implements HttpRequestStage {
 
   private final Pipeline parent;
   private final RequestQueue requestHandler;
-  private final Function<String, HttpVirtualHost> virtualHostLookup;
+  private final HttpHandler handler;
+  private final UploadPolicy uploadPolicy;
+  private final KeepAlivePolicy keepAlivePolicy;
+  private final CompressionPolicy compressionPolicy;
   private final Connection connection;
 
   private HttpRequest headers;
-  private HttpVirtualHost host;
   private final ByteArrayOutputStream bodyBuffer = new ByteArrayOutputStream();
   private HttpResponseGenerator responseGenerator;
 
   LocalHttpRequestStage(
       Pipeline parent,
       RequestQueue requestHandler,
-      Function<String, HttpVirtualHost> virtualHostLookup,
+      HttpHandler handler,
+      UploadPolicy uploadPolicy,
+      KeepAlivePolicy keepAlivePolicy,
+      CompressionPolicy compressionPolicy,
       Connection connection) {
     this.parent = parent;
     this.requestHandler = requestHandler;
-    this.virtualHostLookup = virtualHostLookup;
+    this.handler = handler;
+    this.uploadPolicy = uploadPolicy;
+    this.keepAlivePolicy = keepAlivePolicy;
+    this.compressionPolicy = compressionPolicy;
     this.connection = connection;
   }
 
@@ -73,19 +82,13 @@ final class LocalHttpRequestStage implements HttpRequestStage {
     if (VERBOSE) {
       System.out.println(CoreHelper.requestToString(headers));
     }
-    host = virtualHostLookup.apply(headers.getHeaders().get(HttpHeaderName.HOST));
-    // Check upload policy if the request has a body (before host validation — matches old
-    // behavior where null host with a body produces 413 rather than 421).
+    // Check upload policy if the request has a body.
     String cl = headers.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
     String te = headers.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
     boolean hasBody =
         (cl != null && !"0".equals(cl)) || (te != null && "chunked".equalsIgnoreCase(te));
-    if (hasBody && (host == null || !host.uploadPolicy().isAllowed(headers))) {
+    if (hasBody && !uploadPolicy.isAllowed(headers)) {
       setErrorResponse(headers, StandardResponses.PAYLOAD_TOO_LARGE);
-      return Decision.REJECT;
-    }
-    if (host == null) {
-      setErrorResponse(headers, StandardResponses.MISDIRECTED_REQUEST);
       return Decision.REJECT;
     }
     String expectValue = headers.getHeaders().get(HttpHeaderName.EXPECT);
@@ -133,8 +136,8 @@ final class LocalHttpRequestStage implements HttpRequestStage {
       fullRequest = headers;
     }
     HttpResponseWriter writer =
-        new ResponseWriterImpl(fullRequest, host.keepAlivePolicy(), host.compressionPolicy());
-    requestHandler.queueRequest(host.handler(), connection, fullRequest, writer);
+        new ResponseWriterImpl(fullRequest, keepAlivePolicy, compressionPolicy);
+    requestHandler.queueRequest(handler, connection, fullRequest, writer);
   }
 
   /** Decode chunked transfer-encoding, extracting just the payload bytes. */

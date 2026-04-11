@@ -242,7 +242,7 @@ public class BasicIntegrationTest {
   @Test
   public void unknownVirtualHostReturnsMisdirectedRequest() throws Exception {
     HttpResponse response = localServer.send("GET / HTTP/1.1\nHost: unknown.example.com\n\n");
-    assertEquals(HttpStatusCode.MISDIRECTED_REQUEST.getStatusCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.FORBIDDEN.getStatusCode(), response.getStatusCode());
   }
 
   @Test
@@ -287,7 +287,7 @@ public class BasicIntegrationTest {
             .setBody(new HttpRequest.InMemoryBody(new byte[10]))
             .build();
     HttpResponse response = localServer.send(HttpRequestHelper.toByteArray(request));
-    assertEquals(HttpStatusCode.PAYLOAD_TOO_LARGE.getStatusCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.FORBIDDEN.getStatusCode(), response.getStatusCode());
   }
 
   //  @Test

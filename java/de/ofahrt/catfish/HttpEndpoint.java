@@ -1,8 +1,12 @@
 package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.internal.network.NetworkEngine;
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
+import de.ofahrt.catfish.model.server.RequestAction;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -73,7 +77,7 @@ public final class HttpEndpoint {
   }
 
   void listen(CatfishHttpServer server) throws IOException, InterruptedException {
-    Function<String, HttpVirtualHost> lookup = buildLookup();
+    ConnectHandler effectiveHandler = buildConnectHandler();
     SSLSocketFactory effectiveOriginFactory =
         originSslFactory != null
             ? originSslFactory
@@ -81,8 +85,8 @@ public final class HttpEndpoint {
     NetworkEngine.NetworkHandler networkHandler =
         new HttpServerHandler(
             server,
-            lookup,
-            connectHandler,
+            effectiveHandler,
+            /* needsExecutor= */ connectHandler != null,
             effectiveOriginFactory,
             /* sslContextProvider= */ null,
             requestListener);
@@ -92,6 +96,51 @@ public final class HttpEndpoint {
       case LOCALHOST -> engine.listenLocalhost(port, networkHandler);
       case UNIX_SOCKET -> engine.listenUnixSocket(unixSocketPath, networkHandler);
     }
+  }
+
+  private ConnectHandler buildConnectHandler() {
+    if (connectHandler != null) {
+      if (!hosts.isEmpty()) {
+        throw new IllegalStateException(
+            "Cannot use both addHost() and dispatcher() on the same endpoint. "
+                + "Use dispatcher() for all routing, or addHost() for vhost-based serving.");
+      }
+      return connectHandler;
+    }
+    // No dispatcher set: create a handler from the vhost map.
+    // Both applyProxy and applyLocal serve locally — a non-proxy server treats absolute URIs
+    // the same as relative ones (the absolute URI is just the request-target format, not a
+    // proxy request).
+    Function<String, HttpVirtualHost> lookup = buildLookup();
+    return new ConnectHandler() {
+      @Override
+      public ConnectDecision applyConnect(String host, int port) {
+        return ConnectDecision.deny();
+      }
+
+      @Override
+      public RequestAction applyProxy(HttpRequest request) {
+        return applyLocalFromVhosts(lookup, request);
+      }
+
+      @Override
+      public RequestAction applyLocal(HttpRequest request) {
+        return applyLocalFromVhosts(lookup, request);
+      }
+    };
+  }
+
+  private static RequestAction applyLocalFromVhosts(
+      Function<String, HttpVirtualHost> lookup, HttpRequest request) {
+    HttpVirtualHost vhost = lookup.apply(request.getHeaders().get(HttpHeaderName.HOST));
+    if (vhost != null) {
+      return new RequestAction.ServeLocally(
+          vhost.handler(),
+          vhost.uploadPolicy(),
+          vhost.keepAlivePolicy(),
+          vhost.compressionPolicy());
+    }
+    return RequestAction.deny();
   }
 
   private Function<String, HttpVirtualHost> buildLookup() {

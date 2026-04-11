@@ -16,7 +16,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.Executor;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLContext;
@@ -35,8 +34,8 @@ import javax.net.ssl.SSLSocketFactory;
 final class ConnectStage implements Stage {
 
   /**
-   * Creates the inner stage used for {@link ConnectDecision#localIntercept local-intercept} mode —
-   * typically a fresh {@link HttpServerStage} wired to the current server's request dispatcher.
+   * Creates the inner stage used for MITM intercept mode — typically a fresh {@link
+   * HttpServerStage} wired to the current server's request dispatcher.
    */
   @FunctionalInterface
   interface LocalStageFactory {
@@ -47,9 +46,6 @@ final class ConnectStage implements Stage {
         ConnectHandler connectHandler,
         Executor executor);
   }
-
-  private static final ConnectHandler SERVE_LOCALLY =
-      (host, port) -> ConnectDecision.serveLocally();
 
   private enum ConnectState {
     CONNECTING,
@@ -82,7 +78,6 @@ final class ConnectStage implements Stage {
 
   // Set during doConnect(); read on NIO thread in setupMitm()/setupTunnel().
   private boolean isTunnel;
-  private boolean isLocalIntercept;
   private Socket tunnelSocket;
   private SSLContext fakeCtx;
   private String originHost;
@@ -139,20 +134,17 @@ final class ConnectStage implements Stage {
         () -> executor.execute(() -> serverListener.onConnectComplete(connectHost, connectPort));
     ConnectDecision decision;
     try {
-      decision = handler.apply(connectHost, connectPort);
+      decision = handler.applyConnect(connectHost, connectPort);
     } catch (Exception e) {
       parent.queue(() -> startResponse(RESPONSE_403, /* closeAfterSend= */ true));
       return;
     }
 
-    if (decision.isDenied()) {
+    if (decision instanceof ConnectDecision.Deny) {
       parent.queue(() -> startResponse(RESPONSE_403, /* closeAfterSend= */ true));
-      return;
-    }
-
-    if (decision.isTunnel()) {
+    } else if (decision instanceof ConnectDecision.Tunnel t) {
       try {
-        Socket sock = new Socket(decision.getHost(), decision.getPort());
+        Socket sock = new Socket(t.host(), t.port());
         isTunnel = true;
         tunnelSocket = sock;
         parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
@@ -160,76 +152,63 @@ final class ConnectStage implements Stage {
         serverListener.onConnectFailed(connectHost, connectPort, e);
         parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
       }
-      return;
-    }
+    } else if (decision instanceof ConnectDecision.Intercept i) {
+      // INTERCEPT: use a cached cert if available, otherwise connect to origin to mirror.
+      String cacheKey = connectHost + ":" + connectPort;
+      SSLInfo cached = sslInfoCache != null ? sslInfoCache.get(cacheKey) : null;
+      SSLContext ctx;
+      if (cached != null) {
+        ctx = cached.sslContext();
+      } else {
+        CertificateAuthority ca = i.ca();
+        SSLSocket socket;
+        X509Certificate originCert;
+        try {
+          socket = (SSLSocket) originSocketFactory.createSocket(i.host(), i.port());
+          SSLParameters params = socket.getSSLParameters();
+          params.setServerNames(List.of(new SNIHostName(i.host())));
+          socket.setSSLParameters(params);
+          socket.startHandshake();
+          originCert = (X509Certificate) socket.getSession().getPeerCertificates()[0];
+        } catch (IOException e) {
+          serverListener.onConnectFailed(connectHost, connectPort, e);
+          parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
+          return;
+        }
 
-    if (decision.isLocalIntercept()) {
-      // Use the provided SSLInfo directly; don't mirror an origin cert (there's no origin).
-      // After TLS setup, decrypted requests are routed through the local HTTP handler instead
-      // of being forwarded to a remote origin.
-      isLocalIntercept = true;
-      fakeCtx = decision.getSslInfo().sslContext();
-      serverListener.onCertificateReady(connectHost, connectPort);
-      parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
-      return;
-    }
+        SSLInfo info;
+        try {
+          info = ca.create(connectHost, originCert);
+        } catch (Exception e) {
+          try {
+            socket.close();
+          } catch (IOException ignored) {
+          }
+          serverListener.onConnectFailed(connectHost, connectPort, e);
+          parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
+          return;
+        }
 
-    // INTERCEPT: use a cached cert if available, otherwise connect to origin to mirror its cert.
-    // Cache key includes the port because different ports on the same host may serve different
-    // certs (different vhosts, different services).
-    String cacheKey = connectHost + ":" + connectPort;
-    SSLInfo cached = sslInfoCache != null ? sslInfoCache.get(cacheKey) : null;
-    SSLContext ctx;
-    if (cached != null) {
-      ctx = cached.sslContext();
-    } else {
-      CertificateAuthority ca = decision.getCertificateAuthority();
-      SSLSocket socket;
-      X509Certificate originCert;
-      try {
-        socket =
-            (SSLSocket) originSocketFactory.createSocket(decision.getHost(), decision.getPort());
-        SSLParameters params = socket.getSSLParameters();
-        params.setServerNames(List.of(new SNIHostName(decision.getHost())));
-        socket.setSSLParameters(params);
-        socket.startHandshake();
-        originCert = (X509Certificate) socket.getSession().getPeerCertificates()[0];
-      } catch (IOException e) {
-        serverListener.onConnectFailed(connectHost, connectPort, e);
-        parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
-        return;
-      }
-
-      SSLInfo info;
-      try {
-        info = ca.create(connectHost, originCert);
-      } catch (Exception e) {
         try {
           socket.close();
         } catch (IOException ignored) {
         }
-        serverListener.onConnectFailed(connectHost, connectPort, e);
-        parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
-        return;
+
+        if (sslInfoCache != null) {
+          sslInfoCache.put(cacheKey, info);
+        }
+        ctx = info.sslContext();
       }
 
-      try {
-        socket.close();
-      } catch (IOException ignored) {
-      }
+      serverListener.onCertificateReady(connectHost, connectPort);
 
-      if (sslInfoCache != null) {
-        sslInfoCache.put(cacheKey, info);
-      }
-      ctx = info.sslContext();
+      fakeCtx = ctx;
+      originHost = i.host();
+      originPort = i.port();
+      parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
+    } else {
+      throw new IllegalStateException("Unknown ConnectDecision: " + decision);
     }
-
-    serverListener.onCertificateReady(connectHost, connectPort);
-
-    fakeCtx = ctx;
-    originHost = decision.getHost();
-    originPort = decision.getPort();
-    parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
   }
 
   private void startResponse(byte[] bytes, boolean closeAfterSend) {
@@ -282,51 +261,42 @@ final class ConnectStage implements Stage {
   }
 
   private void setupMitm() {
-    SslServerStage.InnerStageFactory innerFactory;
-    if (isLocalIntercept) {
-      if (localStageFactory == null) {
-        throw new IllegalStateException(
-            "local-intercept decision requires a LocalStageFactory; none was provided");
-      }
-      innerFactory =
-          (innerPipeline, plainIn, plainOut) ->
-              wrapWithOnClose(
-                  localStageFactory.create(
-                      innerPipeline, plainIn, plainOut, SERVE_LOCALLY, /* executor= */ null),
-                  onClose);
-    } else {
-      // MITM intercept: create an HttpServerStage as the inner stage. Its ConnectHandler's
-      // applyLocal forwards all relative-URI requests to the CONNECT target origin.
-      String capturedOriginHost = originHost;
-      int capturedOriginPort = originPort;
-      ConnectHandler mitmHandler =
-          new ConnectHandler() {
-            @Override
-            public ConnectDecision apply(String host, int port) {
-              return handler.apply(host, port);
-            }
+    // MITM intercept: create an HttpServerStage as the inner stage. Its ConnectHandler's
+    // applyLocal forwards all relative-URI requests to the CONNECT target origin.
+    String capturedOriginHost = originHost;
+    int capturedOriginPort = originPort;
+    ConnectHandler mitmHandler =
+        new ConnectHandler() {
+          @Override
+          public ConnectDecision applyConnect(String host, int port) {
+            return handler.applyConnect(host, port);
+          }
 
-            @Override
-            public ConnectDecision applyLocal(String host, int port) {
-              return ConnectDecision.tunnel(capturedOriginHost, capturedOriginPort);
-            }
+          @Override
+          public RequestAction applyProxy(HttpRequest request) {
+            return handler.applyProxy(request);
+          }
 
-            @Override
-            public RequestAction handleRequest(
-                UUID requestId, String oh, int op, HttpRequest request) {
-              return handler.handleRequest(requestId, oh, op, request);
+          @Override
+          public RequestAction applyLocal(HttpRequest request) {
+            // Delegate to the user's handler first; if it returns Deny (the default),
+            // forward to the CONNECT target origin.
+            RequestAction userAction = handler.applyLocal(request);
+            if (userAction instanceof RequestAction.Deny) {
+              return RequestAction.forward(capturedOriginHost, capturedOriginPort, true);
             }
-          };
-      if (localStageFactory == null) {
-        throw new IllegalStateException(
-            "MITM intercept requires a LocalStageFactory; none was provided");
-      }
-      innerFactory =
-          (innerPipeline, plainIn, plainOut) ->
-              wrapWithOnClose(
-                  localStageFactory.create(innerPipeline, plainIn, plainOut, mitmHandler, executor),
-                  onClose);
+            return userAction;
+          }
+        };
+    if (localStageFactory == null) {
+      throw new IllegalStateException(
+          "MITM intercept requires a LocalStageFactory; none was provided");
     }
+    SslServerStage.InnerStageFactory innerFactory =
+        (innerPipeline, plainIn, plainOut) ->
+            wrapWithOnClose(
+                localStageFactory.create(innerPipeline, plainIn, plainOut, mitmHandler, executor),
+                onClose);
 
     SSLContext capturedCtx = fakeCtx;
     SslServerStage ssl =

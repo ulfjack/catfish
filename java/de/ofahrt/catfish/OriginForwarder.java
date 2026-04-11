@@ -6,9 +6,7 @@ import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
-import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
-import de.ofahrt.catfish.model.server.RequestAction;
 import de.ofahrt.catfish.model.server.RequestOutcome;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -60,10 +58,10 @@ final class OriginForwarder {
   private final int originPort;
   private final boolean useTls;
   private final SocketFactory socketFactory;
-  private final ConnectHandler handler;
   private final HttpServerListener serverListener;
   private final PipeBuffer requestBodyPipe;
   private final boolean keepAlive;
+  private final OutputStream captureStream;
 
   /** Callback to install the response generator and keepAlive flag on the NIO thread. */
   interface ResultCallback {
@@ -79,10 +77,10 @@ final class OriginForwarder {
       int originPort,
       boolean useTls,
       SocketFactory socketFactory,
-      ConnectHandler handler,
       HttpServerListener serverListener,
       PipeBuffer requestBodyPipe,
       boolean keepAlive,
+      OutputStream captureStream,
       ResultCallback resultCallback,
       Runnable pipeSpaceCallback) {
     this.parent = parent;
@@ -90,10 +88,10 @@ final class OriginForwarder {
     this.originPort = originPort;
     this.useTls = useTls;
     this.socketFactory = socketFactory;
-    this.handler = handler;
     this.serverListener = serverListener;
     this.requestBodyPipe = requestBodyPipe;
     this.keepAlive = keepAlive;
+    this.captureStream = captureStream;
     this.resultCallback = resultCallback;
     this.pipeSpaceCallback = pipeSpaceCallback;
   }
@@ -102,21 +100,11 @@ final class OriginForwarder {
     UUID requestId = UUID.randomUUID();
     String absoluteUri = buildAbsoluteUri(useTls, originHost, originPort, headers.getUri());
     HttpRequest absoluteHeaders = headers.withUri(absoluteUri);
-    RequestAction action =
-        handler.handleRequest(requestId, originHost, originPort, absoluteHeaders);
     RequestOutcome outcome;
     try {
-      if (action.localResponse() != null) {
-        outcome = runLocalResponse(requestId, absoluteHeaders, action);
-      } else {
-        HttpRequest effectiveRequest =
-            action.request() != null ? action.request() : absoluteHeaders;
-        // The request sent to the origin must use a relative URI.
-        HttpRequest originRequest =
-            effectiveRequest.withUri(toRelativeUri(effectiveRequest.getUri()));
-        outcome =
-            runForwardToOrigin(requestId, absoluteHeaders, originRequest, action.captureStream());
-      }
+      // The request sent to the origin must use a relative URI.
+      HttpRequest originRequest = headers.withUri(toRelativeUri(headers.getUri()));
+      outcome = runForwardToOrigin(requestId, absoluteHeaders, originRequest, captureStream);
     } catch (Exception e) {
       outcome = RequestOutcome.error(e);
     }
@@ -147,43 +135,6 @@ final class OriginForwarder {
     } catch (Exception e) {
       return uri;
     }
-  }
-
-  private RequestOutcome runLocalResponse(
-      UUID requestId, HttpRequest headers, RequestAction action) {
-    drainPipe();
-
-    HttpResponse localResponse = action.localResponse();
-    HttpHeaders dateAndConnection =
-        HttpHeaders.of(
-            HttpHeaderName.CONNECTION,
-            keepAlive ? "keep-alive" : "close",
-            HttpHeaderName.DATE,
-            DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now(ZoneOffset.UTC)));
-    HttpResponse responseWithHeaders =
-        localResponse
-            .withoutHeader(HttpHeaderName.CONTENT_LENGTH)
-            .withoutHeader(HttpHeaderName.TRANSFER_ENCODING)
-            .withHeaderOverrides(dateAndConnection);
-    HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(
-            parent::encourageWrites, headers, responseWithHeaders, /* includeBody= */ true);
-    parent.queue(() -> resultCallback.accept(gen, keepAlive));
-
-    CountingOutputStream counter = new CountingOutputStream(gen.getOutputStream());
-    try {
-      if (action.bodyWriter() != null) {
-        action.bodyWriter().writeTo(counter);
-      } else if (localResponse.getBody() != null) {
-        counter.write(localResponse.getBody());
-      }
-      counter.close();
-    } catch (IOException e) {
-      gen.close();
-      return RequestOutcome.error(localResponse, e, counter.count());
-    }
-    serverListener.onResponse(requestId, originHost, originPort, headers, localResponse);
-    return RequestOutcome.success(localResponse, counter.count());
   }
 
   private RequestOutcome runForwardToOrigin(

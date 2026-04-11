@@ -5,7 +5,6 @@ import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpEndpoint;
-import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpMethodName;
@@ -17,6 +16,7 @@ import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
+import de.ofahrt.catfish.model.server.RequestAction;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -45,16 +45,29 @@ public class MixedServerIntegrationTest {
   @Before
   public void startServer() throws Exception {
     server = newServer();
+    de.ofahrt.catfish.model.server.HttpHandler handler =
+        (conn, request, writer) ->
+            writer.commitBuffered(
+                StandardResponses.OK.withBody(RESPONSE_BODY.getBytes(StandardCharsets.UTF_8)));
     HttpEndpoint listener =
         HttpEndpoint.onLocalhost(MIXED_PORT)
-            .addHost(
-                "localhost",
-                new HttpVirtualHost(
-                    (conn, request, writer) ->
-                        writer.commitBuffered(
-                            StandardResponses.OK.withBody(
-                                RESPONSE_BODY.getBytes(StandardCharsets.UTF_8)))))
-            .dispatcher(ConnectHandler.tunnelAll());
+            .dispatcher(
+                new ConnectHandler() {
+                  @Override
+                  public ConnectDecision applyConnect(String h, int p) {
+                    return ConnectDecision.tunnel(h, p);
+                  }
+
+                  @Override
+                  public RequestAction applyProxy(HttpRequest request) {
+                    return ConnectHandler.tunnelAll().applyProxy(request);
+                  }
+
+                  @Override
+                  public RequestAction applyLocal(HttpRequest request) {
+                    return new RequestAction.ServeLocally(handler);
+                  }
+                });
     server.listen(listener);
   }
 
@@ -89,18 +102,31 @@ public class MixedServerIntegrationTest {
    * Starts a proxy server on {@code port} with the given handler and a "localhost" virtual host
    * that returns {@link #RESPONSE_BODY}. Registered for teardown in {@code @After}.
    */
-  private void startExtraServer(int port, ConnectHandler handler) throws Exception {
+  private void startExtraServer(int port, ConnectHandler connectHandler) throws Exception {
     CatfishHttpServer s = newServer();
+    de.ofahrt.catfish.model.server.HttpHandler localHandler =
+        (conn, request, writer) ->
+            writer.commitBuffered(
+                StandardResponses.OK.withBody(RESPONSE_BODY.getBytes(StandardCharsets.UTF_8)));
     HttpEndpoint listener =
         HttpEndpoint.onLocalhost(port)
-            .addHost(
-                "localhost",
-                new HttpVirtualHost(
-                    (conn, request, writer) ->
-                        writer.commitBuffered(
-                            StandardResponses.OK.withBody(
-                                RESPONSE_BODY.getBytes(StandardCharsets.UTF_8)))))
-            .dispatcher(handler);
+            .dispatcher(
+                new ConnectHandler() {
+                  @Override
+                  public ConnectDecision applyConnect(String h, int p) {
+                    return connectHandler.applyConnect(h, p);
+                  }
+
+                  @Override
+                  public RequestAction applyProxy(HttpRequest request) {
+                    return connectHandler.applyProxy(request);
+                  }
+
+                  @Override
+                  public RequestAction applyLocal(HttpRequest request) {
+                    return new RequestAction.ServeLocally(localHandler);
+                  }
+                });
     s.listen(listener);
     extraServers.add(s);
   }
@@ -111,48 +137,85 @@ public class MixedServerIntegrationTest {
    */
   private void startExtraServerWithUpload(int port) throws Exception {
     CatfishHttpServer s = newServer();
+    de.ofahrt.catfish.model.server.HttpHandler localHandler =
+        (conn, request, writer) ->
+            writer.commitBuffered(
+                StandardResponses.OK.withBody(RESPONSE_BODY.getBytes(StandardCharsets.UTF_8)));
     HttpEndpoint listener =
         HttpEndpoint.onLocalhost(port)
-            .addHost(
-                "localhost",
-                new HttpVirtualHost(
-                        (conn, request, writer) ->
-                            writer.commitBuffered(
-                                StandardResponses.OK.withBody(
-                                    RESPONSE_BODY.getBytes(StandardCharsets.UTF_8))))
-                    .uploadPolicy(UploadPolicy.ALLOW))
-            .dispatcher(ConnectHandler.tunnelAll());
+            .dispatcher(
+                new ConnectHandler() {
+                  @Override
+                  public ConnectDecision applyConnect(String h, int p) {
+                    return ConnectDecision.tunnel(h, p);
+                  }
+
+                  @Override
+                  public RequestAction applyProxy(HttpRequest request) {
+                    return ConnectHandler.tunnelAll().applyProxy(request);
+                  }
+
+                  @Override
+                  public RequestAction applyLocal(HttpRequest request) {
+                    return new RequestAction.ServeLocally(
+                        localHandler,
+                        UploadPolicy.ALLOW,
+                        de.ofahrt.catfish.model.server.KeepAlivePolicy.KEEP_ALIVE,
+                        de.ofahrt.catfish.model.server.CompressionPolicy.NONE);
+                  }
+                });
     s.listen(listener);
     extraServers.add(s);
   }
 
   /**
    * Starts a proxy server on {@code port} that routes all absolute-URI requests through the local
-   * {@link de.ofahrt.catfish.model.server.HttpHandler} via {@link ConnectDecision#serveLocally}.
-   * The echo virtual host copies the request body back in the response so tests can assert that the
-   * body arrived. Upload policy is {@link UploadPolicy#ALLOW}.
+   * handler via {@link RequestAction#serveLocally}. The echo virtual host copies the request body
+   * back in the response so tests can assert that the body arrived. Upload policy is {@link
+   * UploadPolicy#ALLOW}.
    */
   private void startExtraServerServeLocallyEcho(int port) throws Exception {
     CatfishHttpServer s = newServer();
+    de.ofahrt.catfish.model.server.HttpHandler echoHandler =
+        (conn, request, writer) -> {
+          byte[] body = new byte[0];
+          if (request.getBody() instanceof HttpRequest.InMemoryBody inMem) {
+            body = inMem.toByteArray();
+          }
+          String prefix = request.getMethod() + " " + request.getUri() + "\n";
+          byte[] prefixBytes = prefix.getBytes(StandardCharsets.UTF_8);
+          byte[] out = new byte[prefixBytes.length + body.length];
+          System.arraycopy(prefixBytes, 0, out, 0, prefixBytes.length);
+          System.arraycopy(body, 0, out, prefixBytes.length, body.length);
+          writer.commitBuffered(StandardResponses.OK.withBody(out));
+        };
     HttpEndpoint listener =
         HttpEndpoint.onLocalhost(port)
-            .addHost(
-                "localhost",
-                new HttpVirtualHost(
-                        (conn, request, writer) -> {
-                          byte[] body = new byte[0];
-                          if (request.getBody() instanceof HttpRequest.InMemoryBody inMem) {
-                            body = inMem.toByteArray();
-                          }
-                          String prefix = request.getMethod() + " " + request.getUri() + "\n";
-                          byte[] prefixBytes = prefix.getBytes(StandardCharsets.UTF_8);
-                          byte[] out = new byte[prefixBytes.length + body.length];
-                          System.arraycopy(prefixBytes, 0, out, 0, prefixBytes.length);
-                          System.arraycopy(body, 0, out, prefixBytes.length, body.length);
-                          writer.commitBuffered(StandardResponses.OK.withBody(out));
-                        })
-                    .uploadPolicy(UploadPolicy.ALLOW))
-            .dispatcher((host, p) -> ConnectDecision.serveLocally());
+            .dispatcher(
+                new ConnectHandler() {
+                  @Override
+                  public ConnectDecision applyConnect(String host, int port) {
+                    return ConnectDecision.deny();
+                  }
+
+                  @Override
+                  public RequestAction applyProxy(HttpRequest request) {
+                    return new RequestAction.ServeLocally(
+                        echoHandler,
+                        UploadPolicy.ALLOW,
+                        de.ofahrt.catfish.model.server.KeepAlivePolicy.KEEP_ALIVE,
+                        de.ofahrt.catfish.model.server.CompressionPolicy.NONE);
+                  }
+
+                  @Override
+                  public RequestAction applyLocal(HttpRequest request) {
+                    return new RequestAction.ServeLocally(
+                        echoHandler,
+                        UploadPolicy.ALLOW,
+                        de.ofahrt.catfish.model.server.KeepAlivePolicy.KEEP_ALIVE,
+                        de.ofahrt.catfish.model.server.CompressionPolicy.NONE);
+                  }
+                });
     s.listen(listener);
     extraServers.add(s);
   }
@@ -228,8 +291,16 @@ public class MixedServerIntegrationTest {
     int port = 9101;
     startExtraServer(
         port,
-        (host, p) -> {
-          throw new RuntimeException("policy error");
+        new ConnectHandler() {
+          @Override
+          public ConnectDecision applyConnect(String host, int port) {
+            return ConnectDecision.deny();
+          }
+
+          @Override
+          public RequestAction applyProxy(HttpRequest request) {
+            throw new RuntimeException("policy error");
+          }
         });
     try (HttpConnection conn = HttpConnection.connect("localhost", port)) {
       var response =
@@ -414,24 +485,44 @@ public class MixedServerIntegrationTest {
     // ConnectHandler that forwards the first request and serves the second locally.
     int[] callCount = {0};
     CatfishHttpServer s = newServer();
+    de.ofahrt.catfish.model.server.HttpHandler localHandler =
+        (conn, request, writer) -> {
+          String body = "local:" + request.getMethod() + " " + request.getUri();
+          writer.commitBuffered(
+              StandardResponses.OK.withBody(body.getBytes(StandardCharsets.UTF_8)));
+        };
     HttpEndpoint listener =
         HttpEndpoint.onLocalhost(port)
-            .addHost(
-                "localhost",
-                new HttpVirtualHost(
-                        (conn, request, writer) -> {
-                          String body = "local:" + request.getMethod() + " " + request.getUri();
-                          writer.commitBuffered(
-                              StandardResponses.OK.withBody(body.getBytes(StandardCharsets.UTF_8)));
-                        })
-                    .uploadPolicy(UploadPolicy.ALLOW))
             .dispatcher(
-                (host, p) -> {
-                  callCount[0]++;
-                  if (callCount[0] <= 1) {
-                    return ConnectDecision.tunnel(host, p);
+                new ConnectHandler() {
+                  @Override
+                  public ConnectDecision applyConnect(String h, int p) {
+                    return ConnectDecision.deny();
                   }
-                  return ConnectDecision.serveLocally();
+
+                  @Override
+                  public RequestAction applyProxy(HttpRequest request) {
+                    callCount[0]++;
+                    if (callCount[0] <= 1) {
+                      // Forward to origin (same server).
+                      return RequestAction.forward("localhost", port);
+                    }
+                    // Serve locally via the handler defined above.
+                    return new RequestAction.ServeLocally(
+                        localHandler,
+                        UploadPolicy.ALLOW,
+                        de.ofahrt.catfish.model.server.KeepAlivePolicy.KEEP_ALIVE,
+                        de.ofahrt.catfish.model.server.CompressionPolicy.NONE);
+                  }
+
+                  @Override
+                  public RequestAction applyLocal(HttpRequest request) {
+                    return new RequestAction.ServeLocally(
+                        localHandler,
+                        UploadPolicy.ALLOW,
+                        de.ofahrt.catfish.model.server.KeepAlivePolicy.KEEP_ALIVE,
+                        de.ofahrt.catfish.model.server.CompressionPolicy.NONE);
+                  }
                 });
     s.listen(listener);
     extraServers.add(s);

@@ -8,14 +8,12 @@ import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
-import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.function.Function;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
@@ -25,7 +23,6 @@ import javax.net.ssl.SSLSocketFactory;
  */
 final class HttpServerHandler implements NetworkHandler {
   private final CatfishHttpServer server;
-  private final Function<String, HttpVirtualHost> virtualHostLookup;
   private final ConnectHandler connectHandler;
   private final SSLSocketFactory originSocketFactory;
   private final SslInfoCache sslInfoCache = new SslInfoCache();
@@ -33,19 +30,18 @@ final class HttpServerHandler implements NetworkHandler {
   private final HttpServerStage.RequestListener requestListener;
   private final HttpServerListener serverListener;
 
-  private static final ConnectHandler SERVE_LOCALLY =
-      (host, port) -> ConnectDecision.serveLocally();
+  private final boolean needsExecutor;
 
   HttpServerHandler(
       CatfishHttpServer server,
-      Function<String, HttpVirtualHost> virtualHostLookup,
       ConnectHandler connectHandler,
+      boolean needsExecutor,
       SSLSocketFactory originSocketFactory,
       SslServerStage.SSLContextProvider sslContextProvider,
       HttpServerListener serverListener) {
     this.server = server;
-    this.virtualHostLookup = virtualHostLookup;
-    this.connectHandler = connectHandler != null ? connectHandler : SERVE_LOCALLY;
+    this.connectHandler = connectHandler;
+    this.needsExecutor = needsExecutor;
     this.originSocketFactory = originSocketFactory;
     this.sslContextProvider = sslContextProvider;
     this.requestListener = (conn, req, res) -> serverListener.notifySent(conn, req, res, 0);
@@ -59,11 +55,6 @@ final class HttpServerHandler implements NetworkHandler {
 
   @Override
   public Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer) {
-    // Only pass the executor for proxy-capable endpoints. Non-proxy endpoints (SERVE_LOCALLY)
-    // don't need async routing, and passing the executor would consume thread pool slots for
-    // routing decisions that always return immediately.
-    boolean needsExecutor = connectHandler != SERVE_LOCALLY;
-    var executor = needsExecutor ? server.executor : null;
     if (sslContextProvider != null) {
       return new SslServerStage(
           pipeline,
@@ -72,12 +63,11 @@ final class HttpServerHandler implements NetworkHandler {
                   innerPipeline,
                   this::queueRequest,
                   requestListener,
-                  virtualHostLookup,
                   connectHandler,
                   serverListener,
-                  needsExecutor ? originSocketFactory : null,
-                  needsExecutor ? sslInfoCache : null,
-                  executor,
+                  originSocketFactory,
+                  sslInfoCache,
+                  needsExecutor ? server.executor : null,
                   plainIn,
                   plainOut),
           sslContextProvider,
@@ -89,12 +79,11 @@ final class HttpServerHandler implements NetworkHandler {
         pipeline,
         this::queueRequest,
         requestListener,
-        virtualHostLookup,
         connectHandler,
         serverListener,
-        needsExecutor ? originSocketFactory : null,
-        needsExecutor ? sslInfoCache : null,
-        executor,
+        originSocketFactory,
+        sslInfoCache,
+        needsExecutor ? server.executor : null,
         inputBuffer,
         outputBuffer);
   }

@@ -1,40 +1,54 @@
 package de.ofahrt.catfish.model.server;
 
+import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.ssl.CertificateAuthority;
-import java.util.UUID;
+import java.net.URI;
+import java.net.URISyntaxException;
 
+/**
+ * Routes incoming requests. Three methods for three distinct request types:
+ *
+ * <ul>
+ *   <li>{@link #applyConnect} — CONNECT method (only sees host:port)
+ *   <li>{@link #applyProxy} — absolute-URI forward-proxy request (sees full headers)
+ *   <li>{@link #applyLocal} — relative-URI normal request (sees full headers)
+ * </ul>
+ */
 @FunctionalInterface
 public interface ConnectHandler {
-  /**
-   * Called for proxy requests (CONNECT method, absolute-URI forward proxy). The client explicitly
-   * asked to proxy this request. May block (e.g. DNS lookup, DB check). Runs on the executor
-   * thread.
-   */
-  ConnectDecision apply(String host, int port);
+
+  /** Route a CONNECT request. Only sees host:port (no HTTP headers parsed yet). */
+  ConnectDecision applyConnect(String host, int port);
 
   /**
-   * Called for normal (non-proxy) requests with relative URIs. The server decides whether to handle
-   * them locally or reverse-proxy them to a remote origin. Default: serve locally. May block. Runs
-   * on the executor thread.
+   * Route an absolute-URI proxy request (e.g. {@code GET http://host/path}). The client explicitly
+   * asked to be proxied. Sees full HTTP headers. Default: deny.
    */
-  default ConnectDecision applyLocal(String host, int port) {
-    return ConnectDecision.serveLocally();
+  default RequestAction applyProxy(HttpRequest request) {
+    return RequestAction.deny();
   }
 
   /**
-   * Called on the executor thread for each MITM-intercepted or forward-proxied request. Return a
-   * {@link RequestAction} to control how the request is handled: forward to origin (optionally with
-   * a rewritten request), respond locally (buffered or streaming), or forward while capturing the
-   * response body.
+   * Route a normal request with a relative URI (e.g. {@code GET /path}). Sees full HTTP headers.
+   * Default: deny.
    */
-  default RequestAction handleRequest(
-      UUID requestId, String originHost, int originPort, HttpRequest headers) {
-    return RequestAction.forward();
+  default RequestAction applyLocal(HttpRequest request) {
+    return RequestAction.deny();
   }
 
   static ConnectHandler tunnelAll() {
-    return (h, p) -> ConnectDecision.tunnel(h, p);
+    return new ConnectHandler() {
+      @Override
+      public ConnectDecision applyConnect(String host, int port) {
+        return ConnectDecision.tunnel(host, port);
+      }
+
+      @Override
+      public RequestAction applyProxy(HttpRequest request) {
+        return resolveForwardFromUri(request);
+      }
+    };
   }
 
   static ConnectHandler denyAll() {
@@ -42,6 +56,54 @@ public interface ConnectHandler {
   }
 
   static ConnectHandler mitmAll(CertificateAuthority ca) {
-    return (h, p) -> ConnectDecision.intercept(h, p, ca);
+    return new ConnectHandler() {
+      @Override
+      public ConnectDecision applyConnect(String host, int port) {
+        return ConnectDecision.intercept(host, port, ca);
+      }
+
+      @Override
+      public RequestAction applyProxy(HttpRequest request) {
+        return resolveForwardFromUri(request);
+      }
+    };
+  }
+
+  /** Extracts host/port from the request URI and returns a Forward action. */
+  private static RequestAction resolveForwardFromUri(HttpRequest request) {
+    String uri = request.getUri();
+    if (uri.startsWith("http://") || uri.startsWith("https://")) {
+      try {
+        URI parsed = new URI(uri);
+        String host = parsed.getHost();
+        if (host == null) {
+          return RequestAction.deny();
+        }
+        boolean useTls = "https".equalsIgnoreCase(parsed.getScheme());
+        int port = parsed.getPort();
+        if (port < 0) {
+          port = useTls ? 443 : 80;
+        }
+        return RequestAction.forward(host, port, useTls);
+      } catch (URISyntaxException e) {
+        return RequestAction.deny();
+      }
+    }
+    // Relative URI — extract from Host header.
+    String hostHeader = request.getHeaders().get(HttpHeaderName.HOST);
+    if (hostHeader == null) {
+      return RequestAction.deny();
+    }
+    int colonIdx = hostHeader.lastIndexOf(':');
+    if (colonIdx >= 0) {
+      try {
+        String host = hostHeader.substring(0, colonIdx);
+        int port = Integer.parseInt(hostHeader.substring(colonIdx + 1));
+        return RequestAction.forward(host, port);
+      } catch (NumberFormatException e) {
+        // fall through
+      }
+    }
+    return RequestAction.forward(hostHeader, 80);
   }
 }

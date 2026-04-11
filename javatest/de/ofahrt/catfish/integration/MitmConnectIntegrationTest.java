@@ -13,8 +13,6 @@ import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpResponse;
-import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
@@ -40,7 +38,6 @@ import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLContext;
@@ -657,12 +654,12 @@ public class MitmConnectIntegrationTest {
     }
   }
 
-  // ---- handleRequest tests ----
+  // ---- applyLocal routing tests ----
 
   /**
    * Creates a MITM proxy on {@code mitmPort} with a custom {@link ConnectHandler} that intercepts
-   * all CONNECT requests using the shared CA and delegates to {@code handleRequest} for each
-   * proxied HTTP request.
+   * all CONNECT requests using the shared CA and uses {@code applyLocal} for per-request routing of
+   * decrypted MITM requests.
    */
   private CatfishHttpServer startMitmProxyWithHandler(int mitmPort, ConnectHandler handler)
       throws IOException, InterruptedException {
@@ -677,25 +674,26 @@ public class MitmConnectIntegrationTest {
   }
 
   @Test
-  public void handleRequest_localBufferedResponse_skipsOrigin() throws Exception {
+  public void applyLocal_serveLocally_skipsOrigin() throws Exception {
     byte[] cachedBody = "cached-response".getBytes(StandardCharsets.UTF_8);
-    HttpResponse cachedResponse =
-        StandardResponses.OK
-            .withHeaderOverrides(HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, "text/plain"))
-            .withBody(cachedBody);
 
     startMitmProxyWithHandler(
         9070,
         new ConnectHandler() {
           @Override
-          public ConnectDecision apply(String host, int port) {
+          public ConnectDecision applyConnect(String host, int port) {
             return ConnectDecision.intercept(host, port, ca);
           }
 
           @Override
-          public RequestAction handleRequest(
-              UUID requestId, String originHost, int originPort, HttpRequest request) {
-            return RequestAction.respond(cachedResponse);
+          public RequestAction applyLocal(HttpRequest request) {
+            return RequestAction.serveLocally(
+                (conn, req, writer) ->
+                    writer.commitBuffered(
+                        StandardResponses.OK
+                            .withHeaderOverrides(
+                                HttpHeaders.of(HttpHeaderName.CONTENT_TYPE, "text/plain"))
+                            .withBody(cachedBody)));
           }
         });
 
@@ -716,7 +714,7 @@ public class MitmConnectIntegrationTest {
   }
 
   @Test
-  public void handleRequest_localStreamingResponse_streamsLargeBody() throws Exception {
+  public void applyLocal_serveLocally_streamsLargeBody() throws Exception {
     int bodySize = 2 * 1024 * 1024; // 2 MB
     byte[] largeBody = new byte[bodySize];
     for (int i = 0; i < bodySize; i++) {
@@ -727,15 +725,18 @@ public class MitmConnectIntegrationTest {
         9071,
         new ConnectHandler() {
           @Override
-          public ConnectDecision apply(String host, int port) {
+          public ConnectDecision applyConnect(String host, int port) {
             return ConnectDecision.intercept(host, port, ca);
           }
 
           @Override
-          public RequestAction handleRequest(
-              UUID requestId, String originHost, int originPort, HttpRequest request) {
-            return RequestAction.respondStreaming(
-                StandardResponses.OK, out -> out.write(largeBody));
+          public RequestAction applyLocal(HttpRequest request) {
+            return RequestAction.serveLocally(
+                (conn, req, writer) -> {
+                  OutputStream out = writer.commitStreamed(StandardResponses.OK);
+                  out.write(largeBody);
+                  out.close();
+                });
           }
         });
 
@@ -757,7 +758,7 @@ public class MitmConnectIntegrationTest {
   }
 
   @Test
-  public void handleRequest_forwardAndCapture_teesResponseBody() throws Exception {
+  public void applyLocal_forwardAndCapture_teesResponseBody() throws Exception {
     byte[] expectedBody = "MITM-OK".getBytes(StandardCharsets.UTF_8);
 
     ByteArrayOutputStream captured = new ByteArrayOutputStream();
@@ -765,14 +766,13 @@ public class MitmConnectIntegrationTest {
         9073,
         new ConnectHandler() {
           @Override
-          public ConnectDecision apply(String host, int port) {
+          public ConnectDecision applyConnect(String host, int port) {
             return ConnectDecision.intercept(host, port, ca);
           }
 
           @Override
-          public RequestAction handleRequest(
-              UUID requestId, String originHost, int originPort, HttpRequest request) {
-            return RequestAction.forwardAndCapture(captured);
+          public RequestAction applyLocal(HttpRequest request) {
+            return new RequestAction.ForwardAndCapture("localhost", HTTPS_PORT, true, captured);
           }
         });
 
@@ -796,70 +796,26 @@ public class MitmConnectIntegrationTest {
   }
 
   @Test
-  public void handleRequest_requestRewrite_modifiesForwardedRequest() throws Exception {
-    // The shared origin's /echo-uri endpoint echoes the URI back in the response body.
-    startMitmProxyWithHandler(
-        9075,
-        new ConnectHandler() {
-          @Override
-          public ConnectDecision apply(String host, int port) {
-            return ConnectDecision.intercept(host, port, ca);
-          }
-
-          @Override
-          public RequestAction handleRequest(
-              UUID requestId, String originHost, int originPort, HttpRequest request) {
-            try {
-              HttpRequest rewritten =
-                  new SimpleHttpRequest.Builder()
-                      .setVersion(request.getVersion())
-                      .setMethod(request.getMethod())
-                      .setUri("/echo-uri/rewritten")
-                      .addHeader(HttpHeaderName.HOST, request.getHeaders().get(HttpHeaderName.HOST))
-                      .addHeader(HttpHeaderName.CONNECTION, "close")
-                      .build();
-              return RequestAction.forward(rewritten);
-            } catch (Exception e) {
-              throw new RuntimeException(e);
-            }
-          }
-        });
-
-    try (SSLSocket sslSocket = connectViaMitm(9075, HTTPS_PORT)) {
-      OutputStream sslOut = sslSocket.getOutputStream();
-      InputStream sslIn = sslSocket.getInputStream();
-      sslOut.write(
-          "GET /echo-uri/original HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
-              .getBytes(StandardCharsets.ISO_8859_1));
-      sslOut.flush();
-
-      String responseHeaders = readUntilBlankLine(sslIn);
-      assertTrue(
-          "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
-      String body = new String(readBody(sslIn, responseHeaders), StandardCharsets.UTF_8);
-      assertEquals("Origin should have received rewritten URI", "/echo-uri/rewritten", body);
-    }
-  }
-
-  @Test
-  public void handleRequest_localResponse_keepAlive_secondRequestForwarded() throws Exception {
+  public void applyLocal_keepAlive_secondRequestForwarded() throws Exception {
     byte[] cachedBody = "cached".getBytes(StandardCharsets.UTF_8);
 
     startMitmProxyWithHandler(
         9076,
         new ConnectHandler() {
           @Override
-          public ConnectDecision apply(String host, int port) {
+          public ConnectDecision applyConnect(String host, int port) {
             return ConnectDecision.intercept(host, port, ca);
           }
 
           @Override
-          public RequestAction handleRequest(
-              UUID requestId, String originHost, int originPort, HttpRequest request) {
+          public RequestAction applyLocal(HttpRequest request) {
             if (request.getUri().endsWith("/cached")) {
-              return RequestAction.respond(StandardResponses.OK.withBody(cachedBody));
+              return RequestAction.serveLocally(
+                  (conn, req, writer) ->
+                      writer.commitBuffered(StandardResponses.OK.withBody(cachedBody)));
             }
-            return RequestAction.forward();
+            // Deny → the MITM handler falls back to Forward(originHost, originPort).
+            return RequestAction.deny();
           }
         });
 
@@ -890,56 +846,8 @@ public class MitmConnectIntegrationTest {
     }
   }
 
-  @Test
-  public void localIntercept_servesRequestLocally_withoutOpeningOriginSocket() throws Exception {
-    // Simulates a client (e.g. Claude Code) that auto-upgrades localhost HTTP requests to HTTPS
-    // via CONNECT, even though the target port speaks plain HTTP. The proxy's ConnectHandler
-    // returns localIntercept() so the MITM terminates TLS with a pre-made cert and routes the
-    // decrypted request through the local HTTP handler — no socket is opened to the CONNECT
-    // target. We pick port 1 as the CONNECT target; nothing is listening there, so if the MITM
-    // did try to open a socket the handshake would fail with ECONNREFUSED and the CONNECT would
-    // return 502.
-    //
-    // Mint a leaf cert for "localhost" signed by the shared MITM CA so the test client (which
-    // trusts that CA) will validate the chain.
-    SSLInfo localSslInfo = ca.create("localhost", testSslInfo.certificate());
-
-    CatfishHttpServer server = newServer();
-    HttpEndpoint listener =
-        HttpEndpoint.onLocalhost(9120)
-            .addHost(
-                "localhost",
-                new HttpVirtualHost(
-                    (conn, request, writer) ->
-                        writer.commitBuffered(
-                            StandardResponses.OK.withBody(
-                                "local-intercept-ok".getBytes(StandardCharsets.UTF_8)))))
-            .dispatcher(
-                new ConnectHandler() {
-                  @Override
-                  public ConnectDecision apply(String host, int port) {
-                    return ConnectDecision.localIntercept(localSslInfo);
-                  }
-                })
-            .originSslFactory(testSslInfo.sslContext().getSocketFactory());
-    server.listen(listener);
-    serversToStop.add(server);
-
-    try (SSLSocket sslSocket = connectViaMitm(9120, /* unreachable port */ 1)) {
-      OutputStream sslOut = sslSocket.getOutputStream();
-      InputStream sslIn = sslSocket.getInputStream();
-      sslOut.write(
-          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
-              .getBytes(StandardCharsets.ISO_8859_1));
-      sslOut.flush();
-
-      String responseHeaders = readUntilBlankLine(sslIn);
-      assertTrue(
-          "Expected 200, got: " + responseHeaders, responseHeaders.startsWith("HTTP/1.1 200"));
-      byte[] body = readBody(sslIn, responseHeaders);
-      assertEquals("local-intercept-ok", new String(body, StandardCharsets.UTF_8));
-    }
-  }
+  // localIntercept test removed — localIntercept is no longer a ConnectDecision variant.
+  // The equivalent behavior uses Intercept + applyLocal returning ServeLocally.
 
   // ---- I/O helpers ----
 
