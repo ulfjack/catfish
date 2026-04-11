@@ -10,6 +10,7 @@ import org.junit.runners.Suite.SuiteClasses;
   HttpCacheControlTest.class,
   HttpConnectionHeaderTest.class,
   HttpContentTypeTest.class,
+  MediaTypeTest.class,
   MimeTypeRegistryTest.class,
   MimeTypeTest.class,
 })
