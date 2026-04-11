@@ -42,45 +42,64 @@ HttpHandler handler = (connection, request, writer) -> {
 
 ```java
 CatfishHttpServer server = new CatfishHttpServer(eventListener);
-server.addHttpHost("localhost", new HttpVirtualHost(handler));
-server.listenHttp(8080);
+server.listen(
+    HttpEndpoint.onAny(8080)
+        .addHost("localhost", new HttpVirtualHost(handler)));
 ```
 
 Call `server.stop()` to shut down.
 
-## Request routing
+## TLS / HTTPS
 
-By default, all requests are handled locally by the `HttpHandler` registered for the matching
-virtual host. To forward requests to a remote origin instead, use a `ConnectHandler` with
-`listenConnectProxy`:
+Use `HttpsEndpoint` with `SSLContextFactory` to serve over HTTPS:
 
 ```java
-server.listenConnectProxy(8080, new ConnectHandler() {
-    @Override
-    public ConnectDecision apply(String host, int port) {
-        // Forward proxy: client sends absolute URIs (e.g. GET http://example.com/path)
-        // or CONNECT requests. Decide per-request: forward, deny, or serve locally.
-        return ConnectDecision.tunnel(host, port);
-    }
-});
+SSLInfo sslInfo = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
+
+server.listen(
+    HttpsEndpoint.onAny(8443)
+        .addHost("localhost", new HttpVirtualHost(handler), sslInfo));
 ```
 
-`ConnectHandler` has two routing methods:
+For loading from non-file sources (e.g. classpath resources in tests), use
+`SSLContextFactory.loadPem(InputStream key, InputStream cert)`.
 
-- **`apply(host, port)`** is called for explicit proxy requests: `CONNECT` method and
-  absolute-URI requests (e.g. `GET http://host/path`). The client asked to be proxied.
-- **`applyLocal(host, port)`** is called for normal requests with relative URIs
-  (e.g. `GET /path`). Override this to reverse-proxy selected requests to a remote origin.
-  Default: serve locally.
+SNI is used to select the right `SSLContext` for each incoming connection. Connections that
+present an unknown hostname receive a TLS `unrecognized_name` alert before the handshake
+completes.
 
-Both methods return a `ConnectDecision`:
+## Proxying and CONNECT handling
+
+For forward proxying, reverse proxying, or MITM interception, use a `ConnectHandler` via
+the `dispatcher` method on an endpoint. This replaces the default virtual-host routing with
+custom request routing logic.
+
+`ConnectHandler` routes three distinct request types:
+
+- **`applyConnect(host, port)`** — `CONNECT` method requests. Only sees host:port (no HTTP
+  headers parsed yet). Returns a `ConnectDecision`.
+- **`applyProxy(request)`** — absolute-URI forward-proxy requests
+  (e.g. `GET http://host/path`). The client explicitly asked to be proxied. Sees full HTTP
+  headers. Returns a `RequestAction`. Default: deny.
+- **`applyLocal(request)`** — normal requests with relative URIs (e.g. `GET /path`). Sees
+  full HTTP headers. Returns a `RequestAction`. Default: deny.
+
+`ConnectDecision` controls how a CONNECT tunnel is handled:
 
 | Decision | Effect |
 |---|---|
-| `serveLocally()` | Handle the request with the local `HttpHandler` (body is buffered) |
-| `tunnel(host, port)` | Forward the request to the specified origin (body is streamed) |
+| `tunnel(host, port)` | Forward raw TCP to the target (no HTTP parsing inside the tunnel) |
+| `intercept(host, port, ca)` | MITM-intercept: terminate TLS, mirror origin cert, forward decrypted requests |
 | `deny()` | Reject with 403 Forbidden |
-| `intercept(host, port, ca)` | MITM-intercept a CONNECT tunnel (mirror the origin's TLS cert) |
+
+`RequestAction` controls how an HTTP request is handled:
+
+| Action | Effect |
+|---|---|
+| `serveLocally(handler)` | Handle the request with the given `HttpHandler` (body is buffered) |
+| `forward(host, port)` | Forward the request to the specified origin (body is streamed) |
+| `forward(request)` | Extract host/port/TLS from the request URI and forward |
+| `deny()` | Reject with 403 Forbidden |
 
 ### Forward proxy
 
@@ -88,7 +107,9 @@ A forward proxy handles requests where the client explicitly targets a remote or
 Set `HTTP_PROXY=http://localhost:8080/` on the client side:
 
 ```java
-server.listenConnectProxy(8080, ConnectHandler.tunnelAll());
+server.listen(
+    HttpEndpoint.onAny(8080)
+        .dispatcher(ConnectHandler.tunnelAll()));
 ```
 
 ### Reverse proxy
@@ -97,17 +118,19 @@ A reverse proxy forwards normal (relative-URI) requests to a backend server. Ove
 `applyLocal`:
 
 ```java
-server.listenConnectProxy(8080, new ConnectHandler() {
-    @Override
-    public ConnectDecision apply(String host, int port) {
-        return ConnectDecision.deny(); // no forward proxying
-    }
+server.listen(
+    HttpEndpoint.onAny(8080)
+        .dispatcher(new ConnectHandler() {
+            @Override
+            public ConnectDecision applyConnect(String host, int port) {
+                return ConnectDecision.deny();
+            }
 
-    @Override
-    public ConnectDecision applyLocal(String host, int port) {
-        return ConnectDecision.tunnel("backend-server", 9090);
-    }
-});
+            @Override
+            public RequestAction applyLocal(HttpRequest request) {
+                return RequestAction.forward("backend-server", 9090);
+            }
+        }));
 ```
 
 ### MITM interception
@@ -118,33 +141,13 @@ to the origin:
 
 ```java
 CertificateAuthority ca = ...;  // your root CA for signing leaf certs
-server.listenConnectProxy(8080, ConnectHandler.mitmAll(ca));
+server.listen(
+    HttpEndpoint.onAny(8080)
+        .dispatcher(ConnectHandler.mitmAll(ca)));
 ```
 
-Each decrypted request inside the tunnel gets its own routing decision via `applyLocal`,
-so you can serve some requests locally and forward others.
-
-## TLS / HTTPS
-
-`SSLContextFactory` loads credentials from PEM key + certificate files. The CN
-of the certificate is used as the virtual-host name:
-
-```java
-SSLInfo sslInfo = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
-
-server.addHttpHost(
-    sslInfo.certificateCommonName(),
-    new HttpVirtualHost(handler).ssl(sslInfo));
-
-server.listenHttps(8443);
-```
-
-For loading from non-file sources (e.g. classpath resources in tests), use
-`SSLContextFactory.loadPem(InputStream key, InputStream cert)`.
-
-SNI is used to select the right `SSLContext` for each incoming connection. Connections that
-present an unknown hostname receive a TLS `unrecognized_name` alert before the handshake
-completes.
+Each decrypted request inside the tunnel is routed through `applyProxy`, so you can
+inspect, modify, record, forward, or serve individual requests locally.
 
 ## Design overview
 
