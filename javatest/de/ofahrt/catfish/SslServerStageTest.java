@@ -855,69 +855,59 @@ public class SslServerStageTest {
     void handshakeStep(boolean throwOnStall) throws IOException {
       HandshakeStatus status = engine.getHandshakeStatus();
       switch (status) {
-        case NEED_TASK:
-          runDelegatedTasks();
-          return;
-        case NEED_WRAP:
-          {
-            clientNetOut.clear();
-            ByteBuffer empty = ByteBuffer.allocate(0);
-            SSLEngineResult r = engine.wrap(empty, clientNetOut);
-            if (r.getStatus() != SSLEngineResult.Status.OK) {
-              throw new IOException("client wrap: " + r);
-            }
-            clientNetOut.flip();
-            byte[] out = new byte[clientNetOut.remaining()];
-            clientNetOut.get(out);
-            feedNetIn(out);
-            runServerReadLoop();
+        case NEED_TASK -> runDelegatedTasks();
+        case NEED_WRAP -> {
+          clientNetOut.clear();
+          ByteBuffer empty = ByteBuffer.allocate(0);
+          SSLEngineResult r = engine.wrap(empty, clientNetOut);
+          if (r.getStatus() != SSLEngineResult.Status.OK) {
+            throw new IOException("client wrap: " + r);
+          }
+          clientNetOut.flip();
+          byte[] out = new byte[clientNetOut.remaining()];
+          clientNetOut.get(out);
+          feedNetIn(out);
+          runServerReadLoop();
+          runServerWriteLoop();
+          byte[] fromServer = drainNetOut();
+          if (fromServer.length > 0) {
+            appendToClientNetIn(fromServer);
+          }
+        }
+        case NEED_UNWRAP -> {
+          if (!clientNetIn.hasRemaining()) {
             runServerWriteLoop();
             byte[] fromServer = drainNetOut();
-            if (fromServer.length > 0) {
-              appendToClientNetIn(fromServer);
-            }
-            return;
-          }
-        case NEED_UNWRAP:
-          {
-            if (!clientNetIn.hasRemaining()) {
-              runServerWriteLoop();
-              byte[] fromServer = drainNetOut();
-              if (fromServer.length == 0) {
-                if (throwOnStall) {
-                  throw new IOException("handshake stalled: NEED_UNWRAP with no bytes available");
-                }
-                return;
+            if (fromServer.length == 0) {
+              if (throwOnStall) {
+                throw new IOException("handshake stalled: NEED_UNWRAP with no bytes available");
               }
-              appendToClientNetIn(fromServer);
-            }
-            clientAppIn.compact();
-            SSLEngineResult r = engine.unwrap(clientNetIn, clientAppIn);
-            clientAppIn.flip();
-            if (r.getStatus() == SSLEngineResult.Status.BUFFER_UNDERFLOW) {
               return;
             }
-            if (r.getStatus() != SSLEngineResult.Status.OK) {
-              throw new IOException("client unwrap: " + r);
-            }
-            if (r.getHandshakeStatus() == HandshakeStatus.NEED_TASK) {
-              runDelegatedTasks();
-            }
+            appendToClientNetIn(fromServer);
+          }
+          clientAppIn.compact();
+          SSLEngineResult r = engine.unwrap(clientNetIn, clientAppIn);
+          clientAppIn.flip();
+          if (r.getStatus() == SSLEngineResult.Status.BUFFER_UNDERFLOW) {
             return;
           }
-        case NEED_UNWRAP_AGAIN:
-          {
-            clientAppIn.compact();
-            SSLEngineResult r = engine.unwrap(clientNetIn, clientAppIn);
-            clientAppIn.flip();
-            if (r.getStatus() != SSLEngineResult.Status.OK) {
-              throw new IOException("client unwrap_again: " + r);
-            }
-            return;
+          if (r.getStatus() != SSLEngineResult.Status.OK) {
+            throw new IOException("client unwrap: " + r);
           }
-        case FINISHED:
-        case NOT_HANDSHAKING:
-          return;
+          if (r.getHandshakeStatus() == HandshakeStatus.NEED_TASK) {
+            runDelegatedTasks();
+          }
+        }
+        case NEED_UNWRAP_AGAIN -> {
+          clientAppIn.compact();
+          SSLEngineResult r = engine.unwrap(clientNetIn, clientAppIn);
+          clientAppIn.flip();
+          if (r.getStatus() != SSLEngineResult.Status.OK) {
+            throw new IOException("client unwrap_again: " + r);
+          }
+        }
+        case FINISHED, NOT_HANDSHAKING -> {}
       }
     }
 
