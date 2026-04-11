@@ -1,6 +1,10 @@
 package de.ofahrt.catfish.model.server;
 
+import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpRequest;
 import java.io.OutputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 /**
  * The result of an HTTP routing decision. Returned by {@link ConnectHandler#applyProxy} and {@link
@@ -34,6 +38,10 @@ public sealed interface RequestAction {
     return new Deny();
   }
 
+  static RequestAction serveLocally(HttpHandler handler) {
+    return new ServeLocally(handler);
+  }
+
   static RequestAction forward(String host, int port) {
     return new Forward(host, port, false);
   }
@@ -42,7 +50,40 @@ public sealed interface RequestAction {
     return new Forward(host, port, useTls);
   }
 
-  static RequestAction serveLocally(HttpHandler handler) {
-    return new ServeLocally(handler);
+  /** Extract host/port/TLS from the request URI and return a Forward action. */
+  static RequestAction forward(HttpRequest request) {
+    String uri = request.getUri();
+    if (uri.startsWith("http://") || uri.startsWith("https://")) {
+      try {
+        URI parsed = new URI(uri);
+        String host = parsed.getHost();
+        if (host == null) {
+          return deny();
+        }
+        boolean useTls = "https".equalsIgnoreCase(parsed.getScheme());
+        int port = parsed.getPort();
+        if (port < 0) {
+          port = useTls ? 443 : 80;
+        }
+        return forward(host, port, useTls);
+      } catch (URISyntaxException e) {
+        return deny();
+      }
+    }
+    String hostHeader = request.getHeaders().get(HttpHeaderName.HOST);
+    if (hostHeader == null) {
+      return deny();
+    }
+    int colonIdx = hostHeader.lastIndexOf(':');
+    if (colonIdx >= 0) {
+      try {
+        String host = hostHeader.substring(0, colonIdx);
+        int port = Integer.parseInt(hostHeader.substring(colonIdx + 1));
+        return forward(host, port);
+      } catch (NumberFormatException e) {
+        // fall through
+      }
+    }
+    return forward(hostHeader, 80);
   }
 }

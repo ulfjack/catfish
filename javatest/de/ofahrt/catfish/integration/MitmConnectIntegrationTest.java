@@ -595,10 +595,19 @@ public class MitmConnectIntegrationTest {
     HttpEndpoint proxyListener =
         HttpEndpoint.onLocalhost(proxyPort)
             .dispatcher(
-                (host, port) ->
-                    port == tunnelTargetPort
+                new ConnectHandler() {
+                  @Override
+                  public ConnectDecision applyConnect(String host, int port) {
+                    return port == tunnelTargetPort
                         ? ConnectDecision.tunnel(host, port)
-                        : ConnectDecision.intercept(host, port, ca))
+                        : ConnectDecision.intercept(host, port, ca);
+                  }
+
+                  @Override
+                  public RequestAction applyProxy(HttpRequest request) {
+                    return RequestAction.forward(request);
+                  }
+                })
             .originSslFactory(testSslInfo.sslContext().getSocketFactory());
     proxy.listen(proxyListener);
     serversToStop.add(proxy);
@@ -814,8 +823,8 @@ public class MitmConnectIntegrationTest {
                   (conn, req, writer) ->
                       writer.commitBuffered(StandardResponses.OK.withBody(cachedBody)));
             }
-            // Deny → the MITM handler falls back to Forward(originHost, originPort).
-            return RequestAction.deny();
+            // Forward non-cached requests to the origin.
+            return RequestAction.forward(request);
           }
         });
 

@@ -1,10 +1,7 @@
 package de.ofahrt.catfish.model.server;
 
-import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.ssl.CertificateAuthority;
-import java.net.URI;
-import java.net.URISyntaxException;
 
 /**
  * Routes incoming requests. Three methods for three distinct request types:
@@ -46,7 +43,7 @@ public interface ConnectHandler {
 
       @Override
       public RequestAction applyProxy(HttpRequest request) {
-        return resolveForwardFromUri(request);
+        return RequestAction.forward(request);
       }
     };
   }
@@ -64,46 +61,8 @@ public interface ConnectHandler {
 
       @Override
       public RequestAction applyProxy(HttpRequest request) {
-        return resolveForwardFromUri(request);
+        return RequestAction.forward(request);
       }
     };
-  }
-
-  /** Extracts host/port from the request URI and returns a Forward action. */
-  private static RequestAction resolveForwardFromUri(HttpRequest request) {
-    String uri = request.getUri();
-    if (uri.startsWith("http://") || uri.startsWith("https://")) {
-      try {
-        URI parsed = new URI(uri);
-        String host = parsed.getHost();
-        if (host == null) {
-          return RequestAction.deny();
-        }
-        boolean useTls = "https".equalsIgnoreCase(parsed.getScheme());
-        int port = parsed.getPort();
-        if (port < 0) {
-          port = useTls ? 443 : 80;
-        }
-        return RequestAction.forward(host, port, useTls);
-      } catch (URISyntaxException e) {
-        return RequestAction.deny();
-      }
-    }
-    // Relative URI — extract from Host header.
-    String hostHeader = request.getHeaders().get(HttpHeaderName.HOST);
-    if (hostHeader == null) {
-      return RequestAction.deny();
-    }
-    int colonIdx = hostHeader.lastIndexOf(':');
-    if (colonIdx >= 0) {
-      try {
-        String host = hostHeader.substring(0, colonIdx);
-        int port = Integer.parseInt(hostHeader.substring(colonIdx + 1));
-        return RequestAction.forward(host, port);
-      } catch (NumberFormatException e) {
-        // fall through
-      }
-    }
-    return RequestAction.forward(hostHeader, 80);
   }
 }
