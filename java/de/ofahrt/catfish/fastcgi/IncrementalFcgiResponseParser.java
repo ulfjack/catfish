@@ -80,7 +80,7 @@ final class IncrementalFcgiResponseParser {
         }
       }
       switch (state) {
-        case MESSAGE_HEADER_NAME:
+        case MESSAGE_HEADER_NAME -> {
           if (c == ':') {
             if (elementBuffer.length() == 0) {
               throw new MalformedResponseException(
@@ -102,8 +102,8 @@ final class IncrementalFcgiResponseParser {
           } else {
             throw new MalformedResponseException("Illegal character in request method");
           }
-          break;
-        case MESSAGE_HEADER_VALUE:
+        }
+        case MESSAGE_HEADER_VALUE -> {
           if (c == '\r') {
             expectLineFeed = true;
           } else if (c == '\n') {
@@ -120,39 +120,34 @@ final class IncrementalFcgiResponseParser {
           } else {
             elementBuffer.append(c);
           }
-          break;
-        case MESSAGE_HEADER_NAME_OR_CONTINUATION:
+        }
+        case MESSAGE_HEADER_NAME_OR_CONTINUATION -> {
           if (isSpace(c)) {
             state = State.MESSAGE_HEADER_VALUE;
             elementBuffer.append(messageHeaderValue);
             trimAndAppendSpace();
-            break;
-          }
-
-          if (c == '\r') {
+          } else if (c == '\r') {
             expectLineFeed = true;
-            break;
-          }
-
-          callback.addHeader(messageHeaderName, messageHeaderValue);
-          messageHeaderName = null;
-          messageHeaderValue = null;
-
-          if (c == '\n') {
-            state = State.CONTENT;
-          } else if (isTokenCharacter(c)) {
-            elementBuffer.setLength(0);
-            state = State.MESSAGE_HEADER_NAME;
-            elementBuffer.append(c);
           } else {
-            throw new MalformedResponseException("Illegal character in request header name");
+            callback.addHeader(messageHeaderName, messageHeaderValue);
+            messageHeaderName = null;
+            messageHeaderValue = null;
+
+            if (c == '\n') {
+              state = State.CONTENT;
+            } else if (isTokenCharacter(c)) {
+              elementBuffer.setLength(0);
+              state = State.MESSAGE_HEADER_NAME;
+              elementBuffer.append(c);
+            } else {
+              throw new MalformedResponseException("Illegal character in request header name");
+            }
           }
-          break;
-        case CONTENT:
+        }
+        case CONTENT -> {
           callback.addData(input, offset + i, length - i);
           return length;
-        default:
-          throw new RuntimeException("Not implemented!");
+        }
       }
     }
     return length;
