@@ -31,12 +31,15 @@ java_binary(
     testonly = True,
     srcs = [
         "ChunkedBodyScannerBenchmark.java",
+        "HttpServerBenchmark.java",
         "IncrementalHttpRequestParserBenchmark.java",
     ],
     main_class = "org.openjdk.jmh.Main",
     plugins = ["//third_party/jmh:jmh_annprocess"],
     deps = [
         "//java/de/ofahrt/catfish",
+        "//java/de/ofahrt/catfish/model",
+        "//java/de/ofahrt/catfish/model/network",
         "//third_party/jmh",
     ],
 )
@@ -47,6 +50,7 @@ java_test(
         ["*.java"],
         exclude = [
             "ChunkedBodyScannerBenchmark.java",
+            "HttpServerBenchmark.java",
             "CollectionsUtils.java",
             "HashConflictGenerator.java",
             "HttpParserTest.java",
