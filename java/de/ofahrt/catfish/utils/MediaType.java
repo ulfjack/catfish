@@ -2,6 +2,7 @@ package de.ofahrt.catfish.utils;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -33,21 +34,21 @@ public record MediaType(String type, String subtype, Map<String, String> paramet
     int len = value.length();
     int i = 0;
 
-    // type = token
+    // type = token (case-insensitive per RFC 2045 §5.1)
     int start = i;
     while (i < len && isTokenChar(value.charAt(i))) i++;
     if (i == start) return null;
-    String type = value.substring(start, i);
+    String type = value.substring(start, i).toLowerCase(Locale.ROOT);
 
     // "/"
     if (i >= len || value.charAt(i) != '/') return null;
     i++;
 
-    // subtype = token
+    // subtype = token (case-insensitive per RFC 2045 §5.1)
     start = i;
     while (i < len && isTokenChar(value.charAt(i))) i++;
     if (i == start) return null;
-    String subtype = value.substring(start, i);
+    String subtype = value.substring(start, i).toLowerCase(Locale.ROOT);
 
     // *( OWS ";" OWS parameter )
     Map<String, String> params = new LinkedHashMap<>();

@@ -23,6 +23,24 @@ public class MediaTypeTest {
   }
 
   @Test
+  public void parse_caseInsensitive() {
+    // RFC 2045 §5.1: type and subtype are case-insensitive.
+    MediaType mt = MediaType.parse("Text/HTML");
+    assertNotNull(mt);
+    assertEquals("text", mt.type());
+    assertEquals("html", mt.subtype());
+    assertEquals("text/html", mt.mimeType());
+  }
+
+  @Test
+  public void parse_mixedCaseMultipart() {
+    MediaType mt = MediaType.parse("Multipart/Form-Data; boundary=abc");
+    assertNotNull(mt);
+    assertEquals("multipart/form-data", mt.mimeType());
+    assertEquals("abc", mt.parameters().get("boundary"));
+  }
+
+  @Test
   public void parse_withTokenParameter() {
     MediaType mt = MediaType.parse("text/html;charset=utf-8");
     assertNotNull(mt);
