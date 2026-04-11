@@ -6,6 +6,9 @@ import java.util.UUID;
 
 public interface HttpServerListener {
 
+  /** Called when a CONNECT request begins, before the upstream connection is established. */
+  default void onConnect(UUID connectId, String host, int port) {}
+
   /** Called on the executor thread after a leaf cert is obtained (MITM INTERCEPT only). */
   default void onCertificateReady(UUID connectId, String host, int port) {}
 
@@ -19,11 +22,15 @@ public interface HttpServerListener {
   /** Called when a CONNECT connection closes (tunnel disconnected or MITM session ended). */
   default void onConnectComplete(UUID connectId, String host, int port) {}
 
+  /** Called when request headers have been parsed, before routing. Fires for every request. */
+  default void onRequest(UUID requestId, HttpRequest request) {}
+
   /**
-   * Called on the executor thread after origin response headers are received for a proxied request.
-   * Only fires on success (not on connection errors). Not called for locally served requests.
+   * Called when a streaming response begins — response headers are ready but body is still being
+   * written. Only fires for streamed responses (proxied requests and local {@code commitStreamed}
+   * responses). Not called for buffered responses where headers and body are ready together.
    */
-  default void onResponse(
+  default void onResponseStreamed(
       UUID requestId,
       String originHost,
       int originPort,

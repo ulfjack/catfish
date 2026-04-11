@@ -160,6 +160,7 @@ final class HttpServerStage implements Stage {
     }
     parser.reset();
     requestId = UUID.randomUUID();
+    serverListener.onRequest(requestId, headers);
 
     // Route based on method/URI.
     if (HttpMethodName.CONNECT.equals(headers.getMethod())) {
@@ -308,6 +309,8 @@ final class HttpServerStage implements Stage {
               parent,
               requestHandler,
               s.handler(),
+              serverListener,
+              requestId,
               s.uploadPolicy(),
               s.keepAlivePolicy(),
               s.compressionPolicy(),

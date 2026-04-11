@@ -18,6 +18,7 @@ import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.CompressionPolicy;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
+import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.KeepAlivePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
@@ -31,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.GZIPOutputStream;
 
@@ -49,6 +51,8 @@ final class LocalHttpRequestStage implements HttpRequestStage {
   private final Pipeline parent;
   private final RequestQueue requestHandler;
   private final HttpHandler handler;
+  private final HttpServerListener serverListener;
+  private final UUID requestId;
   private final UploadPolicy uploadPolicy;
   private final KeepAlivePolicy keepAlivePolicy;
   private final CompressionPolicy compressionPolicy;
@@ -62,6 +66,8 @@ final class LocalHttpRequestStage implements HttpRequestStage {
       Pipeline parent,
       RequestQueue requestHandler,
       HttpHandler handler,
+      HttpServerListener serverListener,
+      UUID requestId,
       UploadPolicy uploadPolicy,
       KeepAlivePolicy keepAlivePolicy,
       CompressionPolicy compressionPolicy,
@@ -69,6 +75,8 @@ final class LocalHttpRequestStage implements HttpRequestStage {
     this.parent = parent;
     this.requestHandler = requestHandler;
     this.handler = handler;
+    this.serverListener = serverListener;
+    this.requestId = requestId;
     this.uploadPolicy = uploadPolicy;
     this.keepAlivePolicy = keepAlivePolicy;
     this.compressionPolicy = compressionPolicy;
@@ -368,6 +376,7 @@ final class LocalHttpRequestStage implements HttpRequestStage {
           HttpResponseGeneratorStreamed.create(
               parent::encourageWrites, request, responseToWrite, !headRequest);
       parent.queue(() -> setResponse(gen));
+      serverListener.onResponseStreamed(requestId, null, 0, request, responseToWrite);
       return compress ? new GZIPOutputStream(gen.getOutputStream()) : gen.getOutputStream();
     }
 

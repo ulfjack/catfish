@@ -261,6 +261,8 @@ final class OriginForwarder {
       }
       HttpResponseGeneratorStreamed genFinal = gen;
       parent.queue(() -> resultCallback.accept(genFinal, keepAlive));
+      serverListener.onResponseStreamed(
+          requestId, originHost, originPort, originalHeaders, originResponse);
 
       counter = new CountingOutputStream(gen.getOutputStream());
 
@@ -320,7 +322,6 @@ final class OriginForwarder {
       counter.close();
       closeCaptureStream(captureStream);
       socket.close();
-      serverListener.onResponse(requestId, originHost, originPort, originalHeaders, originResponse);
       return RequestOutcome.success(originResponse, counter.count());
 
     } catch (IOException e) {

@@ -117,6 +117,7 @@ final class ConnectStage implements Stage {
   public InitialConnectionState connect(Connection connection) {
     // Set onClose before dispatching to the executor so that onConnectComplete fires for every
     // CONNECT connection, regardless of whether doConnect succeeds or fails.
+    serverListener.onConnect(connectId, host, port);
     onClose = () -> executor.execute(() -> serverListener.onConnectComplete(connectId, host, port));
     executor.execute(() -> doConnect(host, port));
     return InitialConnectionState.READ_ONLY;
