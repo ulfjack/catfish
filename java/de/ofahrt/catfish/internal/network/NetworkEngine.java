@@ -854,7 +854,7 @@ public final class NetworkEngine {
 
   public NetworkEngine(NetworkEventListener networkEventListener) throws IOException {
     this.networkEventListener = networkEventListener;
-    this.queues = new SelectorQueue[8];
+    this.queues = new SelectorQueue[Runtime.getRuntime().availableProcessors()];
     for (int i = 0; i < queues.length; i++) {
       queues[i] = new SelectorQueue(i);
     }

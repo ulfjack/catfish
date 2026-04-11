@@ -271,8 +271,8 @@ public class MitmConnectIntegrationTest {
     assertTrue("onConnectComplete not invoked within 2s", latch.await(2, TimeUnit.SECONDS));
     String actual = threadName.get();
     assertTrue(
-        "Expected onConnectComplete on an executor thread (catfish-worker-*), got: " + actual,
-        actual != null && actual.startsWith("catfish-worker-"));
+        "Expected onConnectComplete on an executor thread, not a selector thread, got: " + actual,
+        actual != null && !actual.startsWith("catfish-select-"));
   }
 
   @Test

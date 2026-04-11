@@ -2,6 +2,7 @@ package de.ofahrt.catfish.integration;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpEndpoint;
@@ -165,8 +166,11 @@ public class ConnectionHandlingTest {
       int group = getStatusGroup(response.getStatusCode());
       statusCounts[group]++;
     }
-    assertEquals(136, statusCounts[2]); // 128 buffered + 8 threads = 136 OK
-    assertEquals(64, statusCounts[5]); // 64 Internal Server Error
+    // Some requests succeed (accepted by the executor), some are rejected (503).
+    // Exact split depends on executor parallelism + queue capacity.
+    assertTrue("expected some 2xx, got " + statusCounts[2], statusCounts[2] > 0);
+    assertTrue("expected some 5xx, got " + statusCounts[5], statusCounts[5] > 0);
+    assertEquals(200, statusCounts[2] + statusCounts[5]);
   }
 
   @Test

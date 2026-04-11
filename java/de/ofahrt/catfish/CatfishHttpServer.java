@@ -3,11 +3,8 @@ package de.ofahrt.catfish;
 import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import java.io.IOException;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.RejectedExecutionHandler;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** A <code>CatfishHttpServer</code> manages a HTTP-Server. */
@@ -18,35 +15,34 @@ public final class CatfishHttpServer {
     void reject();
   }
 
+  private static final int MAX_QUEUED_REQUESTS = 128;
+
   private final NetworkEngine engine;
 
-  final ThreadPoolExecutor executor =
-      new ThreadPoolExecutor(
-          8,
-          8,
-          1L,
-          TimeUnit.SECONDS,
-          new ArrayBlockingQueue<>(128),
-          new ThreadFactory() {
-            private final AtomicInteger threadNumber = new AtomicInteger(0);
-
-            @Override
-            public Thread newThread(Runnable r) {
-              return new Thread(r, "catfish-worker-" + threadNumber.getAndIncrement());
-            }
-          });
+  final Executor executor;
 
   public CatfishHttpServer(NetworkEventListener serverListener) throws IOException {
-    // TODO: This implements tail drop; head drop might be better.
-    executor.setRejectedExecutionHandler(
-        new RejectedExecutionHandler() {
-          @Override
-          public void rejectedExecution(Runnable task, ThreadPoolExecutor actualExecutor) {
-            if (task instanceof RequestCallback) {
-              ((RequestCallback) task).reject();
+    ForkJoinPool pool = new ForkJoinPool();
+    int capacity = pool.getParallelism() + MAX_QUEUED_REQUESTS;
+    AtomicInteger pending = new AtomicInteger();
+    this.executor =
+        task -> {
+          if (pending.incrementAndGet() <= capacity) {
+            pool.execute(
+                () -> {
+                  try {
+                    task.run();
+                  } finally {
+                    pending.decrementAndGet();
+                  }
+                });
+          } else {
+            pending.decrementAndGet();
+            if (task instanceof RequestCallback rc) {
+              rc.reject();
             }
           }
-        });
+        };
     this.engine = new NetworkEngine(serverListener);
   }
 
