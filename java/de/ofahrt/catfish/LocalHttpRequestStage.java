@@ -4,7 +4,6 @@ import de.ofahrt.catfish.HttpServerStage.RequestQueue;
 import de.ofahrt.catfish.http.HttpRequestStage;
 import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.http.HttpResponseGenerator.ContinuationToken;
-import de.ofahrt.catfish.internal.CoreHelper;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.model.HttpDate;
 import de.ofahrt.catfish.model.HttpHeaderName;
@@ -42,7 +41,6 @@ import java.util.zip.GZIPOutputStream;
  */
 final class LocalHttpRequestStage implements HttpRequestStage {
 
-  private static final boolean VERBOSE = false;
   private static final byte[] EMPTY_BODY = new byte[0];
   private static final String GZIP_ENCODING = "gzip";
   private static final HttpHeaders OPTIONS_STAR_HEADERS =
@@ -87,9 +85,6 @@ final class LocalHttpRequestStage implements HttpRequestStage {
   public Decision onHeaders(HttpRequest headers) {
     this.headers = headers;
     parent.log("%s %s %s", headers.getMethod(), headers.getUri(), headers.getVersion());
-    if (VERBOSE) {
-      System.out.println(CoreHelper.requestToString(headers));
-    }
     // Check upload policy if the request has a body.
     String cl = headers.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
     String te = headers.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
@@ -243,9 +238,6 @@ final class LocalHttpRequestStage implements HttpRequestStage {
         response.getProtocolVersion(),
         Integer.valueOf(response.getStatusCode()),
         response.getStatusMessage());
-    if (VERBOSE) {
-      System.out.println(CoreHelper.responseToString(response));
-    }
     parent.encourageWrites();
   }
 

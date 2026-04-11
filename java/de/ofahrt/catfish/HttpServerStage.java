@@ -3,7 +3,6 @@ package de.ofahrt.catfish;
 import de.ofahrt.catfish.http.HttpRequestStage;
 import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.http.HttpResponseGenerator.ContinuationToken;
-import de.ofahrt.catfish.internal.CoreHelper;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.HttpDate;
@@ -34,8 +33,6 @@ import javax.net.SocketFactory;
 import javax.net.ssl.SSLSocketFactory;
 
 final class HttpServerStage implements Stage {
-
-  private static final boolean VERBOSE = false;
 
   // Incoming data:
   // Socket -> SSL Stage -> HTTP Stage -> Request Queue
@@ -432,9 +429,6 @@ final class HttpServerStage implements Stage {
 
   @Override
   public ConnectionControl write() throws IOException {
-    if (VERBOSE) {
-      parent.log("write");
-    }
     // Consume a pending routing decision on the NIO thread. Driven by encourageWrites from the
     // executor-thread runRoutingDecision.
     if (pendingAbsoluteUriRequest != null
@@ -620,9 +614,6 @@ final class HttpServerStage implements Stage {
         response.getProtocolVersion(),
         Integer.valueOf(response.getStatusCode()),
         response.getStatusMessage());
-    if (HttpServerStage.VERBOSE) {
-      System.out.println(CoreHelper.responseToString(response));
-    }
     parent.encourageWrites();
   }
 }
