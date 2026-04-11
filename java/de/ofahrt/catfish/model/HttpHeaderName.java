@@ -77,7 +77,7 @@ public final class HttpHeaderName {
   public static final String X_FRAME_OPTIONS = "X-Frame-Options";
 
   private static final HashSet<String> MULTIPLE_OCCURANCE_BLACKLIST =
-      new HashSet<>(Arrays.asList(HOST));
+      new HashSet<>(Arrays.asList(CONTENT_LENGTH, HOST));
 
   private static Map<String, String> CANONICALIZATION_MAP = getCanonicalizationMap();
 
