@@ -80,6 +80,7 @@ final class ConnectStage implements Stage {
 
   // Set during doConnect(); read on NIO thread in setupMitm()/setupTunnel().
   private boolean isTunnel;
+  private boolean isLocal;
   private Socket tunnelSocket;
   private SSLContext fakeCtx;
   private String originHost;
@@ -208,8 +209,9 @@ final class ConnectStage implements Stage {
       parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
     } else if (decision instanceof ConnectDecision.InterceptLocal il) {
       fakeCtx = il.sslInfo().sslContext();
-      originHost = null;
-      originPort = 0;
+      isLocal = true;
+      originHost = connectHost;
+      originPort = connectPort;
       parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
     } else {
       throw new IllegalStateException("Unknown ConnectDecision: " + decision);
@@ -298,7 +300,7 @@ final class ConnectStage implements Stage {
 
           @Override
           public RequestAction applyLocal(HttpRequest request) {
-            if (capturedOriginHost == null) {
+            if (isLocal) {
               // InterceptLocal: serve locally via the user's applyLocal.
               return handler.applyLocal(request);
             }
