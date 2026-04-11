@@ -116,32 +116,33 @@ final class Asn1Parser {
     int length = readEncodedLength();
     checkLength(length);
     switch (tag) {
-      case INTEGER_TAG:
+      case INTEGER_TAG -> {
         currentTag = Event.INTEGER;
         currentObject = readBigInteger(length);
-        break;
-      case OCTET_STRING_TAG:
+      }
+      case OCTET_STRING_TAG -> {
         currentTag = Event.OCTET_STRING;
         currentObject = readOctetString(length);
-        break;
-      case NULL_TAG:
+      }
+      case NULL_TAG -> {
         currentTag = Event.NULL;
         if (length != 0) {
           throw new IOException("NULL element with non-zero length: " + length);
         }
-        break;
-      case OBJECT_IDENTIFIER_TAG:
+      }
+      case OBJECT_IDENTIFIER_TAG -> {
         currentTag = Event.OBJECT_IDENTIFIER;
         currentObject = readObjectIdentifier(length);
-        break;
-      case SEQUENCE_TAG:
+      }
+      case SEQUENCE_TAG -> {
         currentTag = Event.SEQUENCE;
         deque.push(new Section(Event.END_SEQUENCE, endOfData));
         endOfData = index + length;
-        break;
-      default:
+      }
+      default -> {
         index += length;
         throw new IOException("Unknown tag type: " + Integer.toHexString(tag));
+      }
     }
     return currentTag;
   }
@@ -227,26 +228,20 @@ final class Asn1Parser {
     Event e;
     while ((e = nextEvent()) != Event.END_INPUT) {
       switch (e) {
-        case INTEGER:
-          System.out.println(indent(indentation) + e + " -> " + getInteger());
-          break;
-        case OCTET_STRING:
-          System.out.println(indent(indentation) + e + " -> " + Arrays.toString(getOctetString()));
-          break;
-        case OBJECT_IDENTIFIER:
-          System.out.println(indent(indentation) + e + " -> " + getObjectIdentifier());
-          break;
-        case SEQUENCE:
+        case INTEGER -> System.out.println(indent(indentation) + e + " -> " + getInteger());
+        case OCTET_STRING ->
+            System.out.println(indent(indentation) + e + " -> " + Arrays.toString(getOctetString()));
+        case OBJECT_IDENTIFIER ->
+            System.out.println(indent(indentation) + e + " -> " + getObjectIdentifier());
+        case SEQUENCE -> {
           System.out.println(indent(indentation) + e);
           indentation += 2;
-          break;
-        case END_SEQUENCE:
+        }
+        case END_SEQUENCE -> {
           indentation -= 2;
           System.out.println(indent(indentation) + e);
-          break;
-        default:
-          System.out.println(indent(indentation) + e);
-          break;
+        }
+        default -> System.out.println(indent(indentation) + e);
       }
     }
   }
