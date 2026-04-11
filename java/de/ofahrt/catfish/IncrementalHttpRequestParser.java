@@ -1,6 +1,5 @@
 package de.ofahrt.catfish;
 
-import de.ofahrt.catfish.internal.CoreHelper;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpStatusCode;
@@ -177,11 +176,11 @@ final class IncrementalHttpRequestParser {
             // (which goes back 9 years). Likely a workaround for a tool that sent these characters
             // literally in URIs.
             if (c == '|') {
-              elementBuffer.append(CoreHelper.encode('|'));
+              elementBuffer.append("%7C");
             } else if (c == '^') {
-              elementBuffer.append(CoreHelper.encode('^'));
+              elementBuffer.append("%5E");
             } else if (c == '`') {
-              elementBuffer.append(CoreHelper.encode('`'));
+              elementBuffer.append("%60");
             } else {
               elementBuffer.append(c);
             }

@@ -48,31 +48,6 @@ public final class CoreHelper {
     return out.toString();
   }
 
-  // Hex encoding:
-  private static final String HEX_CODES = "0123456789ABCDEF";
-
-  private static final String toHex(int i) {
-    return "" + HEX_CODES.charAt((i >> 4) & 0xf) + HEX_CODES.charAt(i & 0xf);
-  }
-
-  public static final String encode(char c) {
-    if (c <= 0x007F) {
-      return "%" + toHex(c);
-    }
-
-    int i = c;
-    int j = i & 0x3F;
-    i = i >> 6;
-    int k = i & 0x3F;
-    i = i >> 6;
-    int l = i;
-
-    if (c <= 0x07FF) {
-      return "%" + toHex(0xC0 + k) + "%" + toHex(0x80 + j);
-    }
-    return "%" + toHex(0xE0 + l) + "%" + toHex(0x80 + k) + "%" + toHex(0x80 + j);
-  }
-
   private CoreHelper() {
     // Disallow instantiation.
   }
