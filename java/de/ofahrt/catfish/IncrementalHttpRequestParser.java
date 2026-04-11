@@ -21,7 +21,47 @@ final class IncrementalHttpRequestParser {
   private static final int MAX_HEADER_VALUE_LENGTH = 10_000;
   private static final int MAX_HEADER_FIELD_COUNT = 1000;
 
-  private static enum State {
+  private static final int TOKEN = 1;
+  private static final int DIGIT = 2;
+  private static final int SPACE = 4;
+  private static final int CONTROL = 8;
+
+  private static final byte[] CHAR_FLAGS = new byte[256];
+
+  private static boolean isControlOrSeparator(int c) {
+    return c < 32 || c == 127 || (c < 128 && "\"(),/:;<=>?@[\\]{} \t".indexOf(c) >= 0);
+  }
+
+  static {
+    for (int c = 0; c < 256; c++) {
+      int flags = 0;
+      flags |= (c < 32 || c == 127) ? CONTROL : 0;
+      flags |= (c == ' ' || c == '\t') ? SPACE : 0;
+      flags |= (c >= '0' && c <= '9') ? DIGIT : 0;
+      flags |= (!isControlOrSeparator(c)) ? TOKEN : 0;
+      CHAR_FLAGS[c] = (byte) flags;
+    }
+  }
+
+  //       CTL            = <any US-ASCII control character
+  //                        (octets 0 - 31) and DEL (127)>
+  private static boolean isControl(char c) {
+    return (CHAR_FLAGS[c] & CONTROL) != 0;
+  }
+
+  static boolean isTokenCharacter(char c) {
+    return (CHAR_FLAGS[c] & TOKEN) != 0;
+  }
+
+  private static boolean isDigit(char c) {
+    return (CHAR_FLAGS[c] & DIGIT) != 0;
+  }
+
+  private static boolean isSpace(char c) {
+    return (CHAR_FLAGS[c] & SPACE) != 0;
+  }
+
+  private enum State {
     // Request-Line   = Method SP Request-URI SP HTTP-Version CRLF
     REQUEST_METHOD,
     REQUEST_URI,
@@ -69,50 +109,6 @@ final class IncrementalHttpRequestParser {
     unparsedUri = null;
     messageHeaderName = null;
     messageHeaderValue = null;
-  }
-
-  //       CTL            = <any US-ASCII control character
-  //                        (octets 0 - 31) and DEL (127)>
-  private static boolean isControl(char c) {
-    return (c < 32) || (c == 127);
-  }
-
-  //       separators     = "(" | ")" | "<" | ">" | "@"
-  //                      | "," | ";" | ":" | "\" | <">
-  //                      | "/" | "[" | "]" | "?" | "="
-  //                      | "{" | "}" | SP | HT
-  private static boolean isSeparator(char c) {
-    return (c == '(')
-        || (c == ')')
-        || (c == '<')
-        || (c == '>')
-        || (c == '@')
-        || (c == ',')
-        || (c == ';')
-        || (c == ':')
-        || (c == '\\')
-        || (c == '"')
-        || (c == '/')
-        || (c == '[')
-        || (c == ']')
-        || (c == '?')
-        || (c == '=')
-        || (c == '{')
-        || (c == '}')
-        || (c == ' ')
-        || (c == '\t');
-  }
-
-  static boolean isTokenCharacter(char c) {
-    return !isControl(c) && !isSeparator(c);
-  }
-
-  private boolean isDigit(char c) {
-    return (c >= '0') && (c <= '9');
-  }
-
-  private boolean isSpace(char c) {
-    return (c == ' ') || (c == '\t');
   }
 
   private void trimAndAppendSpace() {
