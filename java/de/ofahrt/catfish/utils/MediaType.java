@@ -4,6 +4,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A parsed HTTP media-type (RFC 9110 §8.3):
@@ -18,6 +20,12 @@ import java.util.Map;
  */
 public record MediaType(String type, String subtype, Map<String, String> parameters) {
 
+  public MediaType {
+    Objects.requireNonNull(type, "type");
+    Objects.requireNonNull(subtype, "subtype");
+    Objects.requireNonNull(parameters, "parameters");
+  }
+
   /** Returns the mime type string ({@code "type/subtype"}). */
   public String mimeType() {
     return type + "/" + subtype;
@@ -27,7 +35,7 @@ public record MediaType(String type, String subtype, Map<String, String> paramet
    * Parses a Content-Type header value into a MediaType. Returns {@code null} if the value is
    * malformed.
    */
-  public static MediaType parse(String value) {
+  public static @Nullable MediaType parse(@Nullable String value) {
     if (value == null) {
       return null;
     }

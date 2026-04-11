@@ -7,5 +7,6 @@ java_library(
     srcs = glob(["*.java"]),
     deps = [
         "//java/de/ofahrt/catfish/model",
+        "//third_party/jspecify",
     ],
 )
