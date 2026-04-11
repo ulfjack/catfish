@@ -29,10 +29,10 @@ public class MimeTypeTest {
   // Single-arg constructor
 
   @Test
-  public void singleArgConstructorSetsEmptySubtype() {
-    MimeType m = new MimeType("text");
-    assertEquals("text", m.getPrimaryType());
-    assertEquals("", m.getSubType());
+  public void emptySubtype() {
+    MimeType m = new MimeType("text", "");
+    assertEquals("text", m.primary());
+    assertEquals("", m.subtype());
   }
 
   // isText

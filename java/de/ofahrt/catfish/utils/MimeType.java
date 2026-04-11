@@ -1,29 +1,17 @@
 package de.ofahrt.catfish.utils;
 
-import java.io.Serializable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public final class MimeType implements Serializable {
-  private static final long serialVersionUID = 3902904509160688751L;
+public record MimeType(String primary, String subtype) {
 
   private static final Pattern MIME_PATTERN = Pattern.compile("([\\w]+)/([\\w.+-]+)");
   private static final ConcurrentHashMap<String, MimeType> cache = new ConcurrentHashMap<>(30);
 
   public static MimeType getInstance(String primary, String subtype) {
-    StringBuilder builder = new StringBuilder(primary.length() + subtype.length() + 1);
-    builder.append(primary).append('/').append(subtype);
-    String key = builder.toString();
-    MimeType mimetype = cache.get(key);
-    if (mimetype == null) {
-      mimetype = new MimeType(primary, subtype);
-      MimeType m = cache.putIfAbsent(key, mimetype);
-      if (m != null) {
-        mimetype = m;
-      }
-    }
-    return mimetype;
+    String key = primary + "/" + subtype;
+    return cache.computeIfAbsent(key, k -> new MimeType(primary, subtype));
   }
 
   public static MimeType parseMimeType(String type) {
@@ -70,26 +58,18 @@ public final class MimeType implements Serializable {
   public static final MimeType TEXT_RTF = getInstance("text", "rtf");
   public static final MimeType TEXT_XML = getInstance("text", "xml");
 
-  private final String primary;
-  private final String subtype;
-  private final String cachedToString;
-
-  private transient volatile int cachedHashCode = 0;
-
-  public MimeType(String primary, String subtype) {
-    this.primary = primary;
-    this.subtype = subtype;
-    this.cachedToString = primary + "/" + subtype;
-  }
-
-  public MimeType(String primary) {
-    this(primary, "");
-  }
-
+  /**
+   * @deprecated Use {@link #primary()} instead.
+   */
+  @Deprecated
   public String getPrimaryType() {
     return primary;
   }
 
+  /**
+   * @deprecated Use {@link #subtype()} instead.
+   */
+  @Deprecated
   public String getSubType() {
     return subtype;
   }
@@ -99,27 +79,7 @@ public final class MimeType implements Serializable {
   }
 
   @Override
-  public int hashCode() {
-    if (cachedHashCode == 0) {
-      cachedHashCode = primary.hashCode() * 313 + subtype.hashCode();
-    }
-    return cachedHashCode;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (o == this) {
-      return true;
-    }
-    if (!(o instanceof MimeType)) {
-      return false;
-    }
-    MimeType other = (MimeType) o;
-    return primary.equals(other.primary) && subtype.equals(other.subtype);
-  }
-
-  @Override
   public String toString() {
-    return cachedToString;
+    return primary + "/" + subtype;
   }
 }
