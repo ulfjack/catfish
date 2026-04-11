@@ -8,7 +8,6 @@ java_library(
     deps = [
         "//java/de/ofahrt/catfish/client/legacy",
         "//java/de/ofahrt/catfish/http",
-        "//java/de/ofahrt/catfish/internal",
         "//java/de/ofahrt/catfish/internal/network",
         "//java/de/ofahrt/catfish/model",
         "//java/de/ofahrt/catfish/model/network",

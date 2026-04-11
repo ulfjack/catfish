@@ -1,7 +1,7 @@
 package de.ofahrt.catfish.client;
 
-import de.ofahrt.catfish.internal.CoreHelper;
 import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpMessages;
 import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
@@ -52,7 +52,7 @@ public class ClientMainForTesting {
       } else {
         response = client.send("www.example.com", 80, null, null, request).get();
       }
-      System.out.println(CoreHelper.responseToString(response));
+      System.out.println(HttpMessages.responseToString(response));
     } finally {
       client.shutdown();
     }

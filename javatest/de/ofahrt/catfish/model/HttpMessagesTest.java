@@ -1,22 +1,15 @@
-package de.ofahrt.catfish.internal;
+package de.ofahrt.catfish.model;
 
 import static org.junit.Assert.assertTrue;
 
-import de.ofahrt.catfish.model.HttpHeaderName;
-import de.ofahrt.catfish.model.HttpMethodName;
-import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpResponse;
-import de.ofahrt.catfish.model.HttpVersion;
-import de.ofahrt.catfish.model.SimpleHttpRequest;
-import de.ofahrt.catfish.model.SimpleHttpResponse;
 import org.junit.Test;
 
-public class CoreHelperTest {
+public class HttpMessagesTest {
 
   @Test
   public void responseToStringIncludesStatusLine() throws Exception {
     HttpResponse response = new SimpleHttpResponse.Builder().setStatusCode(200).build();
-    String result = CoreHelper.responseToString(response);
+    String result = HttpMessages.responseToString(response);
     assertTrue(result.startsWith("HTTP/1.1 200 OK"));
   }
 
@@ -27,7 +20,7 @@ public class CoreHelperTest {
             .setStatusCode(200)
             .addHeader(HttpHeaderName.CONTENT_TYPE, "text/plain")
             .build();
-    String result = CoreHelper.responseToString(response);
+    String result = HttpMessages.responseToString(response);
     assertTrue(result.contains("Content-Type: text/plain"));
   }
 
@@ -40,7 +33,7 @@ public class CoreHelperTest {
             .setUri("/test")
             .addHeader(HttpHeaderName.HOST, "localhost")
             .build();
-    String result = CoreHelper.requestToString(request);
+    String result = HttpMessages.requestToString(request);
     assertTrue(result.startsWith("GET /test HTTP/1.1"));
   }
 
@@ -53,7 +46,7 @@ public class CoreHelperTest {
             .setUri("/test")
             .addHeader(HttpHeaderName.HOST, "localhost")
             .build();
-    String result = CoreHelper.requestToString(request);
+    String result = HttpMessages.requestToString(request);
     assertTrue(result.contains("Host: localhost"));
   }
 }

@@ -1,9 +1,9 @@
 package de.ofahrt.catfish.client;
 
 import de.ofahrt.catfish.client.HttpRequestGenerator.ContinuationToken;
-import de.ofahrt.catfish.internal.CoreHelper;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
+import de.ofahrt.catfish.model.HttpMessages;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.MalformedResponseException;
@@ -56,7 +56,7 @@ final class HttpClientStage implements Stage {
     this.parser = new IncrementalHttpResponseParser();
     parent.log("%s %s %s", request.getMethod(), request.getUri(), request.getVersion());
     if (VERBOSE) {
-      System.out.println(CoreHelper.requestToString(request));
+      System.out.println(HttpMessages.requestToString(request));
     }
   }
 
@@ -134,7 +134,7 @@ final class HttpClientStage implements Stage {
         Integer.valueOf(response.getStatusCode()),
         response.getStatusMessage());
     if (VERBOSE) {
-      System.out.println(CoreHelper.responseToString(response));
+      System.out.println(HttpMessages.responseToString(response));
     }
     responseHandler.received(response);
     return HttpConnectionHeader.isKeepAlive(response.getHeaders());
