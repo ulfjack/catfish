@@ -28,11 +28,14 @@ public class MimeTypeTest {
 
   // Single-arg constructor
 
-  @Test
-  public void emptySubtype() {
-    MimeType m = new MimeType("text", "");
-    assertEquals("text", m.primary());
-    assertEquals("", m.subtype());
+  @Test(expected = IllegalArgumentException.class)
+  public void emptySubtype_throws() {
+    new MimeType("text", "");
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void emptyPrimary_throws() {
+    new MimeType("", "html");
   }
 
   // isText

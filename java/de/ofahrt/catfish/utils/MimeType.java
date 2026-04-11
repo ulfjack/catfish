@@ -6,6 +6,15 @@ import java.util.regex.Pattern;
 
 public record MimeType(String primary, String subtype) {
 
+  public MimeType {
+    if (primary == null || primary.isEmpty()) {
+      throw new IllegalArgumentException("primary type must not be empty");
+    }
+    if (subtype == null || subtype.isEmpty()) {
+      throw new IllegalArgumentException("subtype must not be empty");
+    }
+  }
+
   private static final Pattern MIME_PATTERN = Pattern.compile("([\\w]+)/([\\w.+-]+)");
   private static final ConcurrentHashMap<String, MimeType> cache = new ConcurrentHashMap<>(30);
 
