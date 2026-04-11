@@ -145,33 +145,28 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     }
     ReadToken token = ReadToken.CONTINUE;
     int before = outputBuffer.remaining();
-    loop:
-    while (outputBuffer.hasRemaining()) {
+    while (outputBuffer.hasRemaining() && readState != ReadState.CLOSED) {
       switch (readState) {
-        case UNCOMMITTED:
-          throw new IllegalStateException();
-        case READ_RESPONSE:
+        case UNCOMMITTED -> throw new IllegalStateException();
+        case READ_RESPONSE -> {
           token = generateResponse(outputBuffer);
           if (token == ReadToken.FINISHED) {
             readState = includeBody ? ReadState.READ_BODY : ReadState.CLOSED;
           }
-          break;
-        case READ_BODY:
+        }
+        case READ_BODY -> {
           token = generateBody(outputBuffer);
           if (token == ReadToken.FINISHED) {
             readState = useChunking ? ReadState.READ_TAIL : ReadState.CLOSED;
           }
-          break;
-        case READ_TAIL:
+        }
+        case READ_TAIL -> {
           token = generateTail(outputBuffer);
           if (token == ReadToken.FINISHED) {
             readState = ReadState.CLOSED;
           }
-          break;
-        case CLOSED:
-          break loop;
-        default:
-          throw new IllegalStateException();
+        }
+        case CLOSED -> {} // unreachable; guarded by while condition
       }
       if (token == ReadToken.PAUSE || token == ReadToken.NOT_ENOUGH_SPACE) {
         break;
@@ -381,18 +376,6 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
           statusLineToByteArray(response), headersToByteArray(headers),
         };
   }
-
-  //  private int parseContentLength(HttpResponse responseToWrite) {
-  //    String value = responseToWrite.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
-  //    if (value == null) {
-  //      return -1;
-  //    }
-  //    try {
-  //      return Integer.parseInt(value);
-  //    } catch (NumberFormatException e) {
-  //      return -1;
-  //    }
-  //  }
 
   private synchronized void internalClose() {
     if (writeState == WriteState.CLOSED) {
