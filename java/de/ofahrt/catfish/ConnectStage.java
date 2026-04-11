@@ -120,12 +120,7 @@ final class ConnectStage implements Stage {
 
   @Override
   public ConnectionControl read() {
-    switch (state) {
-      case CONNECTING:
-      case SENDING_RESPONSE:
-        return ConnectionControl.PAUSE;
-    }
-    throw new IllegalStateException();
+    return ConnectionControl.PAUSE;
   }
 
   private void doConnect(String connectHost, int connectPort) {
