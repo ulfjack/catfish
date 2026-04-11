@@ -511,9 +511,11 @@ final class HttpServerStage implements Stage {
         break;
       case PAUSE:
         break;
-      case CLOSE_CONNECTION_AFTER_FLUSH:
       case CLOSE_INPUT:
-        throw new IllegalStateException();
+        // An error response is already queued (via startBuffered + encourageWrites).
+        // Return PAUSE so the write loop can send it.
+        break;
+      case CLOSE_CONNECTION_AFTER_FLUSH:
       case CLOSE_OUTPUT_AFTER_FLUSH:
       case CLOSE_CONNECTION_IMMEDIATELY:
         return control;

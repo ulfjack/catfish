@@ -152,6 +152,22 @@ public class BasicIntegrationTest {
   }
 
   @Test
+  public void pipelinedMalformedSecondRequest_returns400() throws Exception {
+    // Regression test: a valid keep-alive request followed by a malformed request in the same
+    // packet. The server calls readAndResume() after completing the first response, which calls
+    // read() to parse the second request. The malformed request triggers CLOSE_INPUT from read().
+    // Before the fix, readAndResume() threw IllegalStateException for CLOSE_INPUT, crashing the
+    // connection before the 400 response could be sent.
+    try (HttpConnection connection = localServer.connect(/* ssl= */ false)) {
+      connection.write(toBytes("GET / HTTP/1.1\nHost: localhost\n\nINVALID\n\n"));
+      HttpResponse response1 = connection.readResponse();
+      assertEquals(200, response1.getStatusCode());
+      HttpResponse response2 = connection.readResponse();
+      assertEquals(400, response2.getStatusCode());
+    }
+  }
+
+  @Test
   public void sslDoubleGetInOnePacket() throws Exception {
     try (HttpConnection connection = localServer.connect(/* ssl= */ true)) {
       connection.write(
