@@ -115,7 +115,7 @@ public final class SSLContextFactory {
   private static byte[] decodePem(InputStream in) throws IOException {
     try (BufferedReader reader =
         new BufferedReader(new InputStreamReader(in, StandardCharsets.ISO_8859_1))) {
-      StringBuffer base64Data = new StringBuffer();
+      StringBuilder base64Data = new StringBuilder();
       boolean copyingData = false;
       String s;
       while ((s = reader.readLine()) != null) {
