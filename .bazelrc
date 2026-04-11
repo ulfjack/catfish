@@ -1,5 +1,8 @@
 build --java_runtime_version=remotejdk_21
 build --java_language_version=17
+build --javacopt="-Xep:NullAway:ERROR"
+build --javacopt="-XepOpt:NullAway:AnnotatedPackages=de.ofahrt.catfish.model:de.ofahrt.catfish.ssl:de.ofahrt.catfish.utils"
+build --plugin=//third_party/nullaway
 coverage --instrumentation_filter=//java/... --combined_report=lcov
 
 try-import %workspace%/.bazelrc.user
