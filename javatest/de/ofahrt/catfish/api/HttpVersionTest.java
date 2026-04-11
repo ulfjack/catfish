@@ -14,13 +14,13 @@ public class HttpVersionTest {
   }
 
   @Test
-  public void getMajorVersion() {
-    assertEquals(1, HttpVersion.HTTP_1_1.getMajorVersion());
+  public void majorVersion() {
+    assertEquals(1, HttpVersion.HTTP_1_1.majorVersion());
   }
 
   @Test
-  public void getMinorVersion() {
-    assertEquals(1, HttpVersion.HTTP_1_1.getMinorVersion());
+  public void minorVersion() {
+    assertEquals(1, HttpVersion.HTTP_1_1.minorVersion());
   }
 
   @Test
