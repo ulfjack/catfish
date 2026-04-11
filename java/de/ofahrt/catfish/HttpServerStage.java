@@ -148,7 +148,7 @@ final class HttpServerStage implements Stage {
     // Phase 1: header parsing.
     // invariant: inputBuffer is readable
     if (inputBuffer.hasRemaining()) {
-      int consumed = parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.limit());
+      int consumed = parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.remaining());
       inputBuffer.position(inputBuffer.position() + consumed);
     }
     if (!parser.isDone()) {
