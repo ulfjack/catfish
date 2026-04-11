@@ -42,26 +42,13 @@ public class ServletHelper {
     for (int i = 0; i < what.length(); i++) {
       char c = what.charAt(i);
       switch (c) {
-        case 13:
-          break;
-        case 10:
-          result.append("<br/>");
-          break;
-        case '<':
-          result.append("&lt;");
-          break;
-        case '>':
-          result.append("&gt;");
-          break;
-        case '&':
-          result.append("&amp;");
-          break;
-        case '"':
-          result.append("&quot;");
-          break;
-        default:
-          result.append(c);
-          break;
+        case 13 -> {} // skip CR
+        case 10 -> result.append("<br/>");
+        case '<' -> result.append("&lt;");
+        case '>' -> result.append("&gt;");
+        case '&' -> result.append("&amp;");
+        case '"' -> result.append("&quot;");
+        default -> result.append(c);
       }
     }
     if (fixed) {
@@ -201,12 +188,9 @@ public class ServletHelper {
       }
 
       switch (b) {
-        case -1:
-          requestFinished = true;
-          break;
-        case 0:
-          break;
-        case 10:
+        case -1 -> requestFinished = true;
+        case 0 -> {}
+        case 10 -> {
           if (line.equals("")) {
             requestFinished = true;
           } else {
@@ -217,10 +201,8 @@ public class ServletHelper {
             tempInfo.put(s1, s2);
           }
           line = "";
-          break;
-        default:
-          line += (char) b;
-          break;
+        }
+        default -> line += (char) b;
       }
     }
 

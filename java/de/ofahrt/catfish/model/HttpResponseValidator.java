@@ -978,21 +978,20 @@ public class HttpResponseValidator {
           (eqIdx >= 0 ? trimmed.substring(0, eqIdx).trim() : trimmed).toLowerCase(Locale.US);
       String value = eqIdx >= 0 ? trimmed.substring(eqIdx + 1).trim() : null;
       switch (name) {
-        case "max-age":
+        case "max-age" -> {
           if (value == null || !isNonNegativeInteger(value)) {
             return false;
           }
           hasMaxAge = true;
-          break;
-        case "includesubdomains":
-        case "preload":
+        }
+        case "includesubdomains", "preload" -> {
           if (value != null) {
             return false;
           }
-          break;
-        default:
+        }
+        default -> {
           // Unknown directives MUST be ignored per RFC 6797 §6.1.
-          break;
+        }
       }
     }
     return hasMaxAge;

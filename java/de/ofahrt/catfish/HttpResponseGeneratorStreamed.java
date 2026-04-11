@@ -336,16 +336,13 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
           "flush(close=" + close + ") state=" + writeState + " callback=" + requireCallback);
     }
     switch (writeState) {
-      case UNCOMMITTED:
+      case UNCOMMITTED -> {
         finalizeResponse(close);
         writeState = close ? WriteState.CLOSED : WriteState.STREAM;
         readState = ReadState.READ_RESPONSE;
-        break;
-      case STREAM:
-        writeState = close ? WriteState.CLOSED : WriteState.STREAM;
-        break;
-      case CLOSED:
-        throw new IllegalStateException();
+      }
+      case STREAM -> writeState = close ? WriteState.CLOSED : WriteState.STREAM;
+      case CLOSED -> throw new IllegalStateException();
     }
     if (requireCallback) {
       dataAvailableCallback.run();
