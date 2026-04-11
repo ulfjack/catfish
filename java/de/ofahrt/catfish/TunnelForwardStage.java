@@ -27,7 +27,12 @@ final class TunnelForwardStage implements Stage {
   private final OutputStream targetOut;
   private final Runnable onClose;
 
-  private final LinkedBlockingQueue<byte[]> fromTarget = new LinkedBlockingQueue<>();
+  // Bounded to limit memory when the NIO write side can't keep up with the origin.
+  // 16 chunks × 64KB ≈ 1MB max. When full, readFromTarget blocks, applying TCP backpressure.
+  private static final int MAX_QUEUED_CHUNKS = 16;
+
+  private final LinkedBlockingQueue<byte[]> fromTarget =
+      new LinkedBlockingQueue<>(MAX_QUEUED_CHUNKS);
   private byte[] currentChunk;
   private int currentChunkOffset;
   private volatile boolean targetClosed;
@@ -118,7 +123,12 @@ final class TunnelForwardStage implements Stage {
       byte[] buf = new byte[65536];
       int n;
       while ((n = in.read(buf)) != -1) {
-        fromTarget.add(Arrays.copyOf(buf, n));
+        try {
+          fromTarget.put(Arrays.copyOf(buf, n));
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          break;
+        }
         parent.queue(parent::encourageWrites);
       }
     } catch (IOException e) {

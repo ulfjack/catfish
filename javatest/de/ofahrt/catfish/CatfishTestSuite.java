@@ -20,5 +20,6 @@ import org.junit.runners.Suite.SuiteClasses;
   SNIParserTest.class,
   SslInfoCacheTest.class,
   SslServerStageTest.class,
+  TunnelForwardStageTest.class,
 })
 public class CatfishTestSuite {}
