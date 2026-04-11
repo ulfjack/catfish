@@ -280,7 +280,7 @@ public final class NetworkEngine {
               int before = inputBuffer.remaining();
               ConnectionControl control = current.read();
               switch (control) {
-                case CONTINUE:
+                case CONTINUE -> {
                   if ((inputBuffer.remaining() == before) && (drainAttempt++ == 10)) {
                     throw new IllegalStateException(
                         String.format(
@@ -288,16 +288,15 @@ public final class NetworkEngine {
                                 + " during input shutdown (%s)",
                             current));
                   }
-                  break;
-                case NEED_MORE_DATA:
+                }
+                case NEED_MORE_DATA ->
                   // No more data is coming and the stage thinks it needs more. Discard any
                   // remaining bytes so the next loop iteration reaches the empty-buffer branch
                   // and calls inputClosed(). (Don't use buffer.clear() here — that puts the
                   // buffer back into write mode, where hasRemaining() would report the full
                   // capacity and spin forever.)
                   inputBuffer.position(inputBuffer.limit());
-                  break;
-                case PAUSE:
+                case PAUSE -> {
                   if (inputBuffer.hasRemaining()) {
                     // There's still data left in the buffer, so we're not done yet.
                     readState = FlowState.PAUSED_CLOSE_AFTER_FLUSH;
@@ -306,8 +305,8 @@ public final class NetworkEngine {
                     readState = FlowState.CLOSED;
                     current.inputClosed();
                   }
-                  break;
-                case CLOSE_INPUT:
+                }
+                case CLOSE_INPUT -> {
                   // The other side already shut down, and we agree with that. Mark as closed.
                   // We intentionally don't call inputClosed here. We don't guarantee that it is
                   // called; in particular, local processing and remote shutdown may race, so it
@@ -315,17 +314,18 @@ public final class NetworkEngine {
                   readState = FlowState.CLOSED;
                   // Redundant since the remote already closed, but makes our intent explicit.
                   socketChannel.shutdownInput();
-                  break;
-                case CLOSE_OUTPUT_AFTER_FLUSH:
+                }
+                case CLOSE_OUTPUT_AFTER_FLUSH ->
                   throw new IllegalStateException(
                       String.format("Cannot close-output-after-flush after read (%s)", current));
-                case CLOSE_CONNECTION_AFTER_FLUSH:
+                case CLOSE_CONNECTION_AFTER_FLUSH ->
                   throw new IllegalStateException(
                       String.format(
                           "Cannot close-connection-after-flush after read (%s)", current));
-                case CLOSE_CONNECTION_IMMEDIATELY:
+                case CLOSE_CONNECTION_IMMEDIATELY -> {
                   close();
                   return;
+                }
               }
             } else {
               readState = FlowState.CLOSED;
@@ -333,12 +333,12 @@ public final class NetworkEngine {
             }
           }
           int attempt = 0;
-          loop:
-          while ((readState == FlowState.OPEN) && inputBuffer.hasRemaining()) {
+          boolean needMoreData = false;
+          while ((readState == FlowState.OPEN) && inputBuffer.hasRemaining() && !needMoreData) {
             int before = inputBuffer.remaining();
             ConnectionControl control = current.read();
             switch (control) {
-              case CONTINUE:
+              case CONTINUE -> {
                 if ((inputBuffer.remaining() == before) && (attempt++ == 10)) {
                   // The pipeline did not read any data after several attempts. Looks like a bug.
                   throw new IllegalStateException(
@@ -346,25 +346,23 @@ public final class NetworkEngine {
                           "Stage did not process remaining input data after 10 attempts (%s)",
                           current));
                 }
-                break;
-              case NEED_MORE_DATA:
-                break loop;
-              case PAUSE:
-                readState = FlowState.PAUSED;
-                break;
-              case CLOSE_INPUT:
+              }
+              case NEED_MORE_DATA -> needMoreData = true;
+              case PAUSE -> readState = FlowState.PAUSED;
+              case CLOSE_INPUT -> {
                 readState = FlowState.CLOSED;
                 socketChannel.shutdownInput();
-                break;
-              case CLOSE_OUTPUT_AFTER_FLUSH:
+              }
+              case CLOSE_OUTPUT_AFTER_FLUSH ->
                 throw new IllegalStateException(
                     String.format("Cannot close-output-after-flush after read (%s)", current));
-              case CLOSE_CONNECTION_AFTER_FLUSH:
+              case CLOSE_CONNECTION_AFTER_FLUSH ->
                 throw new IllegalStateException(
                     String.format("Cannot close-connection-after-flush after read (%s)", current));
-              case CLOSE_CONNECTION_IMMEDIATELY:
+              case CLOSE_CONNECTION_IMMEDIATELY -> {
                 close();
                 return;
+              }
             }
           }
 
@@ -372,28 +370,22 @@ public final class NetworkEngine {
           while (writeState == FlowState.OPEN && (available(outputBuffer) > 0)) {
             int before = available(outputBuffer);
             ConnectionControl control = current.write();
-            //          log("Have %d bytes outgoing", Integer.valueOf(outputBuffer.remaining()));
             switch (control) {
-              case CONTINUE:
-                break;
-              case NEED_MORE_DATA:
+              case CONTINUE -> {}
+              case NEED_MORE_DATA ->
                 throw new IllegalStateException(
                     String.format("Cannot provide more data to write (%s)", current));
-              case PAUSE:
-                writeState = FlowState.PAUSED;
-                break;
-              case CLOSE_INPUT:
+              case PAUSE -> writeState = FlowState.PAUSED;
+              case CLOSE_INPUT ->
                 throw new IllegalStateException(
                     String.format("Cannot close-input after write (%s)", current));
-              case CLOSE_OUTPUT_AFTER_FLUSH:
-                writeState = FlowState.CLOSE_AFTER_FLUSH;
-                break;
-              case CLOSE_CONNECTION_AFTER_FLUSH:
+              case CLOSE_OUTPUT_AFTER_FLUSH -> writeState = FlowState.CLOSE_AFTER_FLUSH;
+              case CLOSE_CONNECTION_AFTER_FLUSH ->
                 writeState = FlowState.CLOSE_CONNECTION_AFTER_FLUSH;
-                break;
-              case CLOSE_CONNECTION_IMMEDIATELY:
+              case CLOSE_CONNECTION_IMMEDIATELY -> {
                 close();
                 return;
+              }
             }
             if (before == available(outputBuffer)) {
               // Pipeline did not write any data.
