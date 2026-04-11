@@ -29,7 +29,10 @@ java_library(
 java_binary(
     name = "benchmark",
     testonly = True,
-    srcs = ["IncrementalHttpRequestParserBenchmark.java"],
+    srcs = [
+        "ChunkedBodyScannerBenchmark.java",
+        "IncrementalHttpRequestParserBenchmark.java",
+    ],
     main_class = "org.openjdk.jmh.Main",
     plugins = ["//third_party/jmh:jmh_annprocess"],
     deps = [
@@ -43,6 +46,7 @@ java_test(
     srcs = glob(
         ["*.java"],
         exclude = [
+            "ChunkedBodyScannerBenchmark.java",
             "CollectionsUtils.java",
             "HashConflictGenerator.java",
             "HttpParserTest.java",
