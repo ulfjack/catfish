@@ -274,7 +274,9 @@ final class OriginForwarder {
           responseScanner.advance(readBuf, leftoverStart, leftoverLen);
           bodyOut.write(readBuf, leftoverStart, leftoverLen);
         }
-        while (!responseScanner.isDone()) {
+        // TODO: Replace OriginForwarder with a non-blocking HTTP client to avoid tying up an
+        // executor thread per proxied request.
+        while (!responseScanner.isDone() && !responseScanner.hasError()) {
           int n = originIn.read(readBuf, 0, readBuf.length);
           if (n < 0) {
             break;
