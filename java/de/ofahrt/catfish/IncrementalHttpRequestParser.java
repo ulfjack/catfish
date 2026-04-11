@@ -177,6 +177,9 @@ final class IncrementalHttpRequestParser {
             if (elementBuffer.length() >= MAX_URI_LENGTH) {
               return setError(HttpStatusCode.URI_TOO_LONG);
             }
+            // As of 2026-04, this encoding is probably unnecessary but predates the git history
+            // (which goes back 9 years). Likely a workaround for a tool that sent these characters
+            // literally in URIs.
             if (c == '|') {
               elementBuffer.append(CoreHelper.encode('|'));
             } else if (c == '^') {
