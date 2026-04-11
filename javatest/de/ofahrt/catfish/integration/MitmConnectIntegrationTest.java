@@ -987,6 +987,87 @@ public class MitmConnectIntegrationTest {
     return sb.toString();
   }
 
+  // ---- interceptLocal tests ----
+
+  @Test
+  public void interceptLocal_servesRequestLocally() throws Exception {
+    int proxyPort = 9075;
+    CatfishHttpServer s = newServer();
+    serversToStop.add(s);
+    HttpEndpoint listener =
+        HttpEndpoint.onLocalhost(proxyPort)
+            .dispatcher(
+                new ConnectHandler() {
+                  @Override
+                  public ConnectDecision applyConnect(String host, int port) {
+                    return ConnectDecision.interceptLocal(testSslInfo);
+                  }
+
+                  @Override
+                  public RequestAction applyLocal(HttpRequest request) {
+                    return RequestAction.serveLocally(
+                        (conn, req, writer) ->
+                            writer.commitBuffered(
+                                StandardResponses.OK
+                                    .withHeaderOverrides(
+                                        HttpHeaders.of("Content-Type", "text/plain"))
+                                    .withBody(
+                                        "interceptLocal-ok".getBytes(StandardCharsets.UTF_8))));
+                  }
+                });
+    s.listen(listener);
+
+    // Build a client SSLContext that trusts the test cert.
+    KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+    trustStore.load(null, null);
+    trustStore.setCertificateEntry("test", testSslInfo.certificate());
+    TrustManagerFactory tmf =
+        TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+    tmf.init(trustStore);
+    SSLContext localClientCtx = SSLContext.getInstance("TLS");
+    localClientCtx.init(null, tmf.getTrustManagers(), null);
+
+    // CONNECT, then TLS upgrade, then HTTP request.
+    try (Socket socket = new Socket("localhost", proxyPort)) {
+      OutputStream out = socket.getOutputStream();
+      InputStream in = socket.getInputStream();
+      out.write(
+          "CONNECT localhost:443 HTTP/1.1\r\nHost: localhost\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      out.flush();
+      String connectResp = readUntilBlankLine(in);
+      assertTrue("Expected 200, got: " + connectResp, connectResp.startsWith("HTTP/1.1 200"));
+
+      SSLSocket sslSocket =
+          (SSLSocket)
+              localClientCtx.getSocketFactory().createSocket(socket, "localhost", 443, true);
+      SSLParameters sslParams = sslSocket.getSSLParameters();
+      sslParams.setServerNames(List.of(new SNIHostName("localhost")));
+      sslSocket.setSSLParameters(sslParams);
+      sslSocket.setUseClientMode(true);
+      sslSocket.startHandshake();
+
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+      sslOut.write(
+          "GET /test HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
+
+      ByteArrayOutputStream responseBytes = new ByteArrayOutputStream();
+      byte[] buf = new byte[4096];
+      int n;
+      while ((n = sslIn.read(buf)) != -1) {
+        responseBytes.write(buf, 0, n);
+      }
+      String response = responseBytes.toString(StandardCharsets.ISO_8859_1.name());
+      assertTrue("Expected HTTP 200, got: " + response, response.startsWith("HTTP/1.1 200"));
+      assertTrue(
+          "Expected interceptLocal-ok body, got: " + response,
+          response.contains("interceptLocal-ok"));
+    }
+  }
+
   // ---- Infrastructure ----
 
   private static CatfishHttpServer newServer() throws IOException {

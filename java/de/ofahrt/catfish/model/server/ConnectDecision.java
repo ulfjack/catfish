@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.model.server;
 
 import de.ofahrt.catfish.ssl.CertificateAuthority;
+import de.ofahrt.catfish.ssl.SSLInfo;
 
 /**
  * The result of a CONNECT routing decision. Returned by {@link ConnectHandler#applyConnect} to
@@ -14,6 +15,12 @@ public sealed interface ConnectDecision {
   /** MITM-intercept: terminate TLS, mirror origin cert, forward decrypted requests. */
   record Intercept(String host, int port, CertificateAuthority ca) implements ConnectDecision {}
 
+  /**
+   * Terminate TLS with the given certificate and serve all decrypted requests locally via {@link
+   * ConnectHandler#applyLocal}.
+   */
+  record InterceptLocal(SSLInfo sslInfo) implements ConnectDecision {}
+
   /** Deny the CONNECT request (403 Forbidden). */
   record Deny() implements ConnectDecision {}
 
@@ -23,6 +30,10 @@ public sealed interface ConnectDecision {
 
   static ConnectDecision intercept(String host, int port, CertificateAuthority ca) {
     return new Intercept(host, port, ca);
+  }
+
+  static ConnectDecision interceptLocal(SSLInfo sslInfo) {
+    return new InterceptLocal(sslInfo);
   }
 
   static ConnectDecision deny() {

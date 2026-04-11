@@ -206,6 +206,11 @@ final class ConnectStage implements Stage {
       originHost = i.host();
       originPort = i.port();
       parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
+    } else if (decision instanceof ConnectDecision.InterceptLocal il) {
+      fakeCtx = il.sslInfo().sslContext();
+      originHost = null;
+      originPort = 0;
+      parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
     } else {
       throw new IllegalStateException("Unknown ConnectDecision: " + decision);
     }
@@ -293,6 +298,11 @@ final class ConnectStage implements Stage {
 
           @Override
           public RequestAction applyLocal(HttpRequest request) {
+            if (capturedOriginHost == null) {
+              // InterceptLocal: serve locally via the user's applyLocal.
+              return handler.applyLocal(request);
+            }
+            // Intercept: reconstruct the absolute URI and call the user's applyProxy.
             String absoluteUri =
                 OriginForwarder.buildAbsoluteUri(
                     true, capturedOriginHost, capturedOriginPort, request.getUri());
