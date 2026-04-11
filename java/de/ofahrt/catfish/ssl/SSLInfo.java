@@ -7,8 +7,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import javax.naming.InvalidNameException;
+import javax.naming.ldap.LdapName;
+import javax.naming.ldap.Rdn;
 import javax.net.ssl.SSLContext;
 
 public record SSLInfo(SSLContext sslContext, X509Certificate certificate) {
@@ -18,12 +19,21 @@ public record SSLInfo(SSLContext sslContext, X509Certificate certificate) {
     Objects.requireNonNull(certificate, "certificate");
   }
 
-  private static final Pattern CN_PATTERN = Pattern.compile("CN=([^,]+),");
-
-  /** Returns the CN from the certificate's subject, or null if absent or no certificate. */
+  /** Returns the CN from the certificate's subject, or null if absent. */
   public String certificateCommonName() {
-    Matcher matcher = CN_PATTERN.matcher(certificate.getSubjectX500Principal().toString());
-    return matcher.find() ? matcher.group(1) : null;
+    try {
+      // X500Principal.getName() returns RFC 2253 format, which is the LDAP DN string format.
+      // LdapName is the standard JDK class for parsing it.
+      LdapName ldapName = new LdapName(certificate.getSubjectX500Principal().getName());
+      for (Rdn rdn : ldapName.getRdns()) {
+        if ("CN".equalsIgnoreCase(rdn.getType())) {
+          return rdn.getValue().toString();
+        }
+      }
+    } catch (InvalidNameException e) {
+      // Malformed subject DN; treat as no CN.
+    }
+    return null;
   }
 
   /**
