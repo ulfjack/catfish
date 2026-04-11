@@ -314,7 +314,7 @@ public class MitmConnectIntegrationTest {
   }
 
   @Test
-  public void mitmConnectProxy_policyThrows_returns403() throws Exception {
+  public void mitmConnectProxy_policyThrows_returns502() throws Exception {
     CatfishHttpServer s = newServer();
     serversToStop.add(s);
     HttpEndpoint listener =
@@ -333,7 +333,7 @@ public class MitmConnectIntegrationTest {
               .getBytes(StandardCharsets.ISO_8859_1));
       out.flush();
       String response = readUntilBlankLine(in);
-      assertTrue("Expected 403, got: " + response, response.startsWith("HTTP/1.1 403"));
+      assertTrue("Expected 502, got: " + response, response.startsWith("HTTP/1.1 502"));
       assertTrue(
           "Expected Connection: close, got: " + response, response.contains("Connection: close"));
       assertTrue("Expected connection closed", in.read() == -1);

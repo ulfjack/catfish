@@ -83,7 +83,6 @@ final class ConnectStage implements Stage {
   private String originHost;
   private int originPort;
   private Runnable onClose;
-  private Connection connection;
 
   ConnectStage(
       Pipeline parent,
@@ -112,7 +111,9 @@ final class ConnectStage implements Stage {
 
   @Override
   public InitialConnectionState connect(Connection connection) {
-    this.connection = connection;
+    // Set onClose before dispatching to the executor so that onConnectComplete fires for every
+    // CONNECT connection, regardless of whether doConnect succeeds or fails.
+    onClose = () -> executor.execute(() -> serverListener.onConnectComplete(host, port));
     executor.execute(() -> doConnect(host, port));
     return InitialConnectionState.READ_ONLY;
   }
@@ -128,17 +129,16 @@ final class ConnectStage implements Stage {
   }
 
   private void doConnect(String connectHost, int connectPort) {
-    // Stage.close() runs on the NIO selector thread; dispatch onConnectComplete to the executor
-    // so user callbacks don't block the selector.
-    onClose =
-        () -> executor.execute(() -> serverListener.onConnectComplete(connectHost, connectPort));
-    ConnectDecision decision;
     try {
-      decision = handler.applyConnect(connectHost, connectPort);
+      doConnectInner(connectHost, connectPort);
     } catch (Exception e) {
-      parent.queue(() -> startResponse(RESPONSE_403, /* closeAfterSend= */ true));
-      return;
+      notifyConnectFailed(connectHost, connectPort, e);
+      parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
     }
+  }
+
+  private void doConnectInner(String connectHost, int connectPort) throws Exception {
+    ConnectDecision decision = handler.applyConnect(connectHost, connectPort);
 
     if (decision instanceof ConnectDecision.Deny) {
       parent.queue(() -> startResponse(RESPONSE_403, /* closeAfterSend= */ true));
@@ -149,7 +149,7 @@ final class ConnectStage implements Stage {
         tunnelSocket = sock;
         parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
       } catch (IOException e) {
-        serverListener.onConnectFailed(connectHost, connectPort, e);
+        notifyConnectFailed(connectHost, connectPort, e);
         parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
       }
     } else if (decision instanceof ConnectDecision.Intercept i) {
@@ -171,7 +171,7 @@ final class ConnectStage implements Stage {
           socket.startHandshake();
           originCert = (X509Certificate) socket.getSession().getPeerCertificates()[0];
         } catch (IOException e) {
-          serverListener.onConnectFailed(connectHost, connectPort, e);
+          notifyConnectFailed(connectHost, connectPort, e);
           parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
           return;
         }
@@ -184,7 +184,7 @@ final class ConnectStage implements Stage {
             socket.close();
           } catch (IOException ignored) {
           }
-          serverListener.onConnectFailed(connectHost, connectPort, e);
+          notifyConnectFailed(connectHost, connectPort, e);
           parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
           return;
         }
@@ -200,7 +200,7 @@ final class ConnectStage implements Stage {
         ctx = info.sslContext();
       }
 
-      serverListener.onCertificateReady(connectHost, connectPort);
+      notifyCertificateReady(connectHost, connectPort);
 
       fakeCtx = ctx;
       originHost = i.host();
@@ -208,6 +208,20 @@ final class ConnectStage implements Stage {
       parent.queue(() -> startResponse(RESPONSE_200, /* closeAfterSend= */ false));
     } else {
       throw new IllegalStateException("Unknown ConnectDecision: " + decision);
+    }
+  }
+
+  private void notifyConnectFailed(String host, int port, Exception cause) {
+    try {
+      serverListener.onConnectFailed(host, port, cause);
+    } catch (Exception ignored) {
+    }
+  }
+
+  private void notifyCertificateReady(String host, int port) {
+    try {
+      serverListener.onCertificateReady(host, port);
+    } catch (Exception ignored) {
     }
   }
 
@@ -308,7 +322,7 @@ final class ConnectStage implements Stage {
   /**
    * Wraps a Stage so that {@code onClose} runs after the delegate's {@link Stage#close()}. Used for
    * local-intercept mode since the local inner stage ({@link HttpServerStage}) doesn't know about
-   * the {@link ConnectHandler#onConnectComplete} callback contract.
+   * the {@link HttpServerListener#onConnectComplete} callback contract.
    */
   private static Stage wrapWithOnClose(Stage delegate, Runnable onClose) {
     return new Stage() {
