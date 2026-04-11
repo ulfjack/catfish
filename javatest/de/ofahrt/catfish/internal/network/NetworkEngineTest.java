@@ -565,6 +565,28 @@ public class NetworkEngineTest {
     }
   }
 
+  // ---- 22. replaceWith: buffered input is re-drained by the new stage ----
+
+  @Test
+  public void replaceWith_bufferedInput_newStageReadsRemainingData() throws Exception {
+    // The replacement stage receives the buffered data via a queued handleEvent.
+    ProgrammableStage replacement =
+        new ProgrammableStage()
+            .withInitialState(InitialConnectionState.READ_AND_WRITE)
+            .withDefaultReadResponse(ConnectionControl.PAUSE);
+    ProgrammableStage initial =
+        new ProgrammableStage()
+            .withInitialState(InitialConnectionState.READ_AND_WRITE)
+            .replaceOnFirstRead(replacement);
+    int port = startListener(initial);
+    try (Socket client = connectClient(port)) {
+      client.getOutputStream().write("for-replacement".getBytes());
+      client.getOutputStream().flush();
+      // The replacement stage's read() should be called with the buffered data.
+      assertTrue(replacement.awaitReadCall(TIMEOUT_MS));
+    }
+  }
+
   // ---- helpers ----
 
   private static byte[] readExactly(InputStream in, int n) throws IOException {
@@ -655,19 +677,21 @@ public class NetworkEngineTest {
 
     @Override
     public Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer) {
-      stage.attach(inputBuffer, outputBuffer);
+      stage.attach(pipeline, inputBuffer, outputBuffer);
       return stage;
     }
   }
 
   /** Test {@link Stage} whose behaviour is driven by the test. */
   private static final class ProgrammableStage implements Stage {
+    private Pipeline pipeline;
     private ByteBuffer inputBuffer;
     private ByteBuffer outputBuffer;
 
     private InitialConnectionState initialState = InitialConnectionState.READ_AND_WRITE;
     private boolean throwOnConnect;
     private boolean drainInput = true;
+    private Stage replaceWithStage;
 
     private final Deque<byte[]> sendQueue = new ArrayDeque<>();
     private final Deque<ConnectionControl> readResponses = new ArrayDeque<>();
@@ -678,7 +702,8 @@ public class NetworkEngineTest {
     private final CountDownLatch inputClosedLatch = new CountDownLatch(1);
     private final CountDownLatch readCallLatch = new CountDownLatch(1);
 
-    void attach(ByteBuffer in, ByteBuffer out) {
+    void attach(Pipeline pipeline, ByteBuffer in, ByteBuffer out) {
+      this.pipeline = pipeline;
       this.inputBuffer = in;
       this.outputBuffer = out;
     }
@@ -718,6 +743,11 @@ public class NetworkEngineTest {
       return this;
     }
 
+    ProgrammableStage replaceOnFirstRead(Stage replacement) {
+      this.replaceWithStage = replacement;
+      return this;
+    }
+
     ProgrammableStage withFinalWriteResponse(ConnectionControl cc) {
       this.finalWriteResponse = cc;
       return this;
@@ -746,6 +776,15 @@ public class NetworkEngineTest {
     @Override
     public ConnectionControl read() {
       readCallLatch.countDown();
+      if (replaceWithStage != null) {
+        Stage replacement = replaceWithStage;
+        replaceWithStage = null;
+        if (replacement instanceof ProgrammableStage ps) {
+          ps.attach(pipeline, inputBuffer, outputBuffer);
+        }
+        pipeline.replaceWith(replacement);
+        return ConnectionControl.CONTINUE;
+      }
       if (drainInput) {
         while (inputBuffer.hasRemaining()) {
           inputBuffer.get();
