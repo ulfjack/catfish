@@ -830,16 +830,18 @@ public final class NetworkEngine {
           }
           selector.selectedKeys().clear();
         }
-        while (!shutdownQueue.isEmpty()) {
-          shutdownQueue.remove().run();
-        }
         // Close any remaining connections (both incoming and outgoing) that weren't
         // cleaned up by the shutdownQueue. Server socket handlers are shut down above;
         // this catches SocketHandlers for active connections that are still open.
+        // This must run BEFORE draining the shutdownQueue, because the shutdown latch
+        // countdown in the queue allows the calling thread to close the selector.
         for (SelectionKey key : selector.keys()) {
           if (key.isValid() && key.attachment() instanceof SocketHandler) {
             ((SocketHandler) key.attachment()).doClose();
           }
+        }
+        while (!shutdownQueue.isEmpty()) {
+          shutdownQueue.remove().run();
         }
       } catch (Throwable e) {
         // Last resort: print, notify listener of fatal error. We expect this to exit the Jvm.
