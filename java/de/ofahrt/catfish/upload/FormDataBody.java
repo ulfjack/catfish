@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-public final class FormDataBody implements HttpRequest.Body, Iterable<FormEntry> {
+public record FormDataBody(List<FormEntry> parts) implements HttpRequest.Body, Iterable<FormEntry> {
   public static final FormDataBody EMPTY = new FormDataBody(Collections.emptyList());
 
   public static FormDataBody parseFormData(HttpRequest request) throws IOException {
@@ -38,12 +38,6 @@ public final class FormDataBody implements HttpRequest.Body, Iterable<FormEntry>
       return EMPTY;
     }
     return EMPTY;
-  }
-
-  private final List<FormEntry> parts;
-
-  public FormDataBody(List<FormEntry> parts) {
-    this.parts = parts;
   }
 
   public int size() {

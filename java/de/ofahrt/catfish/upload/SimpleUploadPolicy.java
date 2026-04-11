@@ -4,12 +4,7 @@ import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 
-public final class SimpleUploadPolicy implements UploadPolicy {
-  private final int maxContentLength;
-
-  public SimpleUploadPolicy(int maxContentLength) {
-    this.maxContentLength = maxContentLength;
-  }
+public record SimpleUploadPolicy(int maxContentLength) implements UploadPolicy {
 
   @Override
   public boolean isAllowed(HttpRequest request) {
