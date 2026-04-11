@@ -341,9 +341,6 @@ final class IncrementalHttpResponseParser {
             counter = 0;
             elementBuffer.setLength(0);
             state = State.MESSAGE_HEADER_NAME;
-            if (elementBuffer.length() > MAX_HEADER_VALUE_LENGTH) {
-              return setBadResponse("Header name is too long");
-            }
             elementBuffer.append(c);
           } else {
             return setBadResponse("Illegal character in response header name");

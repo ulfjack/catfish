@@ -37,7 +37,6 @@ final class HttpClientStage implements Stage {
 
   private final Pipeline parent;
   private final ResponseHandler responseHandler;
-  //  private final RequestListener requestListener;
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
   private final IncrementalHttpResponseParser parser;
@@ -125,7 +124,6 @@ final class HttpClientStage implements Stage {
     try {
       response = parser.getResponse();
     } catch (MalformedResponseException e) {
-      e.printStackTrace();
       throw new IllegalStateException(e);
     } finally {
       parser.reset();
