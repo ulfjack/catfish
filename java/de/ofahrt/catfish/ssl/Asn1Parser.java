@@ -230,7 +230,8 @@ final class Asn1Parser {
       switch (e) {
         case INTEGER -> System.out.println(indent(indentation) + e + " -> " + getInteger());
         case OCTET_STRING ->
-            System.out.println(indent(indentation) + e + " -> " + Arrays.toString(getOctetString()));
+            System.out.println(
+                indent(indentation) + e + " -> " + Arrays.toString(getOctetString()));
         case OBJECT_IDENTIFIER ->
             System.out.println(indent(indentation) + e + " -> " + getObjectIdentifier());
         case SEQUENCE -> {
