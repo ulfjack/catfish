@@ -3,7 +3,7 @@ package de.ofahrt.catfish;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
-/** {@link https://tools.ietf.org/rfc/rfc5246.txt} {@link https://tools.ietf.org/rfc/rfc6066.txt} */
+/** See https://tools.ietf.org/rfc/rfc5246.txt and https://tools.ietf.org/rfc/rfc6066.txt. */
 final class SNIParser {
   private static final boolean DEBUG = false;
 
