@@ -32,8 +32,8 @@ final class ProxyRequestStage implements HttpRequestStage {
   private final OutputStream captureStream;
 
   private final PipeBuffer bodyPipe = new PipeBuffer();
-  private HttpResponseGeneratorStreamed responseGen;
-  private boolean keepAlive;
+  private volatile HttpResponseGeneratorStreamed responseGen;
+  private volatile boolean keepAlive;
 
   ProxyRequestStage(
       Pipeline parent,
