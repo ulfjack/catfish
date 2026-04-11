@@ -5,6 +5,7 @@ import de.ofahrt.catfish.model.HttpRequest;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Objects;
 
 /**
  * The result of an HTTP routing decision. Returned by {@link ConnectHandler#applyProxy} and {@link
@@ -19,6 +20,13 @@ public sealed interface RequestAction {
       KeepAlivePolicy keepAlivePolicy,
       CompressionPolicy compressionPolicy)
       implements RequestAction {
+    public ServeLocally {
+      Objects.requireNonNull(handler, "handler");
+      Objects.requireNonNull(uploadPolicy, "uploadPolicy");
+      Objects.requireNonNull(keepAlivePolicy, "keepAlivePolicy");
+      Objects.requireNonNull(compressionPolicy, "compressionPolicy");
+    }
+
     public ServeLocally(HttpHandler handler) {
       this(handler, UploadPolicy.DENY, KeepAlivePolicy.KEEP_ALIVE, CompressionPolicy.NONE);
     }
