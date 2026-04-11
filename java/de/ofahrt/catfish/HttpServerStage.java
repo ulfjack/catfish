@@ -389,6 +389,14 @@ final class HttpServerStage implements Stage {
       int consumed = currentHandler.onBodyData(inputBuffer.array(), pos, len);
       inputBuffer.position(pos + consumed);
       chunkedScanner.advance(inputBuffer.array(), pos, consumed);
+      if (chunkedScanner.hasError()) {
+        chunkedScanner = null;
+        currentHandler.close();
+        currentHandler = null;
+        startBuffered(headersRequest, StandardResponses.BAD_REQUEST);
+        headersRequest = null;
+        return ConnectionControl.CLOSE_INPUT;
+      }
       if (consumed < len) {
         return ConnectionControl.PAUSE;
       }

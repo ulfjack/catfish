@@ -24,14 +24,26 @@ final class ChunkedBodyScanner {
     TRAILER_LINE_CR,
   }
 
+  // A chunk size of 2^60 bytes (~1 exabyte) is far beyond anything real; 15 hex digits suffice.
+  // Capping here prevents signed long overflow, which would make chunkDataLeft negative and corrupt
+  // the DATA-state loop index via the bulk-skip arithmetic.
+  private static final int MAX_CHUNK_SIZE_DIGITS = 15;
+
   private State state = State.SIZE;
   private long currentChunkSize;
+  private int chunkSizeDigits;
   private long chunkDataLeft;
   private boolean done;
+  private boolean error;
 
   /** Returns true once the terminal zero-length chunk and trailers have been fully scanned. */
   boolean isDone() {
     return done;
+  }
+
+  /** Returns true if a parse error was detected (e.g., chunk size overflow). */
+  boolean hasError() {
+    return error;
   }
 
   /**
@@ -41,16 +53,20 @@ final class ChunkedBodyScanner {
   int findEnd(byte[] arr, int off, int len) {
     State savedState = state;
     long savedChunkSize = currentChunkSize;
+    int savedChunkSizeDigits = chunkSizeDigits;
     long savedChunkDataLeft = chunkDataLeft;
     boolean savedDone = done;
+    boolean savedError = error;
 
     int result = advance(arr, off, len);
     boolean foundEnd = done;
 
     state = savedState;
     currentChunkSize = savedChunkSize;
+    chunkSizeDigits = savedChunkSizeDigits;
     chunkDataLeft = savedChunkDataLeft;
     done = savedDone;
+    error = savedError;
 
     return foundEnd ? result : -1;
   }
@@ -61,6 +77,9 @@ final class ChunkedBodyScanner {
    * {@code len}.
    */
   int advance(byte[] arr, int off, int len) {
+    if (error) {
+      return 0;
+    }
     for (int i = 0; i < len; i++) {
       char c = (char) (arr[off + i] & 0xff);
       switch (state) {
@@ -70,10 +89,22 @@ final class ChunkedBodyScanner {
           } else if (c == ';') {
             state = State.SIZE_EXT;
           } else if (c >= '0' && c <= '9') {
+            if (++chunkSizeDigits > MAX_CHUNK_SIZE_DIGITS) {
+              error = true;
+              return i;
+            }
             currentChunkSize = currentChunkSize * 16 + (c - '0');
           } else if (c >= 'a' && c <= 'f') {
+            if (++chunkSizeDigits > MAX_CHUNK_SIZE_DIGITS) {
+              error = true;
+              return i;
+            }
             currentChunkSize = currentChunkSize * 16 + (c - 'a' + 10);
           } else if (c >= 'A' && c <= 'F') {
+            if (++chunkSizeDigits > MAX_CHUNK_SIZE_DIGITS) {
+              error = true;
+              return i;
+            }
             currentChunkSize = currentChunkSize * 16 + (c - 'A' + 10);
           }
           break;
@@ -113,6 +144,7 @@ final class ChunkedBodyScanner {
         case DATA_LF:
           if (c == '\n') {
             currentChunkSize = 0;
+            chunkSizeDigits = 0;
             state = State.SIZE;
           }
           break;
@@ -154,7 +186,9 @@ final class ChunkedBodyScanner {
   void reset() {
     state = State.SIZE;
     currentChunkSize = 0;
+    chunkSizeDigits = 0;
     chunkDataLeft = 0;
     done = false;
+    error = false;
   }
 }

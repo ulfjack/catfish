@@ -223,6 +223,36 @@ public class ChunkedBodyScannerTest {
   }
 
   @Test
+  public void chunkSizeOverflow_setsError() {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    // 16 hex digits overflows the 15-digit limit.
+    byte[] data = bytes("FFFFFFFFFFFFFFFF\r\n");
+    scanner.advance(data, 0, data.length);
+    assertTrue(scanner.hasError());
+    assertFalse(scanner.isDone());
+  }
+
+  @Test
+  public void maxChunkSizeDigits_accepted() {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    // 15 hex digits = max allowed. 0x000000000000001 = 1 byte of data.
+    byte[] data = bytes("000000000000001\r\nX\r\n0\r\n\r\n");
+    scanner.advance(data, 0, data.length);
+    assertFalse(scanner.hasError());
+    assertTrue(scanner.isDone());
+  }
+
+  @Test
+  public void chunkSizeOverflow_advanceReturnsZeroAfterError() {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    byte[] data = bytes("FFFFFFFFFFFFFFFF\r\n");
+    scanner.advance(data, 0, data.length);
+    assertTrue(scanner.hasError());
+    // Subsequent calls return 0.
+    assertEquals(0, scanner.advance(data, 0, data.length));
+  }
+
+  @Test
   public void offset_respected() {
     ChunkedBodyScanner scanner = new ChunkedBodyScanner();
     byte[] data = bytes("XXXX0\r\n\r\n");
