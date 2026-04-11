@@ -82,6 +82,7 @@ final class HttpServerStage implements Stage {
   private long contentLengthRemaining = -1;
   // For chunked bodies: scans raw chunked framing to detect completion without decoding.
   private ChunkedBodyScanner chunkedScanner;
+  private UUID requestId;
   private HttpRequest headersRequest;
   // Non-null while waiting for ConnectHandler.applyProxy/applyLocal to return the routing
   // decision for a request. While set, read() returns PAUSE so that body bytes remain buffered
@@ -158,6 +159,7 @@ final class HttpServerStage implements Stage {
       return ConnectionControl.CLOSE_INPUT;
     }
     parser.reset();
+    requestId = UUID.randomUUID();
 
     // Route based on method/URI.
     if (HttpMethodName.CONNECT.equals(headers.getMethod())) {
@@ -318,6 +320,7 @@ final class HttpServerStage implements Stage {
               parent,
               executor,
               serverListener,
+              requestId,
               fc.host(),
               fc.port(),
               fc.useTls(),
@@ -328,7 +331,7 @@ final class HttpServerStage implements Stage {
       SocketFactory factory = f.useTls() ? sslFactory : SocketFactory.getDefault();
       currentHandler =
           new ProxyRequestStage(
-              parent, executor, serverListener, f.host(), f.port(), f.useTls(), factory);
+              parent, executor, serverListener, requestId, f.host(), f.port(), f.useTls(), factory);
       return startBodyOrDispatch(effective);
     } else {
       throw new IllegalStateException("Unknown RequestAction: " + action);
@@ -475,7 +478,7 @@ final class HttpServerStage implements Stage {
         }
         if (currentHandler != null) {
           serverListener.onRequestComplete(
-              UUID.randomUUID(),
+              requestId,
               null,
               0,
               currentHandler.getRequest(),
@@ -484,7 +487,7 @@ final class HttpServerStage implements Stage {
           currentHandler = null;
         } else {
           serverListener.onRequestComplete(
-              UUID.randomUUID(),
+              requestId,
               null,
               0,
               responseGenerator.getRequest(),

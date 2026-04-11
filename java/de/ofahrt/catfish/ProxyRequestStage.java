@@ -9,6 +9,7 @@ import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 import javax.net.SocketFactory;
 
@@ -25,6 +26,7 @@ final class ProxyRequestStage implements HttpRequestStage {
   private final Pipeline parent;
   private final Executor executor;
   private final HttpServerListener serverListener;
+  private final UUID requestId;
   private final String host;
   private final int port;
   private final boolean useTls;
@@ -39,17 +41,19 @@ final class ProxyRequestStage implements HttpRequestStage {
       Pipeline parent,
       Executor executor,
       HttpServerListener serverListener,
+      UUID requestId,
       String host,
       int port,
       boolean useTls,
       SocketFactory socketFactory) {
-    this(parent, executor, serverListener, host, port, useTls, socketFactory, null);
+    this(parent, executor, serverListener, requestId, host, port, useTls, socketFactory, null);
   }
 
   ProxyRequestStage(
       Pipeline parent,
       Executor executor,
       HttpServerListener serverListener,
+      UUID requestId,
       String host,
       int port,
       boolean useTls,
@@ -58,6 +62,7 @@ final class ProxyRequestStage implements HttpRequestStage {
     this.parent = parent;
     this.executor = executor;
     this.serverListener = serverListener;
+    this.requestId = requestId;
     this.host = host;
     this.port = port;
     this.useTls = useTls;
@@ -72,6 +77,7 @@ final class ProxyRequestStage implements HttpRequestStage {
     OriginForwarder forwarder =
         new OriginForwarder(
             parent,
+            requestId,
             host,
             port,
             useTls,

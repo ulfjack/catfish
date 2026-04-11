@@ -54,6 +54,7 @@ final class OriginForwarder {
           "proxy-authorization");
 
   private final Pipeline parent;
+  private final UUID requestId;
   private final String originHost;
   private final int originPort;
   private final boolean useTls;
@@ -73,6 +74,7 @@ final class OriginForwarder {
 
   OriginForwarder(
       Pipeline parent,
+      UUID requestId,
       String originHost,
       int originPort,
       boolean useTls,
@@ -84,6 +86,7 @@ final class OriginForwarder {
       ResultCallback resultCallback,
       Runnable pipeSpaceCallback) {
     this.parent = parent;
+    this.requestId = requestId;
     this.originHost = originHost;
     this.originPort = originPort;
     this.useTls = useTls;
@@ -97,7 +100,6 @@ final class OriginForwarder {
   }
 
   void run(HttpRequest headers) {
-    UUID requestId = UUID.randomUUID();
     String absoluteUri = buildAbsoluteUri(useTls, originHost, originPort, headers.getUri());
     HttpRequest absoluteHeaders = headers.withUri(absoluteUri);
     RequestOutcome outcome;
