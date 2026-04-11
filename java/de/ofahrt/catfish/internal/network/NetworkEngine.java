@@ -290,12 +290,12 @@ public final class NetworkEngine {
                   }
                 }
                 case NEED_MORE_DATA ->
-                  // No more data is coming and the stage thinks it needs more. Discard any
-                  // remaining bytes so the next loop iteration reaches the empty-buffer branch
-                  // and calls inputClosed(). (Don't use buffer.clear() here — that puts the
-                  // buffer back into write mode, where hasRemaining() would report the full
-                  // capacity and spin forever.)
-                  inputBuffer.position(inputBuffer.limit());
+                    // No more data is coming and the stage thinks it needs more. Discard any
+                    // remaining bytes so the next loop iteration reaches the empty-buffer branch
+                    // and calls inputClosed(). (Don't use buffer.clear() here — that puts the
+                    // buffer back into write mode, where hasRemaining() would report the full
+                    // capacity and spin forever.)
+                    inputBuffer.position(inputBuffer.limit());
                 case PAUSE -> {
                   if (inputBuffer.hasRemaining()) {
                     // There's still data left in the buffer, so we're not done yet.
@@ -316,12 +316,12 @@ public final class NetworkEngine {
                   socketChannel.shutdownInput();
                 }
                 case CLOSE_OUTPUT_AFTER_FLUSH ->
-                  throw new IllegalStateException(
-                      String.format("Cannot close-output-after-flush after read (%s)", current));
+                    throw new IllegalStateException(
+                        String.format("Cannot close-output-after-flush after read (%s)", current));
                 case CLOSE_CONNECTION_AFTER_FLUSH ->
-                  throw new IllegalStateException(
-                      String.format(
-                          "Cannot close-connection-after-flush after read (%s)", current));
+                    throw new IllegalStateException(
+                        String.format(
+                            "Cannot close-connection-after-flush after read (%s)", current));
                 case CLOSE_CONNECTION_IMMEDIATELY -> {
                   close();
                   return;
@@ -354,11 +354,12 @@ public final class NetworkEngine {
                 socketChannel.shutdownInput();
               }
               case CLOSE_OUTPUT_AFTER_FLUSH ->
-                throw new IllegalStateException(
-                    String.format("Cannot close-output-after-flush after read (%s)", current));
+                  throw new IllegalStateException(
+                      String.format("Cannot close-output-after-flush after read (%s)", current));
               case CLOSE_CONNECTION_AFTER_FLUSH ->
-                throw new IllegalStateException(
-                    String.format("Cannot close-connection-after-flush after read (%s)", current));
+                  throw new IllegalStateException(
+                      String.format(
+                          "Cannot close-connection-after-flush after read (%s)", current));
               case CLOSE_CONNECTION_IMMEDIATELY -> {
                 close();
                 return;
@@ -373,15 +374,15 @@ public final class NetworkEngine {
             switch (control) {
               case CONTINUE -> {}
               case NEED_MORE_DATA ->
-                throw new IllegalStateException(
-                    String.format("Cannot provide more data to write (%s)", current));
+                  throw new IllegalStateException(
+                      String.format("Cannot provide more data to write (%s)", current));
               case PAUSE -> writeState = FlowState.PAUSED;
               case CLOSE_INPUT ->
-                throw new IllegalStateException(
-                    String.format("Cannot close-input after write (%s)", current));
+                  throw new IllegalStateException(
+                      String.format("Cannot close-input after write (%s)", current));
               case CLOSE_OUTPUT_AFTER_FLUSH -> writeState = FlowState.CLOSE_AFTER_FLUSH;
               case CLOSE_CONNECTION_AFTER_FLUSH ->
-                writeState = FlowState.CLOSE_CONNECTION_AFTER_FLUSH;
+                  writeState = FlowState.CLOSE_CONNECTION_AFTER_FLUSH;
               case CLOSE_CONNECTION_IMMEDIATELY -> {
                 close();
                 return;
