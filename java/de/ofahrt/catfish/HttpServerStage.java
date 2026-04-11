@@ -327,8 +327,8 @@ final class HttpServerStage implements Stage {
         originSocketFactory != null
             ? originSocketFactory
             : (SSLSocketFactory) SSLSocketFactory.getDefault();
-    if (action instanceof RequestAction.Deny) {
-      startBuffered(headers, StandardResponses.FORBIDDEN);
+    if (action instanceof RequestAction.Deny d) {
+      startBuffered(headers, d.response() != null ? d.response() : StandardResponses.FORBIDDEN);
       return ConnectionControl.PAUSE;
     } else if (action instanceof RequestAction.ServeLocally s) {
       currentHandler =

@@ -2,6 +2,7 @@ package de.ofahrt.catfish.model.server;
 
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpResponse;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -39,11 +40,19 @@ public sealed interface RequestAction {
   record ForwardAndCapture(String host, int port, boolean useTls, OutputStream captureStream)
       implements RequestAction {}
 
-  /** Deny with 403 Forbidden. */
-  record Deny() implements RequestAction {}
+  /** Deny with a custom response, or 403 Forbidden by default. No body is read. */
+  record Deny(HttpResponse response) implements RequestAction {
+    public Deny() {
+      this(null);
+    }
+  }
 
   static RequestAction deny() {
     return new Deny();
+  }
+
+  static RequestAction deny(HttpResponse response) {
+    return new Deny(Objects.requireNonNull(response, "response"));
   }
 
   static RequestAction serveLocally(HttpHandler handler) {

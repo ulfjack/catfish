@@ -46,6 +46,24 @@ public class RequestActionTest {
   }
 
   @Test
+  public void deny_defaultHasNullResponse() {
+    RequestAction.Deny d = (RequestAction.Deny) RequestAction.deny();
+    assertEquals(null, d.response());
+  }
+
+  @Test
+  public void deny_withCustomResponse() {
+    RequestAction a = RequestAction.deny(StandardResponses.NOT_FOUND);
+    RequestAction.Deny d = (RequestAction.Deny) a;
+    assertSame(StandardResponses.NOT_FOUND, d.response());
+  }
+
+  @Test(expected = NullPointerException.class)
+  public void deny_withNullResponse_throws() {
+    RequestAction.deny(null);
+  }
+
+  @Test
   public void forward_setsHostAndPort() {
     RequestAction a = RequestAction.forward("example.com", 8080);
     assertTrue(a instanceof RequestAction.Forward);
