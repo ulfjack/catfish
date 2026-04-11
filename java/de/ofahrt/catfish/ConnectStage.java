@@ -45,7 +45,9 @@ final class ConnectStage implements Stage {
         ByteBuffer inputBuffer,
         ByteBuffer outputBuffer,
         ConnectHandler connectHandler,
-        Executor executor);
+        Executor executor,
+        String connectHost,
+        int connectPort);
   }
 
   private enum ConnectState {
@@ -314,7 +316,14 @@ final class ConnectStage implements Stage {
     SslServerStage.InnerStageFactory innerFactory =
         (innerPipeline, plainIn, plainOut) ->
             wrapWithOnClose(
-                localStageFactory.create(innerPipeline, plainIn, plainOut, mitmHandler, executor),
+                localStageFactory.create(
+                    innerPipeline,
+                    plainIn,
+                    plainOut,
+                    mitmHandler,
+                    executor,
+                    capturedOriginHost,
+                    capturedOriginPort),
                 onClose);
 
     SSLContext capturedCtx = fakeCtx;

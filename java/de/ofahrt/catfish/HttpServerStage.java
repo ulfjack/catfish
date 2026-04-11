@@ -66,6 +66,8 @@ final class HttpServerStage implements Stage {
   private final Executor executor;
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
+  private final String connectHost;
+  private final int connectPort;
   private final IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
   private Connection connection;
   private boolean keepAlive = true;
@@ -105,6 +107,32 @@ final class HttpServerStage implements Stage {
       Executor executor,
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer) {
+    this(
+        parent,
+        requestHandler,
+        connectHandler,
+        serverListener,
+        originSocketFactory,
+        sslInfoCache,
+        executor,
+        inputBuffer,
+        outputBuffer,
+        null,
+        0);
+  }
+
+  HttpServerStage(
+      Pipeline parent,
+      RequestQueue requestHandler,
+      ConnectHandler connectHandler,
+      HttpServerListener serverListener,
+      SSLSocketFactory originSocketFactory,
+      SslInfoCache sslInfoCache,
+      Executor executor,
+      ByteBuffer inputBuffer,
+      ByteBuffer outputBuffer,
+      String connectHost,
+      int connectPort) {
     this.parent = parent;
     this.requestHandler = requestHandler;
     this.connectHandler = connectHandler;
@@ -114,6 +142,8 @@ final class HttpServerStage implements Stage {
     this.executor = executor;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
+    this.connectHost = connectHost;
+    this.connectPort = connectPort;
   }
 
   @Override
@@ -476,8 +506,8 @@ final class HttpServerStage implements Stage {
         if (currentHandler != null) {
           serverListener.onRequestComplete(
               requestId,
-              null,
-              0,
+              connectHost,
+              connectPort,
               currentHandler.getRequest(),
               RequestOutcome.success(currentHandler.getResponse(), 0));
           keepAlive = currentHandler.keepAlive();
@@ -485,8 +515,8 @@ final class HttpServerStage implements Stage {
         } else {
           serverListener.onRequestComplete(
               requestId,
-              null,
-              0,
+              connectHost,
+              connectPort,
               responseGenerator.getRequest(),
               RequestOutcome.success(responseGenerator.getResponse(), 0));
           keepAlive = responseGenerator.keepAlive();
@@ -556,7 +586,7 @@ final class HttpServerStage implements Stage {
     // dispatcher, but with its own buffers and no connect handler (nested CONNECT would be
     // meaningless once TLS is already terminated).
     ConnectStage.LocalStageFactory localFactory =
-        (p, in, out, ch, ex) ->
+        (p, in, out, ch, ex, cHost, cPort) ->
             new HttpServerStage(
                 p,
                 requestHandler,
@@ -566,7 +596,9 @@ final class HttpServerStage implements Stage {
                 sslInfoCache,
                 ex,
                 in,
-                out);
+                out,
+                cHost,
+                cPort);
     parent.replaceWith(
         new ConnectStage(
             parent,
