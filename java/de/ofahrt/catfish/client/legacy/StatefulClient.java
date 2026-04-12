@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.net.ssl.SSLContext;
+import org.jspecify.annotations.Nullable;
 
 public final class StatefulClient {
   private static final boolean DEBUG = false;
@@ -22,9 +23,9 @@ public final class StatefulClient {
 
   private final String hostname;
   private final int port;
-  private final SSLContext sslContext;
+  private final @Nullable SSLContext sslContext;
 
-  private String cookie;
+  private @Nullable String cookie;
 
   public StatefulClient(String hostname, int port) {
     this.hostname = hostname;

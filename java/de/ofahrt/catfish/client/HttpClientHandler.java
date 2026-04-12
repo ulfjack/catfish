@@ -9,18 +9,19 @@ import java.nio.ByteBuffer;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
+import org.jspecify.annotations.Nullable;
 
 final class HttpClientHandler implements NetworkHandler {
   private final HttpRequest request;
   private final ResponseHandler responseHandler;
-  private final SSLContext sslContext;
-  private final SSLParameters sslParameters;
+  private final @Nullable SSLContext sslContext;
+  private final @Nullable SSLParameters sslParameters;
 
   HttpClientHandler(
       HttpRequest request,
       ResponseHandler responseHandler,
-      SSLContext sslContext,
-      SSLParameters sslParameters) {
+      @Nullable SSLContext sslContext,
+      @Nullable SSLParameters sslParameters) {
     this.request = request;
     this.responseHandler = responseHandler;
     this.sslContext = sslContext;
@@ -34,7 +35,7 @@ final class HttpClientHandler implements NetworkHandler {
 
   @Override
   public Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer) {
-    if (usesSsl()) {
+    if (sslContext != null && sslParameters != null) {
       SSLEngine sslEngine = sslContext.createSSLEngine();
       sslEngine.setSSLParameters(sslParameters);
       return new SslClientStage(

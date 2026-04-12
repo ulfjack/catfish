@@ -8,8 +8,16 @@ import java.nio.ByteBuffer;
 
 final class HttpRequestGeneratorBuffered extends HttpRequestGenerator {
   public static HttpRequestGeneratorBuffered create(HttpRequest request) {
-    byte[] body =
-        mustHaveBody(request) ? ((InMemoryBody) request.getBody()).toByteArray() : EMPTY_BYTE_ARRAY;
+    byte[] body;
+    if (mustHaveBody(request)) {
+      InMemoryBody requestBody = (InMemoryBody) request.getBody();
+      if (requestBody == null) {
+        throw new IllegalArgumentException("Request has content headers but no body");
+      }
+      body = requestBody.toByteArray();
+    } else {
+      body = EMPTY_BYTE_ARRAY;
+    }
     HttpHeaders headers = request.getHeaders();
     byte[][] data =
         new byte[][] {requestLineToByteArray(request), headersToByteArray(headers), body};

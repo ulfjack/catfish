@@ -21,6 +21,7 @@ import javax.net.ssl.SNIServerName;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
+import org.jspecify.annotations.Nullable;
 
 public final class HttpConnection implements Closeable {
   public static HttpConnection connect(String server, int port) throws IOException {
@@ -28,7 +29,7 @@ public final class HttpConnection implements Closeable {
   }
 
   @SuppressWarnings("resource")
-  public static HttpConnection connect(String server, int port, SSLContext sslContext)
+  public static HttpConnection connect(String server, int port, @Nullable SSLContext sslContext)
       throws IOException {
     Socket socket;
     if (sslContext != null) {
@@ -47,8 +48,8 @@ public final class HttpConnection implements Closeable {
   }
 
   private final Socket socket;
-  private InputStream in;
-  private byte[] buffer;
+  private @Nullable InputStream in;
+  private byte @Nullable [] buffer;
   private int offset;
   private int length;
 
@@ -113,6 +114,7 @@ public final class HttpConnection implements Closeable {
     return readResponse(true);
   }
 
+  @SuppressWarnings("NullAway") // buffer is lazily initialized on first call
   private HttpResponse readResponse(boolean noBody) throws IOException {
     if (in == null) {
       in = socket.getInputStream();

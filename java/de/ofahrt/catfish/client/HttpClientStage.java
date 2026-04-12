@@ -11,6 +11,7 @@ import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import org.jspecify.annotations.Nullable;
 
 final class HttpClientStage implements Stage {
   private static final boolean VERBOSE = false;
@@ -40,7 +41,7 @@ final class HttpClientStage implements Stage {
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
   private final IncrementalHttpResponseParser parser;
-  private HttpRequestGenerator requestGenerator;
+  private @Nullable HttpRequestGenerator requestGenerator;
 
   HttpClientStage(
       Pipeline parent,

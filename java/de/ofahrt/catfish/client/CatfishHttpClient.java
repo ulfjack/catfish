@@ -11,6 +11,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
+import org.jspecify.annotations.Nullable;
 
 public class CatfishHttpClient {
   private final NetworkEngine engine;
@@ -22,8 +23,8 @@ public class CatfishHttpClient {
   public Future<HttpResponse> send(
       String host,
       int port,
-      SSLContext sslContext,
-      SSLParameters sslParameters,
+      @Nullable SSLContext sslContext,
+      @Nullable SSLParameters sslParameters,
       HttpRequest request)
       throws IOException, InterruptedException {
     CompletableFuture<HttpResponse> future = new CompletableFuture<>();

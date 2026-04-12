@@ -21,6 +21,6 @@ public final class LoggingTrustManager implements X509TrustManager {
   @Override
   public X509Certificate[] getAcceptedIssuers() {
     System.out.printf("getAcceptedIssuers()\n");
-    return null;
+    return new X509Certificate[0];
   }
 }

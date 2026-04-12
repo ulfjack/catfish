@@ -5,6 +5,7 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.MalformedResponseException;
 import de.ofahrt.catfish.model.SimpleHttpResponse;
 import java.util.Arrays;
+import org.jspecify.annotations.Nullable;
 
 final class IncrementalHttpResponseParser {
   private static final int MAX_HEADER_NAME_LENGTH = 1024;
@@ -36,10 +37,10 @@ final class IncrementalHttpResponseParser {
   private int counter;
   private boolean expectLineFeed;
 
-  private String messageHeaderName;
-  private String messageHeaderValue;
+  private @Nullable String messageHeaderName;
+  private @Nullable String messageHeaderValue;
 
-  private byte[] content;
+  private byte @Nullable [] content;
   private int contentIndex;
 
   private boolean done;
@@ -128,6 +129,8 @@ final class IncrementalHttpResponseParser {
     return parse(input, 0, input.length);
   }
 
+  @SuppressWarnings(
+      "NullAway") // State machine invariants ensure fields are non-null when accessed.
   public int parse(byte[] input, int offset, int length) {
     for (int i = 0; i < length; i++) {
       final char c = (char) (input[offset + i] & 0xff);
