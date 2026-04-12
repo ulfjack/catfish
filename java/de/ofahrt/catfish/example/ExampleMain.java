@@ -64,7 +64,7 @@ public class ExampleMain {
           @Override
           public void onRequestComplete(
               UUID requestId,
-              String originHost,
+              @Nullable String originHost,
               int originPort,
               HttpRequest request,
               RequestOutcome outcome) {

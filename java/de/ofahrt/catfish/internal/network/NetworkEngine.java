@@ -29,6 +29,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.Nullable;
 
 public final class NetworkEngine {
 
@@ -105,6 +106,7 @@ public final class NetworkEngine {
     private FlowState readState;
     private FlowState writeState;
 
+    @SuppressWarnings("NullAway") // state/readState/writeState initialized in both branches
     SocketHandler(
         SelectorQueue queue,
         Connection connection,
@@ -607,7 +609,8 @@ public final class NetworkEngine {
       t.start();
     }
 
-    private void listenPort(final InetAddress address, final int port, final NetworkHandler handler)
+    private void listenPort(
+        final @Nullable InetAddress address, final int port, final NetworkHandler handler)
         throws IOException, InterruptedException {
       if (shutdownInitiated.get()) {
         throw new IllegalStateException();
@@ -630,7 +633,7 @@ public final class NetworkEngine {
               networkEventListener.portOpened(
                   new NetworkServer() {
                     @Override
-                    public InetAddress address() {
+                    public @Nullable InetAddress address() {
                       return address;
                     }
 
@@ -869,7 +872,7 @@ public final class NetworkEngine {
     listen(InetAddress.getLoopbackAddress(), port, handler);
   }
 
-  private void listen(InetAddress address, int port, NetworkHandler handler)
+  private void listen(@Nullable InetAddress address, int port, NetworkHandler handler)
       throws IOException, InterruptedException {
     getQueueForConnection().listenPort(address, port, handler);
   }
