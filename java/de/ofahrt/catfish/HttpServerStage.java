@@ -202,14 +202,13 @@ final class HttpServerStage implements Stage {
    * handling. Shared between the normal post-header path and the post-routing-decision path for
    * absolute-URI forward-proxy requests that the {@link ConnectHandler} chose to serve locally.
    */
-  @SuppressWarnings("NullAway") // currentHandler is non-null when called
-  private ConnectionControl startBodyOrDispatch(HttpRequest headers) {
+  private ConnectionControl startBodyOrDispatch(HttpRequest headers, HttpRequestStage handler) {
     // Check if there's a body to stream.
     String cl = headers.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
     String te = headers.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
     boolean hasBody =
         (cl != null && !"0".equals(cl)) || (te != null && "chunked".equalsIgnoreCase(te));
-    HttpRequestStage.Decision decision = currentHandler.onHeaders(headers);
+    HttpRequestStage.Decision decision = handler.onHeaders(headers);
     if (decision == HttpRequestStage.Decision.REJECT) {
       // Handler prepared an error response. Pause reading, start writing.
       parent.encourageWrites();
@@ -217,7 +216,7 @@ final class HttpServerStage implements Stage {
     }
 
     if (!hasBody) {
-      currentHandler.onBodyComplete();
+      handler.onBodyComplete();
       return ConnectionControl.PAUSE;
     }
 
@@ -232,13 +231,13 @@ final class HttpServerStage implements Stage {
       try {
         contentLength = Long.parseLong(cl);
       } catch (NumberFormatException e) {
-        currentHandler.close();
+        handler.close();
         currentHandler = null;
         startBuffered(headers, StandardResponses.BAD_REQUEST);
         return ConnectionControl.CLOSE_INPUT;
       }
       if (contentLength < 0 || contentLength > Integer.MAX_VALUE) {
-        currentHandler.close();
+        handler.close();
         currentHandler = null;
         startBuffered(headers, StandardResponses.PAYLOAD_TOO_LARGE);
         return ConnectionControl.CLOSE_INPUT;
@@ -320,16 +319,16 @@ final class HttpServerStage implements Stage {
    * Applies a routing decision: serve locally, deny, or forward to origin. Called from both the
    * synchronous path (non-proxy server) and the async path (after executor returns decision).
    */
-  @SuppressWarnings("NullAway") // state machine guarantees non-null at usage points
   private ConnectionControl applyRoutingDecision(HttpRequest headers, RequestAction action) {
     HttpRequest effective =
         isAbsoluteUri(headers.getUri())
             ? headers.withUri(toRelativeUri(headers.getUri()))
             : headers;
-    SSLSocketFactory sslFactory =
-        originSocketFactory != null
-            ? originSocketFactory
-            : (SSLSocketFactory) SSLSocketFactory.getDefault();
+    Connection conn = this.connection;
+    UUID reqId = this.requestId;
+    if (conn == null || reqId == null) {
+      throw new IllegalStateException("applyRoutingDecision called before connect/read");
+    }
     if (action instanceof RequestAction.Deny d) {
       startBuffered(headers, d.response() != null ? d.response() : StandardResponses.FORBIDDEN);
       return ConnectionControl.PAUSE;
@@ -340,32 +339,40 @@ final class HttpServerStage implements Stage {
               requestHandler,
               s.handler(),
               serverListener,
-              requestId,
+              reqId,
               s.uploadPolicy(),
               s.keepAlivePolicy(),
               s.compressionPolicy(),
-              connection);
-      return startBodyOrDispatch(effective);
+              conn);
+      return startBodyOrDispatch(effective, currentHandler);
     } else if (action instanceof RequestAction.ForwardAndCapture fc) {
-      SocketFactory factory = fc.useTls() ? sslFactory : SocketFactory.getDefault();
+      Executor exec = this.executor;
+      if (exec == null) {
+        throw new IllegalStateException("Forward action requires an executor");
+      }
+      SocketFactory factory = fc.useTls() ? originSocketFactory : SocketFactory.getDefault();
       currentHandler =
           new ProxyRequestStage(
               parent,
-              executor,
+              exec,
               serverListener,
-              requestId,
+              reqId,
               fc.host(),
               fc.port(),
               fc.useTls(),
               factory,
               fc.captureStream());
-      return startBodyOrDispatch(effective);
+      return startBodyOrDispatch(effective, currentHandler);
     } else if (action instanceof RequestAction.Forward f) {
-      SocketFactory factory = f.useTls() ? sslFactory : SocketFactory.getDefault();
+      Executor exec = this.executor;
+      if (exec == null) {
+        throw new IllegalStateException("Forward action requires an executor");
+      }
+      SocketFactory factory = f.useTls() ? originSocketFactory : SocketFactory.getDefault();
       currentHandler =
           new ProxyRequestStage(
-              parent, executor, serverListener, requestId, f.host(), f.port(), f.useTls(), factory);
-      return startBodyOrDispatch(effective);
+              parent, exec, serverListener, reqId, f.host(), f.port(), f.useTls(), factory);
+      return startBodyOrDispatch(effective, currentHandler);
     } else {
       throw new IllegalStateException("Unknown RequestAction: " + action);
     }
@@ -385,18 +392,20 @@ final class HttpServerStage implements Stage {
     }
   }
 
-  @SuppressWarnings("NullAway") // state machine guarantees non-null at usage points
   private ConnectionControl readBody() {
     if (!inputBuffer.hasRemaining()) {
       return ConnectionControl.CONTINUE;
+    }
+    HttpRequestStage handler = this.currentHandler;
+    if (handler == null) {
+      throw new IllegalStateException("readBody called without a current handler");
     }
     // Content-Length: stream raw bytes directly to the handler (no parser buffering).
     if (contentLengthRemaining >= 0) {
       int toFeed = (int) Math.min(inputBuffer.remaining(), contentLengthRemaining);
       if (toFeed > 0) {
         // Let the handler write what it can. It returns how many bytes it consumed.
-        int consumed =
-            currentHandler.onBodyData(inputBuffer.array(), inputBuffer.position(), toFeed);
+        int consumed = handler.onBodyData(inputBuffer.array(), inputBuffer.position(), toFeed);
         inputBuffer.position(inputBuffer.position() + consumed);
         contentLengthRemaining -= consumed;
         if (consumed < toFeed) {
@@ -408,7 +417,7 @@ final class HttpServerStage implements Stage {
       if (contentLengthRemaining <= 0) {
         contentLengthRemaining = -1;
         headersRequest = null;
-        currentHandler.onBodyComplete();
+        handler.onBodyComplete();
         return ConnectionControl.PAUSE;
       }
       return ConnectionControl.CONTINUE;
@@ -417,12 +426,12 @@ final class HttpServerStage implements Stage {
     if (chunkedScanner != null) {
       int pos = inputBuffer.position();
       int len = inputBuffer.remaining();
-      int consumed = currentHandler.onBodyData(inputBuffer.array(), pos, len);
+      int consumed = handler.onBodyData(inputBuffer.array(), pos, len);
       inputBuffer.position(pos + consumed);
       chunkedScanner.advance(inputBuffer.array(), pos, consumed);
       if (chunkedScanner.hasError()) {
         chunkedScanner = null;
-        currentHandler.close();
+        handler.close();
         currentHandler = null;
         startBuffered(headersRequest, StandardResponses.BAD_REQUEST);
         headersRequest = null;
@@ -434,21 +443,25 @@ final class HttpServerStage implements Stage {
       if (chunkedScanner.isDone()) {
         chunkedScanner = null;
         headersRequest = null;
-        currentHandler.onBodyComplete();
+        handler.onBodyComplete();
         return ConnectionControl.PAUSE;
       }
       return ConnectionControl.CONTINUE;
     }
     // Fallback for bodyParser (shouldn't be reached with current code paths).
+    HttpRequestBodyParser parser = this.bodyParser;
+    if (parser == null) {
+      throw new IllegalStateException("readBody called without body parser or framing");
+    }
     int consumed =
-        bodyParser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.remaining());
+        parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.remaining());
     inputBuffer.position(inputBuffer.position() + consumed);
-    if (!bodyParser.isDone()) {
+    if (!parser.isDone()) {
       return ConnectionControl.CONTINUE;
     }
     headersRequest = null;
     bodyParser = null;
-    currentHandler.onBodyComplete();
+    handler.onBodyComplete();
     return ConnectionControl.PAUSE;
   }
 
@@ -462,7 +475,6 @@ final class HttpServerStage implements Stage {
   }
 
   @Override
-  @SuppressWarnings("NullAway") // state machine guarantees non-null at usage points
   public ConnectionControl write() throws IOException {
     // Consume a pending routing decision on the NIO thread. Driven by encourageWrites from the
     // executor-thread runRoutingDecision.
@@ -488,13 +500,15 @@ final class HttpServerStage implements Stage {
     }
     // Generate response bytes. The responseGenerator takes priority (used for 100-continue
     // and pre-handler error responses). Otherwise delegate to the current handler.
+    HttpResponseGenerator gen = responseGenerator;
+    HttpRequestStage handler = currentHandler;
     ContinuationToken token;
-    if (responseGenerator != null) {
+    if (gen != null) {
       outputBuffer.compact();
-      token = responseGenerator.generate(outputBuffer);
+      token = gen.generate(outputBuffer);
       outputBuffer.flip();
-    } else if (currentHandler != null) {
-      token = currentHandler.generateResponse(outputBuffer);
+    } else if (handler != null) {
+      token = handler.generateResponse(outputBuffer);
     } else {
       // Spurious write() call. Ignore.
       return ConnectionControl.PAUSE;
@@ -503,28 +517,18 @@ final class HttpServerStage implements Stage {
       case CONTINUE -> ConnectionControl.CONTINUE;
       case PAUSE -> ConnectionControl.PAUSE;
       case STOP -> {
-        if (responseGenerator instanceof ContinueResponseGenerator) {
+        if (gen instanceof ContinueResponseGenerator) {
           responseGenerator = null;
           parent.log("Sent 100 Continue, resuming body read");
           yield readAndResume();
         }
-        if (currentHandler != null) {
-          serverListener.onRequestComplete(
-              requestId,
-              connectHost,
-              connectPort,
-              currentHandler.getRequest(),
-              RequestOutcome.success(currentHandler.getResponse(), 0));
-          keepAlive = currentHandler.keepAlive();
+        if (handler != null) {
+          notifyRequestComplete(handler.getRequest(), handler.getResponse());
+          keepAlive = handler.keepAlive();
           currentHandler = null;
-        } else {
-          serverListener.onRequestComplete(
-              requestId,
-              connectHost,
-              connectPort,
-              responseGenerator.getRequest(),
-              RequestOutcome.success(responseGenerator.getResponse(), 0));
-          keepAlive = responseGenerator.keepAlive();
+        } else if (gen != null) {
+          notifyRequestComplete(gen.getRequest(), gen.getResponse());
+          keepAlive = gen.keepAlive();
           responseGenerator = null;
         }
         parent.log("Completed. keepAlive=%s", Boolean.valueOf(keepAlive));
@@ -642,16 +646,30 @@ final class HttpServerStage implements Stage {
     startResponse(HttpResponseGeneratorBuffered.createWithBody(request, response));
   }
 
-  @SuppressWarnings("NullAway") // response is non-null when startResponse is called
+  private void notifyRequestComplete(
+      @Nullable HttpRequest request, @Nullable HttpResponse response) {
+    UUID reqId = this.requestId;
+    if (reqId == null || response == null) {
+      return;
+    }
+    if (request == null) {
+      return;
+    }
+    serverListener.onRequestComplete(
+        reqId, connectHost, connectPort, request, RequestOutcome.success(response, 0));
+  }
+
   private void startResponse(HttpResponseGenerator gen) {
     this.responseGenerator = gen;
-    this.keepAlive = responseGenerator.keepAlive();
-    HttpResponse response = responseGenerator.getResponse();
-    parent.log(
-        "%s %d %s",
-        response.getProtocolVersion(),
-        Integer.valueOf(response.getStatusCode()),
-        response.getStatusMessage());
+    this.keepAlive = gen.keepAlive();
+    HttpResponse response = gen.getResponse();
+    if (response != null) {
+      parent.log(
+          "%s %d %s",
+          response.getProtocolVersion(),
+          Integer.valueOf(response.getStatusCode()),
+          response.getStatusMessage());
+    }
     parent.encourageWrites();
   }
 }
