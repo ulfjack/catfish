@@ -76,8 +76,8 @@ final class IncrementalHttpRequestParser {
 
   private final SimpleHttpRequest.Builder builder = new SimpleHttpRequest.Builder();
 
-  private State state;
-  private StringBuilder elementBuffer;
+  private State state = State.REQUEST_METHOD;
+  private StringBuilder elementBuffer = new StringBuilder();
   private int counter;
   private boolean expectLineFeed;
   private int headerFieldCount;
@@ -90,7 +90,6 @@ final class IncrementalHttpRequestParser {
   private @Nullable String messageHeaderName;
   private @Nullable String messageHeaderValue;
 
-  @SuppressWarnings("NullAway") // fields initialized via reset()
   IncrementalHttpRequestParser() {
     reset();
   }

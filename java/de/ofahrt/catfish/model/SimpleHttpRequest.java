@@ -48,15 +48,14 @@ public final class SimpleHttpRequest implements HttpRequest {
   }
 
   public static class Builder {
-    private HttpVersion version;
-    private String method;
+    private HttpVersion version = HttpVersion.HTTP_0_9;
+    private String method = "UNKNOWN";
     private @Nullable String unparsedUri;
-    private Map<String, String> headers;
+    private Map<String, String> headers = new TreeMap<>();
     private @Nullable Body body;
 
     private @Nullable HttpResponse errorResponse;
 
-    @SuppressWarnings("NullAway") // reset() initializes all non-null fields
     public Builder() {
       reset();
     }

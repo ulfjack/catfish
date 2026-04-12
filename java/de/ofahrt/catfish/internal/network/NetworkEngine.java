@@ -102,11 +102,10 @@ public final class NetworkEngine {
     private final ByteBuffer outputBuffer;
 
     private Stage current;
-    private ConnectionState state;
-    private FlowState readState;
-    private FlowState writeState;
+    private ConnectionState state = ConnectionState.CONNECTING;
+    private FlowState readState = FlowState.PAUSED;
+    private FlowState writeState = FlowState.PAUSED;
 
-    @SuppressWarnings("NullAway") // state/readState/writeState initialized in both branches
     SocketHandler(
         SelectorQueue queue,
         Connection connection,
