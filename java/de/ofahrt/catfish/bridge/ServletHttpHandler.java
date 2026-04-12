@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.Collections;
 import javax.servlet.Servlet;
+import org.jspecify.annotations.Nullable;
 
 public final class ServletHttpHandler implements HttpHandler {
   private final SiteLayout<HttpHandler> siteLayout;
@@ -44,15 +45,16 @@ public final class ServletHttpHandler implements HttpHandler {
   }
 
   private static final class ServletAsHttpHandler implements HttpHandler {
-    private SessionManager sessionManager;
+    private @Nullable SessionManager sessionManager;
     private Servlet servlet;
 
-    ServletAsHttpHandler(SessionManager sessionManager, Servlet servlet) {
+    ServletAsHttpHandler(@Nullable SessionManager sessionManager, Servlet servlet) {
       this.sessionManager = sessionManager;
       this.servlet = servlet;
     }
 
     @Override
+    @SuppressWarnings("NullAway") // sessionManager is nullable; RequestImpl handles it.
     public void handle(
         Connection connection, HttpRequest request, HttpResponseWriter responseWriter)
         throws IOException {
@@ -84,7 +86,7 @@ public final class ServletHttpHandler implements HttpHandler {
 
   public static final class Builder {
     private final SiteLayout.Builder<HttpHandler> builder = new SiteLayout.Builder<>();
-    private SessionManager sessionManager;
+    private @Nullable SessionManager sessionManager;
 
     public ServletHttpHandler build() {
       return new ServletHttpHandler(this);

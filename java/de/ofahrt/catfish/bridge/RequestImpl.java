@@ -38,6 +38,7 @@ import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 
+@SuppressWarnings("NullAway") // Servlet API methods return null by design; not JSpecify-annotated.
 public final class RequestImpl implements HttpServletRequest {
   private static final String DEFAULT_CHARSET = "UTF-8";
   private static final Pattern HTTP_LOCALE_PATTERN =

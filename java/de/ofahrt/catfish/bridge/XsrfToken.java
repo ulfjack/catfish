@@ -7,6 +7,7 @@ import javax.servlet.http.HttpSession;
 public final class XsrfToken {
   private static final String TOKEN_KEY = "xsrf-token";
 
+  @SuppressWarnings("NullAway") // AtomicReference.get() non-null after compareAndSet
   public static String getToken(HttpSession session) {
     if (session == null) {
       throw new NullPointerException();

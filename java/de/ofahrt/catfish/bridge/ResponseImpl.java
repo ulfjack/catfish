@@ -23,6 +23,7 @@ import javax.servlet.ServletOutputStream;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletResponse;
 
+@SuppressWarnings("NullAway") // Servlet API methods return null by design; not JSpecify-annotated.
 public final class ResponseImpl implements HttpServletResponse {
 
   private static final class StreamingHttpResponse implements HttpResponse {

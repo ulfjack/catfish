@@ -7,7 +7,7 @@ import javax.servlet.ServletContext;
 import javax.servlet.http.HttpSession;
 import javax.servlet.http.HttpSessionContext;
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings({"deprecation", "NullAway"}) // Servlet API; not JSpecify-annotated.
 final class SessionImpl implements HttpSession, Serializable {
 
   private static final long serialVersionUID = 2L;
