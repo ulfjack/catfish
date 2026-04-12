@@ -54,6 +54,7 @@ public abstract class HttpResponseGenerator {
 
   public abstract void close();
 
+  @SuppressWarnings("NullAway") // only called after response is committed
   public boolean keepAlive() {
     return HttpConnectionHeader.isKeepAlive(getResponse().getHeaders());
   }
