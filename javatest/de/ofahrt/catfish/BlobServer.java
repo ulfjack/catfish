@@ -23,7 +23,7 @@ public class BlobServer {
     }
     HttpResponse blob =
         StandardResponses.OK
-            .withHeaderOverrides(HttpHeaders.of("Content-Type", "application/octet-stream"))
+            .withHeaderOverrides(HttpHeaders.of("Content-Type", "text/plain"))
             .withBody(body);
 
     HttpVirtualHost host = new HttpVirtualHost((conn, req, writer) -> writer.commitBuffered(blob));
