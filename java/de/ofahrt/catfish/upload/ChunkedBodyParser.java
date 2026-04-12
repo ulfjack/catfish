@@ -4,6 +4,7 @@ import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Incrementally parses an HTTP chunked transfer-encoded request body (RFC 7230 §4.1).
@@ -32,7 +33,7 @@ public final class ChunkedBodyParser implements HttpRequestBodyParser {
   private boolean sawHexDigit;
   private long bytesRemaining;
   private final ByteArrayOutputStream body = new ByteArrayOutputStream();
-  private String errorMessage;
+  private @Nullable String errorMessage;
 
   @Override
   public int parse(byte[] input, int offset, int length) {

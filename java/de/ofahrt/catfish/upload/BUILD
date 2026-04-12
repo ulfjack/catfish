@@ -9,5 +9,6 @@ java_library(
         "//java/de/ofahrt/catfish/model",
         "//java/de/ofahrt/catfish/model/server",
         "//java/de/ofahrt/catfish/utils",
+        "//third_party/jspecify",
     ],
 )

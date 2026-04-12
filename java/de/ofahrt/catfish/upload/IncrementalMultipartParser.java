@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 
 public final class IncrementalMultipartParser implements HttpRequestBodyParser {
   private static final Pattern nameExtractorPattern = Pattern.compile(".* name=\"([^\"]*)\".*");
@@ -32,17 +33,17 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
 
   private State state = State.PREAMBLE;
 
-  private final char[] boundary;
+  private final char @Nullable [] boundary;
   private int searchPosition = 2;
 
   private StringBuffer elementBuffer = new StringBuffer();
-  private String fieldName;
-  private String fieldValue;
+  private @Nullable String fieldName;
+  private @Nullable String fieldValue;
   private Map<String, String> fields = new TreeMap<>();
 
-  private ByteArrayOutputStream partBody;
+  private @Nullable ByteArrayOutputStream partBody;
   private List<FormEntry> parts = new ArrayList<>();
-  private MalformedMultipartException error;
+  private @Nullable MalformedMultipartException error;
 
   public IncrementalMultipartParser(String contentType) {
     MediaType mt = MediaType.parse(contentType);
@@ -59,7 +60,7 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
         try {
           foundBoundary = validateBoundary(boundaryValue);
         } catch (IllegalArgumentException e) {
-          error = new MalformedMultipartException(e.getMessage());
+          error = new MalformedMultipartException(String.valueOf(e.getMessage()));
         }
       }
     }
@@ -150,6 +151,7 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
   }
 
   @Override
+  @SuppressWarnings("NullAway") // State machine guarantees fields are non-null when accessed.
   public int parse(byte[] data, int offset, int length) {
     if (isDone()) {
       return 0;
@@ -326,7 +328,8 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
     return length;
   }
 
-  private FormEntry constructEntry() {
+  @SuppressWarnings("NullAway") // partBody/boundary are non-null when constructEntry is called.
+  private @Nullable FormEntry constructEntry() {
     String contentDisposition = fields.get(MultipartHeaderName.CONTENT_DISPOSITION);
     if (contentDisposition == null) {
       error =

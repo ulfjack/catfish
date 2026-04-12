@@ -3,6 +3,7 @@ package de.ofahrt.catfish.upload;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 final class MultipartHeaderName {
   public static final String CONTENT_DISPOSITION = "Content-Disposition";
@@ -24,7 +25,7 @@ final class MultipartHeaderName {
     map.put(value.toLowerCase(Locale.US), value);
   }
 
-  static String canonicalize(String name) {
+  static @Nullable String canonicalize(String name) {
     String result = CANONICALIZATION_MAP.get(name);
     if (result != null) {
       return result;

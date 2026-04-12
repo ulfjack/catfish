@@ -1,10 +1,12 @@
 package de.ofahrt.catfish.upload;
 
+import org.jspecify.annotations.Nullable;
+
 public final class FormEntry {
   private final String name;
-  private final String value;
-  private final String contentType;
-  private final byte[] body;
+  private final @Nullable String value;
+  private final @Nullable String contentType;
+  private final byte @Nullable [] body;
 
   public FormEntry(String name, String value) {
     if (name == null) {
@@ -43,15 +45,15 @@ public final class FormEntry {
     return contentType != null;
   }
 
-  public String getValue() {
+  public @Nullable String getValue() {
     return value;
   }
 
-  public String getContentType() {
+  public @Nullable String getContentType() {
     return contentType;
   }
 
-  public byte[] getBody() {
+  public byte @Nullable [] getBody() {
     return body;
   }
 }
