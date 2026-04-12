@@ -14,6 +14,7 @@ public final class Http2FrameReader {
   private final byte[] headerBuf = new byte[FRAME_HEADER_SIZE];
   private int headerOffset;
 
+  private int maxPayloadSize = 16384; // SETTINGS_MAX_FRAME_SIZE default
   private int length;
   private int type;
   private int flags;
@@ -21,6 +22,7 @@ public final class Http2FrameReader {
   private byte @Nullable [] payload;
   private int payloadOffset;
   private boolean complete;
+  private boolean frameSizeError;
 
   /**
    * Feeds data to the reader. Returns the number of bytes consumed. After this call, check {@link
@@ -52,15 +54,23 @@ public final class Http2FrameReader {
               | ((headerBuf[6] & 0xff) << 16)
               | ((headerBuf[7] & 0xff) << 8)
               | (headerBuf[8] & 0xff);
-      payload = length > 0 ? new byte[length] : new byte[0];
+      if (length > maxPayloadSize) {
+        // Frame exceeds maximum allowed size. Skip the payload bytes without allocating.
+        frameSizeError = true;
+        payload = new byte[0];
+      } else {
+        payload = length > 0 ? new byte[length] : new byte[0];
+      }
       payloadOffset = 0;
     }
 
-    // Read payload.
+    // Read (or skip) payload.
     if (payloadOffset < length) {
       int need = length - payloadOffset;
       int take = Math.min(need, available);
-      System.arraycopy(data, offset, payload, payloadOffset, take);
+      if (!frameSizeError) {
+        System.arraycopy(data, offset, payload, payloadOffset, take);
+      }
       payloadOffset += take;
       consumed += take;
     }
@@ -85,6 +95,7 @@ public final class Http2FrameReader {
     flags = 0;
     streamId = 0;
     payload = null;
+    frameSizeError = false;
     payloadOffset = 0;
     complete = false;
   }
@@ -112,6 +123,16 @@ public final class Http2FrameReader {
   /** Returns true if the given flag bit is set. */
   public boolean hasFlag(int flag) {
     return (flags & flag) != 0;
+  }
+
+  /** Returns true if the frame payload exceeded the maximum allowed size. */
+  public boolean hasFrameSizeError() {
+    return frameSizeError;
+  }
+
+  /** Sets the maximum allowed payload size. Frames exceeding this are flagged as errors. */
+  public void setMaxPayloadSize(int maxPayloadSize) {
+    this.maxPayloadSize = maxPayloadSize;
   }
 
   // Common frame flags.

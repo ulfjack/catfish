@@ -214,6 +214,16 @@ public final class Http2ServerStage implements Stage {
   // ---- Frame dispatch ----
 
   private void processFrame() throws IOException {
+    if (frameReader.hasFrameSizeError()) {
+      int streamId = frameReader.getStreamId();
+      throw new IOException(
+          "h2 FRAME_SIZE_ERROR: frame type="
+              + frameReader.getType()
+              + " length="
+              + frameReader.getLength()
+              + " stream="
+              + streamId);
+    }
     int type = frameReader.getType();
     switch (type) {
       case FrameType.SETTINGS -> handleSettings();

@@ -3,6 +3,7 @@ package de.ofahrt.catfish.http2;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import de.ofahrt.catfish.http2.Hpack.Header;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
@@ -245,6 +246,36 @@ public class Http2ServerStageTest {
     assertEquals(FrameType.PING, reader.getType());
     assertTrue(reader.hasFlag(Http2FrameReader.FLAG_ACK));
     assertArrayEquals(pingData, reader.getPayload());
+  }
+
+  @Test
+  public void oversizedFrame_throwsIOException() throws IOException {
+    // Setup: preface + settings.
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // Craft a DATA frame with length = 16385 (exceeds default SETTINGS_MAX_FRAME_SIZE of 16384).
+    // We only need the 9-byte header + enough payload to complete the frame.
+    int oversizedLength = 16385;
+    byte[] frameHeader = new byte[9];
+    frameHeader[0] = (byte) ((oversizedLength >>> 16) & 0xff);
+    frameHeader[1] = (byte) ((oversizedLength >>> 8) & 0xff);
+    frameHeader[2] = (byte) (oversizedLength & 0xff);
+    frameHeader[3] = (byte) FrameType.DATA; // type
+    frameHeader[4] = 0; // flags
+    frameHeader[5] = 0;
+    frameHeader[6] = 0;
+    frameHeader[7] = 0;
+    frameHeader[8] = 1; // stream ID = 1
+    byte[] payload = new byte[oversizedLength];
+    byte[] oversizedFrame = concat(frameHeader, payload);
+
+    try {
+      feedAndRead(oversizedFrame);
+      fail("Expected IOException for oversized frame");
+    } catch (IOException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("FRAME_SIZE_ERROR"));
+    }
   }
 
   // ---- Helpers ----
