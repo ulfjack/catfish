@@ -18,39 +18,38 @@ import org.jspecify.annotations.Nullable;
 /** Configures a plain HTTP endpoint with per-listener virtual host isolation. */
 public final class HttpEndpoint {
 
-  private enum Binding {
-    ANY,
-    LOCALHOST,
-    UNIX_SOCKET
+  /** Describes where the endpoint listens. */
+  sealed interface Binding {
+    record AnyPort(int port) implements Binding {}
+
+    record LocalhostPort(int port) implements Binding {}
+
+    record UnixSocket(Path path) implements Binding {}
   }
 
   private final Binding binding;
-  private final int port;
-  private final @Nullable Path unixSocketPath;
   private final Map<String, HttpVirtualHost> hosts = new LinkedHashMap<>();
   private @Nullable ConnectHandler connectHandler;
   private @Nullable SSLSocketFactory originSslFactory;
   private HttpServerListener requestListener = new HttpServerListener() {};
 
-  private HttpEndpoint(Binding binding, int port, @Nullable Path unixSocketPath) {
+  private HttpEndpoint(Binding binding) {
     this.binding = binding;
-    this.port = port;
-    this.unixSocketPath = unixSocketPath;
   }
 
   /** Listen on all interfaces. */
   public static HttpEndpoint onAny(int port) {
-    return new HttpEndpoint(Binding.ANY, port, null);
+    return new HttpEndpoint(new Binding.AnyPort(port));
   }
 
   /** Listen on localhost only. */
   public static HttpEndpoint onLocalhost(int port) {
-    return new HttpEndpoint(Binding.LOCALHOST, port, null);
+    return new HttpEndpoint(new Binding.LocalhostPort(port));
   }
 
   /** Listen on a Unix domain socket. */
   public static HttpEndpoint onUnixSocket(Path path) {
-    return new HttpEndpoint(Binding.UNIX_SOCKET, 0, path);
+    return new HttpEndpoint(new Binding.UnixSocket(path));
   }
 
   /** Register a virtual host. */
@@ -77,7 +76,6 @@ public final class HttpEndpoint {
     return this;
   }
 
-  @SuppressWarnings("NullAway") // unixSocketPath is non-null in the UNIX_SOCKET case
   void listen(CatfishHttpServer server) throws IOException, InterruptedException {
     ConnectHandler effectiveHandler = buildConnectHandler();
     SSLSocketFactory effectiveOriginFactory =
@@ -93,10 +91,14 @@ public final class HttpEndpoint {
             /* sslContextProvider= */ null,
             requestListener);
     NetworkEngine engine = server.engine();
-    switch (binding) {
-      case ANY -> engine.listenAll(port, networkHandler);
-      case LOCALHOST -> engine.listenLocalhost(port, networkHandler);
-      case UNIX_SOCKET -> engine.listenUnixSocket(unixSocketPath, networkHandler);
+    if (binding instanceof Binding.AnyPort b) {
+      engine.listenAll(b.port(), networkHandler);
+    } else if (binding instanceof Binding.LocalhostPort b) {
+      engine.listenLocalhost(b.port(), networkHandler);
+    } else if (binding instanceof Binding.UnixSocket b) {
+      engine.listenUnixSocket(b.path(), networkHandler);
+    } else {
+      throw new AssertionError("Unknown binding type: " + binding);
     }
   }
 
