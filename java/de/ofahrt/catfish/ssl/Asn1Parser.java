@@ -148,10 +148,11 @@ final class Asn1Parser {
     return currentTag;
   }
 
-  public Event tag() {
+  public @Nullable Event tag() {
     return currentTag;
   }
 
+  @SuppressWarnings("NullAway") // currentObject is non-null when currentTag matches
   public BigInteger getInteger() {
     if (currentTag != Event.INTEGER) {
       throw new IllegalStateException();
@@ -159,6 +160,7 @@ final class Asn1Parser {
     return (BigInteger) currentObject;
   }
 
+  @SuppressWarnings("NullAway") // currentObject is non-null when currentTag matches
   public byte[] getOctetString() {
     if (currentTag != Event.OCTET_STRING) {
       throw new IllegalStateException();
@@ -166,6 +168,7 @@ final class Asn1Parser {
     return (byte[]) currentObject;
   }
 
+  @SuppressWarnings("NullAway") // currentObject is non-null when currentTag matches
   public ObjectIdentifier getObjectIdentifier() {
     if (currentTag != Event.OBJECT_IDENTIFIER) {
       throw new IllegalStateException();
