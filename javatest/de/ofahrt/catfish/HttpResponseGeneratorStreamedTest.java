@@ -17,7 +17,6 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Test;
 
-@SuppressWarnings("NullAway") // test code
 public class HttpResponseGeneratorStreamedTest {
 
   private byte[] readUntil(HttpResponseGeneratorStreamed generator, ContinuationToken expected) {

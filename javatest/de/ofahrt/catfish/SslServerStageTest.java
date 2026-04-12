@@ -35,7 +35,6 @@ import javax.net.ssl.X509TrustManager;
 import org.junit.Test;
 
 /** Direct unit tests for {@link SslServerStage}'s state machine. */
-@SuppressWarnings("NullAway") // test code
 public class SslServerStageTest {
 
   private static final int BUF_SIZE = 32768;

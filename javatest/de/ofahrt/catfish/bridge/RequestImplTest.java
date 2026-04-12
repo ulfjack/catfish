@@ -31,7 +31,6 @@ import javax.servlet.http.HttpSession;
 import org.junit.Test;
 
 /** Tests for {@link RequestImpl}. */
-@SuppressWarnings("NullAway") // intentional null passing in tests
 public class RequestImplTest {
   private static final HttpResponseWriter THROWING_WRITER =
       new HttpResponseWriter() {

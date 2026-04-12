@@ -10,7 +10,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
 
-@SuppressWarnings("NullAway") // test code
 final class HttpRequestHelper {
   private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
   private static final String CRLF = "\r\n";

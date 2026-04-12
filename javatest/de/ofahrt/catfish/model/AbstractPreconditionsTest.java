@@ -18,7 +18,6 @@ public abstract class AbstractPreconditionsTest {
     assertSame(value, checkNotNull(value));
   }
 
-  @SuppressWarnings("NullAway") // intentionally passing null to test the null check
   @Test(expected = NullPointerException.class)
   public void checkNotNullThrows() {
     checkNotNull(null);

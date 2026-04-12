@@ -41,7 +41,6 @@ import org.jspecify.annotations.Nullable;
 import org.junit.After;
 import org.junit.Test;
 
-@SuppressWarnings("NullAway") // test code
 public class ConnectionHandlingTest {
 
   private static final boolean DEBUG = false;

@@ -5,7 +5,6 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
-@SuppressWarnings("NullAway") // test code
 public class InternalServerErrorResponseTest {
 
   @Test

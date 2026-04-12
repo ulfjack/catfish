@@ -16,7 +16,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import org.junit.Test;
 
-@SuppressWarnings("NullAway") // intentional null passing in tests
 public class ServletHelperTest {
 
   private static FormData parseFormData(String contentType, String content) throws Exception {

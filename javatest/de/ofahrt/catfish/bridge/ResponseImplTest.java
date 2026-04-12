@@ -18,7 +18,6 @@ import java.io.OutputStream;
 import java.util.Locale;
 import org.junit.Test;
 
-@SuppressWarnings("NullAway") // intentional null passing in tests
 public class ResponseImplTest {
 
   private static class CapturingWriter implements HttpResponseWriter {

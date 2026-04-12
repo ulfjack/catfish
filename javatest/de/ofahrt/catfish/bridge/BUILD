@@ -3,6 +3,7 @@ load("@rules_java//java:defs.bzl", "java_library", "java_test")
 java_library(
     name = "test_helper",
     testonly = True,
+    javacopts = ["-Xep:NullAway:OFF"],
     srcs = ["TestHelper.java"],
     visibility = ["//javatest/de/ofahrt/catfish:__subpackages__"],
     deps = [
@@ -14,6 +15,7 @@ java_library(
 
 java_test(
     name = "bridge",
+    javacopts = ["-Xep:NullAway:OFF"],
     srcs = glob(
         ["*.java"],
         exclude = ["TestHelper.java"],

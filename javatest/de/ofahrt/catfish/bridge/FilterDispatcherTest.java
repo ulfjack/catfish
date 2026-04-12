@@ -17,7 +17,6 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.junit.Test;
 
-@SuppressWarnings("NullAway") // intentional null passing in tests
 public class FilterDispatcherTest {
 
   private static final Servlet NOOP_SERVLET =

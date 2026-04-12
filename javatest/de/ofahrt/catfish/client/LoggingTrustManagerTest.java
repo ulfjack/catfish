@@ -4,7 +4,6 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
-@SuppressWarnings("NullAway") // intentional null passing in tests
 public class LoggingTrustManagerTest {
 
   @Test

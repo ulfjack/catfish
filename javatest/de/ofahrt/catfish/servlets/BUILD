@@ -2,6 +2,7 @@ load("@rules_java//java:defs.bzl", "java_test")
 
 java_test(
     name = "servlets",
+    javacopts = ["-Xep:NullAway:OFF"],
     srcs = glob(["*.java"]),
     test_class = "de.ofahrt.catfish.servlets.ServletsTestSuite",
     deps = [

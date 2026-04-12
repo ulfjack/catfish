@@ -24,7 +24,7 @@ import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 
-@SuppressWarnings({"rawtypes", "NullAway"}) // test code
+@SuppressWarnings("rawtypes")
 public final class SerializableHttpServletRequest implements HttpServletRequest, Serializable {
   private static final long serialVersionUID = 1L;
 

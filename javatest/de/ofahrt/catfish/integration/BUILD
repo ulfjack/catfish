@@ -2,6 +2,7 @@ load("@rules_java//java:defs.bzl", "java_test")
 
 java_test(
     name = "integration",
+    javacopts = ["-Xep:NullAway:OFF"],
     srcs = glob(["*.java"]),
     classpath_resources = [
         "//javatest/de/ofahrt/catfish:test-cert.pem",

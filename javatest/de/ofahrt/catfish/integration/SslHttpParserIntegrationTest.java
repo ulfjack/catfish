@@ -16,7 +16,6 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-@SuppressWarnings("NullAway") // test code
 public class SslHttpParserIntegrationTest extends ServletEngineTest {
 
   private static LocalCatfishServer localServer;

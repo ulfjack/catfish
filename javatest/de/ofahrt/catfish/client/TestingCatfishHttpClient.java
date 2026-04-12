@@ -27,7 +27,6 @@ import javax.net.ssl.SSLSession;
 import javax.servlet.Servlet;
 import javax.servlet.ServletException;
 
-@SuppressWarnings("NullAway") // Test infrastructure with lazy init patterns.
 public abstract class TestingCatfishHttpClient {
 
   public static TestingCatfishHttpClient createNetworkedClient() {

@@ -28,7 +28,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 /** Direct unit tests for {@link NetworkEngine}'s read/write loop state machine. */
-@SuppressWarnings("NullAway") // Test infrastructure uses lazy init and intentional null passing.
 public class NetworkEngineTest {
 
   private static final long TIMEOUT_MS = 2000;

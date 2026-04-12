@@ -8,7 +8,6 @@ import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.StandardResponses;
 import org.junit.Test;
 
-@SuppressWarnings("NullAway") // intentional null passing in tests
 public class StandardResponsesTest {
 
   @Test

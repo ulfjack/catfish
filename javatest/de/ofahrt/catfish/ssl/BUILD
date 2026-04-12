@@ -2,6 +2,7 @@ load("@rules_java//java:defs.bzl", "java_test")
 
 java_test(
     name = "ssl",
+    javacopts = ["-Xep:NullAway:OFF"],
     srcs = glob(["*.java"]),
     data = [
         "test.cert.pem",

@@ -21,7 +21,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-@SuppressWarnings("NullAway") // test code
 public class StatefulClientIntegrationTest {
 
   private static final String HOST = "localhost";

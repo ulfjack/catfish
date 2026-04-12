@@ -8,6 +8,7 @@ exports_files([
 java_library(
     name = "test_helpers",
     testonly = True,
+    javacopts = ["-Xep:NullAway:OFF"],
     srcs = [
         "CollectionsUtils.java",
         "HashConflictGenerator.java",
@@ -61,6 +62,7 @@ java_binary(
 
 java_test(
     name = "catfish",
+    javacopts = ["-Xep:NullAway:OFF"],
     srcs = glob(
         ["*.java"],
         exclude = [
