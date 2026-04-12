@@ -483,24 +483,36 @@ public final class Http2ServerStage implements Stage {
   }
 
   private void sendErrorResponse(Http2Stream stream, HttpResponse errorResponse) {
-    byte[] headerBlock = encodeResponseHeaders(errorResponse);
     byte[] body = errorResponse.getBody();
-    stream.setResponse(headerBlock, body != null ? body : new byte[0], true);
+    if (body == null) {
+      body = new byte[0];
+    }
+    byte[] headerBlock = encodeResponseHeaders(errorResponse, body.length);
+    stream.setResponse(headerBlock, body, true);
     parent.encourageWrites();
   }
 
   // ---- Response encoding ----
 
-  private byte[] encodeResponseHeaders(HttpResponse response) {
+  /**
+   * @param contentLength if >= 0, adds a content-length header with this value
+   */
+  private byte[] encodeResponseHeaders(HttpResponse response, int contentLength) {
     var headerList = new java.util.ArrayList<Header>();
     headerList.add(new Header(":status", Integer.toString(response.getStatusCode())));
     for (var entry : response.getHeaders()) {
-      // Skip HTTP/1.1-specific headers that don't apply to HTTP/2.
       String name = entry.getKey().toLowerCase(java.util.Locale.ROOT);
-      if ("connection".equals(name) || "transfer-encoding".equals(name)) {
+      // Skip HTTP/1.1-specific headers that don't apply to HTTP/2,
+      // and skip content-length if we're setting it ourselves.
+      if ("connection".equals(name)
+          || "transfer-encoding".equals(name)
+          || (contentLength >= 0 && "content-length".equals(name))) {
         continue;
       }
       headerList.add(new Header(name, entry.getValue()));
+    }
+    if (contentLength >= 0) {
+      headerList.add(new Header("content-length", Integer.toString(contentLength)));
     }
     return hpackEncoder.encode(headerList.toArray(new Header[0]));
   }
@@ -559,11 +571,12 @@ public final class Http2ServerStage implements Stage {
       if (!committed.compareAndSet(false, true)) {
         throw new IllegalStateException("Response already committed");
       }
-      byte[] headerBlock = encodeResponseHeaders(response);
       byte[] body = response.getBody();
-      if (body == null || !HttpStatusCode.mayHaveBody(response.getStatusCode())) {
+      boolean bodyAllowed = HttpStatusCode.mayHaveBody(response.getStatusCode());
+      if (!bodyAllowed || body == null) {
         body = new byte[0];
       }
+      byte[] headerBlock = encodeResponseHeaders(response, bodyAllowed ? body.length : -1);
       stream.setResponse(headerBlock, body, true);
       parent.queue(() -> parent.encourageWrites());
     }
@@ -576,7 +589,7 @@ public final class Http2ServerStage implements Stage {
       if (!committed.compareAndSet(false, true)) {
         throw new IllegalStateException("Response already committed");
       }
-      byte[] headerBlock = encodeResponseHeaders(response);
+      byte[] headerBlock = encodeResponseHeaders(response, -1);
       return new java.io.ByteArrayOutputStream() {
         @Override
         public void close() throws IOException {
