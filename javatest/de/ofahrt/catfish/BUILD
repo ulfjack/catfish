@@ -2,6 +2,7 @@ load("@rules_java//java:defs.bzl", "java_binary", "java_library", "java_test")
 
 exports_files([
     "localhost-cert.pem",
+    "localhost-fullchain.pem",
     "localhost-key.pem",
     "test-cert.pem",
     "test-key.pem",
@@ -37,7 +38,7 @@ java_binary(
     testonly = True,
     srcs = ["BlobServer.java"],
     classpath_resources = [
-        ":localhost-cert.pem",
+        ":localhost-fullchain.pem",
         ":localhost-key.pem",
     ],
     main_class = "de.ofahrt.catfish.BlobServer",

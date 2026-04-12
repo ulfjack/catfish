@@ -50,16 +50,19 @@ public final class SSLContextFactory {
     KeyFactory keyFactory = KeyFactory.getInstance(algorithm);
     PrivateKey privateKey = keyFactory.generatePrivate(new PKCS8EncodedKeySpec(keyData));
 
-    Certificate cert;
+    Certificate[] chain;
     try (InputStream in = sslCrt) {
-      cert = readCertificate(in);
+      chain = readCertificateChain(in);
     }
-    if (!(cert instanceof X509Certificate x509cert)) {
+    if (chain.length == 0) {
+      throw new GeneralSecurityException("No certificates found");
+    }
+    if (!(chain[0] instanceof X509Certificate x509cert)) {
       throw new GeneralSecurityException("Certificate is not an X.509 certificate");
     }
     KeyStore keyStore = KeyStore.getInstance("PKCS12");
     keyStore.load(null, null);
-    keyStore.setKeyEntry("xyz", privateKey, "no-password".toCharArray(), new Certificate[] {cert});
+    keyStore.setKeyEntry("xyz", privateKey, "no-password".toCharArray(), chain);
     KeyManagerFactory keyManagerFactory =
         KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
     keyManagerFactory.init(keyStore, "no-password".toCharArray());
@@ -103,13 +106,12 @@ public final class SSLContextFactory {
     }
   }
 
-  private static Certificate readCertificate(InputStream in)
+  private static Certificate[] readCertificateChain(InputStream in)
       throws IOException, CertificateException {
-    byte[] crtData;
-    crtData = decodePem(in);
+    byte[] allBytes = in.readAllBytes();
     CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
-    Certificate cert = certFactory.generateCertificate(new ByteArrayInputStream(crtData));
-    return cert;
+    var certs = certFactory.generateCertificates(new ByteArrayInputStream(allBytes));
+    return certs.toArray(new Certificate[0]);
   }
 
   private static byte[] decodePem(InputStream in) throws IOException {

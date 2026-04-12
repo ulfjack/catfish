@@ -50,7 +50,7 @@ public class BlobServer {
     try (InputStream key =
             BlobServer.class.getClassLoader().getResourceAsStream("localhost-key.pem");
         InputStream cert =
-            BlobServer.class.getClassLoader().getResourceAsStream("localhost-cert.pem")) {
+            BlobServer.class.getClassLoader().getResourceAsStream("localhost-fullchain.pem")) {
       sslInfo = SSLContextFactory.loadPem(key, cert);
     }
     server.listen(Http2Endpoint.onLocalhost(8443).addHost("localhost", host, sslInfo));
