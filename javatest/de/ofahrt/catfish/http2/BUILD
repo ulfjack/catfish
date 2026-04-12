@@ -6,6 +6,10 @@ java_test(
     test_class = "de.ofahrt.catfish.http2.AllTests",
     deps = [
         "//java/de/ofahrt/catfish/http2",
+        "//java/de/ofahrt/catfish/internal/network",
+        "//java/de/ofahrt/catfish/model",
+        "//java/de/ofahrt/catfish/model/network",
+        "//java/de/ofahrt/catfish/model/server",
         "//third_party/junit",
     ],
 )
