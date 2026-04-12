@@ -47,6 +47,8 @@ java_binary(
         "HttpServerBenchmark.java",
         "IncrementalHttpRequestParserBenchmark.java",
     ],
+    # Disable NullAway for JMH-generated code which cannot be annotated.
+    javacopts = ["-Xep:NullAway:OFF"],
     main_class = "org.openjdk.jmh.Main",
     plugins = ["//third_party/jmh:jmh_annprocess"],
     deps = [
