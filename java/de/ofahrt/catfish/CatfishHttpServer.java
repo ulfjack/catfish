@@ -56,6 +56,10 @@ public final class CatfishHttpServer {
     endpoint.listen(this);
   }
 
+  public void listen(Http2Endpoint endpoint) throws IOException, InterruptedException {
+    endpoint.listen(this);
+  }
+
   NetworkEngine engine() {
     return engine;
   }

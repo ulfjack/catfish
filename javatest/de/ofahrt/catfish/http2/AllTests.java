@@ -10,5 +10,6 @@ import org.junit.runners.Suite.SuiteClasses;
   Http2FrameReaderTest.class,
   Http2FrameWriterTest.class,
   Http2ServerStageTest.class,
+  Http2IntegrationTest.class,
 })
 public class AllTests {}

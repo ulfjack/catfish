@@ -12,8 +12,10 @@ import de.ofahrt.catfish.internal.network.Stage.InitialConnectionState;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
+import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
+import de.ofahrt.catfish.model.server.RequestAction;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -51,6 +53,14 @@ public class Http2ServerStageTest {
               StandardResponses.OK.withBody("hello".getBytes(StandardCharsets.UTF_8)));
         };
 
+    ConnectHandler connectHandler =
+        new ConnectHandler() {
+          @Override
+          public RequestAction applyLocal(HttpRequest request) {
+            return RequestAction.serveLocally(echoHandler);
+          }
+        };
+
     stage =
         new Http2ServerStage(
             pipeline,
@@ -64,7 +74,7 @@ public class Http2ServerStageTest {
                 throw new RuntimeException(e);
               }
             },
-            echoHandler,
+            connectHandler,
             inputBuffer,
             outputBuffer);
 
@@ -127,9 +137,9 @@ public class Http2ServerStageTest {
             new InetSocketAddress("127.0.0.1", 12345),
             true);
     // Already connected in setUp, but verify the return value.
+    ConnectHandler noopHandler = new ConnectHandler() {};
     Http2ServerStage fresh =
-        new Http2ServerStage(
-            pipeline, (h, c, r, w) -> {}, (c, r, w) -> {}, inputBuffer, outputBuffer);
+        new Http2ServerStage(pipeline, (h, c, r, w) -> {}, noopHandler, inputBuffer, outputBuffer);
     assertEquals(InitialConnectionState.READ_ONLY, fresh.connect(conn));
   }
 

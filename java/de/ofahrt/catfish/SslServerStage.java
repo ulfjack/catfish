@@ -13,6 +13,7 @@ import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLParameters;
 import org.jspecify.annotations.Nullable;
 
 final class SslServerStage implements Stage {
@@ -41,6 +42,7 @@ final class SslServerStage implements Stage {
   }
 
   private final SSLContextProvider contextProvider;
+  private final String[] alpnProtocols;
   private final Executor taskExecutor;
   private final Pipeline parent;
   private final Pipeline innerPipeline;
@@ -62,11 +64,13 @@ final class SslServerStage implements Stage {
   public SslServerStage(
       Pipeline parent,
       InnerStageFactory innerStageFactory,
+      String[] alpnProtocols,
       SSLContextProvider contextProvider,
       Executor taskExecutor,
       ByteBuffer netInputBuffer,
       ByteBuffer netOutputBuffer) {
     this.contextProvider = contextProvider;
+    this.alpnProtocols = alpnProtocols;
     this.taskExecutor = taskExecutor;
     this.parent = parent;
     this.netInputBuffer = netInputBuffer;
@@ -153,6 +157,17 @@ final class SslServerStage implements Stage {
     }
   }
 
+  /** Transitions from HANDSHAKE to OPEN after the TLS handshake completes. */
+  private void transitionToOpen() {
+    status = FlowStatus.OPEN;
+    if (postHandshakeState != InitialConnectionState.WRITE_ONLY) {
+      parent.encourageReads();
+    }
+    if (postHandshakeState != InitialConnectionState.READ_ONLY) {
+      parent.encourageWrites();
+    }
+  }
+
   private void checkStatus(SSLEngine engine) {
     if (engine.getHandshakeStatus() == HandshakeStatus.NEED_TASK) {
       Runnable task = engine.getDelegatedTask();
@@ -207,6 +222,9 @@ final class SslServerStage implements Stage {
     this.sslEngine.setUseClientMode(false);
     this.sslEngine.setNeedClientAuth(false);
     this.sslEngine.setWantClientAuth(false);
+    SSLParameters params = this.sslEngine.getSSLParameters();
+    params.setApplicationProtocols(alpnProtocols);
+    this.sslEngine.setSSLParameters(params);
     //    System.out.println(Arrays.toString(sslEngine.getEnabledCipherSuites()));
     //    System.out.println(Arrays.toString(sslEngine.getSupportedCipherSuites()));
     //    System.out.println(sslEngine.getSession().getApplicationBufferSize());
@@ -248,19 +266,9 @@ final class SslServerStage implements Stage {
         return ConnectionControl.PAUSE;
       }
       if (engine.getHandshakeStatus() == HandshakeStatus.NOT_HANDSHAKING) {
-        // The handshake completed via unwrap. This happens for the TLS 1.2 abbreviated
-        // handshake (session resumption): the server's last handshake action is unwrapping
-        // the client's Finished, after which the engine transitions to NOT_HANDSHAKING. Mirror
-        // the OPEN-state transition from write(): record the new state, encourage writes if
-        // the next stage wants to write, and return CONTINUE so the driver re-enters read()
-        // and takes the OPEN branch on the next call.
-        InitialConnectionState phs =
-            Objects.requireNonNull(this.postHandshakeState, "postHandshakeState");
-        status = FlowStatus.OPEN;
-        if (phs != InitialConnectionState.READ_ONLY) {
-          parent.encourageWrites();
-        }
-        return phs == InitialConnectionState.WRITE_ONLY
+        // The handshake completed via unwrap (TLS 1.2 abbreviated handshake / session resumption).
+        transitionToOpen();
+        return postHandshakeState == InitialConnectionState.WRITE_ONLY
             ? ConnectionControl.PAUSE
             : ConnectionControl.CONTINUE;
       }
@@ -332,13 +340,8 @@ final class SslServerStage implements Stage {
         return ConnectionControl.PAUSE;
       }
       if (engine.getHandshakeStatus() == HandshakeStatus.NOT_HANDSHAKING) {
-        InitialConnectionState phs =
-            Objects.requireNonNull(this.postHandshakeState, "postHandshakeState");
-        status = FlowStatus.OPEN;
-        if (phs != InitialConnectionState.WRITE_ONLY) {
-          parent.encourageReads();
-        }
-        return phs == InitialConnectionState.READ_ONLY
+        transitionToOpen();
+        return postHandshakeState == InitialConnectionState.READ_ONLY
             ? ConnectionControl.PAUSE
             : ConnectionControl.CONTINUE;
       }

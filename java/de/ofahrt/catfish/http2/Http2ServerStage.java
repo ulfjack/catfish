@@ -13,8 +13,10 @@ import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
+import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
+import de.ofahrt.catfish.model.server.RequestAction;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -52,7 +54,7 @@ public final class Http2ServerStage implements Stage {
 
   private final Pipeline parent;
   private final RequestQueue requestHandler;
-  private final HttpHandler httpHandler;
+  private final ConnectHandler connectHandler;
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
 
@@ -85,12 +87,12 @@ public final class Http2ServerStage implements Stage {
   public Http2ServerStage(
       Pipeline parent,
       RequestQueue requestHandler,
-      HttpHandler httpHandler,
+      ConnectHandler connectHandler,
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer) {
     this.parent = parent;
     this.requestHandler = requestHandler;
-    this.httpHandler = httpHandler;
+    this.connectHandler = connectHandler;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
     controlFrameBuffer.flip(); // start in read mode (empty)
@@ -408,8 +410,17 @@ public final class Http2ServerStage implements Stage {
       return;
     }
 
-    HttpResponseWriter writer = new Http2ResponseWriter(stream);
-    requestHandler.queueRequest(httpHandler, connection, request, writer);
+    RequestAction action = connectHandler.applyLocal(request);
+    if (action instanceof RequestAction.ServeLocally serve) {
+      HttpResponseWriter writer = new Http2ResponseWriter(stream);
+      requestHandler.queueRequest(serve.handler(), connection, request, writer);
+    } else if (action instanceof RequestAction.Deny deny) {
+      HttpResponse denyResponse = deny.response();
+      sendErrorResponse(stream, denyResponse != null ? denyResponse : StandardResponses.FORBIDDEN);
+    } else {
+      // Forward/ForwardAndCapture not supported over HTTP/2 yet.
+      sendErrorResponse(stream, StandardResponses.NOT_IMPLEMENTED);
+    }
   }
 
   private void sendErrorResponse(Http2Stream stream, HttpResponse errorResponse) {

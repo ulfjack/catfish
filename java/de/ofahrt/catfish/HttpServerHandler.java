@@ -67,6 +67,7 @@ final class HttpServerHandler implements NetworkHandler {
                   needsExecutor ? server.executor : null,
                   plainIn,
                   plainOut),
+          new String[] {"http/1.1"},
           sslContextProvider,
           server.executor,
           inputBuffer,

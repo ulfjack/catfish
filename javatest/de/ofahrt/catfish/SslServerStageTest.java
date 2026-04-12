@@ -61,6 +61,7 @@ public class SslServerStageTest {
               this.next = new CapturingNextStage(plainInBuf, plainOutBuf);
               return next;
             },
+            new String[] {"http/1.1"},
             provider,
             taskExecutor,
             netIn,

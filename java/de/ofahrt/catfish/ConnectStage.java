@@ -332,7 +332,13 @@ final class ConnectStage implements Stage {
     SSLContext capturedCtx = ctx;
     SslServerStage ssl =
         new SslServerStage(
-            parent, innerFactory, ignored -> capturedCtx, executor, inputBuffer, outputBuffer);
+            parent,
+            innerFactory,
+            new String[] {"http/1.1"},
+            ignored -> capturedCtx,
+            executor,
+            inputBuffer,
+            outputBuffer);
     parent.replaceWith(ssl);
   }
 
