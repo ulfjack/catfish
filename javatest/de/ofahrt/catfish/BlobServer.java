@@ -1,12 +1,13 @@
 package de.ofahrt.catfish;
 
-import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
+import de.ofahrt.catfish.ssl.SSLContextFactory;
 import de.ofahrt.catfish.ssl.SSLInfo;
+import java.io.InputStream;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -45,7 +46,13 @@ public class BlobServer {
             });
     server.listen(HttpEndpoint.onLocalhost(8090).addHost("localhost", host));
 
-    SSLInfo sslInfo = TestHelper.getSSLInfo();
+    SSLInfo sslInfo;
+    try (InputStream key =
+            BlobServer.class.getClassLoader().getResourceAsStream("localhost-key.pem");
+        InputStream cert =
+            BlobServer.class.getClassLoader().getResourceAsStream("localhost-cert.pem")) {
+      sslInfo = SSLContextFactory.loadPem(key, cert);
+    }
     server.listen(Http2Endpoint.onLocalhost(8443).addHost("localhost", host, sslInfo));
 
     System.out.println("Server ready. Press Ctrl+C to stop.");

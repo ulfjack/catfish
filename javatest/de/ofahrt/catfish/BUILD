@@ -1,6 +1,8 @@
 load("@rules_java//java:defs.bzl", "java_binary", "java_library", "java_test")
 
 exports_files([
+    "localhost-cert.pem",
+    "localhost-key.pem",
     "test-cert.pem",
     "test-key.pem",
 ])
@@ -35,8 +37,8 @@ java_binary(
     testonly = True,
     srcs = ["BlobServer.java"],
     classpath_resources = [
-        ":test-cert.pem",
-        ":test-key.pem",
+        ":localhost-cert.pem",
+        ":localhost-key.pem",
     ],
     main_class = "de.ofahrt.catfish.BlobServer",
     deps = [
@@ -44,7 +46,6 @@ java_binary(
         "//java/de/ofahrt/catfish/model",
         "//java/de/ofahrt/catfish/model/network",
         "//java/de/ofahrt/catfish/ssl",
-        "//javatest/de/ofahrt/catfish/bridge:test_helper",
         "//third_party/jspecify",
     ],
 )
