@@ -7,6 +7,7 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import java.io.IOException;
 import java.net.InetAddress;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import javax.net.ssl.SSLContext;
@@ -17,7 +18,7 @@ public class CatfishHttpClient {
   private final NetworkEngine engine;
 
   public CatfishHttpClient(NetworkEventListener eventListener) throws IOException {
-    this.engine = new NetworkEngine(eventListener);
+    this.engine = new NetworkEngine(Objects.requireNonNull(eventListener, "eventListener"));
   }
 
   public Future<HttpResponse> send(

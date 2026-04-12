@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -855,7 +856,8 @@ public final class NetworkEngine {
   private final AtomicInteger connectionIndex = new AtomicInteger();
 
   public NetworkEngine(NetworkEventListener networkEventListener) throws IOException {
-    this.networkEventListener = networkEventListener;
+    this.networkEventListener =
+        Objects.requireNonNull(networkEventListener, "networkEventListener");
     this.queues = new SelectorQueue[Runtime.getRuntime().availableProcessors()];
     for (int i = 0; i < queues.length; i++) {
       queues[i] = new SelectorQueue(i);

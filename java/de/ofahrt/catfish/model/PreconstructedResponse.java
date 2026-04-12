@@ -1,5 +1,7 @@
 package de.ofahrt.catfish.model;
 
+import java.util.Objects;
+
 final class PreconstructedResponse implements HttpResponse {
   private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
@@ -10,10 +12,11 @@ final class PreconstructedResponse implements HttpResponse {
 
   public PreconstructedResponse(
       HttpStatusCode statusCode, String statusMessage, HttpHeaders headers, byte[] body) {
+    Objects.requireNonNull(statusCode, "statusCode");
     this.statusCode = statusCode.getStatusCode();
-    this.statusMessage = Preconditions.checkNotNull(statusMessage);
-    this.headers = Preconditions.checkNotNull(headers);
-    this.body = Preconditions.checkNotNull(body);
+    this.statusMessage = Objects.requireNonNull(statusMessage, "statusMessage");
+    this.headers = Objects.requireNonNull(headers, "headers");
+    this.body = Objects.requireNonNull(body, "body");
   }
 
   public PreconstructedResponse(HttpStatusCode statusCode, HttpHeaders headers, byte[] body) {

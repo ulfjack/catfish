@@ -1,5 +1,6 @@
 package de.ofahrt.catfish.fastcgi;
 
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 final class IncrementalFcgiResponseParser {
@@ -36,7 +37,7 @@ final class IncrementalFcgiResponseParser {
   private @Nullable String messageHeaderValue;
 
   public IncrementalFcgiResponseParser(Callback callback) {
-    this.callback = callback;
+    this.callback = Objects.requireNonNull(callback, "callback");
   }
 
   /** RFC 2616 §2.2 separators = "()<>@,;:\\\"/[]?={}" plus SP and HT. */

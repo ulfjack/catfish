@@ -124,12 +124,12 @@ public final class SimpleHttpRequest implements HttpRequest {
     }
 
     public Builder setVersion(HttpVersion version) {
-      this.version = version;
+      this.version = Objects.requireNonNull(version, "version");
       return this;
     }
 
     public Builder setMethod(String method) {
-      this.method = method;
+      this.method = Objects.requireNonNull(method, "method");
       return this;
     }
 
@@ -166,7 +166,7 @@ public final class SimpleHttpRequest implements HttpRequest {
     }
 
     public Builder setBody(Body body) {
-      this.body = body;
+      this.body = Objects.requireNonNull(body, "body");
       return this;
     }
 

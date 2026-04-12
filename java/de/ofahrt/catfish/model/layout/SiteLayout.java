@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.model.layout;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import org.jspecify.annotations.Nullable;
 
@@ -51,7 +52,7 @@ public final class SiteLayout<T> {
 
     public Builder<T> exact(String path, T handler) {
       Preconditions.checkArgument(path.startsWith("/"));
-      Preconditions.checkNotNull(handler);
+      Objects.requireNonNull(handler, "handler");
       Preconditions.checkState(!exact.containsKey(path));
       exact.put(path, handler);
       return this;
@@ -60,7 +61,7 @@ public final class SiteLayout<T> {
     public Builder<T> directory(String prefix, T handler) {
       Preconditions.checkArgument(prefix.startsWith("/"));
       Preconditions.checkArgument(prefix.endsWith("/"));
-      Preconditions.checkNotNull(handler);
+      Objects.requireNonNull(handler, "handler");
       Preconditions.checkState(!directory.containsKey(prefix));
       directory.put(prefix, handler);
       return this;
@@ -69,7 +70,7 @@ public final class SiteLayout<T> {
     public Builder<T> recursive(String prefix, T handler) {
       Preconditions.checkArgument(prefix.startsWith("/"));
       Preconditions.checkArgument(prefix.endsWith("/"));
-      Preconditions.checkNotNull(handler);
+      Objects.requireNonNull(handler, "handler");
       Preconditions.checkState(!recursive.containsKey(prefix));
       recursive.put(prefix, handler);
       return this;

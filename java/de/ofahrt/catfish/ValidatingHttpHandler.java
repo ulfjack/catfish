@@ -10,6 +10,7 @@ import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Objects;
 
 /**
  * An {@link HttpHandler} wrapper that validates responses before they are committed.
@@ -33,8 +34,8 @@ public final class ValidatingHttpHandler implements HttpHandler {
   }
 
   ValidatingHttpHandler(HttpHandler delegate, HttpResponseValidator validator) {
-    this.delegate = delegate;
-    this.validator = validator;
+    this.delegate = Objects.requireNonNull(delegate, "delegate");
+    this.validator = Objects.requireNonNull(validator, "validator");
   }
 
   @Override

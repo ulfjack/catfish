@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -150,13 +151,13 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
     private Duration validity = DEFAULT_VALIDITY;
 
     public Builder(Path caKey, Path caCert, Path workDir) {
-      this.caKey = caKey;
-      this.caCert = caCert;
-      this.workDir = workDir;
+      this.caKey = Objects.requireNonNull(caKey, "caKey");
+      this.caCert = Objects.requireNonNull(caCert, "caCert");
+      this.workDir = Objects.requireNonNull(workDir, "workDir");
     }
 
     public Builder setValidity(Duration validity) {
-      this.validity = validity;
+      this.validity = Objects.requireNonNull(validity, "validity");
       return this;
     }
 

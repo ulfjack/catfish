@@ -12,6 +12,7 @@ import java.nio.channels.Channels;
 import java.nio.channels.SocketChannel;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Objects;
 
 final class FastCgiConnection implements Closeable {
 
@@ -57,9 +58,9 @@ final class FastCgiConnection implements Closeable {
   private final Closeable underlying;
 
   private FastCgiConnection(InputStream in, OutputStream out, Closeable underlying) {
-    this.in = in;
-    this.out = out;
-    this.underlying = underlying;
+    this.in = Objects.requireNonNull(in, "in");
+    this.out = Objects.requireNonNull(out, "out");
+    this.underlying = Objects.requireNonNull(underlying, "underlying");
   }
 
   public void write(Record record) throws IOException {

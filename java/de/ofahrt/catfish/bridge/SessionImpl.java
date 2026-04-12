@@ -2,6 +2,7 @@ package de.ofahrt.catfish.bridge;
 
 import java.io.Serializable;
 import java.util.Enumeration;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpSession;
@@ -20,7 +21,7 @@ final class SessionImpl implements HttpSession, Serializable {
   private final ConcurrentHashMap<String, Serializable> info = new ConcurrentHashMap<>();
 
   public SessionImpl(String id, long creationTime, long timeoutInterval) {
-    this.id = id;
+    this.id = Objects.requireNonNull(id, "id");
     this.creationTime = creationTime;
     this.lastAccessTime = creationTime;
     this.timeoutInterval = timeoutInterval;

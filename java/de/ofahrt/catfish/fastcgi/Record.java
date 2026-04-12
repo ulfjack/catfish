@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Objects;
 
 final class Record {
 
@@ -46,6 +47,7 @@ final class Record {
   }
 
   public Record setContent(byte[] data) {
+    Objects.requireNonNull(data, "data");
     if (data.length > MAX_CONTENT_LENGTH) {
       throw new IllegalArgumentException(
           "Record content exceeds 0xffff bytes: " + data.length + "; caller must split.");

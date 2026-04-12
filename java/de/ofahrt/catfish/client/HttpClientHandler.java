@@ -6,6 +6,7 @@ import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.HttpRequest;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
@@ -22,8 +23,8 @@ final class HttpClientHandler implements NetworkHandler {
       ResponseHandler responseHandler,
       @Nullable SSLContext sslContext,
       @Nullable SSLParameters sslParameters) {
-    this.request = request;
-    this.responseHandler = responseHandler;
+    this.request = Objects.requireNonNull(request, "request");
+    this.responseHandler = Objects.requireNonNull(responseHandler, "responseHandler");
     this.sslContext = sslContext;
     this.sslParameters = sslParameters;
   }

@@ -19,11 +19,13 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Instant;
+import java.util.Objects;
 
 public final class DirectoryHandler implements HttpHandler {
   private final String internalPath;
 
   public DirectoryHandler(String internalPath) {
+    Objects.requireNonNull(internalPath, "internalPath");
     if (!internalPath.endsWith("/")) {
       throw new IllegalArgumentException("Path must end with a '/'");
     }

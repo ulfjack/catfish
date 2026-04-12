@@ -2,6 +2,7 @@ package de.ofahrt.catfish.model;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 public final class SimpleHttpResponse implements HttpResponse {
@@ -85,12 +86,12 @@ public final class SimpleHttpResponse implements HttpResponse {
     }
 
     public Builder setReasonPhrase(String reasonPhrase) {
-      this.reasonPhrase = reasonPhrase;
+      this.reasonPhrase = Objects.requireNonNull(reasonPhrase, "reasonPhrase");
       return this;
     }
 
     public Builder setBody(byte[] content) {
-      this.content = content;
+      this.content = Objects.requireNonNull(content, "content");
       return this;
     }
 

@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import org.jspecify.annotations.Nullable;
@@ -106,9 +107,9 @@ public final class FcgiHandler implements HttpHandler {
   }
 
   private FcgiHandler(Connector connector, String scriptName, String scriptFilename) {
-    this.connector = connector;
-    this.scriptName = scriptName;
-    this.scriptFilename = scriptFilename;
+    this.connector = Objects.requireNonNull(connector, "connector");
+    this.scriptName = Objects.requireNonNull(scriptName, "scriptName");
+    this.scriptFilename = Objects.requireNonNull(scriptFilename, "scriptFilename");
   }
 
   @Override

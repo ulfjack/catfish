@@ -2,6 +2,7 @@ package de.ofahrt.catfish.bridge;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Objects;
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
 import javax.servlet.Servlet;
@@ -17,10 +18,8 @@ final class FilterDispatcher implements FilterChain {
   private final Servlet servlet;
 
   public FilterDispatcher(List<Filter> filters, Servlet servlet) {
-    if (servlet == null) throw new NullPointerException();
-    if (filters == null) throw new NullPointerException();
-    this.filters = filters;
-    this.servlet = servlet;
+    this.filters = Objects.requireNonNull(filters, "filters");
+    this.servlet = Objects.requireNonNull(servlet, "servlet");
   }
 
   @Override

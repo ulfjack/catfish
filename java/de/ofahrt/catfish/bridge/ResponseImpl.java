@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Locale;
+import java.util.Objects;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletResponse;
@@ -76,7 +77,7 @@ public final class ResponseImpl implements HttpServletResponse {
   private HashMap<String, String> header = new HashMap<>();
 
   ResponseImpl(HttpRequest request, HttpResponseWriter responseWriter) {
-    this.request = request;
+    this.request = Objects.requireNonNull(request, "request");
     this.responseWriter = responseWriter;
   }
 

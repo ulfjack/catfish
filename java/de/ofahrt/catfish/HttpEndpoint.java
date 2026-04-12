@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import javax.net.ssl.SSLSocketFactory;
 import org.jspecify.annotations.Nullable;
@@ -34,7 +35,7 @@ public final class HttpEndpoint {
   private HttpServerListener requestListener = new HttpServerListener() {};
 
   private HttpEndpoint(Binding binding) {
-    this.binding = binding;
+    this.binding = Objects.requireNonNull(binding, "binding");
   }
 
   /** Listen on all interfaces. */
@@ -54,25 +55,27 @@ public final class HttpEndpoint {
 
   /** Register a virtual host. */
   public HttpEndpoint addHost(String hostname, HttpVirtualHost host) {
+    Objects.requireNonNull(hostname, "hostname");
+    Objects.requireNonNull(host, "host");
     hosts.put(hostname, host);
     return this;
   }
 
   /** Set the connect/proxy handler for this listener. */
   public HttpEndpoint dispatcher(ConnectHandler handler) {
-    this.connectHandler = handler;
+    this.connectHandler = Objects.requireNonNull(handler, "handler");
     return this;
   }
 
   /** Set the SSL socket factory for outgoing proxy connections to HTTPS origins. */
   public HttpEndpoint originSslFactory(SSLSocketFactory factory) {
-    this.originSslFactory = factory;
+    this.originSslFactory = Objects.requireNonNull(factory, "factory");
     return this;
   }
 
   /** Set a listener for completed requests (logging, metrics). */
   public HttpEndpoint requestListener(HttpServerListener listener) {
-    this.requestListener = listener;
+    this.requestListener = Objects.requireNonNull(listener, "listener");
     return this;
   }
 

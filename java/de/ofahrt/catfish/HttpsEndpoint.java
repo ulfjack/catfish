@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
@@ -28,7 +29,7 @@ public final class HttpsEndpoint {
   private HttpServerListener requestListener = new HttpServerListener() {};
 
   private HttpsEndpoint(HttpEndpoint.Binding binding) {
-    this.binding = binding;
+    this.binding = Objects.requireNonNull(binding, "binding");
   }
 
   /** Listen on all interfaces. */
@@ -51,6 +52,9 @@ public final class HttpsEndpoint {
    * (checked via SAN/CN matching at registration time).
    */
   public HttpsEndpoint addHost(String hostname, HttpVirtualHost host, SSLInfo sslInfo) {
+    Objects.requireNonNull(hostname, "hostname");
+    Objects.requireNonNull(host, "host");
+    Objects.requireNonNull(sslInfo, "sslInfo");
     if (!sslInfo.covers(hostname)) {
       throw new IllegalArgumentException("Certificate does not cover hostname '" + hostname + "'");
     }
@@ -61,19 +65,19 @@ public final class HttpsEndpoint {
 
   /** Set the connect/proxy handler for this listener. */
   public HttpsEndpoint dispatcher(ConnectHandler handler) {
-    this.connectHandler = handler;
+    this.connectHandler = Objects.requireNonNull(handler, "handler");
     return this;
   }
 
   /** Set the SSL socket factory for outgoing proxy connections to HTTPS origins. */
   public HttpsEndpoint originSslFactory(SSLSocketFactory factory) {
-    this.originSslFactory = factory;
+    this.originSslFactory = Objects.requireNonNull(factory, "factory");
     return this;
   }
 
   /** Set a listener for completed requests (logging, metrics). */
   public HttpsEndpoint requestListener(HttpServerListener listener) {
-    this.requestListener = listener;
+    this.requestListener = Objects.requireNonNull(listener, "listener");
     return this;
   }
 

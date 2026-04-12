@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -46,6 +47,7 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
   private @Nullable MalformedMultipartException error;
 
   public IncrementalMultipartParser(String contentType) {
+    Objects.requireNonNull(contentType, "contentType");
     MediaType mt = MediaType.parse(contentType);
     char[] foundBoundary = null;
     if (mt == null) {

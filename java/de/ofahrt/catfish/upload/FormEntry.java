@@ -1,5 +1,6 @@
 package de.ofahrt.catfish.upload;
 
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 public final class FormEntry {
@@ -9,32 +10,17 @@ public final class FormEntry {
   private final byte @Nullable [] body;
 
   public FormEntry(String name, String value) {
-    if (name == null) {
-      throw new NullPointerException();
-    }
-    if (value == null) {
-      throw new NullPointerException();
-    }
-    this.name = name;
-    this.value = value;
+    this.name = Objects.requireNonNull(name, "name");
+    this.value = Objects.requireNonNull(value, "value");
     this.contentType = null;
     this.body = null;
   }
 
   public FormEntry(String name, String contentType, byte[] body) {
-    if (name == null) {
-      throw new NullPointerException();
-    }
-    if (contentType == null) {
-      throw new NullPointerException();
-    }
-    if (body == null) {
-      throw new NullPointerException();
-    }
-    this.name = name;
+    this.name = Objects.requireNonNull(name, "name");
     this.value = null;
-    this.contentType = contentType;
-    this.body = body;
+    this.contentType = Objects.requireNonNull(contentType, "contentType");
+    this.body = Objects.requireNonNull(body, "body");
   }
 
   public String getName() {

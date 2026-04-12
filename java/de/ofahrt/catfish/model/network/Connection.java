@@ -2,6 +2,7 @@ package de.ofahrt.catfish.model.network;
 
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
+import java.util.Objects;
 import java.util.UUID;
 import javax.net.ssl.SSLSession;
 import org.jspecify.annotations.Nullable;
@@ -45,6 +46,7 @@ public final class Connection {
   }
 
   public Connection(Path socketPath, boolean ssl) {
+    Objects.requireNonNull(socketPath, "socketPath");
     this.id = UUID.randomUUID();
     this.startTimeMillis = System.currentTimeMillis();
     this.startTimeNanos = System.nanoTime();

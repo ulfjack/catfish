@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.model;
 
 import java.io.IOException;
+import java.util.Objects;
 
 public final class MalformedRequestException extends IOException {
   private static final long serialVersionUID = 1L;
@@ -9,7 +10,7 @@ public final class MalformedRequestException extends IOException {
 
   public MalformedRequestException(HttpResponse errorResponse) {
     super(errorResponse.getStatusCode() + " " + errorResponse.getStatusMessage());
-    this.errorResponse = errorResponse;
+    this.errorResponse = Objects.requireNonNull(errorResponse, "errorResponse");
   }
 
   public HttpResponse getErrorResponse() {

@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.servlets;
 
 import java.io.IOException;
+import java.util.Objects;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -12,7 +13,7 @@ public final class RedirectServlet extends HttpServlet {
   private final String target;
 
   public RedirectServlet(String target) {
-    this.target = target;
+    this.target = Objects.requireNonNull(target, "target");
   }
 
   @Override

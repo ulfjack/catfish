@@ -5,6 +5,7 @@ import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpRequest.InMemoryBody;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 final class HttpRequestGeneratorBuffered extends HttpRequestGenerator {
   public static HttpRequestGeneratorBuffered create(HttpRequest request) {
@@ -36,8 +37,8 @@ final class HttpRequestGeneratorBuffered extends HttpRequestGenerator {
   private int currentIndex;
 
   HttpRequestGeneratorBuffered(HttpRequest request, byte[][] data) {
-    this.request = request;
-    this.data = data;
+    this.request = Objects.requireNonNull(request, "request");
+    this.data = Objects.requireNonNull(data, "data");
   }
 
   @Override

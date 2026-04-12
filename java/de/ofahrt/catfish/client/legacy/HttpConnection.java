@@ -16,6 +16,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SNIServerName;
 import javax.net.ssl.SSLContext;
@@ -54,7 +55,7 @@ public final class HttpConnection implements Closeable {
   private int length;
 
   private HttpConnection(Socket socket) {
-    this.socket = socket;
+    this.socket = Objects.requireNonNull(socket, "socket");
   }
 
   public HttpResponse send(HttpRequest request) throws IOException {

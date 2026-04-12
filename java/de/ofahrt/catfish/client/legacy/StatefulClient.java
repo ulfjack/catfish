@@ -12,6 +12,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.net.ssl.SSLContext;
@@ -28,7 +29,7 @@ public final class StatefulClient {
   private @Nullable String cookie;
 
   public StatefulClient(String hostname, int port) {
-    this.hostname = hostname;
+    this.hostname = Objects.requireNonNull(hostname, "hostname");
     this.port = port;
     this.sslContext = null;
   }

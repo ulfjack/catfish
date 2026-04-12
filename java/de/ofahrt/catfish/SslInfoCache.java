@@ -1,6 +1,7 @@
 package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.ssl.SSLInfo;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 import org.jspecify.annotations.Nullable;
@@ -26,7 +27,7 @@ final class SslInfoCache {
   }
 
   SslInfoCache(LongSupplier clock) {
-    this.clock = clock;
+    this.clock = Objects.requireNonNull(clock, "clock");
   }
 
   /**

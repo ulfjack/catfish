@@ -6,6 +6,7 @@ import de.ofahrt.catfish.utils.MimeTypeRegistry;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.Objects;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -16,6 +17,7 @@ public final class DirectoryServlet extends HttpServlet {
   private final String internalPath;
 
   public DirectoryServlet(String internalPath) {
+    Objects.requireNonNull(internalPath, "internalPath");
     if (!internalPath.endsWith("/")) {
       throw new IllegalArgumentException("Path must end with a '/'");
     }

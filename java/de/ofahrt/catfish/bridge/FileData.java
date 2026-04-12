@@ -2,6 +2,7 @@ package de.ofahrt.catfish.bridge;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.util.Objects;
 
 public final class FileData {
   private final String id;
@@ -9,9 +10,9 @@ public final class FileData {
   private final byte[] data;
 
   public FileData(String id, String name, byte[] data) {
-    this.id = id;
-    this.name = name;
-    this.data = data;
+    this.id = Objects.requireNonNull(id, "id");
+    this.name = Objects.requireNonNull(name, "name");
+    this.data = Objects.requireNonNull(data, "data");
   }
 
   public String getId() {

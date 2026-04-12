@@ -13,6 +13,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Collections;
+import java.util.Objects;
 import javax.servlet.Servlet;
 import org.jspecify.annotations.Nullable;
 
@@ -50,7 +51,7 @@ public final class ServletHttpHandler implements HttpHandler {
 
     ServletAsHttpHandler(@Nullable SessionManager sessionManager, Servlet servlet) {
       this.sessionManager = sessionManager;
-      this.servlet = servlet;
+      this.servlet = Objects.requireNonNull(servlet, "servlet");
     }
 
     @Override

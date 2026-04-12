@@ -5,6 +5,7 @@ import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 final class HttpResponseGeneratorBuffered extends HttpResponseGenerator {
@@ -35,8 +36,8 @@ final class HttpResponseGeneratorBuffered extends HttpResponseGenerator {
   HttpResponseGeneratorBuffered(
       @Nullable HttpRequest request, HttpResponse response, byte[][] data) {
     this.request = request;
-    this.response = response;
-    this.data = data;
+    this.response = Objects.requireNonNull(response, "response");
+    this.data = Objects.requireNonNull(data, "data");
   }
 
   @Override

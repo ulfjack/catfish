@@ -3,6 +3,7 @@ package de.ofahrt.catfish;
 import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import java.io.IOException;
+import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -22,6 +23,7 @@ public final class CatfishHttpServer {
   final Executor executor;
 
   public CatfishHttpServer(NetworkEventListener serverListener) throws IOException {
+    Objects.requireNonNull(serverListener, "serverListener");
     ForkJoinPool pool = new ForkJoinPool();
     int capacity = pool.getParallelism() + MAX_QUEUED_REQUESTS;
     AtomicInteger pending = new AtomicInteger();
