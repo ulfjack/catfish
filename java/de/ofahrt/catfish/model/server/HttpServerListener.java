@@ -3,6 +3,7 @@ package de.ofahrt.catfish.model.server;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 public interface HttpServerListener {
 
@@ -32,7 +33,7 @@ public interface HttpServerListener {
    */
   default void onResponseStreamed(
       UUID requestId,
-      String originHost,
+      @Nullable String originHost,
       int originPort,
       HttpRequest request,
       HttpResponse response) {}
@@ -44,7 +45,7 @@ public interface HttpServerListener {
    */
   default void onRequestComplete(
       UUID requestId,
-      String originHost,
+      @Nullable String originHost,
       int originPort,
       HttpRequest request,
       RequestOutcome outcome) {}

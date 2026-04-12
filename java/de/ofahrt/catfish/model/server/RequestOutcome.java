@@ -14,7 +14,8 @@ public record RequestOutcome(
     return new RequestOutcome(null, error, 0);
   }
 
-  public static RequestOutcome error(HttpResponse response, Throwable error, long bytesSent) {
+  public static RequestOutcome error(
+      @Nullable HttpResponse response, Throwable error, long bytesSent) {
     return new RequestOutcome(response, error, bytesSent);
   }
 
