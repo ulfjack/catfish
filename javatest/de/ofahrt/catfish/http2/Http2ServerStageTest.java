@@ -249,6 +249,41 @@ public class Http2ServerStageTest {
   }
 
   @Test
+  public void headersWithoutEndHeaders_throwsIOException() throws IOException {
+    // Setup: preface + settings.
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // Build a HEADERS frame without END_HEADERS flag.
+    HpackEncoder encoder = new HpackEncoder();
+    byte[] headerBlock =
+        encoder.encode(
+            new Header(":method", "GET"),
+            new Header(":path", "/"),
+            new Header(":scheme", "https"),
+            new Header(":authority", "localhost"));
+    ByteBuffer buf = ByteBuffer.allocate(9 + headerBlock.length);
+    // Write frame header manually: HEADERS type, only END_STREAM flag (0x01), no END_HEADERS.
+    buf.put((byte) 0);
+    buf.put((byte) 0);
+    buf.put((byte) headerBlock.length);
+    buf.put((byte) FrameType.HEADERS);
+    buf.put((byte) Http2FrameReader.FLAG_END_STREAM); // no END_HEADERS
+    buf.putInt(1); // stream ID = 1
+    buf.put(headerBlock);
+    buf.flip();
+    byte[] frame = new byte[buf.remaining()];
+    buf.get(frame);
+
+    try {
+      feedAndRead(frame);
+      fail("Expected IOException for HEADERS without END_HEADERS");
+    } catch (IOException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("END_HEADERS"));
+    }
+  }
+
+  @Test
   public void oversizedFrame_throwsIOException() throws IOException {
     // Setup: preface + settings.
     feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));

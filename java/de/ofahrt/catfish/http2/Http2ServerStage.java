@@ -233,6 +233,8 @@ public final class Http2ServerStage implements Stage {
       case FrameType.WINDOW_UPDATE -> handleWindowUpdate();
       case FrameType.RST_STREAM -> handleRstStream();
       case FrameType.GOAWAY -> handleGoaway();
+      case FrameType.CONTINUATION ->
+          throw new IOException("h2 unexpected CONTINUATION frame (not supported)");
       case FrameType.PRIORITY -> {} // ignore
       default -> {} // unknown frame types are ignored per spec
     }
@@ -284,6 +286,11 @@ public final class Http2ServerStage implements Stage {
 
   @SuppressWarnings("NullAway") // payload and connection are non-null in this context
   private void handleHeaders() throws IOException {
+    if (!frameReader.hasFlag(Http2FrameReader.FLAG_END_HEADERS)) {
+      // CONTINUATION frames are not supported. Per RFC 9113 §6.2, a HEADERS frame without
+      // END_HEADERS must be followed by CONTINUATION frames. Reject with a connection error.
+      throw new IOException("h2 HEADERS without END_HEADERS (CONTINUATION not supported)");
+    }
     int streamId = frameReader.getStreamId();
     byte[] payload = frameReader.getPayload();
     boolean endStream = frameReader.hasFlag(Http2FrameReader.FLAG_END_STREAM);
