@@ -34,11 +34,17 @@ java_binary(
     name = "blob_server",
     testonly = True,
     srcs = ["BlobServer.java"],
+    classpath_resources = [
+        ":test-cert.pem",
+        ":test-key.pem",
+    ],
     main_class = "de.ofahrt.catfish.BlobServer",
     deps = [
         "//java/de/ofahrt/catfish",
         "//java/de/ofahrt/catfish/model",
         "//java/de/ofahrt/catfish/model/network",
+        "//java/de/ofahrt/catfish/ssl",
+        "//javatest/de/ofahrt/catfish/bridge:test_helper",
         "//third_party/jspecify",
     ],
 )
