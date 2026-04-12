@@ -16,7 +16,9 @@ import de.ofahrt.catfish.model.server.RequestOutcome;
 import de.ofahrt.catfish.ssl.SSLContextFactory;
 import de.ofahrt.catfish.ssl.SSLInfo;
 import java.io.File;
+import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 public class ExampleMain {
 
@@ -53,7 +55,7 @@ public class ExampleMain {
               }
 
               @Override
-              public void notifyInternalError(Connection id, Throwable throwable) {
+              public void notifyInternalError(@Nullable Connection id, Throwable throwable) {
                 throwable.printStackTrace();
               }
             });
@@ -97,7 +99,10 @@ public class ExampleMain {
     if (sslInfo != null) {
       HttpsEndpoint httpsEndpoint =
           HttpsEndpoint.onAny(8081)
-              .addHost(sslInfo.certificateCommonName(), new HttpVirtualHost(handler), sslInfo)
+              .addHost(
+                  Objects.requireNonNull(sslInfo.certificateCommonName()),
+                  new HttpVirtualHost(handler),
+                  sslInfo)
               .requestListener(errorLogger);
       server.listen(httpsEndpoint);
     }

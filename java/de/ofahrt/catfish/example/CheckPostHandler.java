@@ -25,18 +25,19 @@ public final class CheckPostHandler implements HttpHandler {
   public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter)
       throws IOException {
     FormDataBody formData = null;
-    if (HttpMethodName.POST.equals(request.getMethod())) {
+    if (HttpMethodName.POST.equals(request.getMethod())
+        && request.getBody() instanceof HttpRequest.InMemoryBody body) {
       String ctHeader = request.getHeaders().get(HttpHeaderName.CONTENT_TYPE);
-      String mimeType = HttpContentType.getMimeTypeFromContentType(ctHeader);
-      if (HttpContentType.MULTIPART_FORMDATA.equals(mimeType)) {
-        IncrementalMultipartParser parser = new IncrementalMultipartParser(ctHeader);
-        byte[] data = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
-        parser.parse(data);
-        formData = parser.getParsedBody();
-      } else if (HttpContentType.WWW_FORM_URLENCODED.equals(mimeType)) {
-        UrlEncodedParser parser = new UrlEncodedParser();
-        byte[] data = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
-        formData = parser.parse(data);
+      if (ctHeader != null) {
+        String mimeType = HttpContentType.getMimeTypeFromContentType(ctHeader);
+        if (HttpContentType.MULTIPART_FORMDATA.equals(mimeType)) {
+          IncrementalMultipartParser parser = new IncrementalMultipartParser(ctHeader);
+          parser.parse(body.toByteArray());
+          formData = parser.getParsedBody();
+        } else if (HttpContentType.WWW_FORM_URLENCODED.equals(mimeType)) {
+          UrlEncodedParser parser = new UrlEncodedParser();
+          formData = parser.parse(body.toByteArray());
+        }
       }
     }
 
