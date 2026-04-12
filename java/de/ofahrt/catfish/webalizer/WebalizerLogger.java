@@ -10,11 +10,12 @@ import java.io.PrintStream;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import org.jspecify.annotations.Nullable;
 
 public final class WebalizerLogger implements HttpServerListener {
 
   private class LogFileWriter implements Runnable {
-    private PrintStream out = null;
+    private @Nullable PrintStream out = null;
 
     private void checkFile() {
       if ((out == null) || out.checkError()) {
@@ -72,7 +73,7 @@ public final class WebalizerLogger implements HttpServerListener {
   @Override
   public void onRequestComplete(
       UUID requestId,
-      String originHost,
+      @Nullable String originHost,
       int originPort,
       HttpRequest request,
       RequestOutcome outcome) {

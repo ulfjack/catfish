@@ -8,6 +8,7 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import org.jspecify.annotations.Nullable;
 
 public final class WebalizerFormatter {
 
@@ -20,7 +21,7 @@ public final class WebalizerFormatter {
   }
 
   public String format(
-      Connection connection, HttpRequest request, HttpResponse response, int amount) {
+      @Nullable Connection connection, HttpRequest request, HttpResponse response, int amount) {
     // LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-agent}i\""
     // client unknown unknown time request-line(method,url,protocol) status-code bytes-sent referer
     // user-agent
@@ -34,7 +35,7 @@ public final class WebalizerFormatter {
     }
 
     String logentry =
-        connection.getRemoteAddress()
+        (connection != null ? connection.getRemoteAddress() : "-")
             + " - - ["
             + formatDate(new Date())
             + "] "
