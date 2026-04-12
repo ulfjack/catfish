@@ -2,7 +2,6 @@ package de.ofahrt.catfish;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import org.jspecify.annotations.Nullable;
 
 /** See https://tools.ietf.org/rfc/rfc5246.txt and https://tools.ietf.org/rfc/rfc6066.txt. */
 final class SNIParser {
@@ -18,10 +17,10 @@ final class SNIParser {
   private static final int SNI_EXTENSION_ID = 0;
   private static final int SNI_DNS_HOSTNAME_ID = 0;
 
-  private static final Result NOT_DONE = new Result(false, false);
-  private static final Result NO_SNI_FOUND = new Result(true, false);
-  private static final Result UNSUPPORTED_SPLIT_RECORD = new Result(true, true);
-  private static final Result PARSE_ERROR = new Result(true, true);
+  private static final Result NOT_DONE = new Result.NotDone();
+  private static final Result NO_SNI_FOUND = new Result.NoSniFound();
+  private static final Result UNSUPPORTED_SPLIT_RECORD = new Result.Error();
+  private static final Result PARSE_ERROR = new Result.Error();
 
   Result parse(ByteBuffer inputBuffer) {
     if (inputBuffer.remaining() == 0) {
@@ -161,7 +160,7 @@ final class SNIParser {
         serverName = name;
       }
     }
-    return new Result(serverName);
+    return serverName != null ? new Result.Found(serverName) : NO_SNI_FOUND;
   }
 
   /** Skips as many bytes as given; returns false if there was an error. */
@@ -192,36 +191,13 @@ final class SNIParser {
     if (DEBUG) System.out.println(text);
   }
 
-  public static final class Result {
-    private final boolean done;
-    private final boolean error;
-    private final @Nullable String name;
+  public sealed interface Result {
+    record NotDone() implements Result {}
 
-    public Result(@Nullable String name) {
-      this.done = true;
-      this.error = false;
-      this.name = name;
-    }
+    record NoSniFound() implements Result {}
 
-    public Result(boolean done, boolean error) {
-      if (!done && error) {
-        throw new IllegalArgumentException();
-      }
-      this.done = done;
-      this.error = error;
-      this.name = null;
-    }
+    record Error() implements Result {}
 
-    public boolean isDone() {
-      return done;
-    }
-
-    public boolean hasError() {
-      return error;
-    }
-
-    public @Nullable String getName() {
-      return name;
-    }
+    record Found(String name) implements Result {}
   }
 }

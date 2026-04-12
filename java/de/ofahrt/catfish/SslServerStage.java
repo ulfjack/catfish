@@ -185,16 +185,16 @@ final class SslServerStage implements Stage {
 
   private void findSni() throws IOException {
     SNIParser.Result result = new SNIParser().parse(netInputBuffer);
-    if (!result.isDone()) {
+    if (result instanceof SNIParser.Result.NotDone) {
       return;
     }
-    if (result.getName() == null) {
+    if (!(result instanceof SNIParser.Result.Found found)) {
       throw new IOException("SSL Client did not send SNI");
     }
-    parent.log("SSL Found SNI=%s", result.getName());
-    SSLContext sslContext = contextProvider.getSSLContext(result.getName());
+    parent.log("SSL Found SNI=%s", found.name());
+    SSLContext sslContext = contextProvider.getSSLContext(found.name());
     if (sslContext == null) {
-      parent.log("SSL Unknown SNI=%s, sending alert", result.getName());
+      parent.log("SSL Unknown SNI=%s, sending alert", found.name());
       netOutputBuffer.clear();
       netOutputBuffer.put(UNRECOGNIZED_NAME_ALERT);
       netOutputBuffer.flip();
