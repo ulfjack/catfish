@@ -155,19 +155,18 @@ public final class Http2ServerStage implements Stage {
     }
 
     // Write response frames for streams that have pending data.
-    for (var it = streams.entrySet().iterator(); it.hasNext(); ) {
+    boolean blocked = false;
+    for (var it = streams.entrySet().iterator(); it.hasNext() && !blocked; ) {
       var entry = it.next();
       Http2Stream stream = entry.getValue();
       if (stream.isResponseReady()) {
-        int beforePos = outputBuffer.position();
-        boolean done =
+        Http2Stream.WriteResult result =
             stream.writeResponseFrames(outputBuffer, peerMaxFrameSize, connectionSendWindow);
-        int dataSent = stream.getLastDataBytesSent();
-        connectionSendWindow -= dataSent;
-        if (done) {
-          it.remove();
-        } else {
-          break; // output buffer full or window exhausted, try again later
+        connectionSendWindow -= stream.getLastDataBytesSent();
+        switch (result) {
+          case DONE -> it.remove();
+          case BLOCKED -> blocked = true;
+          case WAITING -> {} // skip, try next stream
         }
       }
     }
@@ -442,6 +441,10 @@ public final class Http2ServerStage implements Stage {
     Http2Stream stream = streams.remove(streamId);
     if (stream != null) {
       stream.setState(Http2Stream.State.CLOSED);
+      Http2StreamBuffer buf = stream.getStreamingBuffer();
+      if (buf != null) {
+        buf.cancelStream();
+      }
     }
   }
 
@@ -583,20 +586,28 @@ public final class Http2ServerStage implements Stage {
 
     @Override
     public java.io.OutputStream commitStreamed(HttpResponse response) throws IOException {
-      // For now, buffer the streamed response and commit when closed.
-      // A proper streaming implementation would use a pipe buffer (like
-      // HttpResponseGeneratorStreamed).
       if (!committed.compareAndSet(false, true)) {
         throw new IllegalStateException("Response already committed");
       }
       byte[] headerBlock = encodeResponseHeaders(response, -1);
-      return new java.io.ByteArrayOutputStream() {
+      Http2StreamBuffer buffer =
+          new Http2StreamBuffer(65536, () -> parent.queue(() -> parent.encourageWrites()));
+      stream.setStreamingResponse(headerBlock, buffer);
+      parent.queue(() -> parent.encourageWrites()); // send HEADERS immediately
+      return new java.io.OutputStream() {
         @Override
-        public void close() throws IOException {
-          super.close();
-          byte[] body = toByteArray();
-          stream.setResponse(headerBlock, body, true);
-          parent.queue(() -> parent.encourageWrites());
+        public void write(int b) throws IOException {
+          write(new byte[] {(byte) b}, 0, 1);
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+          buffer.write(b, off, len);
+        }
+
+        @Override
+        public void close() {
+          buffer.close();
         }
       };
     }

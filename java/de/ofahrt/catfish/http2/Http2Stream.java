@@ -6,8 +6,8 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Per-stream state for an HTTP/2 connection. Tracks the stream lifecycle, accumulates request body
- * bytes, and holds response data (HPACK-encoded headers + body) until the NIO write loop drains
- * them.
+ * bytes, and holds response data until the NIO write loop drains them. Supports both buffered
+ * responses (full body known upfront) and streaming responses (body written incrementally).
  */
 final class Http2Stream {
 
@@ -16,6 +16,16 @@ final class Http2Stream {
     HALF_CLOSED_REMOTE,
     HALF_CLOSED_LOCAL,
     CLOSED
+  }
+
+  /** Result of a {@link #writeResponseFrames} call. */
+  enum WriteResult {
+    /** Response fully written; stream can be removed. */
+    DONE,
+    /** Output buffer full or flow control exhausted; stop iterating streams. */
+    BLOCKED,
+    /** Streaming buffer has no data yet but handler hasn't closed; skip to next stream. */
+    WAITING
   }
 
   private final int streamId;
@@ -31,8 +41,11 @@ final class Http2Stream {
   // The NIO write loop reads these fields after the volatile responseReady flag is set.
   private volatile boolean responseReady;
   private byte @Nullable [] responseHeaderBlock;
+  // Buffered mode only:
   private byte @Nullable [] responseBody;
   private boolean responseEndStream;
+  // Streaming mode:
+  private @Nullable Http2StreamBuffer streamingBuffer;
 
   // Response write progress (accessed only on NIO thread).
   private int bodyOffset;
@@ -93,6 +106,7 @@ final class Http2Stream {
 
   // ---- Response ----
 
+  /** Set a buffered response (full body known upfront). */
   void setResponse(byte[] headerBlock, byte[] body, boolean endStream) {
     this.responseHeaderBlock = headerBlock;
     this.responseBody = body;
@@ -100,56 +114,74 @@ final class Http2Stream {
     this.responseReady = true; // volatile write, publishes the above fields
   }
 
+  /** Set a streaming response (body written incrementally via the buffer). */
+  void setStreamingResponse(byte[] headerBlock, Http2StreamBuffer buffer) {
+    this.responseHeaderBlock = headerBlock;
+    this.streamingBuffer = buffer;
+    this.responseReady = true; // volatile write, publishes the above fields
+  }
+
   boolean isResponseReady() {
     return responseReady;
   }
 
+  @Nullable Http2StreamBuffer getStreamingBuffer() {
+    return streamingBuffer;
+  }
+
   /**
-   * Writes pending response frames into the given buffer. Returns true if the response is fully
-   * written, false if more write() calls are needed (output buffer full or flow control window
-   * exhausted). Called only on the NIO thread.
+   * Writes pending response frames into the given buffer. Called only on the NIO thread.
    *
    * @param connectionSendWindow the connection-level send window (limits total DATA across all
    *     streams)
    */
   @SuppressWarnings("NullAway") // fields are non-null after responseReady
-  boolean writeResponseFrames(java.nio.ByteBuffer out, int maxFrameSize, int connectionSendWindow) {
+  WriteResult writeResponseFrames(
+      java.nio.ByteBuffer out, int maxFrameSize, int connectionSendWindow) {
     lastDataBytesSent = 0;
 
     if (!headersSent) {
-      // Need at least 9 bytes for the frame header.
       if (out.remaining() < 9 + 1) {
-        return false;
+        return WriteResult.BLOCKED;
       }
       byte[] hdr = responseHeaderBlock;
-      // Write HEADERS frame. We don't support CONTINUATION, so the entire header block
-      // must fit in one frame. This is fine for typical response headers.
-      boolean endStream = responseEndStream && (responseBody == null || responseBody.length == 0);
-      Http2FrameWriter.writeHeaders(out, streamId, hdr, endStream);
+      boolean noBody =
+          streamingBuffer == null
+              && (responseBody == null || responseBody.length == 0)
+              && responseEndStream;
+      Http2FrameWriter.writeHeaders(out, streamId, hdr, noBody);
       headersSent = true;
-      if (endStream) {
+      if (noBody) {
         state = State.CLOSED;
-        return true;
+        return WriteResult.DONE;
       }
     }
 
-    // Write DATA frames, respecting both stream and connection send windows.
+    if (streamingBuffer != null) {
+      return writeStreamingData(out, maxFrameSize, connectionSendWindow);
+    } else {
+      return writeBufferedData(out, maxFrameSize, connectionSendWindow);
+    }
+  }
+
+  @SuppressWarnings("NullAway")
+  private WriteResult writeBufferedData(
+      java.nio.ByteBuffer out, int maxFrameSize, int connectionSendWindow) {
     byte[] body = responseBody;
     if (body == null || body.length == 0) {
       state = State.CLOSED;
-      return true;
+      return WriteResult.DONE;
     }
 
     while (bodyOffset < body.length) {
       int allowedByWindows = Math.min(sendWindow, connectionSendWindow - lastDataBytesSent);
       if (allowedByWindows <= 0) {
-        return false; // flow control: wait for WINDOW_UPDATE
+        return WriteResult.BLOCKED;
       }
       int remaining = body.length - bodyOffset;
       int chunkSize = Math.min(remaining, Math.min(maxFrameSize, allowedByWindows));
-      // Need 9 (frame header) + chunkSize bytes in the output buffer.
       if (out.remaining() < 9 + chunkSize) {
-        return false;
+        return WriteResult.BLOCKED;
       }
       boolean last = (bodyOffset + chunkSize >= body.length);
       boolean endStream = last && responseEndStream;
@@ -159,11 +191,55 @@ final class Http2Stream {
       lastDataBytesSent += chunkSize;
       if (endStream) {
         state = State.CLOSED;
-        return true;
+        return WriteResult.DONE;
       }
     }
 
     state = State.CLOSED;
-    return true;
+    return WriteResult.DONE;
+  }
+
+  @SuppressWarnings("NullAway")
+  private WriteResult writeStreamingData(
+      java.nio.ByteBuffer out, int maxFrameSize, int connectionSendWindow) {
+    Http2StreamBuffer buf = streamingBuffer;
+
+    while (true) {
+      int avail = buf.available();
+      if (avail == 0) {
+        if (buf.isFinished()) {
+          // Send empty DATA with END_STREAM to close the stream.
+          if (out.remaining() < 9) {
+            return WriteResult.BLOCKED;
+          }
+          Http2FrameWriter.writeData(out, streamId, new byte[0], 0, 0, true);
+          state = State.CLOSED;
+          return WriteResult.DONE;
+        }
+        return WriteResult.WAITING;
+      }
+
+      int allowedByWindows = Math.min(sendWindow, connectionSendWindow - lastDataBytesSent);
+      if (allowedByWindows <= 0) {
+        return WriteResult.BLOCKED;
+      }
+      int chunkSize = Math.min(avail, Math.min(maxFrameSize, allowedByWindows));
+      if (out.remaining() < 9 + chunkSize) {
+        return WriteResult.BLOCKED;
+      }
+
+      // Check if this drain will empty the buffer and the handler is done.
+      boolean lastChunk = (chunkSize >= avail) && buf.isFinished();
+      Http2FrameWriter.writeDataFrameHeader(out, streamId, chunkSize, lastChunk);
+      int drained = buf.drainTo(out, chunkSize);
+      // drained should == chunkSize since we checked available() and out.remaining().
+      sendWindow -= drained;
+      lastDataBytesSent += drained;
+
+      if (lastChunk) {
+        state = State.CLOSED;
+        return WriteResult.DONE;
+      }
+    }
   }
 }

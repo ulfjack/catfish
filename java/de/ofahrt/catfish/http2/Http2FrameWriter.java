@@ -52,6 +52,16 @@ public final class Http2FrameWriter {
     buf.put(data, offset, length);
   }
 
+  /**
+   * Writes only the 9-byte DATA frame header. The caller is responsible for writing exactly {@code
+   * payloadLength} bytes of payload into the buffer afterwards.
+   */
+  public static void writeDataFrameHeader(
+      ByteBuffer buf, int streamId, int payloadLength, boolean endStream) {
+    int flags = endStream ? Http2FrameReader.FLAG_END_STREAM : 0;
+    writeFrameHeader(buf, payloadLength, FrameType.DATA, flags, streamId);
+  }
+
   /** Writes a WINDOW_UPDATE frame. */
   public static void writeWindowUpdate(ByteBuffer buf, int streamId, int increment) {
     writeFrameHeader(buf, 4, FrameType.WINDOW_UPDATE, 0, streamId);
