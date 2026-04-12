@@ -8,6 +8,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 public abstract class HttpResponseGenerator {
   protected static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
@@ -45,9 +46,9 @@ public abstract class HttpResponseGenerator {
     return buffer.toString().getBytes(StandardCharsets.UTF_8);
   }
 
-  public abstract HttpRequest getRequest();
+  public abstract @Nullable HttpRequest getRequest();
 
-  public abstract HttpResponse getResponse();
+  public abstract @Nullable HttpResponse getResponse();
 
   public abstract ContinuationToken generate(ByteBuffer buffer);
 

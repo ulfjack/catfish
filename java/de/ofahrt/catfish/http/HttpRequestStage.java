@@ -3,6 +3,7 @@ package de.ofahrt.catfish.http;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import java.nio.ByteBuffer;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Typed next-stage API for HTTP request processing. Receives parsed HTTP request headers and
@@ -57,10 +58,10 @@ public interface HttpRequestStage {
   boolean keepAlive();
 
   /** The request associated with the current response, for logging. May be null before response. */
-  HttpRequest getRequest();
+  @Nullable HttpRequest getRequest();
 
   /** The response being generated, for logging. May be null before response is committed. */
-  HttpResponse getResponse();
+  @Nullable HttpResponse getResponse();
 
   /** Called when the connection is closing. Clean up any resources held by this handler. */
   void close();
