@@ -185,11 +185,11 @@ public final class Http2ServerStage implements Stage {
 
   // ---- Connection preface ----
 
-  private boolean consumePreface() {
+  private boolean consumePreface() throws IOException {
     while (inputBuffer.hasRemaining() && prefaceOffset < CLIENT_PREFACE.length) {
       byte b = inputBuffer.get();
       if (b != CLIENT_PREFACE[prefaceOffset]) {
-        throw new IllegalStateException("Invalid HTTP/2 client connection preface");
+        throw new IOException("Invalid HTTP/2 client connection preface");
       }
       prefaceOffset++;
     }
@@ -271,8 +271,7 @@ public final class Http2ServerStage implements Stage {
     try {
       headers = hpackDecoder.decode(payload, 0, payload.length);
     } catch (HpackDecodingException e) {
-      sendGoaway(ErrorCode.COMPRESSION_ERROR);
-      return;
+      throw new IOException("h2 HPACK decoding failed", e);
     }
 
     // Extract pseudo-headers and build an HttpRequest.
@@ -297,8 +296,8 @@ public final class Http2ServerStage implements Stage {
     }
 
     if (method == null || path == null) {
-      sendRstStream(streamId, ErrorCode.PROTOCOL_ERROR);
-      return;
+      throw new IOException(
+          "h2 HEADERS missing required pseudo-headers: :method=" + method + " :path=" + path);
     }
 
     builder.setMethod(method);
