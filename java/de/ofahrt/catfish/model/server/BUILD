@@ -5,10 +5,12 @@ package(default_visibility = ["//visibility:public"])
 java_library(
     name = "server",
     srcs = glob(["*.java"]),
+    exports = ["//third_party/jspecify"],
     deps = [
         "//java/de/ofahrt/catfish/model",
         "//java/de/ofahrt/catfish/model/network",
         "//java/de/ofahrt/catfish/ssl",
         "//java/de/ofahrt/catfish/utils",
+        "//third_party/jspecify",
     ],
 )

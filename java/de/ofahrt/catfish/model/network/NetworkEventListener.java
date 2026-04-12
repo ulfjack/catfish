@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.model.network;
 
 import java.nio.file.Path;
+import org.jspecify.annotations.Nullable;
 
 public interface NetworkEventListener {
   void portOpened(int port, boolean ssl);
@@ -17,13 +18,13 @@ public interface NetworkEventListener {
    * @param connection connection if one is available, null otherwise
    * @param throwable
    */
-  default void warning(Connection connection, Throwable throwable) {}
+  default void warning(@Nullable Connection connection, Throwable throwable) {}
 
   /**
    * @param connection connection if one is available, null otherwise
    * @param throwable
    */
-  default void notifyInternalError(Connection connection, Throwable throwable) {}
+  default void notifyInternalError(@Nullable Connection connection, Throwable throwable) {}
 
   /**
    * The expectation is that implementations call System.exit in this case.

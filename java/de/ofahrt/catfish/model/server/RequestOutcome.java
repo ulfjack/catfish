@@ -1,8 +1,10 @@
 package de.ofahrt.catfish.model.server;
 
 import de.ofahrt.catfish.model.HttpResponse;
+import org.jspecify.annotations.Nullable;
 
-public record RequestOutcome(HttpResponse response, Throwable error, long bytesSent) {
+public record RequestOutcome(
+    @Nullable HttpResponse response, @Nullable Throwable error, long bytesSent) {
 
   public static RequestOutcome success(HttpResponse response, long bytesSent) {
     return new RequestOutcome(response, null, bytesSent);

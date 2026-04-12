@@ -7,6 +7,7 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The result of an HTTP routing decision. Returned by {@link ConnectHandler#applyProxy} and {@link
@@ -41,7 +42,7 @@ public sealed interface RequestAction {
       implements RequestAction {}
 
   /** Deny with a custom response, or 403 Forbidden by default. No body is read. */
-  record Deny(HttpResponse response) implements RequestAction {
+  record Deny(@Nullable HttpResponse response) implements RequestAction {
     public Deny() {
       this(null);
     }
