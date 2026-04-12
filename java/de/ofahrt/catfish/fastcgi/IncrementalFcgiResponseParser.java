@@ -1,5 +1,7 @@
 package de.ofahrt.catfish.fastcgi;
 
+import org.jspecify.annotations.Nullable;
+
 final class IncrementalFcgiResponseParser {
 
   public interface Callback {
@@ -30,8 +32,8 @@ final class IncrementalFcgiResponseParser {
   private State state = State.MESSAGE_HEADER_NAME;
   private boolean expectLineFeed;
 
-  private String messageHeaderName;
-  private String messageHeaderValue;
+  private @Nullable String messageHeaderName;
+  private @Nullable String messageHeaderValue;
 
   public IncrementalFcgiResponseParser(Callback callback) {
     this.callback = callback;
@@ -66,6 +68,7 @@ final class IncrementalFcgiResponseParser {
     return parse(input, 0, input.length);
   }
 
+  @SuppressWarnings("NullAway") // State machine guarantees fields are non-null when accessed.
   public int parse(byte[] input, int offset, int length) throws MalformedResponseException {
     if (state == State.CONTENT) {
       callback.addData(input, offset, length);

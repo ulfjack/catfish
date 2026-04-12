@@ -22,6 +22,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import org.jspecify.annotations.Nullable;
 
 /**
  * An {@link HttpHandler} that proxies a request to a FastCGI backend (e.g. PHP-FPM) and forwards
@@ -256,8 +257,8 @@ public final class FcgiHandler implements HttpHandler {
     private final TreeMap<String, String> headers = new TreeMap<>();
     private int statusCode = HttpStatusCode.OK.getStatusCode();
     private String statusMessage = HttpStatusCode.OK.getStatusMessage();
-    private OutputStream body;
-    private IOException pendingError;
+    private @Nullable OutputStream body;
+    private @Nullable IOException pendingError;
 
     ResponseAssembler(HttpResponseWriter writer) {
       this.writer = writer;
