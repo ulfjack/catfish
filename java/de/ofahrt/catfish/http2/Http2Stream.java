@@ -35,13 +35,18 @@ final class Http2Stream {
   private boolean responseEndStream;
 
   // Response write progress (accessed only on NIO thread).
-  private int headerBlockOffset;
   private int bodyOffset;
   private boolean headersSent;
 
-  Http2Stream(int streamId, State initialState) {
+  // Flow control: per-stream send window.
+  private int sendWindow;
+  // Tracks DATA bytes sent in the last writeResponseFrames call (for connection window accounting).
+  private int lastDataBytesSent;
+
+  Http2Stream(int streamId, State initialState, int initialSendWindow) {
     this.streamId = streamId;
     this.state = initialState;
+    this.sendWindow = initialSendWindow;
   }
 
   int getStreamId() {
@@ -54,6 +59,16 @@ final class Http2Stream {
 
   void setState(State state) {
     this.state = state;
+  }
+
+  // ---- Flow control ----
+
+  void adjustSendWindow(int delta) {
+    sendWindow += delta;
+  }
+
+  int getLastDataBytesSent() {
+    return lastDataBytesSent;
   }
 
   // ---- Request builder (for requests with body) ----
@@ -91,12 +106,16 @@ final class Http2Stream {
 
   /**
    * Writes pending response frames into the given buffer. Returns true if the response is fully
-   * written (all HEADERS + DATA frames emitted), false if more write() calls are needed.
+   * written, false if more write() calls are needed (output buffer full or flow control window
+   * exhausted). Called only on the NIO thread.
    *
-   * <p>Called only on the NIO thread.
+   * @param connectionSendWindow the connection-level send window (limits total DATA across all
+   *     streams)
    */
   @SuppressWarnings("NullAway") // fields are non-null after responseReady
-  boolean writeResponseFrames(java.nio.ByteBuffer out, int maxFrameSize) {
+  boolean writeResponseFrames(java.nio.ByteBuffer out, int maxFrameSize, int connectionSendWindow) {
+    lastDataBytesSent = 0;
+
     if (!headersSent) {
       // Need at least 9 bytes for the frame header.
       if (out.remaining() < 9 + 1) {
@@ -114,7 +133,7 @@ final class Http2Stream {
       }
     }
 
-    // Write DATA frames.
+    // Write DATA frames, respecting both stream and connection send windows.
     byte[] body = responseBody;
     if (body == null || body.length == 0) {
       state = State.CLOSED;
@@ -122,8 +141,12 @@ final class Http2Stream {
     }
 
     while (bodyOffset < body.length) {
+      int allowedByWindows = Math.min(sendWindow, connectionSendWindow - lastDataBytesSent);
+      if (allowedByWindows <= 0) {
+        return false; // flow control: wait for WINDOW_UPDATE
+      }
       int remaining = body.length - bodyOffset;
-      int chunkSize = Math.min(remaining, maxFrameSize);
+      int chunkSize = Math.min(remaining, Math.min(maxFrameSize, allowedByWindows));
       // Need 9 (frame header) + chunkSize bytes in the output buffer.
       if (out.remaining() < 9 + chunkSize) {
         return false;
@@ -132,6 +155,8 @@ final class Http2Stream {
       boolean endStream = last && responseEndStream;
       Http2FrameWriter.writeData(out, streamId, body, bodyOffset, chunkSize, endStream);
       bodyOffset += chunkSize;
+      sendWindow -= chunkSize;
+      lastDataBytesSent += chunkSize;
       if (endStream) {
         state = State.CLOSED;
         return true;

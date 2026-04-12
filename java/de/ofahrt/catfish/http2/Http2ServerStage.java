@@ -72,13 +72,14 @@ public final class Http2ServerStage implements Stage {
 
   // Peer settings.
   private int peerMaxFrameSize = DEFAULT_MAX_FRAME_SIZE;
+  private int peerInitialWindowSize = 65535; // SETTINGS_INITIAL_WINDOW_SIZE default
 
   // Control frame queue (accumulated during read(), drained during write()).
   // We use a simple byte buffer for queued control frames.
   private final ByteBuffer controlFrameBuffer = ByteBuffer.allocate(4096);
 
-  // Connection-level receive window: auto-ack DATA.
-  private int connectionRecvWindow = 65535; // initial value per spec
+  // Flow control: send windows (how much DATA we may send).
+  private int connectionSendWindow = 65535; // initial value per spec
 
   // Last stream ID we processed (for GOAWAY).
   private int lastStreamId;
@@ -158,11 +159,15 @@ public final class Http2ServerStage implements Stage {
       var entry = it.next();
       Http2Stream stream = entry.getValue();
       if (stream.isResponseReady()) {
-        boolean done = stream.writeResponseFrames(outputBuffer, peerMaxFrameSize);
+        int beforePos = outputBuffer.position();
+        boolean done =
+            stream.writeResponseFrames(outputBuffer, peerMaxFrameSize, connectionSendWindow);
+        int dataSent = stream.getLastDataBytesSent();
+        connectionSendWindow -= dataSent;
         if (done) {
           it.remove();
         } else {
-          break; // output buffer full, try again later
+          break; // output buffer full or window exhausted, try again later
         }
       }
     }
@@ -253,8 +258,16 @@ public final class Http2ServerStage implements Stage {
   private void applyPeerSetting(int id, int value) {
     switch (id) {
       case 1 -> hpackDecoder.setMaxDynamicTableSize(value); // HEADER_TABLE_SIZE
+      case 4 -> { // INITIAL_WINDOW_SIZE
+        int delta = value - peerInitialWindowSize;
+        peerInitialWindowSize = value;
+        // Adjust all existing stream send windows by the delta.
+        for (Http2Stream stream : streams.values()) {
+          stream.adjustSendWindow(delta);
+        }
+      }
       case 5 -> peerMaxFrameSize = value; // MAX_FRAME_SIZE
-      default -> {} // other settings noted but not acted on for now
+      default -> {}
     }
   }
 
@@ -326,7 +339,7 @@ public final class Http2ServerStage implements Stage {
 
     Http2Stream.State initialState =
         endStream ? Http2Stream.State.HALF_CLOSED_REMOTE : Http2Stream.State.OPEN;
-    Http2Stream stream = new Http2Stream(streamId, initialState);
+    Http2Stream stream = new Http2Stream(streamId, initialState, peerInitialWindowSize);
     streams.put(streamId, stream);
 
     if (endStream) {
@@ -395,9 +408,31 @@ public final class Http2ServerStage implements Stage {
 
   // ---- WINDOW_UPDATE ----
 
+  @SuppressWarnings("NullAway")
   private void handleWindowUpdate() {
-    // We don't track send windows yet (auto-ack flow control).
-    // This will be needed for M5 polish.
+    int streamId = frameReader.getStreamId();
+    byte[] payload = frameReader.getPayload();
+    if (payload == null || payload.length != 4) {
+      return;
+    }
+    int increment =
+        ((payload[0] & 0x7f) << 24)
+            | ((payload[1] & 0xff) << 16)
+            | ((payload[2] & 0xff) << 8)
+            | (payload[3] & 0xff);
+    if (increment == 0) {
+      return;
+    }
+    if (streamId == 0) {
+      connectionSendWindow += increment;
+    } else {
+      Http2Stream stream = streams.get(streamId);
+      if (stream != null) {
+        stream.adjustSendWindow(increment);
+      }
+    }
+    // Window opened — there may be streams blocked on flow control.
+    parent.encourageWrites();
   }
 
   // ---- RST_STREAM ----
