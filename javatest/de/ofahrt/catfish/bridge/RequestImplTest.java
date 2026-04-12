@@ -14,11 +14,14 @@ import de.ofahrt.catfish.InputStreams;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.network.Connection;
+import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.Arrays;
@@ -30,8 +33,22 @@ import org.junit.Test;
 /** Tests for {@link RequestImpl}. */
 @SuppressWarnings("NullAway") // intentional null passing in tests
 public class RequestImplTest {
+  private static final HttpResponseWriter THROWING_WRITER =
+      new HttpResponseWriter() {
+        @Override
+        public void commitBuffered(HttpResponse response) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public OutputStream commitStreamed(HttpResponse response) {
+          throw new UnsupportedOperationException();
+        }
+      };
+
   private RequestImpl toRequestImpl(SimpleHttpRequest.Builder builder) throws Exception {
-    return new RequestImpl(builder.build(), new Connection(null, null, false), null, null);
+    return new RequestImpl(
+        builder.build(), new Connection(null, null, false), null, THROWING_WRITER);
   }
 
   @Test(expected = MalformedRequestException.class)
@@ -141,7 +158,7 @@ public class RequestImplTest {
             new SimpleHttpRequest.Builder().setUri("*").build(),
             new Connection(new InetSocketAddress(80), null, false),
             null,
-            null);
+            THROWING_WRITER);
     ServletHelper.getCompleteUrl(request);
   }
 
@@ -187,7 +204,7 @@ public class RequestImplTest {
             new SimpleHttpRequest.Builder().setUri("/").addHeader("Host", "host:80").build(),
             new Connection(null, null, true),
             null,
-            null);
+            THROWING_WRITER);
     assertEquals("https://host:80/", request.getRequestURL().toString());
   }
 
@@ -198,7 +215,7 @@ public class RequestImplTest {
             new SimpleHttpRequest.Builder().setUri("/").addHeader("Host", "host:443").build(),
             new Connection(null, null, true),
             null,
-            null);
+            THROWING_WRITER);
     assertEquals("https://host/", request.getRequestURL().toString());
   }
 
@@ -210,7 +227,7 @@ public class RequestImplTest {
             new SimpleHttpRequest.Builder().setUri("*").build(),
             new Connection(null, new InetSocketAddress(addr, 5678), false),
             null,
-            null);
+            THROWING_WRITER);
     assertEquals("1.2.3.4", req.getRemoteAddr());
   }
 
@@ -222,7 +239,7 @@ public class RequestImplTest {
             new SimpleHttpRequest.Builder().setUri("*").build(),
             new Connection(null, new InetSocketAddress(addr, 5678), false),
             null,
-            null);
+            THROWING_WRITER);
     assertEquals("my-host", req.getRemoteHost());
   }
 
@@ -234,7 +251,7 @@ public class RequestImplTest {
             new SimpleHttpRequest.Builder().setUri("*").build(),
             new Connection(new InetSocketAddress(addr, 8080), null, false),
             null,
-            null);
+            THROWING_WRITER);
     assertEquals("127.0.0.1", req.getLocalAddr());
   }
 
@@ -278,7 +295,7 @@ public class RequestImplTest {
                 .build(),
             new Connection(null, null, false),
             null,
-            null);
+            THROWING_WRITER);
     assertEquals(-1, req.getContentLength());
   }
 
@@ -322,7 +339,7 @@ public class RequestImplTest {
             new SimpleHttpRequest.Builder().setUri("*").build(),
             new Connection(new InetSocketAddress(addr, 8080), null, false),
             null,
-            null);
+            THROWING_WRITER);
     assertEquals("local-host", req.getLocalName());
   }
 
@@ -334,7 +351,7 @@ public class RequestImplTest {
             new SimpleHttpRequest.Builder().setUri("*").build(),
             new Connection(new InetSocketAddress(addr, 8080), null, false),
             null,
-            null);
+            THROWING_WRITER);
     assertEquals(8080, req.getLocalPort());
   }
 
@@ -346,7 +363,7 @@ public class RequestImplTest {
             new SimpleHttpRequest.Builder().setUri("*").build(),
             new Connection(null, new InetSocketAddress(addr, 12345), false),
             null,
-            null);
+            THROWING_WRITER);
     assertEquals(12345, req.getRemotePort());
   }
 
@@ -416,7 +433,7 @@ public class RequestImplTest {
             new SimpleHttpRequest.Builder().setUri("*").build(),
             new Connection(null, null, true),
             null,
-            null);
+            THROWING_WRITER);
     assertTrue(req.isSecure());
   }
 
@@ -466,7 +483,7 @@ public class RequestImplTest {
             new SimpleHttpRequest.Builder().setUri("*").build(),
             new Connection(null, null, true),
             null,
-            null);
+            THROWING_WRITER);
     assertEquals("https", req.getScheme());
   }
 
@@ -488,7 +505,7 @@ public class RequestImplTest {
             new SimpleHttpRequest.Builder().setUri("*").build(),
             new Connection(new InetSocketAddress(addr, 80), null, false),
             null,
-            null);
+            THROWING_WRITER);
     assertEquals("127.0.0.1", req.getServerName());
   }
 
@@ -509,7 +526,7 @@ public class RequestImplTest {
             new SimpleHttpRequest.Builder().setUri("*").addHeader("Host", "example.com").build(),
             new Connection(null, null, true),
             null,
-            null);
+            THROWING_WRITER);
     assertEquals(443, req.getServerPort());
   }
 
@@ -521,7 +538,7 @@ public class RequestImplTest {
             new SimpleHttpRequest.Builder().setUri("*").build(),
             new Connection(new InetSocketAddress(addr, 9090), null, false),
             null,
-            null);
+            THROWING_WRITER);
     assertEquals(9090, req.getServerPort());
   }
 
@@ -563,7 +580,7 @@ public class RequestImplTest {
             new SimpleHttpRequest.Builder().setUri("*").build(),
             new Connection(null, null, false),
             sm,
-            null);
+            THROWING_WRITER);
     HttpSession session = req.getSession(true);
     assertNotNull(session);
     // Same session on second call.

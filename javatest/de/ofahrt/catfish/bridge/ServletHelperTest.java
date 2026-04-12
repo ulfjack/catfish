@@ -6,9 +6,12 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.network.Connection;
+import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import java.io.ByteArrayInputStream;
+import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import org.junit.Test;
@@ -195,6 +198,19 @@ public class ServletHelperTest {
 
   // ---- Helpers ----
 
+  private static final HttpResponseWriter THROWING_WRITER =
+      new HttpResponseWriter() {
+        @Override
+        public void commitBuffered(HttpResponse response) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public OutputStream commitStreamed(HttpResponse response) {
+          throw new UnsupportedOperationException();
+        }
+      };
+
   private static RequestImpl makeRequestWithHeader(String headerName, String headerValue)
       throws Exception {
     SimpleHttpRequest.Builder b =
@@ -205,7 +221,7 @@ public class ServletHelperTest {
         b.build(),
         new Connection(new InetSocketAddress(addr, 80), new InetSocketAddress(addr, 1234), false),
         null,
-        null);
+        THROWING_WRITER);
   }
 
   private static RequestImpl makeRequest(String uri, String host) throws Exception {
@@ -220,6 +236,6 @@ public class ServletHelperTest {
         b.build(),
         new Connection(new InetSocketAddress(addr, 80), new InetSocketAddress(addr, 1234), false),
         null,
-        null);
+        THROWING_WRITER);
   }
 }

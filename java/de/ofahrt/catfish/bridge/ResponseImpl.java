@@ -78,7 +78,7 @@ public final class ResponseImpl implements HttpServletResponse {
 
   ResponseImpl(HttpRequest request, HttpResponseWriter responseWriter) {
     this.request = Objects.requireNonNull(request, "request");
-    this.responseWriter = responseWriter;
+    this.responseWriter = Objects.requireNonNull(responseWriter, "responseWriter");
   }
 
   void setVersion(HttpVersion version) {
