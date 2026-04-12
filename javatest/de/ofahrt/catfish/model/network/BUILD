@@ -6,5 +6,6 @@ java_test(
     test_class = "de.ofahrt.catfish.model.network.ModelNetworkTestSuite",
     deps = [
         "//java/de/ofahrt/catfish/model/network",
+        "//third_party/jspecify",
     ],
 )

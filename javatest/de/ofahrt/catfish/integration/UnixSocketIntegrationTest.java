@@ -18,6 +18,7 @@ import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.jspecify.annotations.Nullable;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -48,7 +49,7 @@ public class UnixSocketIntegrationTest {
               public void portOpened(int port, boolean ssl) {}
 
               @Override
-              public void notifyInternalError(Connection id, Throwable throwable) {
+              public void notifyInternalError(@Nullable Connection id, Throwable throwable) {
                 throwable.printStackTrace();
               }
             });

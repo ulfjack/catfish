@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 import javax.servlet.http.HttpSession;
 import org.junit.Test;
 
+@SuppressWarnings("NullAway") // intentional null passing in tests
 public class XsrfTokenTest {
 
   @Test

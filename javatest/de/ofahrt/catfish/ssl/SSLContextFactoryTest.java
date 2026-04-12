@@ -79,6 +79,7 @@ public class SSLContextFactoryTest {
       HttpsEndpoint.onLocalhost(0).addHost("wronghost", new HttpVirtualHost(handler), sslInfo);
       fail("Expected IllegalArgumentException");
     } catch (IllegalArgumentException e) {
+      assertNotNull(e.getMessage());
       assertTrue(e.getMessage().contains("wronghost"));
     }
   }

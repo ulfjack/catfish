@@ -16,6 +16,7 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+@SuppressWarnings("NullAway") // test code
 public class HttpParserIntegrationTest extends ServletEngineTest {
   private static Server server;
 

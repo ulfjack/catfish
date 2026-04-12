@@ -19,6 +19,7 @@ import javax.servlet.http.HttpSession;
 import javax.servlet.http.HttpSessionContext;
 import org.junit.Test;
 
+@SuppressWarnings("NullAway") // intentional null passing in tests
 public class SessionManagerTest {
 
   static class ManualClock implements Clock {

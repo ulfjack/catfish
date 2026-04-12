@@ -35,6 +35,7 @@ java_binary(
         "//java/de/ofahrt/catfish",
         "//java/de/ofahrt/catfish/model",
         "//java/de/ofahrt/catfish/model/network",
+        "//third_party/jspecify",
     ],
 )
 

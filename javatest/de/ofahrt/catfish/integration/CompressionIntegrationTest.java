@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.zip.GZIPInputStream;
+import org.jspecify.annotations.Nullable;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -66,7 +67,7 @@ public class CompressionIntegrationTest {
               public void portOpened(int port, boolean ssl) {}
 
               @Override
-              public void notifyInternalError(Connection id, Throwable t) {
+              public void notifyInternalError(@Nullable Connection id, Throwable t) {
                 t.printStackTrace();
               }
             });

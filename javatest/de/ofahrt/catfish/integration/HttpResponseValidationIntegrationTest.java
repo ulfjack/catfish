@@ -25,6 +25,7 @@ import java.io.OutputStream;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import org.jspecify.annotations.Nullable;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -54,7 +55,7 @@ public class HttpResponseValidationIntegrationTest {
               public void portOpened(int port, boolean ssl) {}
 
               @Override
-              public void notifyInternalError(Connection id, Throwable t) {
+              public void notifyInternalError(@Nullable Connection id, Throwable t) {
                 t.printStackTrace();
               }
             });

@@ -16,10 +16,12 @@ import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.upload.SimpleUploadPolicy;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.Nullable;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+@SuppressWarnings("NullAway") // test code
 public class StatefulClientIntegrationTest {
 
   private static final String HOST = "localhost";
@@ -39,7 +41,7 @@ public class StatefulClientIntegrationTest {
               public void portOpened(int port, boolean ssl) {}
 
               @Override
-              public void notifyInternalError(Connection id, Throwable t) {
+              public void notifyInternalError(@Nullable Connection id, Throwable t) {
                 t.printStackTrace();
               }
             });

@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.net.InetAddress;
+import org.jspecify.annotations.Nullable;
 import org.junit.Test;
 
 public class NetworkEventListenerTest {
@@ -28,7 +29,7 @@ public class NetworkEventListenerTest {
     NetworkServer server =
         new NetworkServer() {
           @Override
-          public InetAddress address() {
+          public @Nullable InetAddress address() {
             return null;
           }
 

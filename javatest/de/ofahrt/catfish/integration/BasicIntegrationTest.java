@@ -26,6 +26,7 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+@SuppressWarnings("NullAway") // test code
 public class BasicIntegrationTest {
   private static LocalCatfishServer localServer;
 

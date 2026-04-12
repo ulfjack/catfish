@@ -37,9 +37,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
+import org.jspecify.annotations.Nullable;
 import org.junit.After;
 import org.junit.Test;
 
+@SuppressWarnings("NullAway") // test code
 public class ConnectionHandlingTest {
 
   private static final boolean DEBUG = false;
@@ -70,7 +72,7 @@ public class ConnectionHandlingTest {
               }
 
               @Override
-              public void notifyInternalError(Connection id, Throwable throwable) {
+              public void notifyInternalError(@Nullable Connection id, Throwable throwable) {
                 throwable.printStackTrace();
               }
             });
@@ -102,7 +104,7 @@ public class ConnectionHandlingTest {
               public void portOpened(int port, boolean ssl) {}
 
               @Override
-              public void notifyInternalError(Connection id, Throwable throwable) {
+              public void notifyInternalError(@Nullable Connection id, Throwable throwable) {
                 throwable.printStackTrace();
               }
             });
@@ -139,7 +141,7 @@ public class ConnectionHandlingTest {
               public void shutdown() {}
 
               @Override
-              public void notifyInternalError(Connection id, Throwable throwable) {
+              public void notifyInternalError(@Nullable Connection id, Throwable throwable) {
                 throwable.printStackTrace();
               }
             });

@@ -26,6 +26,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -92,7 +93,7 @@ public class MixedServerIntegrationTest {
           public void portOpened(int port, boolean ssl) {}
 
           @Override
-          public void notifyInternalError(Connection id, Throwable throwable) {
+          public void notifyInternalError(@Nullable Connection id, Throwable throwable) {
             throwable.printStackTrace();
           }
         });

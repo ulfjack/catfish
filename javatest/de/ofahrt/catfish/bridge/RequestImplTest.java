@@ -28,6 +28,7 @@ import javax.servlet.http.HttpSession;
 import org.junit.Test;
 
 /** Tests for {@link RequestImpl}. */
+@SuppressWarnings("NullAway") // intentional null passing in tests
 public class RequestImplTest {
   private RequestImpl toRequestImpl(SimpleHttpRequest.Builder builder) throws Exception {
     return new RequestImpl(builder.build(), new Connection(null, null, false), null, null);

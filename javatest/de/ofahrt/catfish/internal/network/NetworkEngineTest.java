@@ -22,11 +22,13 @@ import java.util.Deque;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.Nullable;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 /** Direct unit tests for {@link NetworkEngine}'s read/write loop state machine. */
+@SuppressWarnings("NullAway") // Test infrastructure uses lazy init and intentional null passing.
 public class NetworkEngineTest {
 
   private static final long TIMEOUT_MS = 2000;
@@ -633,7 +635,7 @@ public class NetworkEngineTest {
     public void shutdown() {}
 
     @Override
-    public void notifyInternalError(Connection connection, Throwable throwable) {
+    public void notifyInternalError(@Nullable Connection connection, Throwable throwable) {
       internalError.compareAndSet(null, throwable);
       internalErrorLatch.countDown();
     }

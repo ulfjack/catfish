@@ -26,6 +26,7 @@ import org.openjdk.jmh.annotations.TearDown;
 @State(Scope.Thread)
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)
+@SuppressWarnings("NullAway") // JMH framework initializes fields
 public class HttpServerBenchmark {
 
   private static final byte[] REQUEST =

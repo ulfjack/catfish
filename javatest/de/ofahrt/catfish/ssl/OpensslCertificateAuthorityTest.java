@@ -13,6 +13,7 @@ import java.security.cert.X509Certificate;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -142,7 +143,7 @@ public class OpensslCertificateAuthorityTest {
         dnsNames.contains("fallback.example.com"));
   }
 
-  private static String extractCn(X509Certificate cert) {
+  private static @Nullable String extractCn(X509Certificate cert) {
     for (String part : cert.getSubjectX500Principal().getName().split(",")) {
       part = part.trim();
       if (part.startsWith("CN=")) {

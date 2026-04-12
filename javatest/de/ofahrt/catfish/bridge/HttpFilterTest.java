@@ -10,6 +10,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.junit.Test;
 
+@SuppressWarnings("NullAway") // intentional null passing in tests
 public class HttpFilterTest {
 
   private static final class TestFilter extends HttpFilter {

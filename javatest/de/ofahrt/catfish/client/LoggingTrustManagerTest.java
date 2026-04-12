@@ -1,9 +1,10 @@
 package de.ofahrt.catfish.client;
 
-import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
+@SuppressWarnings("NullAway") // intentional null passing in tests
 public class LoggingTrustManagerTest {
 
   @Test
@@ -17,7 +18,7 @@ public class LoggingTrustManagerTest {
   }
 
   @Test
-  public void getAcceptedIssuers_returnsNull() {
-    assertNull(new LoggingTrustManager().getAcceptedIssuers());
+  public void getAcceptedIssuers_returnsEmptyArray() {
+    assertEquals(0, new LoggingTrustManager().getAcceptedIssuers().length);
   }
 }

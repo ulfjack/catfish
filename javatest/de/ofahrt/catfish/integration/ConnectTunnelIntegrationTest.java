@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import org.jspecify.annotations.Nullable;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -38,7 +39,7 @@ public class ConnectTunnelIntegrationTest {
               public void portOpened(int port, boolean ssl) {}
 
               @Override
-              public void notifyInternalError(Connection id, Throwable throwable) {
+              public void notifyInternalError(@Nullable Connection id, Throwable throwable) {
                 throwable.printStackTrace();
               }
             });
@@ -167,7 +168,7 @@ public class ConnectTunnelIntegrationTest {
               public void portOpened(int port, boolean ssl) {}
 
               @Override
-              public void notifyInternalError(Connection id, Throwable throwable) {
+              public void notifyInternalError(@Nullable Connection id, Throwable throwable) {
                 throwable.printStackTrace();
               }
             });
@@ -225,7 +226,7 @@ public class ConnectTunnelIntegrationTest {
               public void portOpened(int port, boolean ssl) {}
 
               @Override
-              public void notifyInternalError(Connection id, Throwable throwable) {
+              public void notifyInternalError(@Nullable Connection id, Throwable throwable) {
                 throwable.printStackTrace();
               }
             });

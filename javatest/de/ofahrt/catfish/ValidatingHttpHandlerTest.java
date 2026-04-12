@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import org.junit.Test;
 
+@SuppressWarnings("NullAway") // test code
 public class ValidatingHttpHandlerTest {
 
   // A response with both Content-Length and Transfer-Encoding, which the validator rejects.

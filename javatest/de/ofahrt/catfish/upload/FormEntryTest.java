@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
+@SuppressWarnings("NullAway") // intentional null passing in tests
 public class FormEntryTest {
 
   @Test

@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import org.junit.Test;
 
+@SuppressWarnings("NullAway") // intentional null passing in tests
 public class ServletHttpHandlerTest {
 
   private static class RecordingResponseWriter implements HttpResponseWriter {

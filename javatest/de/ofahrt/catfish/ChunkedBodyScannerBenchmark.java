@@ -13,6 +13,7 @@ import org.openjdk.jmh.annotations.State;
 @State(Scope.Thread)
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
+@SuppressWarnings("NullAway") // JMH framework initializes fields
 public class ChunkedBodyScannerBenchmark {
 
   private static final int CHUNK_DATA_SIZE = 4096;

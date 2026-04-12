@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Test;
 
+@SuppressWarnings("NullAway") // test code
 public class CatfishHttpServerTest {
 
   private static HttpRequest parse(String text) throws Exception {

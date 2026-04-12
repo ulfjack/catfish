@@ -85,6 +85,7 @@ public class HttpContentTypeTest {
         HttpContentType.parseContentType("text/html;a=b;c=d"));
   }
 
+  @SuppressWarnings("NullAway") // intentionally passing null to test the null check
   @Test
   public void isValidContentType_null_throwsNpe() {
     assertThrows(NullPointerException.class, () -> HttpContentType.isValidContentType(null));

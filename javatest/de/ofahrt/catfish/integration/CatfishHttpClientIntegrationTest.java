@@ -21,6 +21,7 @@ import java.util.List;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
+import org.jspecify.annotations.Nullable;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -45,7 +46,7 @@ public class CatfishHttpClientIntegrationTest {
               public void portOpened(int port, boolean ssl) {}
 
               @Override
-              public void notifyInternalError(Connection id, Throwable throwable) {
+              public void notifyInternalError(@Nullable Connection id, Throwable throwable) {
                 throwable.printStackTrace();
               }
             });
@@ -68,7 +69,7 @@ public class CatfishHttpClientIntegrationTest {
               public void portOpened(int port, boolean ssl) {}
 
               @Override
-              public void notifyInternalError(Connection id, Throwable throwable) {
+              public void notifyInternalError(@Nullable Connection id, Throwable throwable) {
                 throwable.printStackTrace();
               }
             });

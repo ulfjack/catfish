@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 
 /** Unit tests for {@link TunnelForwardStage}. */
+@SuppressWarnings("NullAway") // test code
 public class TunnelForwardStageTest {
 
   private static final int BUF_SIZE = 8192;

@@ -15,6 +15,7 @@ import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import org.jspecify.annotations.Nullable;
 
 final class LocalCatfishServer implements Server {
 
@@ -45,7 +46,7 @@ final class LocalCatfishServer implements Server {
             }
 
             @Override
-            public void notifyInternalError(Connection id, Throwable throwable) {
+            public void notifyInternalError(@Nullable Connection id, Throwable throwable) {
               throwable.printStackTrace();
             }
           });

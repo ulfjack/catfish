@@ -5,6 +5,7 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
+import org.jspecify.annotations.Nullable;
 
 /** Minimal server for external benchmarking (h2load, wrk, ab). Serves a 1 KB blob on port 8080. */
 public class BlobServer {
@@ -31,7 +32,7 @@ public class BlobServer {
               public void shutdown() {}
 
               @Override
-              public void notifyInternalError(Connection id, Throwable t) {
+              public void notifyInternalError(@Nullable Connection id, Throwable t) {
                 t.printStackTrace();
               }
             });

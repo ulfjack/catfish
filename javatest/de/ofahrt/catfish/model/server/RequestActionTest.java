@@ -58,6 +58,7 @@ public class RequestActionTest {
     assertSame(StandardResponses.NOT_FOUND, d.response());
   }
 
+  @SuppressWarnings("NullAway") // intentionally passing null to test the null check
   @Test(expected = NullPointerException.class)
   public void deny_withNullResponse_throws() {
     RequestAction.deny(null);

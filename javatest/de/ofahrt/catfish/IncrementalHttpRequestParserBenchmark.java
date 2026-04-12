@@ -13,6 +13,7 @@ import org.openjdk.jmh.annotations.State;
 @State(Scope.Thread)
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
+@SuppressWarnings("NullAway") // JMH framework initializes fields
 public class IncrementalHttpRequestParserBenchmark {
 
   private final IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();

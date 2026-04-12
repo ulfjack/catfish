@@ -36,6 +36,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+@SuppressWarnings("NullAway") // intentional null passing in tests
 public class FcgiHandlerTest {
 
   private ServerSocket serverSocket;

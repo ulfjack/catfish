@@ -47,11 +47,13 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.TrustManagerFactory;
+import org.jspecify.annotations.Nullable;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+@SuppressWarnings("NullAway") // test code
 public class MitmConnectIntegrationTest {
   private static final int HTTPS_PORT = 9095;
   private static final int MITM_PORT = 9096;
@@ -1080,7 +1082,7 @@ public class MitmConnectIntegrationTest {
           public void portOpened(int port, boolean ssl) {}
 
           @Override
-          public void notifyInternalError(Connection id, Throwable throwable) {
+          public void notifyInternalError(@Nullable Connection id, Throwable throwable) {
             throwable.printStackTrace();
           }
         });
