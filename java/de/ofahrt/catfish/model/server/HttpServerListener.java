@@ -47,6 +47,6 @@ public interface HttpServerListener {
       UUID requestId,
       @Nullable String originHost,
       int originPort,
-      HttpRequest request,
+      @Nullable HttpRequest request,
       RequestOutcome outcome) {}
 }

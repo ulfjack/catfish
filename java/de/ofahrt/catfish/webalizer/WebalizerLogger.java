@@ -75,9 +75,9 @@ public final class WebalizerLogger implements HttpServerListener {
       UUID requestId,
       @Nullable String originHost,
       int originPort,
-      HttpRequest request,
+      @Nullable HttpRequest request,
       RequestOutcome outcome) {
-    if (outcome.response() == null) {
+    if (request == null || outcome.response() == null) {
       return;
     }
     String logentry =

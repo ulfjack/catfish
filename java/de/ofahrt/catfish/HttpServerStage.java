@@ -82,7 +82,7 @@ final class HttpServerStage implements Stage {
   private long contentLengthRemaining = -1;
   // For chunked bodies: scans raw chunked framing to detect completion without decoding.
   private @Nullable ChunkedBodyScanner chunkedScanner;
-  private @Nullable UUID requestId;
+  private UUID requestId = UUID.randomUUID();
   private @Nullable HttpRequest headersRequest;
   // Non-null while waiting for ConnectHandler.applyProxy/applyLocal to return the routing
   // decision for a request. While set, read() returns PAUSE so that body bytes remain buffered
@@ -187,7 +187,6 @@ final class HttpServerStage implements Stage {
       return ConnectionControl.CLOSE_INPUT;
     }
     parser.reset();
-    requestId = UUID.randomUUID();
     serverListener.onRequest(requestId, headers);
 
     // Route based on method/URI.
@@ -325,9 +324,8 @@ final class HttpServerStage implements Stage {
             ? headers.withUri(toRelativeUri(headers.getUri()))
             : headers;
     Connection conn = this.connection;
-    UUID reqId = this.requestId;
-    if (conn == null || reqId == null) {
-      throw new IllegalStateException("applyRoutingDecision called before connect/read");
+    if (conn == null) {
+      throw new IllegalStateException("applyRoutingDecision called before connect");
     }
     if (action instanceof RequestAction.Deny d) {
       startBuffered(headers, d.response() != null ? d.response() : StandardResponses.FORBIDDEN);
@@ -339,7 +337,7 @@ final class HttpServerStage implements Stage {
               requestHandler,
               s.handler(),
               serverListener,
-              reqId,
+              requestId,
               s.uploadPolicy(),
               s.keepAlivePolicy(),
               s.compressionPolicy(),
@@ -356,7 +354,7 @@ final class HttpServerStage implements Stage {
               parent,
               exec,
               serverListener,
-              reqId,
+              requestId,
               fc.host(),
               fc.port(),
               fc.useTls(),
@@ -371,7 +369,7 @@ final class HttpServerStage implements Stage {
       SocketFactory factory = f.useTls() ? originSocketFactory : SocketFactory.getDefault();
       currentHandler =
           new ProxyRequestStage(
-              parent, exec, serverListener, reqId, f.host(), f.port(), f.useTls(), factory);
+              parent, exec, serverListener, requestId, f.host(), f.port(), f.useTls(), factory);
       return startBodyOrDispatch(effective, currentHandler);
     } else {
       throw new IllegalStateException("Unknown RequestAction: " + action);
@@ -648,15 +646,12 @@ final class HttpServerStage implements Stage {
 
   private void notifyRequestComplete(
       @Nullable HttpRequest request, @Nullable HttpResponse response) {
-    UUID reqId = this.requestId;
-    if (reqId == null || response == null) {
-      return;
-    }
-    if (request == null) {
-      return;
+    if (response == null) {
+      throw new IllegalStateException("notifyRequestComplete called without response");
     }
     serverListener.onRequestComplete(
-        reqId, connectHost, connectPort, request, RequestOutcome.success(response, 0));
+        requestId, connectHost, connectPort, request, RequestOutcome.success(response, 0));
+    requestId = UUID.randomUUID();
   }
 
   private void startResponse(HttpResponseGenerator gen) {

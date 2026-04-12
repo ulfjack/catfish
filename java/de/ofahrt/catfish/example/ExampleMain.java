@@ -66,7 +66,7 @@ public class ExampleMain {
               UUID requestId,
               @Nullable String originHost,
               int originPort,
-              HttpRequest request,
+              @Nullable HttpRequest request,
               RequestOutcome outcome) {
             if (outcome.response() != null && (outcome.response().getStatusCode() / 100) == 5) {
               System.out.printf(
