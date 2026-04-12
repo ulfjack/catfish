@@ -11,6 +11,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.jspecify.annotations.Nullable;
 
 final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private static final boolean DEBUG = false;
@@ -21,7 +22,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
 
   public static HttpResponseGeneratorStreamed create(
       Runnable dataAvailableCallback,
-      HttpRequest request,
+      @Nullable HttpRequest request,
       HttpResponse response,
       boolean includeBody) {
     return create(dataAvailableCallback, request, response, includeBody, DEFAULT_BUFFER_SIZE);
@@ -29,7 +30,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
 
   public static HttpResponseGeneratorStreamed create(
       Runnable dataAvailableCallback,
-      HttpRequest request,
+      @Nullable HttpRequest request,
       HttpResponse response,
       boolean includeBody,
       int bufferSize) {
@@ -83,7 +84,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private boolean requireCallback = true;
   private boolean useChunking;
 
-  private final HttpRequest request;
+  private final @Nullable HttpRequest request;
   private HttpResponse response;
   private final boolean includeBody;
   private final boolean rawBody;
@@ -91,7 +92,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private final Runnable dataAvailableCallback;
   private final AtomicBoolean outputStreamAcquired = new AtomicBoolean();
 
-  private byte[][] data;
+  private byte @Nullable [][] data;
   private int currentBlock;
   private int currentIndex;
 
@@ -100,9 +101,10 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private int writePosition;
   private boolean isFull;
 
+  @SuppressWarnings("NullAway") // data initialized lazily in finalizeResponse
   private HttpResponseGeneratorStreamed(
       Runnable dataAvailableCallback,
-      HttpRequest request,
+      @Nullable HttpRequest request,
       HttpResponse response,
       boolean includeBody,
       boolean rawBody,
@@ -119,7 +121,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   }
 
   @Override
-  public HttpRequest getRequest() {
+  public @Nullable HttpRequest getRequest() {
     return request;
   }
 
@@ -186,6 +188,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     return ContinuationToken.CONTINUE;
   }
 
+  @SuppressWarnings("NullAway") // data is non-null after finalizeResponse
   private ReadToken generateResponse(ByteBuffer outputBuffer) {
     if (currentBlock >= data.length) {
       return ReadToken.FINISHED;

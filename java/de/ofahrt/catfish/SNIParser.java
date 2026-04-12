@@ -2,6 +2,7 @@ package de.ofahrt.catfish;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import org.jspecify.annotations.Nullable;
 
 /** See https://tools.ietf.org/rfc/rfc5246.txt and https://tools.ietf.org/rfc/rfc6066.txt. */
 final class SNIParser {
@@ -194,9 +195,9 @@ final class SNIParser {
   public static final class Result {
     private final boolean done;
     private final boolean error;
-    private final String name;
+    private final @Nullable String name;
 
-    public Result(String name) {
+    public Result(@Nullable String name) {
       this.done = true;
       this.error = false;
       this.name = name;
@@ -219,7 +220,7 @@ final class SNIParser {
       return error;
     }
 
-    public String getName() {
+    public @Nullable String getName() {
       return name;
     }
   }

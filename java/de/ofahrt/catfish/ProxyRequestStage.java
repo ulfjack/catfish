@@ -12,6 +12,7 @@ import java.nio.ByteBuffer;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import javax.net.SocketFactory;
+import org.jspecify.annotations.Nullable;
 
 /**
  * An {@link HttpRequestStage} that forwards requests to a remote origin via {@link
@@ -31,10 +32,10 @@ final class ProxyRequestStage implements HttpRequestStage {
   private final int port;
   private final boolean useTls;
   private final SocketFactory socketFactory;
-  private final OutputStream captureStream;
+  private final @Nullable OutputStream captureStream;
 
   private final PipeBuffer bodyPipe = new PipeBuffer();
-  private volatile HttpResponseGeneratorStreamed responseGen;
+  private volatile @Nullable HttpResponseGeneratorStreamed responseGen;
   private volatile boolean keepAlive;
 
   ProxyRequestStage(
@@ -58,7 +59,7 @@ final class ProxyRequestStage implements HttpRequestStage {
       int port,
       boolean useTls,
       SocketFactory socketFactory,
-      OutputStream captureStream) {
+      @Nullable OutputStream captureStream) {
     this.parent = parent;
     this.executor = executor;
     this.serverListener = serverListener;
@@ -124,12 +125,12 @@ final class ProxyRequestStage implements HttpRequestStage {
   }
 
   @Override
-  public HttpRequest getRequest() {
+  public @Nullable HttpRequest getRequest() {
     return responseGen != null ? responseGen.getRequest() : null;
   }
 
   @Override
-  public HttpResponse getResponse() {
+  public @Nullable HttpResponse getResponse() {
     return responseGen != null ? responseGen.getResponse() : null;
   }
 

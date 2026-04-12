@@ -11,6 +11,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A Stage that forwards bytes bidirectionally between the client NIO connection and an
@@ -33,7 +34,7 @@ final class TunnelForwardStage implements Stage {
 
   private final LinkedBlockingQueue<byte[]> fromTarget =
       new LinkedBlockingQueue<>(MAX_QUEUED_CHUNKS);
-  private byte[] currentChunk;
+  private byte @Nullable [] currentChunk;
   private int currentChunkOffset;
   private volatile boolean targetClosed;
 

@@ -7,13 +7,14 @@ import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.ssl.SSLInfo;
 import java.util.Objects;
 import javax.net.ssl.SSLContext;
+import org.jspecify.annotations.Nullable;
 
 public record HttpVirtualHost(
     HttpHandler handler,
     UploadPolicy uploadPolicy,
     KeepAlivePolicy keepAlivePolicy,
     CompressionPolicy compressionPolicy,
-    SSLInfo sslInfo // null == HTTP-only; deprecated — use HttpsListener instead
+    @Nullable SSLInfo sslInfo // null == HTTP-only; deprecated — use HttpsListener instead
     ) {
   public HttpVirtualHost {
     Objects.requireNonNull(handler, "handler");
@@ -50,7 +51,7 @@ public record HttpVirtualHost(
         handler, uploadPolicy, keepAlivePolicy, compressionPolicy, Objects.requireNonNull(info));
   }
 
-  SSLContext sslContext() {
+  @Nullable SSLContext sslContext() {
     return sslInfo != null ? sslInfo.sslContext() : null;
   }
 }

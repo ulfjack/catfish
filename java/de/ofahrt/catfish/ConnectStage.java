@@ -23,6 +23,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A Stage that performs CONNECT proxying: it handles the CONNECT handshake, then either tunnels
@@ -76,18 +77,18 @@ final class ConnectStage implements Stage {
   private final LocalStageFactory localStageFactory;
 
   private ConnectState state = ConnectState.CONNECTING;
-  private byte[] pendingResponseBytes;
+  private byte @Nullable [] pendingResponseBytes;
   private int responseOffset;
   private boolean closeAfterSend;
 
   // Set during doConnect(); read on NIO thread in setupMitm()/setupTunnel().
   private boolean isTunnel;
   private boolean isLocal;
-  private Socket tunnelSocket;
-  private SSLContext fakeCtx;
-  private String originHost;
+  private @Nullable Socket tunnelSocket;
+  private @Nullable SSLContext fakeCtx;
+  private @Nullable String originHost;
   private int originPort;
-  private Runnable onClose;
+  private @Nullable Runnable onClose;
 
   ConnectStage(
       Pipeline parent,
@@ -248,6 +249,7 @@ final class ConnectStage implements Stage {
   }
 
   @Override
+  @SuppressWarnings("NullAway") // state machine guarantees non-null at usage points
   public ConnectionControl write() throws IOException {
     return switch (state) {
       case CONNECTING -> ConnectionControl.PAUSE;
@@ -274,6 +276,7 @@ final class ConnectStage implements Stage {
     };
   }
 
+  @SuppressWarnings("NullAway") // state machine guarantees non-null
   private void setupTunnel() throws IOException {
     TunnelForwardStage tunnelStage =
         new TunnelForwardStage(parent, inputBuffer, outputBuffer, executor, tunnelSocket, onClose);
@@ -281,6 +284,7 @@ final class ConnectStage implements Stage {
     parent.replaceWith(tunnelStage);
   }
 
+  @SuppressWarnings("NullAway") // state machine guarantees non-null
   private void setupMitm() {
     if (localStageFactory == null) {
       throw new IllegalStateException(

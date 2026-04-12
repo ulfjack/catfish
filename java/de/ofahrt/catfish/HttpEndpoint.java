@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
 import javax.net.ssl.SSLSocketFactory;
+import org.jspecify.annotations.Nullable;
 
 /** Configures a plain HTTP endpoint with per-listener virtual host isolation. */
 public final class HttpEndpoint {
@@ -25,13 +26,13 @@ public final class HttpEndpoint {
 
   private final Binding binding;
   private final int port;
-  private final Path unixSocketPath;
+  private final @Nullable Path unixSocketPath;
   private final Map<String, HttpVirtualHost> hosts = new LinkedHashMap<>();
-  private ConnectHandler connectHandler;
-  private SSLSocketFactory originSslFactory;
+  private @Nullable ConnectHandler connectHandler;
+  private @Nullable SSLSocketFactory originSslFactory;
   private HttpServerListener requestListener = new HttpServerListener() {};
 
-  private HttpEndpoint(Binding binding, int port, Path unixSocketPath) {
+  private HttpEndpoint(Binding binding, int port, @Nullable Path unixSocketPath) {
     this.binding = binding;
     this.port = port;
     this.unixSocketPath = unixSocketPath;
@@ -76,6 +77,7 @@ public final class HttpEndpoint {
     return this;
   }
 
+  @SuppressWarnings("NullAway") // unixSocketPath is non-null in the UNIX_SOCKET case
   void listen(CatfishHttpServer server) throws IOException, InterruptedException {
     ConnectHandler effectiveHandler = buildConnectHandler();
     SSLSocketFactory effectiveOriginFactory =

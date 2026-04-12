@@ -5,6 +5,7 @@ import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A minimal response generator that writes a {@code 100 Continue} preliminary response. This
@@ -19,12 +20,12 @@ final class ContinueResponseGenerator extends HttpResponseGenerator {
   private int offset = 0;
 
   @Override
-  public HttpRequest getRequest() {
+  public @Nullable HttpRequest getRequest() {
     return null;
   }
 
   @Override
-  public HttpResponse getResponse() {
+  public @Nullable HttpResponse getResponse() {
     return null;
   }
 

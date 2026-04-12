@@ -8,6 +8,7 @@ import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import java.net.URI;
 import java.net.URISyntaxException;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Incremental HTTP/1.1 request header parser. Parses the request line and headers only; body
@@ -85,10 +86,11 @@ final class IncrementalHttpRequestParser {
 
   private int majorVersion;
   private int minorVersion;
-  private String unparsedUri;
-  private String messageHeaderName;
-  private String messageHeaderValue;
+  private @Nullable String unparsedUri;
+  private @Nullable String messageHeaderName;
+  private @Nullable String messageHeaderValue;
 
+  @SuppressWarnings("NullAway") // fields initialized via reset()
   IncrementalHttpRequestParser() {
     reset();
   }
@@ -124,6 +126,7 @@ final class IncrementalHttpRequestParser {
     return parse(input, 0, input.length);
   }
 
+  @SuppressWarnings("NullAway") // state machine guarantees non-null at usage points
   public int parse(byte[] input, int offset, int length) {
     if (done) {
       return 0;

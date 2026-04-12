@@ -3,6 +3,7 @@ package de.ofahrt.catfish;
 import de.ofahrt.catfish.ssl.SSLInfo;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Cache of MITM leaf certificates keyed by {@code "host:port"}. Each entry stores the {@link
@@ -32,7 +33,7 @@ final class SslInfoCache {
    * Returns the cached cert for the key if present and not yet expired, otherwise {@code null}.
    * Expired entries are removed lazily on lookup.
    */
-  SSLInfo get(String key) {
+  @Nullable SSLInfo get(String key) {
     Entry entry = entries.get(key);
     if (entry == null) {
       return null;

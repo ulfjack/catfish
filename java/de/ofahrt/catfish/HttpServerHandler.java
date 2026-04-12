@@ -15,6 +15,7 @@ import de.ofahrt.catfish.model.server.HttpServerListener;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import javax.net.ssl.SSLSocketFactory;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A {@link NetworkHandler} that creates an {@link HttpServerStage} per connection. Supports plain
@@ -26,7 +27,7 @@ final class HttpServerHandler implements NetworkHandler {
   private final ConnectHandler connectHandler;
   private final SSLSocketFactory originSocketFactory;
   private final SslInfoCache sslInfoCache = new SslInfoCache();
-  private final SslServerStage.SSLContextProvider sslContextProvider;
+  private final SslServerStage.@Nullable SSLContextProvider sslContextProvider;
   private final HttpServerListener serverListener;
 
   private final boolean needsExecutor;
@@ -36,7 +37,7 @@ final class HttpServerHandler implements NetworkHandler {
       ConnectHandler connectHandler,
       boolean needsExecutor,
       SSLSocketFactory originSocketFactory,
-      SslServerStage.SSLContextProvider sslContextProvider,
+      SslServerStage.@Nullable SSLContextProvider sslContextProvider,
       HttpServerListener serverListener) {
     this.server = server;
     this.connectHandler = connectHandler;

@@ -28,6 +28,7 @@ import javax.net.SocketFactory;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Runs on the executor thread. Connects to the origin server, forwards the request (headers + body
@@ -62,7 +63,7 @@ final class OriginForwarder {
   private final HttpServerListener serverListener;
   private final PipeBuffer requestBodyPipe;
   private final boolean keepAlive;
-  private final OutputStream captureStream;
+  private final @Nullable OutputStream captureStream;
 
   /** Callback to install the response generator and keepAlive flag on the NIO thread. */
   interface ResultCallback {
@@ -82,7 +83,7 @@ final class OriginForwarder {
       HttpServerListener serverListener,
       PipeBuffer requestBodyPipe,
       boolean keepAlive,
-      OutputStream captureStream,
+      @Nullable OutputStream captureStream,
       ResultCallback resultCallback,
       Runnable pipeSpaceCallback) {
     this.parent = parent;
@@ -143,7 +144,7 @@ final class OriginForwarder {
       UUID requestId,
       HttpRequest originalHeaders,
       HttpRequest effectiveHeaders,
-      OutputStream captureStream) {
+      @Nullable OutputStream captureStream) {
     Socket socket;
     try {
       socket = socketFactory.createSocket(originHost, originPort);
@@ -358,7 +359,7 @@ final class OriginForwarder {
     drainPipe();
   }
 
-  private static void closeCaptureStream(OutputStream captureStream) {
+  private static void closeCaptureStream(@Nullable OutputStream captureStream) {
     if (captureStream != null) {
       try {
         captureStream.close();

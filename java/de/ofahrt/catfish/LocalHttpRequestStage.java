@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.GZIPOutputStream;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Handles a local HTTP request: buffers the body, dispatches to an {@link
@@ -56,9 +57,9 @@ final class LocalHttpRequestStage implements HttpRequestStage {
   private final CompressionPolicy compressionPolicy;
   private final Connection connection;
 
-  private HttpRequest headers;
+  private @Nullable HttpRequest headers;
   private final ByteArrayOutputStream bodyBuffer = new ByteArrayOutputStream();
-  private HttpResponseGenerator responseGenerator;
+  private @Nullable HttpResponseGenerator responseGenerator;
 
   LocalHttpRequestStage(
       Pipeline parent,
@@ -125,6 +126,7 @@ final class LocalHttpRequestStage implements HttpRequestStage {
   }
 
   @Override
+  @SuppressWarnings("NullAway") // headers is non-null after onHeaders
   public void onBodyComplete() {
     HttpRequest fullRequest;
     if (bodyBuffer.size() > 0) {
@@ -202,12 +204,12 @@ final class LocalHttpRequestStage implements HttpRequestStage {
   }
 
   @Override
-  public HttpRequest getRequest() {
+  public @Nullable HttpRequest getRequest() {
     return responseGenerator != null ? responseGenerator.getRequest() : null;
   }
 
   @Override
-  public HttpResponse getResponse() {
+  public @Nullable HttpResponse getResponse() {
     return responseGenerator != null ? responseGenerator.getResponse() : null;
   }
 
@@ -230,6 +232,7 @@ final class LocalHttpRequestStage implements HttpRequestStage {
     setResponse(HttpResponseGeneratorBuffered.createWithBody(request, response));
   }
 
+  @SuppressWarnings("NullAway") // response is non-null when setResponse is called
   private void setResponse(HttpResponseGenerator gen) {
     this.responseGenerator = gen;
     HttpResponse response = gen.getResponse();

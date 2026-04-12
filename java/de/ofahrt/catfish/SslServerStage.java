@@ -12,10 +12,11 @@ import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
+import org.jspecify.annotations.Nullable;
 
 final class SslServerStage implements Stage {
   public interface SSLContextProvider {
-    SSLContext getSSLContext(String host);
+    @Nullable SSLContext getSSLContext(@Nullable String host);
   }
 
   /**
@@ -43,19 +44,19 @@ final class SslServerStage implements Stage {
   private final Pipeline parent;
   private final Pipeline innerPipeline;
   private Stage next;
-  private Connection connection;
+  private @Nullable Connection connection;
   private final ByteBuffer netInputBuffer;
   private final ByteBuffer netOutputBuffer;
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
-  private InitialConnectionState postHandshakeState;
+  private @Nullable InitialConnectionState postHandshakeState;
   private FlowStatus status = FlowStatus.FIND_SNI;
-  private SSLEngine sslEngine;
+  private @Nullable SSLEngine sslEngine;
   private volatile boolean taskPending = false;
   // Set when the next stage requested CLOSE_OUTPUT_AFTER_FLUSH or CLOSE_CONNECTION_AFTER_FLUSH
   // while we still have plaintext to wrap. The CLOSING state returns this value once the
   // plaintext buffer has been fully drained through wrap().
-  private ConnectionControl pendingClose;
+  private @Nullable ConnectionControl pendingClose;
 
   public SslServerStage(
       Pipeline parent,
@@ -95,6 +96,7 @@ final class SslServerStage implements Stage {
    */
   private class InnerPipeline implements Pipeline {
     @Override
+    @SuppressWarnings("NullAway") // connection is non-null after connect()
     public void replaceWith(Stage nextStage) {
       next = nextStage;
       InitialConnectionState s = nextStage.connect(connection);
@@ -150,6 +152,7 @@ final class SslServerStage implements Stage {
     }
   }
 
+  @SuppressWarnings("NullAway") // sslEngine is non-null after SNI parsing
   private void checkStatus() {
     if (sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_TASK) {
       Runnable task = sslEngine.getDelegatedTask();
@@ -212,6 +215,7 @@ final class SslServerStage implements Stage {
   }
 
   @Override
+  @SuppressWarnings("NullAway") // state machine guarantees non-null at usage points
   public ConnectionControl read() throws IOException {
     if (status == FlowStatus.FIND_SNI) {
       // This call may change lookingForSni as a side effect!
@@ -295,6 +299,7 @@ final class SslServerStage implements Stage {
   }
 
   @Override
+  @SuppressWarnings("NullAway") // state machine guarantees non-null at usage points
   public ConnectionControl write() throws IOException {
     if (status == FlowStatus.FIND_SNI) {
       throw new IOException("SSL: Illegal state - write called despite finding SNI");

@@ -31,6 +31,7 @@ import java.util.UUID;
 import java.util.concurrent.Executor;
 import javax.net.SocketFactory;
 import javax.net.ssl.SSLSocketFactory;
+import org.jspecify.annotations.Nullable;
 
 final class HttpServerStage implements Stage {
 
@@ -63,34 +64,34 @@ final class HttpServerStage implements Stage {
   private final HttpServerListener serverListener;
   private final SSLSocketFactory originSocketFactory;
   private final SslInfoCache sslInfoCache;
-  private final Executor executor;
+  private final @Nullable Executor executor;
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
-  private final String connectHost;
+  private final @Nullable String connectHost;
   private final int connectPort;
   private final IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
-  private Connection connection;
+  private @Nullable Connection connection;
   private boolean keepAlive = true;
-  private HttpResponseGenerator responseGenerator;
+  private @Nullable HttpResponseGenerator responseGenerator;
   // The current request handler. Non-null while processing a request (from after header routing
   // until response complete). Null between requests (keep-alive idle).
-  private HttpRequestStage currentHandler;
+  private @Nullable HttpRequestStage currentHandler;
   // Set after header parsing when the request has a body to buffer.
-  private HttpRequestBodyParser bodyParser;
+  private @Nullable HttpRequestBodyParser bodyParser;
   // For Content-Length bodies: remaining bytes to stream to the handler. -1 means not active.
   private long contentLengthRemaining = -1;
   // For chunked bodies: scans raw chunked framing to detect completion without decoding.
-  private ChunkedBodyScanner chunkedScanner;
-  private UUID requestId;
-  private HttpRequest headersRequest;
+  private @Nullable ChunkedBodyScanner chunkedScanner;
+  private @Nullable UUID requestId;
+  private @Nullable HttpRequest headersRequest;
   // Non-null while waiting for ConnectHandler.applyProxy/applyLocal to return the routing
   // decision for a request. While set, read() returns PAUSE so that body bytes remain buffered
   // in inputBuffer until the decision arrives.
-  private HttpRequest pendingAbsoluteUriRequest;
+  private @Nullable HttpRequest pendingAbsoluteUriRequest;
   // Set by the executor task once the routing method has returned. Read and cleared by the
   // next invocation of read() on the NIO thread. Null means "no decision yet" — the field is
   // volatile because it crosses the executor↔NIO thread boundary.
-  private volatile RequestAction pendingRequestAction;
+  private volatile @Nullable RequestAction pendingRequestAction;
   // Signals that the routing method threw; produce a 403. Checked alongside
   // pendingRequestAction.
   private volatile boolean pendingRoutingFailed;
@@ -104,7 +105,7 @@ final class HttpServerStage implements Stage {
       HttpServerListener serverListener,
       SSLSocketFactory originSocketFactory,
       SslInfoCache sslInfoCache,
-      Executor executor,
+      @Nullable Executor executor,
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer) {
     this(
@@ -128,10 +129,10 @@ final class HttpServerStage implements Stage {
       HttpServerListener serverListener,
       SSLSocketFactory originSocketFactory,
       SslInfoCache sslInfoCache,
-      Executor executor,
+      @Nullable Executor executor,
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer,
-      String connectHost,
+      @Nullable String connectHost,
       int connectPort) {
     this.parent = parent;
     this.requestHandler = requestHandler;
@@ -201,6 +202,7 @@ final class HttpServerStage implements Stage {
    * handling. Shared between the normal post-header path and the post-routing-decision path for
    * absolute-URI forward-proxy requests that the {@link ConnectHandler} chose to serve locally.
    */
+  @SuppressWarnings("NullAway") // currentHandler is non-null when called
   private ConnectionControl startBodyOrDispatch(HttpRequest headers) {
     // Check if there's a body to stream.
     String cl = headers.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
@@ -318,6 +320,7 @@ final class HttpServerStage implements Stage {
    * Applies a routing decision: serve locally, deny, or forward to origin. Called from both the
    * synchronous path (non-proxy server) and the async path (after executor returns decision).
    */
+  @SuppressWarnings("NullAway") // state machine guarantees non-null at usage points
   private ConnectionControl applyRoutingDecision(HttpRequest headers, RequestAction action) {
     HttpRequest effective =
         isAbsoluteUri(headers.getUri())
@@ -382,6 +385,7 @@ final class HttpServerStage implements Stage {
     }
   }
 
+  @SuppressWarnings("NullAway") // state machine guarantees non-null at usage points
   private ConnectionControl readBody() {
     if (!inputBuffer.hasRemaining()) {
       return ConnectionControl.CONTINUE;
@@ -458,6 +462,7 @@ final class HttpServerStage implements Stage {
   }
 
   @Override
+  @SuppressWarnings("NullAway") // state machine guarantees non-null at usage points
   public ConnectionControl write() throws IOException {
     // Consume a pending routing decision on the NIO thread. Driven by encourageWrites from the
     // executor-thread runRoutingDecision.
@@ -620,7 +625,7 @@ final class HttpServerStage implements Stage {
     return uri.startsWith("http://") || uri.startsWith("https://");
   }
 
-  private void startBuffered(HttpRequest request, HttpResponse responseToWrite) {
+  private void startBuffered(@Nullable HttpRequest request, HttpResponse responseToWrite) {
     byte[] body = responseToWrite.getBody();
     if (body == null) {
       throw new IllegalArgumentException();
@@ -637,6 +642,7 @@ final class HttpServerStage implements Stage {
     startResponse(HttpResponseGeneratorBuffered.createWithBody(request, response));
   }
 
+  @SuppressWarnings("NullAway") // response is non-null when startResponse is called
   private void startResponse(HttpResponseGenerator gen) {
     this.responseGenerator = gen;
     this.keepAlive = responseGenerator.keepAlive();
