@@ -266,10 +266,26 @@ public final class Http2ServerStage implements Stage {
     byte[] payload = frameReader.getPayload();
     boolean endStream = frameReader.hasFlag(Http2FrameReader.FLAG_END_STREAM);
 
+    // Strip padding and priority fields to find the HPACK header block.
+    int hpackOffset = 0;
+    int hpackLength = payload.length;
+    if (frameReader.hasFlag(Http2FrameReader.FLAG_PADDED)) {
+      int padLength = payload[0] & 0xff;
+      hpackOffset += 1;
+      hpackLength -= 1 + padLength;
+    }
+    if (frameReader.hasFlag(Http2FrameReader.FLAG_PRIORITY)) {
+      hpackOffset += 5; // 4-byte stream dependency + 1-byte weight
+      hpackLength -= 5;
+    }
+    if (hpackLength < 0) {
+      throw new IOException("h2 HEADERS frame too short after stripping padding/priority");
+    }
+
     // Decode HPACK header block.
     List<Header> headers;
     try {
-      headers = hpackDecoder.decode(payload, 0, payload.length);
+      headers = hpackDecoder.decode(payload, hpackOffset, hpackLength);
     } catch (HpackDecodingException e) {
       throw new IOException("h2 HPACK decoding failed", e);
     }
@@ -337,8 +353,17 @@ public final class Http2ServerStage implements Stage {
     }
 
     if (payload != null && payload.length > 0) {
-      stream.appendBodyData(payload, 0, payload.length);
-      // Auto-ack: send WINDOW_UPDATE for both stream and connection.
+      int dataOffset = 0;
+      int dataLength = payload.length;
+      if (frameReader.hasFlag(Http2FrameReader.FLAG_PADDED)) {
+        int padLength = payload[0] & 0xff;
+        dataOffset = 1;
+        dataLength -= 1 + padLength;
+      }
+      if (dataLength > 0) {
+        stream.appendBodyData(payload, dataOffset, dataLength);
+      }
+      // Auto-ack the full frame payload (including padding) per flow control.
       queueWindowUpdate(streamId, payload.length);
       queueWindowUpdate(0, payload.length);
       parent.encourageWrites();
