@@ -1,18 +1,13 @@
 package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.internal.network.NetworkEngine;
-import de.ofahrt.catfish.model.HttpHeaderName;
-import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
-import de.ofahrt.catfish.model.server.RequestAction;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
 import javax.net.ssl.SSLSocketFactory;
 import org.jspecify.annotations.Nullable;
 
@@ -106,68 +101,6 @@ public final class HttpEndpoint {
   }
 
   private ConnectHandler buildConnectHandler() {
-    if (connectHandler != null) {
-      if (!hosts.isEmpty()) {
-        throw new IllegalStateException(
-            "Cannot use both addHost() and dispatcher() on the same endpoint. "
-                + "Use dispatcher() for all routing, or addHost() for vhost-based serving.");
-      }
-      return connectHandler;
-    }
-    // No dispatcher set: create a handler from the vhost map.
-    // Both applyProxy and applyLocal serve locally — a non-proxy server treats absolute URIs
-    // the same as relative ones (the absolute URI is just the request-target format, not a
-    // proxy request).
-    Function<String, HttpVirtualHost> lookup = buildLookup();
-    return new ConnectHandler() {
-      @Override
-      public ConnectDecision applyConnect(String host, int port) {
-        return ConnectDecision.deny();
-      }
-
-      @Override
-      public RequestAction applyProxy(HttpRequest request) {
-        return applyLocalFromVhosts(lookup, request);
-      }
-
-      @Override
-      public RequestAction applyLocal(HttpRequest request) {
-        return applyLocalFromVhosts(lookup, request);
-      }
-    };
-  }
-
-  private static RequestAction applyLocalFromVhosts(
-      Function<String, HttpVirtualHost> lookup, HttpRequest request) {
-    HttpVirtualHost vhost = lookup.apply(request.getHeaders().get(HttpHeaderName.HOST));
-    if (vhost != null) {
-      return new RequestAction.ServeLocally(
-          vhost.handler(),
-          vhost.uploadPolicy(),
-          vhost.keepAlivePolicy(),
-          vhost.compressionPolicy());
-    }
-    return RequestAction.deny();
-  }
-
-  private Function<String, HttpVirtualHost> buildLookup() {
-    if (hosts.isEmpty()) {
-      return host -> null;
-    }
-    return hostHeader -> {
-      HttpVirtualHost def = hosts.get("default");
-      if (hostHeader == null) {
-        return def;
-      }
-      String name = hostHeader;
-      if (name.indexOf(':') >= 0) {
-        name = name.substring(0, name.indexOf(':'));
-      }
-      if (name.endsWith(".localhost")) {
-        name = name.substring(0, name.length() - ".localhost".length());
-      }
-      HttpVirtualHost actual = hosts.get(name);
-      return actual != null ? actual : def;
-    };
+    return VirtualHostRouter.buildConnectHandler(connectHandler, hosts);
   }
 }
