@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.http2;
 
 import de.ofahrt.catfish.model.SimpleHttpRequest;
+import de.ofahrt.catfish.model.server.RequestAction;
 import java.io.ByteArrayOutputStream;
 import org.jspecify.annotations.Nullable;
 
@@ -33,6 +34,8 @@ final class Http2Stream {
 
   // Partial request builder, set after HEADERS, consumed after END_STREAM on body.
   private SimpleHttpRequest.@Nullable Builder requestBuilder;
+  // Routing result, set after HEADERS for requests with a body.
+  private RequestAction.@Nullable ServeLocally routingResult;
 
   // Request body accumulator (DATA frames from client).
   private final ByteArrayOutputStream bodyBuffer = new ByteArrayOutputStream();
@@ -92,6 +95,14 @@ final class Http2Stream {
 
   SimpleHttpRequest.@Nullable Builder getRequestBuilder() {
     return requestBuilder;
+  }
+
+  void setRoutingResult(RequestAction.ServeLocally result) {
+    this.routingResult = result;
+  }
+
+  RequestAction.@Nullable ServeLocally getRoutingResult() {
+    return routingResult;
   }
 
   // ---- Request body ----

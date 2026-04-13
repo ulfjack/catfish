@@ -363,13 +363,33 @@ public final class Http2ServerStage implements Stage {
     Http2Stream stream = new Http2Stream(streamId, initialState, peerInitialWindowSize);
     streams.put(streamId, stream);
 
-    if (endStream) {
-      // No body — dispatch immediately.
-      dispatchRequest(stream, builder);
+    // Route the request now (at header time) so we can check upload policy before accepting body.
+    HttpRequest partialRequest;
+    try {
+      partialRequest = builder.buildPartialRequest();
+    } catch (Exception e) {
+      sendErrorResponse(stream, StandardResponses.BAD_REQUEST);
+      return;
+    }
+
+    RequestAction action = connectHandler.applyLocal(partialRequest);
+    if (action instanceof RequestAction.ServeLocally serve) {
+      if (endStream) {
+        dispatchRequest(stream, builder, serve);
+      } else {
+        // Check upload policy before accepting body DATA frames.
+        if (!serve.uploadPolicy().isAllowed(partialRequest)) {
+          sendErrorResponse(stream, StandardResponses.PAYLOAD_TOO_LARGE);
+          return;
+        }
+        stream.setRequestBuilder(builder);
+        stream.setRoutingResult(serve);
+      }
+    } else if (action instanceof RequestAction.Deny deny) {
+      HttpResponse denyResponse = deny.response();
+      sendErrorResponse(stream, denyResponse != null ? denyResponse : StandardResponses.FORBIDDEN);
     } else {
-      // Body will follow in DATA frames. Store the builder for later.
-      // For simplicity, we store the partial request in the stream and dispatch on END_STREAM.
-      stream.setRequestBuilder(builder);
+      sendErrorResponse(stream, StandardResponses.NOT_IMPLEMENTED);
     }
   }
 
@@ -406,8 +426,9 @@ public final class Http2ServerStage implements Stage {
     if (endStream) {
       stream.setState(Http2Stream.State.HALF_CLOSED_REMOTE);
       SimpleHttpRequest.Builder builder = stream.getRequestBuilder();
-      if (builder != null) {
-        dispatchRequest(stream, builder);
+      RequestAction.ServeLocally serve = stream.getRoutingResult();
+      if (builder != null && serve != null) {
+        dispatchRequest(stream, builder, serve);
       }
     }
   }
@@ -480,7 +501,8 @@ public final class Http2ServerStage implements Stage {
   // ---- Request dispatch ----
 
   @SuppressWarnings("NullAway") // connection is non-null after connect()
-  private void dispatchRequest(Http2Stream stream, SimpleHttpRequest.Builder builder) {
+  private void dispatchRequest(
+      Http2Stream stream, SimpleHttpRequest.Builder builder, RequestAction.ServeLocally serve) {
     HttpRequest request;
     byte[] bodyBytes = stream.getBodyBytes();
     if (bodyBytes.length > 0) {
@@ -494,17 +516,8 @@ public final class Http2ServerStage implements Stage {
       return;
     }
 
-    RequestAction action = connectHandler.applyLocal(request);
-    if (action instanceof RequestAction.ServeLocally serve) {
-      HttpResponseWriter writer = new Http2ResponseWriter(stream);
-      requestHandler.queueRequest(serve.handler(), connection, request, writer);
-    } else if (action instanceof RequestAction.Deny deny) {
-      HttpResponse denyResponse = deny.response();
-      sendErrorResponse(stream, denyResponse != null ? denyResponse : StandardResponses.FORBIDDEN);
-    } else {
-      // Forward/ForwardAndCapture not supported over HTTP/2 yet.
-      sendErrorResponse(stream, StandardResponses.NOT_IMPLEMENTED);
-    }
+    HttpResponseWriter writer = new Http2ResponseWriter(stream);
+    requestHandler.queueRequest(serve.handler(), connection, request, writer);
   }
 
   private void sendErrorResponse(Http2Stream stream, HttpResponse errorResponse) {
