@@ -53,4 +53,16 @@ public class UrlEncodedParserTest {
     FormDataBody body = parse("");
     assertEquals(0, body.size());
   }
+
+  @Test
+  public void parseWithOffsetAndLength() throws Exception {
+    byte[] input = "padding_a=1&b=2_padding".getBytes(StandardCharsets.UTF_8);
+    // Parse only "a=1&b=2" (offset 8, length 7)
+    FormDataBody body = new UrlEncodedParser().parse(input, 8, 7);
+    assertEquals(2, body.size());
+    assertEquals("a", body.get(0).getName());
+    assertEquals("1", body.get(0).getValue());
+    assertEquals("b", body.get(1).getName());
+    assertEquals("2", body.get(1).getValue());
+  }
 }
