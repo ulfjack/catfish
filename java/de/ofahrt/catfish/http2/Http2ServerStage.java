@@ -268,7 +268,7 @@ public final class Http2ServerStage implements Stage {
 
   private void applyPeerSetting(int id, int value) {
     switch (id) {
-      case 1 -> hpackDecoder.setMaxDynamicTableSize(value); // HEADER_TABLE_SIZE
+      case 1 -> {} // HEADER_TABLE_SIZE: limits our encoder's dynamic table. We don't use one.
       case 4 -> { // INITIAL_WINDOW_SIZE
         int delta = value - peerInitialWindowSize;
         peerInitialWindowSize = value;

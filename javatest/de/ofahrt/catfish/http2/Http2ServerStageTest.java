@@ -249,6 +249,79 @@ public class Http2ServerStageTest {
   }
 
   @Test
+  public void peerHeaderTableSizeZero_doesNotBreakDecoder() throws IOException {
+    // Regression: SETTINGS_HEADER_TABLE_SIZE from the peer should limit our *encoder's* dynamic
+    // table, not the decoder's. The old code called hpackDecoder.setMaxDynamicTableSize(0),
+    // which would evict the decoder's dynamic table and break decoding of headers that the peer's
+    // encoder added via literal-with-indexing.
+
+    // Send preface + SETTINGS with HEADER_TABLE_SIZE=0.
+    ByteBuffer settingsBuf = ByteBuffer.allocate(15); // 9 header + 6 payload
+    Http2FrameWriter.writeSettings(settingsBuf, 0x1, 0); // HEADER_TABLE_SIZE = 0
+    settingsBuf.flip();
+    byte[] settings = new byte[settingsBuf.remaining()];
+    settingsBuf.get(settings);
+    feedAndRead(concat(CLIENT_PREFACE, settings));
+    drainOutput();
+
+    // Now send a HEADERS frame that uses literal-with-indexing (0x40 prefix), which adds
+    // an entry to the decoder's dynamic table.
+    byte[] headerBlock1 = {
+      (byte) 0x82, // :method GET (indexed)
+      (byte) 0x84, // :path / (indexed)
+      (byte) 0x86, // :scheme http (indexed)
+      0x41,
+      0x09, // :authority (literal with indexing, name index 1), value length 9
+      'l',
+      'o',
+      'c',
+      'a',
+      'l',
+      'h',
+      'o',
+      's',
+      't'
+    };
+    ByteBuffer h1 = ByteBuffer.allocate(9 + headerBlock1.length);
+    int flags1 = Http2FrameReader.FLAG_END_STREAM | Http2FrameReader.FLAG_END_HEADERS;
+    h1.put((byte) 0);
+    h1.put((byte) 0);
+    h1.put((byte) headerBlock1.length);
+    h1.put((byte) FrameType.HEADERS);
+    h1.put((byte) flags1);
+    h1.putInt(1);
+    h1.put(headerBlock1);
+    h1.flip();
+    byte[] frame1 = new byte[h1.remaining()];
+    h1.get(frame1);
+    feedAndRead(frame1);
+
+    // Second request: reference the dynamic table entry (index 62 = first dynamic entry).
+    byte[] headerBlock2 = {
+      (byte) 0x82, // :method GET (indexed)
+      (byte) 0x84, // :path / (indexed)
+      (byte) 0x86, // :scheme http (indexed)
+      (byte) 0xbe // :authority localhost (indexed from dynamic table, index 62)
+    };
+    ByteBuffer h2 = ByteBuffer.allocate(9 + headerBlock2.length);
+    h2.put((byte) 0);
+    h2.put((byte) 0);
+    h2.put((byte) headerBlock2.length);
+    h2.put((byte) FrameType.HEADERS);
+    h2.put((byte) flags1);
+    h2.putInt(3); // stream 3
+    h2.put(headerBlock2);
+    h2.flip();
+    byte[] frame2 = new byte[h2.remaining()];
+    h2.get(frame2);
+
+    // This should succeed — the decoder's dynamic table should still have the entry.
+    feedAndRead(frame2);
+    assertEquals(2, dispatchedRequests.size());
+    assertEquals("localhost", dispatchedRequests.get(1).getHeaders().get("Host"));
+  }
+
+  @Test
   public void headersWithoutEndHeaders_throwsIOException() throws IOException {
     // Setup: preface + settings.
     feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
