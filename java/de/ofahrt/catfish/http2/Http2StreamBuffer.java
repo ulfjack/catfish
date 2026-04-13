@@ -24,39 +24,54 @@ final class Http2StreamBuffer {
   }
 
   /** Handler thread: write bytes, blocking if the buffer is full. */
-  synchronized void write(byte[] b, int off, int len) throws IOException {
-    while (len > 0) {
-      if (cancelled) {
-        throw new IOException("Stream cancelled");
-      }
-      int space = availableSpace();
-      if (space == 0) {
-        try {
-          wait();
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          throw new IOException("Interrupted", e);
+  void write(byte[] b, int off, int len) throws IOException {
+    boolean needWake = false;
+    try {
+      synchronized (this) {
+        while (len > 0) {
+          if (cancelled) {
+            throw new IOException("Stream cancelled");
+          }
+          int space = availableSpace();
+          if (space == 0) {
+            // Flush any pending wake before blocking.
+            if (needWake) {
+              needWake = false;
+              wakeCallback.run();
+            }
+            try {
+              wait();
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+              throw new IOException("Interrupted", e);
+            }
+            continue;
+          }
+          int toCopy = Math.min(space, len);
+          int firstChunk = Math.min(toCopy, buffer.length - writePosition);
+          System.arraycopy(b, off, buffer, writePosition, firstChunk);
+          if (toCopy > firstChunk) {
+            System.arraycopy(b, off + firstChunk, buffer, 0, toCopy - firstChunk);
+          }
+          writePosition = (writePosition + toCopy) % buffer.length;
+          isFull = writePosition == readPosition;
+          off += toCopy;
+          len -= toCopy;
+          needWake = true;
         }
-        continue;
       }
-      int toCopy = Math.min(space, len);
-      // Copy, handling wrap-around.
-      int firstChunk = Math.min(toCopy, buffer.length - writePosition);
-      System.arraycopy(b, off, buffer, writePosition, firstChunk);
-      if (toCopy > firstChunk) {
-        System.arraycopy(b, off + firstChunk, buffer, 0, toCopy - firstChunk);
+    } finally {
+      if (needWake) {
+        wakeCallback.run();
       }
-      writePosition = (writePosition + toCopy) % buffer.length;
-      isFull = writePosition == readPosition;
-      off += toCopy;
-      len -= toCopy;
-      wakeCallback.run();
     }
   }
 
   /** Handler thread: signal end of body. */
-  synchronized void close() {
-    closed = true;
+  void close() {
+    synchronized (this) {
+      closed = true;
+    }
     wakeCallback.run();
   }
 
@@ -92,7 +107,6 @@ final class Http2StreamBuffer {
     if (toDrain == 0) {
       return 0;
     }
-    // Copy, handling wrap-around.
     int firstChunk = Math.min(toDrain, buffer.length - readPosition);
     out.put(buffer, readPosition, firstChunk);
     if (toDrain > firstChunk) {

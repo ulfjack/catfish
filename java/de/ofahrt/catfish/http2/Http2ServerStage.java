@@ -184,6 +184,12 @@ public final class Http2ServerStage implements Stage {
 
   @Override
   public void close() {
+    for (Http2Stream stream : streams.values()) {
+      Http2StreamBuffer buf = stream.getStreamingBuffer();
+      if (buf != null) {
+        buf.cancelStream();
+      }
+    }
     streams.clear();
   }
 
