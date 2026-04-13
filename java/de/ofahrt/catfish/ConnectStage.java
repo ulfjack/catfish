@@ -249,18 +249,20 @@ final class ConnectStage implements Stage {
   }
 
   @Override
-  @SuppressWarnings("NullAway") // state machine guarantees non-null at usage points
   public ConnectionControl write() throws IOException {
     return switch (state) {
       case CONNECTING -> ConnectionControl.PAUSE;
       case SENDING_RESPONSE -> {
+        byte[] responseBytes = this.pendingResponseBytes;
+        if (responseBytes == null) {
+          throw new IllegalStateException("SENDING_RESPONSE without pendingResponseBytes");
+        }
         outputBuffer.compact();
-        int toCopy =
-            Math.min(outputBuffer.remaining(), pendingResponseBytes.length - responseOffset);
-        outputBuffer.put(pendingResponseBytes, responseOffset, toCopy);
+        int toCopy = Math.min(outputBuffer.remaining(), responseBytes.length - responseOffset);
+        outputBuffer.put(responseBytes, responseOffset, toCopy);
         responseOffset += toCopy;
         outputBuffer.flip();
-        if (responseOffset >= pendingResponseBytes.length) {
+        if (responseOffset >= responseBytes.length) {
           if (closeAfterSend) {
             yield ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
           }
@@ -276,26 +278,39 @@ final class ConnectStage implements Stage {
     };
   }
 
-  @SuppressWarnings("NullAway") // state machine guarantees non-null
   private void setupTunnel() throws IOException {
+    Socket sock = this.tunnelSocket;
+    if (sock == null) {
+      throw new IllegalStateException("setupTunnel called without tunnelSocket");
+    }
+    Runnable closeCallback = this.onClose;
+    if (closeCallback == null) {
+      throw new IllegalStateException("setupTunnel called without onClose");
+    }
     TunnelForwardStage tunnelStage =
-        new TunnelForwardStage(parent, inputBuffer, outputBuffer, executor, tunnelSocket, onClose);
+        new TunnelForwardStage(parent, inputBuffer, outputBuffer, executor, sock, closeCallback);
     tunnelSocket = null; // ownership transferred to tunnelStage
     parent.replaceWith(tunnelStage);
   }
 
-  @SuppressWarnings("NullAway") // state machine guarantees non-null
   private void setupMitm() {
-    if (localStageFactory == null) {
-      throw new IllegalStateException(
-          "MITM intercept requires a LocalStageFactory; none was provided");
+    SSLContext ctx = this.fakeCtx;
+    if (ctx == null) {
+      throw new IllegalStateException("setupMitm called without fakeCtx");
+    }
+    String capturedOriginHost = this.originHost;
+    if (capturedOriginHost == null) {
+      throw new IllegalStateException("setupMitm called without originHost");
+    }
+    Runnable closeCallback = this.onClose;
+    if (closeCallback == null) {
+      throw new IllegalStateException("setupMitm called without onClose");
     }
     // The inner HttpServerStage gets a ConnectHandler scoped to the MITM tunnel:
     // - applyConnect: deny (nested CONNECT inside a decrypted tunnel is meaningless)
     // - applyLocal: reconstruct the absolute URI and call the user's applyProxy, so the user
     //   sees all proxied requests (forward-proxy and MITM) through one method. On Deny,
     //   fall back to forwarding to the CONNECT target origin.
-    String capturedOriginHost = originHost;
     int capturedOriginPort = originPort;
     ConnectHandler mitmHandler =
         new ConnectHandler() {
@@ -328,9 +343,9 @@ final class ConnectStage implements Stage {
                     executor,
                     capturedOriginHost,
                     capturedOriginPort),
-                onClose);
+                closeCallback);
 
-    SSLContext capturedCtx = fakeCtx;
+    SSLContext capturedCtx = ctx;
     SslServerStage ssl =
         new SslServerStage(
             parent, innerFactory, ignored -> capturedCtx, executor, inputBuffer, outputBuffer);
