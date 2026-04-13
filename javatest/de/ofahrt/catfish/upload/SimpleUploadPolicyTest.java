@@ -36,4 +36,16 @@ public class SimpleUploadPolicyTest {
     SimpleUploadPolicy policy = new SimpleUploadPolicy(100);
     assertFalse(policy.isAllowed(buildRequest("101")));
   }
+
+  @Test
+  public void missingContentLengthIsDenied() {
+    SimpleUploadPolicy policy = new SimpleUploadPolicy(1024);
+    HttpRequest request =
+        new SimpleHttpRequest.Builder()
+            .setVersion(HttpVersion.HTTP_1_1)
+            .setMethod("POST")
+            .setUri("/upload")
+            .buildPartialRequest();
+    assertFalse(policy.isAllowed(request));
+  }
 }
