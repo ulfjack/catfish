@@ -249,6 +249,40 @@ public class Http2ServerStageTest {
   }
 
   @Test
+  public void evenStreamId_throwsIOException() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // Stream ID 2 is even (reserved for server push).
+    byte[] frame = buildGetHeadersFrame(2, "/");
+    try {
+      feedAndRead(frame);
+      fail("Expected IOException for even stream ID");
+    } catch (IOException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("invalid stream ID"));
+    }
+  }
+
+  @Test
+  public void reusedStreamId_throwsIOException() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // First request on stream 1 — should succeed.
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+    assertEquals(1, dispatchedRequests.size());
+    drainOutput();
+
+    // Second request reusing stream 1 — should fail.
+    try {
+      feedAndRead(buildGetHeadersFrame(1, "/again"));
+      fail("Expected IOException for reused stream ID");
+    } catch (IOException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("invalid stream ID"));
+    }
+  }
+
+  @Test
   public void peerHeaderTableSizeZero_doesNotBreakDecoder() throws IOException {
     // Regression: SETTINGS_HEADER_TABLE_SIZE from the peer should limit our *encoder's* dynamic
     // table, not the decoder's. The old code called hpackDecoder.setMaxDynamicTableSize(0),
