@@ -317,6 +317,96 @@ public class SNIParserTest {
   }
 
   @Test
+  public void extensionLongerThanDeclared_returnsError() {
+    // Extension declares length=2 but extensions total length only allows 5 bytes for the
+    // extension (type=2 + length=2 + data=2 = 6 > 5), so length goes negative.
+    assertTrue(
+        parse(
+                new byte[] {
+                  22, 3, 1, 0, 49, // TLS record header (length=49)
+                  1, 0, 0, 45, // ClientHello, length=45
+                  3, 1, // version
+                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random
+                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random, cont.
+                  0, // session_id length
+                  0, 0, // cipher_suites length
+                  0, // compression_methods length
+                  0, 5, // extensions length = 5
+                  0, 1, 0, 2, // extension type=1, length=2
+                  0, // only 1 byte of data (but 2 declared → length underflows)
+                })
+            instanceof SNIParser.Result.Error);
+  }
+
+  @Test
+  public void sniListLengthOverflowInParseSniExtension_returnsError() {
+    // SNI extension with list_length > remaining bytes in extension
+    assertTrue(
+        parse(
+                new byte[] {
+                  22, 3, 1, 0, 48, // TLS record header (length=48)
+                  1, 0, 0, 44, // ClientHello, length=44
+                  3, 1, // version
+                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random
+                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random, cont.
+                  0, // session_id length
+                  0, 0, // cipher_suites length
+                  0, // compression_methods length
+                  0, 6, // extensions length = 6
+                  0, 0, 0, 2, // extension type=0 (SNI), length=2
+                  0, 99, // SNI list length = 99 (overflow within extension)
+                })
+            instanceof SNIParser.Result.Error);
+  }
+
+  @Test
+  public void sniNameLengthOverflow_returnsError() {
+    assertTrue(
+        parse(
+                new byte[] {
+                  22, 3, 1, 0, 55, // TLS record header (length=55)
+                  1, 0, 0, 51, // ClientHello, length=51
+                  3, 1, // version
+                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random
+                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random, cont.
+                  0, // session_id length
+                  0, 0, // cipher_suites length
+                  0, // compression_methods length
+                  0, 11, // extensions length = 11
+                  0, 0, 0, 7, // extension type=0 (SNI), length=7
+                  0, 5, // SNI list length = 5
+                  0, // type = DNS hostname
+                  0, 99, // name length = 99 (overflow)
+                  0, 0, // filler
+                })
+            instanceof SNIParser.Result.Error);
+  }
+
+  @Test
+  public void nonDnsHostnameType_noSniFound() {
+    // SNI entry with type=1 (not DNS hostname) → no DNS name found → NoSniFound
+    assertTrue(
+        parse(
+                new byte[] {
+                  22, 3, 1, 0, 55, // TLS record header (length=55)
+                  1, 0, 0, 51, // ClientHello, length=51
+                  3, 1, // version
+                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random
+                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // random, cont.
+                  0, // session_id length
+                  0, 0, // cipher_suites length
+                  0, // compression_methods length
+                  0, 11, // extensions length = 11
+                  0, 0, 0, 7, // extension type=0 (SNI), length=7
+                  0, 5, // SNI list length = 5
+                  1, // type = 1 (NOT DNS hostname)
+                  0, 2, // name length = 2
+                  'a', 'b',
+                })
+            instanceof SNIParser.Result.NoSniFound);
+  }
+
+  @Test
   public void invalidRequestOverflowAnyOfSessionIdCipherOrCompression() {
     for (int i = 0; i < 4; i++) {
       byte[] data =
