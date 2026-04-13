@@ -270,8 +270,14 @@ final class OriginForwarder {
       counter = new CountingOutputStream(gen.getOutputStream());
 
       // Stream the response body. When captureStream is non-null, tee each chunk to it.
+      // For chunked responses, the capture stream receives decoded bytes (without chunk framing)
+      // so that cached responses can be replayed without Transfer-Encoding: chunked.
+      OutputStream effectiveCapture =
+          captureStream != null && chunkedResponse
+              ? new ChunkedDecodingOutputStream(captureStream)
+              : captureStream;
       OutputStream bodyOut =
-          captureStream != null ? new TeeOutputStream(counter, captureStream) : counter;
+          effectiveCapture != null ? new TeeOutputStream(counter, effectiveCapture) : counter;
 
       if (noBody) {
         // No body to stream (1xx/204/304/HEAD).
