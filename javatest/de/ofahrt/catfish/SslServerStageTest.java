@@ -600,6 +600,17 @@ public class SslServerStageTest {
     assertEquals(ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY, cc);
   }
 
+  // ---- 16. close() forwards to next ----
+
+  @Test
+  public void close_forwardsToNext() throws Exception {
+    buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
+    stage.connect(null);
+    stage.close();
+    assertEquals(1, next.closeCount);
+  }
+
+
   // ============================================================================================
   // Fakes and test doubles
   // ============================================================================================
