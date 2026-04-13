@@ -96,10 +96,13 @@ final class SslServerStage implements Stage {
    */
   private class InnerPipeline implements Pipeline {
     @Override
-    @SuppressWarnings("NullAway") // connection is non-null after connect()
     public void replaceWith(Stage nextStage) {
+      Connection conn = connection;
+      if (conn == null) {
+        throw new IllegalStateException("replaceWith called before connect");
+      }
       next = nextStage;
-      InitialConnectionState s = nextStage.connect(connection);
+      InitialConnectionState s = nextStage.connect(conn);
       if (s != InitialConnectionState.WRITE_ONLY) {
         parent.encourageReads();
       }
@@ -152,17 +155,16 @@ final class SslServerStage implements Stage {
     }
   }
 
-  @SuppressWarnings("NullAway") // sslEngine is non-null after SNI parsing
-  private void checkStatus() {
-    if (sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_TASK) {
-      Runnable task = sslEngine.getDelegatedTask();
+  private void checkStatus(SSLEngine engine) {
+    if (engine.getHandshakeStatus() == HandshakeStatus.NEED_TASK) {
+      Runnable task = engine.getDelegatedTask();
       taskPending = true;
       parent.log("SSL scheduling task");
       taskExecutor.execute(
           () -> {
             task.run();
             taskPending = false;
-            HandshakeStatus hs = sslEngine.getHandshakeStatus();
+            HandshakeStatus hs = engine.getHandshakeStatus();
             parent.log("SSL task done -> %s", hs);
             if (hs == HandshakeStatus.NEED_WRAP) {
               parent.encourageWrites();
@@ -215,20 +217,24 @@ final class SslServerStage implements Stage {
   }
 
   @Override
-  @SuppressWarnings("NullAway") // state machine guarantees non-null at usage points
   public ConnectionControl read() throws IOException {
     if (status == FlowStatus.FIND_SNI) {
-      // This call may change lookingForSni as a side effect!
+      // This call may change status as a side effect!
       findSni();
       return status == FlowStatus.SEND_ALERT ? ConnectionControl.PAUSE : ConnectionControl.CONTINUE;
-    } else if (status == FlowStatus.HANDSHAKE) {
+    }
+    SSLEngine engine = this.sslEngine;
+    if (engine == null) {
+      throw new IllegalStateException("read called after SNI phase without sslEngine");
+    }
+    if (status == FlowStatus.HANDSHAKE) {
       if (taskPending) return ConnectionControl.PAUSE;
       parent.log(
           "SSL Read: HandshakeStatus=%s, net=%d",
-          sslEngine.getHandshakeStatus(), Integer.valueOf(netInputBuffer.remaining()));
+          engine.getHandshakeStatus(), Integer.valueOf(netInputBuffer.remaining()));
       if (netInputBuffer.hasRemaining()) {
         inputBuffer.compact(); // prepare buffer for writing
-        SSLEngineResult result = sslEngine.unwrap(netInputBuffer, inputBuffer);
+        SSLEngineResult result = engine.unwrap(netInputBuffer, inputBuffer);
         inputBuffer.flip(); // prepare buffer for reading
         switch (result.getStatus()) {
           case CLOSED -> {
@@ -240,24 +246,28 @@ final class SslServerStage implements Stage {
           case BUFFER_OVERFLOW -> throw new IOException(result.toString());
           case OK -> {} // proceed
         }
-        checkStatus();
+        checkStatus(engine);
       }
-      if (sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP) {
+      if (engine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP) {
         parent.encourageWrites();
         return ConnectionControl.PAUSE;
       }
-      if (sslEngine.getHandshakeStatus() == HandshakeStatus.NOT_HANDSHAKING) {
+      if (engine.getHandshakeStatus() == HandshakeStatus.NOT_HANDSHAKING) {
         // The handshake completed via unwrap. This happens for the TLS 1.2 abbreviated
         // handshake (session resumption): the server's last handshake action is unwrapping
         // the client's Finished, after which the engine transitions to NOT_HANDSHAKING. Mirror
         // the OPEN-state transition from write(): record the new state, encourage writes if
         // the next stage wants to write, and return CONTINUE so the driver re-enters read()
         // and takes the OPEN branch on the next call.
+        InitialConnectionState phs = this.postHandshakeState;
+        if (phs == null) {
+          throw new IllegalStateException("Handshake complete without postHandshakeState");
+        }
         status = FlowStatus.OPEN;
-        if (postHandshakeState != InitialConnectionState.READ_ONLY) {
+        if (phs != InitialConnectionState.READ_ONLY) {
           parent.encourageWrites();
         }
-        return postHandshakeState == InitialConnectionState.WRITE_ONLY
+        return phs == InitialConnectionState.WRITE_ONLY
             ? ConnectionControl.PAUSE
             : ConnectionControl.CONTINUE;
       }
@@ -266,7 +276,7 @@ final class SslServerStage implements Stage {
       parent.log("SSL Read: net=%d", Integer.valueOf(netInputBuffer.remaining()));
       if (netInputBuffer.hasRemaining()) {
         inputBuffer.compact(); // prepare buffer for writing
-        SSLEngineResult result = sslEngine.unwrap(netInputBuffer, inputBuffer);
+        SSLEngineResult result = engine.unwrap(netInputBuffer, inputBuffer);
         inputBuffer.flip(); // prepare buffer for reading
         switch (result.getStatus()) {
           case CLOSED -> {
@@ -279,7 +289,7 @@ final class SslServerStage implements Stage {
           case OK -> {} // proceed
         }
       }
-      if (sslEngine.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING) {
+      if (engine.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING) {
         throw new IOException("Re-entering handshake mode - what's up?");
       }
       return next.read();
@@ -299,37 +309,45 @@ final class SslServerStage implements Stage {
   }
 
   @Override
-  @SuppressWarnings("NullAway") // state machine guarantees non-null at usage points
   public ConnectionControl write() throws IOException {
     if (status == FlowStatus.FIND_SNI) {
       throw new IOException("SSL: Illegal state - write called despite finding SNI");
     } else if (status == FlowStatus.SEND_ALERT) {
       return ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
-    } else if (status == FlowStatus.HANDSHAKE) {
-      parent.log("SSL Write: HandshakeStatus=%s", sslEngine.getHandshakeStatus());
+    }
+    SSLEngine engine = this.sslEngine;
+    if (engine == null) {
+      throw new IllegalStateException("write called after SNI phase without sslEngine");
+    }
+    if (status == FlowStatus.HANDSHAKE) {
+      parent.log("SSL Write: HandshakeStatus=%s", engine.getHandshakeStatus());
       // invariant: both netOutputBuffer and outputBuffer are readable
       if (!netOutputBuffer.hasRemaining()
-          && sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP) {
+          && engine.getHandshakeStatus() == HandshakeStatus.NEED_WRAP) {
         netOutputBuffer.clear(); // prepare for writing
-        SSLEngineResult result = sslEngine.wrap(outputBuffer, netOutputBuffer);
+        SSLEngineResult result = engine.wrap(outputBuffer, netOutputBuffer);
         netOutputBuffer.flip(); // prepare for reading
         parent.log(
             "After Wrapping: %d out, %d net",
             Integer.valueOf(outputBuffer.remaining()),
             Integer.valueOf(netOutputBuffer.remaining()));
         requireOk(result);
-        checkStatus();
+        checkStatus(engine);
       }
-      if (sslEngine.getHandshakeStatus() == HandshakeStatus.NEED_UNWRAP) {
+      if (engine.getHandshakeStatus() == HandshakeStatus.NEED_UNWRAP) {
         parent.encourageReads();
         return ConnectionControl.PAUSE;
       }
-      if (sslEngine.getHandshakeStatus() == HandshakeStatus.NOT_HANDSHAKING) {
+      if (engine.getHandshakeStatus() == HandshakeStatus.NOT_HANDSHAKING) {
+        InitialConnectionState phs = this.postHandshakeState;
+        if (phs == null) {
+          throw new IllegalStateException("Handshake complete without postHandshakeState");
+        }
         status = FlowStatus.OPEN;
-        if (postHandshakeState != InitialConnectionState.WRITE_ONLY) {
+        if (phs != InitialConnectionState.WRITE_ONLY) {
           parent.encourageReads();
         }
-        return postHandshakeState == InitialConnectionState.READ_ONLY
+        return phs == InitialConnectionState.READ_ONLY
             ? ConnectionControl.PAUSE
             : ConnectionControl.CONTINUE;
       }
@@ -348,7 +366,7 @@ final class SslServerStage implements Stage {
       // invariant: both netOutputBuffer and outputBuffer are readable
       if (!netOutputBuffer.hasRemaining() && outputBuffer.hasRemaining()) {
         netOutputBuffer.clear(); // prepare for writing
-        SSLEngineResult result = sslEngine.wrap(outputBuffer, netOutputBuffer);
+        SSLEngineResult result = engine.wrap(outputBuffer, netOutputBuffer);
         netOutputBuffer.flip(); // prepare for reading
         parent.log(
             "After Wrapping: %d out, %d net",
@@ -380,10 +398,14 @@ final class SslServerStage implements Stage {
       return nextState;
     } else { // status == FlowStatus.CLOSING
       parent.log("SSL Write");
+      ConnectionControl closing = this.pendingClose;
+      if (closing == null) {
+        throw new IllegalStateException("CLOSING state without pendingClose");
+      }
       // invariant: both netOutputBuffer and outputBuffer are readable
       if (!netOutputBuffer.hasRemaining() && outputBuffer.hasRemaining()) {
         netOutputBuffer.clear(); // prepare for writing
-        SSLEngineResult result = sslEngine.wrap(outputBuffer, netOutputBuffer);
+        SSLEngineResult result = engine.wrap(outputBuffer, netOutputBuffer);
         netOutputBuffer.flip(); // prepare for reading
         parent.log(
             "After Wrapping: %d out, %d net",
@@ -391,7 +413,7 @@ final class SslServerStage implements Stage {
             Integer.valueOf(netOutputBuffer.remaining()));
         requireOk(result);
       }
-      return outputBuffer.hasRemaining() ? ConnectionControl.CONTINUE : pendingClose;
+      return outputBuffer.hasRemaining() ? ConnectionControl.CONTINUE : closing;
     }
   }
 
