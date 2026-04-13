@@ -17,6 +17,7 @@ import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.RequestAction;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -75,8 +76,10 @@ public final class Http2ServerStage implements Stage {
   private int peerInitialWindowSize = 65535; // SETTINGS_INITIAL_WINDOW_SIZE default
 
   // Control frame queue (accumulated during read(), drained during write()).
-  // We use a simple byte buffer for queued control frames.
-  private final ByteBuffer controlFrameBuffer = ByteBuffer.allocate(4096);
+  // Growable to handle bursts of WINDOW_UPDATE/PING_ACK/SETTINGS_ACK frames.
+  private final ByteArrayOutputStream controlFrameQueue = new ByteArrayOutputStream(256);
+  // Scratch buffer for writing individual control frames before appending to the queue.
+  private final ByteBuffer controlFrameScratch = ByteBuffer.allocate(64);
 
   // Flow control: send windows (how much DATA we may send).
   private int connectionSendWindow = 65535; // initial value per spec
@@ -96,7 +99,6 @@ public final class Http2ServerStage implements Stage {
     this.connectHandler = connectHandler;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
-    controlFrameBuffer.flip(); // start in read mode (empty)
   }
 
   @Override
@@ -207,14 +209,13 @@ public final class Http2ServerStage implements Stage {
   }
 
   private void queueServerSettings() {
-    controlFrameBuffer.compact();
     Http2FrameWriter.writeSettings(
-        controlFrameBuffer,
+        controlFrameScratch,
         0x3,
         DEFAULT_MAX_CONCURRENT_STREAMS, // SETTINGS_MAX_CONCURRENT_STREAMS
         0x2,
         0); // SETTINGS_ENABLE_PUSH = 0
-    controlFrameBuffer.flip();
+    flushScratch();
   }
 
   // ---- Frame dispatch ----
@@ -266,9 +267,8 @@ public final class Http2ServerStage implements Stage {
       }
     }
     // Queue SETTINGS ACK.
-    controlFrameBuffer.compact();
-    Http2FrameWriter.writeSettingsAck(controlFrameBuffer);
-    controlFrameBuffer.flip();
+    Http2FrameWriter.writeSettingsAck(controlFrameScratch);
+    flushScratch();
     parent.encourageWrites();
   }
 
@@ -447,9 +447,8 @@ public final class Http2ServerStage implements Stage {
     }
     byte[] payload = frameReader.getPayload();
     if (payload != null && payload.length == 8) {
-      controlFrameBuffer.compact();
-      Http2FrameWriter.writePing(controlFrameBuffer, payload, true);
-      controlFrameBuffer.flip();
+      Http2FrameWriter.writePing(controlFrameScratch, payload, true);
+      flushScratch();
       parent.encourageWrites();
     }
   }
@@ -563,36 +562,47 @@ public final class Http2ServerStage implements Stage {
 
   // ---- Control frame helpers ----
 
+  /** Writes a frame to the scratch buffer, then appends the bytes to the growable queue. */
+  private void flushScratch() {
+    controlFrameScratch.flip();
+    controlFrameQueue.write(
+        controlFrameScratch.array(),
+        controlFrameScratch.arrayOffset(),
+        controlFrameScratch.limit());
+    controlFrameScratch.clear();
+  }
+
   private void queueWindowUpdate(int streamId, int increment) {
-    controlFrameBuffer.compact();
-    Http2FrameWriter.writeWindowUpdate(controlFrameBuffer, streamId, increment);
-    controlFrameBuffer.flip();
+    Http2FrameWriter.writeWindowUpdate(controlFrameScratch, streamId, increment);
+    flushScratch();
   }
 
   private void sendGoaway(int errorCode) {
-    controlFrameBuffer.compact();
-    Http2FrameWriter.writeGoaway(controlFrameBuffer, lastStreamId, errorCode);
-    controlFrameBuffer.flip();
+    Http2FrameWriter.writeGoaway(controlFrameScratch, lastStreamId, errorCode);
+    flushScratch();
     goawaySent = true;
     parent.encourageWrites();
   }
 
   private void sendRstStream(int streamId, int errorCode) {
-    controlFrameBuffer.compact();
-    Http2FrameWriter.writeRstStream(controlFrameBuffer, streamId, errorCode);
-    controlFrameBuffer.flip();
+    Http2FrameWriter.writeRstStream(controlFrameScratch, streamId, errorCode);
+    flushScratch();
     streams.remove(streamId);
     parent.encourageWrites();
   }
 
   private void drainControlFrames(ByteBuffer out) {
-    while (controlFrameBuffer.hasRemaining() && out.hasRemaining()) {
-      int toCopy = Math.min(controlFrameBuffer.remaining(), out.remaining());
-      out.put(
-          controlFrameBuffer.array(),
-          controlFrameBuffer.arrayOffset() + controlFrameBuffer.position(),
-          toCopy);
-      controlFrameBuffer.position(controlFrameBuffer.position() + toCopy);
+    byte[] queued = controlFrameQueue.toByteArray();
+    controlFrameQueue.reset();
+    int offset = 0;
+    while (offset < queued.length && out.hasRemaining()) {
+      int toCopy = Math.min(queued.length - offset, out.remaining());
+      out.put(queued, offset, toCopy);
+      offset += toCopy;
+    }
+    // If the output buffer was too small, put the remainder back.
+    if (offset < queued.length) {
+      controlFrameQueue.write(queued, offset, queued.length - offset);
     }
   }
 
