@@ -420,7 +420,142 @@ public class Http2ServerStageTest {
     }
   }
 
+  @Test
+  public void settingsOnNonZeroStream_throwsIOException() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // SETTINGS frame on stream 1 instead of 0.
+    byte[] frame = buildRawFrame(FrameType.SETTINGS, 0, 1, new byte[0]);
+    try {
+      feedAndRead(frame);
+      fail("Expected IOException for SETTINGS on non-zero stream");
+    } catch (IOException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("PROTOCOL_ERROR"));
+    }
+  }
+
+  @Test
+  public void settingsOddPayloadLength_throwsIOException() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // SETTINGS with 7-byte payload (not a multiple of 6).
+    byte[] frame = buildRawFrame(FrameType.SETTINGS, 0, 0, new byte[7]);
+    try {
+      feedAndRead(frame);
+      fail("Expected IOException for SETTINGS with odd payload length");
+    } catch (IOException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("FRAME_SIZE_ERROR"));
+    }
+  }
+
+  @Test
+  public void settingsInvalidInitialWindowSize_throwsIOException() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // SETTINGS_INITIAL_WINDOW_SIZE (0x04) with value 0x80000000 (> 2^31-1).
+    ByteBuffer payload = ByteBuffer.allocate(6);
+    payload.putShort((short) 0x04);
+    payload.putInt(0x80000000);
+    byte[] frame = buildRawFrame(FrameType.SETTINGS, 0, 0, payload.array());
+    try {
+      feedAndRead(frame);
+      fail("Expected IOException for invalid INITIAL_WINDOW_SIZE");
+    } catch (IOException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("FLOW_CONTROL_ERROR"));
+    }
+  }
+
+  @Test
+  public void settingsInvalidMaxFrameSize_throwsIOException() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // SETTINGS_MAX_FRAME_SIZE (0x05) with value 0 (below 16384).
+    ByteBuffer payload = ByteBuffer.allocate(6);
+    payload.putShort((short) 0x05);
+    payload.putInt(0);
+    byte[] frame = buildRawFrame(FrameType.SETTINGS, 0, 0, payload.array());
+    try {
+      feedAndRead(frame);
+      fail("Expected IOException for invalid MAX_FRAME_SIZE");
+    } catch (IOException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("PROTOCOL_ERROR"));
+    }
+  }
+
+  @Test
+  public void pingOnNonZeroStream_throwsIOException() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    byte[] frame = buildRawFrame(FrameType.PING, 0, 1, new byte[8]);
+    try {
+      feedAndRead(frame);
+      fail("Expected IOException for PING on non-zero stream");
+    } catch (IOException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("PROTOCOL_ERROR"));
+    }
+  }
+
+  @Test
+  public void pingWrongPayloadLength_throwsIOException() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    byte[] frame = buildRawFrame(FrameType.PING, 0, 0, new byte[4]);
+    try {
+      feedAndRead(frame);
+      fail("Expected IOException for PING with wrong length");
+    } catch (IOException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("FRAME_SIZE_ERROR"));
+    }
+  }
+
+  @Test
+  public void windowUpdateZeroIncrement_throwsIOException() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    byte[] frame = buildRawFrame(FrameType.WINDOW_UPDATE, 0, 0, new byte[4]);
+    try {
+      feedAndRead(frame);
+      fail("Expected IOException for zero WINDOW_UPDATE increment");
+    } catch (IOException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("PROTOCOL_ERROR"));
+    }
+  }
+
+  @Test
+  public void windowUpdateWrongPayloadLength_throwsIOException() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    byte[] frame = buildRawFrame(FrameType.WINDOW_UPDATE, 0, 0, new byte[3]);
+    try {
+      feedAndRead(frame);
+      fail("Expected IOException for WINDOW_UPDATE with wrong length");
+    } catch (IOException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("FRAME_SIZE_ERROR"));
+    }
+  }
+
   // ---- Helpers ----
+
+  /** Builds a raw frame with the given type, flags, stream ID, and payload. */
+  private static byte[] buildRawFrame(int type, int flags, int streamId, byte[] payload) {
+    ByteBuffer buf = ByteBuffer.allocate(9 + payload.length);
+    buf.put((byte) ((payload.length >>> 16) & 0xff));
+    buf.put((byte) ((payload.length >>> 8) & 0xff));
+    buf.put((byte) (payload.length & 0xff));
+    buf.put((byte) type);
+    buf.put((byte) flags);
+    buf.putInt(streamId);
+    buf.put(payload);
+    return buf.array();
+  }
 
   private static byte[] concat(byte[]... arrays) {
     int total = 0;
