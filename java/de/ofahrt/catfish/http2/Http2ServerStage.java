@@ -249,13 +249,22 @@ public final class Http2ServerStage implements Stage {
 
   // ---- SETTINGS ----
 
-  private void handleSettings() {
+  private void handleSettings() throws IOException {
+    if (frameReader.getStreamId() != 0) {
+      throw new IOException(
+          "h2 PROTOCOL_ERROR: SETTINGS frame on stream " + frameReader.getStreamId());
+    }
     if (frameReader.hasFlag(Http2FrameReader.FLAG_ACK)) {
-      // Acknowledgement of our settings — nothing to do.
       return;
     }
     byte[] payload = frameReader.getPayload();
     if (payload != null) {
+      if (payload.length % 6 != 0) {
+        throw new IOException(
+            "h2 FRAME_SIZE_ERROR: SETTINGS payload length "
+                + payload.length
+                + " not a multiple of 6");
+      }
       for (int i = 0; i + 5 < payload.length; i += 6) {
         int id = ((payload[i] & 0xff) << 8) | (payload[i + 1] & 0xff);
         int value =
@@ -272,19 +281,35 @@ public final class Http2ServerStage implements Stage {
     parent.encourageWrites();
   }
 
-  private void applyPeerSetting(int id, int value) {
+  private void applyPeerSetting(int id, int value) throws IOException {
     switch (id) {
       case 1 -> {} // HEADER_TABLE_SIZE: limits our encoder's dynamic table. We don't use one.
+      case 2 -> { // ENABLE_PUSH
+        if (value != 0 && value != 1) {
+          throw new IOException(
+              "h2 PROTOCOL_ERROR: SETTINGS_ENABLE_PUSH must be 0 or 1, got " + value);
+        }
+      }
       case 4 -> { // INITIAL_WINDOW_SIZE
+        if (value < 0) { // value is parsed as signed int; > 2^31-1 appears negative
+          throw new IOException(
+              "h2 FLOW_CONTROL_ERROR: SETTINGS_INITIAL_WINDOW_SIZE exceeds 2^31-1");
+        }
         int delta = value - peerInitialWindowSize;
         peerInitialWindowSize = value;
-        // Adjust all existing stream send windows by the delta.
         for (Http2Stream stream : streams.values()) {
           stream.adjustSendWindow(delta);
         }
       }
-      case 5 -> peerMaxFrameSize = value; // MAX_FRAME_SIZE
-      default -> {}
+      case 5 -> { // MAX_FRAME_SIZE
+        if (value < 16384 || value > 16777215) {
+          throw new IOException(
+              "h2 PROTOCOL_ERROR: SETTINGS_MAX_FRAME_SIZE must be in [16384, 16777215], got "
+                  + value);
+        }
+        peerMaxFrameSize = value;
+      }
+      default -> {} // unknown settings are ignored per spec
     }
   }
 
@@ -441,34 +466,41 @@ public final class Http2ServerStage implements Stage {
 
   // ---- PING ----
 
-  private void handlePing() {
+  @SuppressWarnings("NullAway") // payload is non-null when length > 0
+  private void handlePing() throws IOException {
+    if (frameReader.getStreamId() != 0) {
+      throw new IOException("h2 PROTOCOL_ERROR: PING on stream " + frameReader.getStreamId());
+    }
+    if (frameReader.getLength() != 8) {
+      throw new IOException("h2 FRAME_SIZE_ERROR: PING payload length " + frameReader.getLength());
+    }
     if (frameReader.hasFlag(Http2FrameReader.FLAG_ACK)) {
-      return; // ignore PING ACK
+      return;
     }
     byte[] payload = frameReader.getPayload();
-    if (payload != null && payload.length == 8) {
-      Http2FrameWriter.writePing(controlFrameScratch, payload, true);
-      flushScratch();
-      parent.encourageWrites();
-    }
+    Http2FrameWriter.writePing(controlFrameScratch, payload, true);
+    flushScratch();
+    parent.encourageWrites();
   }
 
   // ---- WINDOW_UPDATE ----
 
   @SuppressWarnings("NullAway")
-  private void handleWindowUpdate() {
+  private void handleWindowUpdate() throws IOException {
+    if (frameReader.getLength() != 4) {
+      throw new IOException(
+          "h2 FRAME_SIZE_ERROR: WINDOW_UPDATE payload length " + frameReader.getLength());
+    }
     int streamId = frameReader.getStreamId();
     byte[] payload = frameReader.getPayload();
-    if (payload == null || payload.length != 4) {
-      return;
-    }
     int increment =
         ((payload[0] & 0x7f) << 24)
             | ((payload[1] & 0xff) << 16)
             | ((payload[2] & 0xff) << 8)
             | (payload[3] & 0xff);
     if (increment == 0) {
-      return;
+      throw new IOException(
+          "h2 PROTOCOL_ERROR: WINDOW_UPDATE increment is 0 on stream " + streamId);
     }
     if (streamId == 0) {
       connectionSendWindow += increment;
