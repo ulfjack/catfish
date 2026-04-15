@@ -11,5 +11,6 @@ import org.junit.runners.Suite.SuiteClasses;
   KeepAlivePolicyTest.class,
   RequestActionTest.class,
   RequestOutcomeTest.class,
+  RouterTest.class,
 })
 public class ModelServerTestSuite {}
