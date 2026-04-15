@@ -542,6 +542,23 @@ public class Http2ServerStageTest {
     }
   }
 
+  @Test
+  public void afterGoawayReceived_newStreamsIgnored() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // Send a GOAWAY frame from the client (last-stream-id=0, NO_ERROR).
+    ByteBuffer goawayPayload = ByteBuffer.allocate(8);
+    goawayPayload.putInt(0); // last stream ID
+    goawayPayload.putInt(0); // error code = NO_ERROR
+    byte[] goaway = buildRawFrame(FrameType.GOAWAY, 0, 0, goawayPayload.array());
+    feedAndRead(goaway);
+
+    // HEADERS after GOAWAY should be silently ignored.
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+    assertEquals(0, dispatchedRequests.size());
+  }
+
   // ---- Helpers ----
 
   /** Builds a raw frame with the given type, flags, stream ID, and payload. */

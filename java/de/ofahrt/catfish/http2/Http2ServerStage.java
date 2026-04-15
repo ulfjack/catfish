@@ -324,6 +324,10 @@ public final class Http2ServerStage implements Stage {
       throw new IOException("h2 HEADERS without END_HEADERS (CONTINUATION not supported)");
     }
     int streamId = frameReader.getStreamId();
+    if (goawaySent || goawayReceived) {
+      // GOAWAY in either direction — ignore new streams per RFC 9113 §6.8.
+      return;
+    }
     // RFC 9113 §5.1.1: client stream IDs must be odd and greater than any previously opened.
     if (streamId % 2 == 0 || streamId <= lastStreamId) {
       throw new IOException(
