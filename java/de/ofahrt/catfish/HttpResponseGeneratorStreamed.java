@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 
@@ -101,7 +102,6 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private int writePosition;
   private boolean isFull;
 
-  @SuppressWarnings("NullAway") // data initialized lazily in finalizeResponse
   private HttpResponseGeneratorStreamed(
       Runnable dataAvailableCallback,
       @Nullable HttpRequest request,
@@ -188,16 +188,16 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     return ContinuationToken.CONTINUE;
   }
 
-  @SuppressWarnings("NullAway") // data is non-null after finalizeResponse
   private ReadToken generateResponse(ByteBuffer outputBuffer) {
-    if (currentBlock >= data.length) {
+    byte[][] responseData = Objects.requireNonNull(this.data, "data");
+    if (currentBlock >= responseData.length) {
       return ReadToken.FINISHED;
     }
     int bytesCopyCount =
-        Math.min(outputBuffer.remaining(), data[currentBlock].length - currentIndex);
-    outputBuffer.put(data[currentBlock], currentIndex, bytesCopyCount);
+        Math.min(outputBuffer.remaining(), responseData[currentBlock].length - currentIndex);
+    outputBuffer.put(responseData[currentBlock], currentIndex, bytesCopyCount);
     currentIndex += bytesCopyCount;
-    if (currentIndex >= data[currentBlock].length) {
+    if (currentIndex >= responseData[currentBlock].length) {
       currentBlock++;
       currentIndex = 0;
     }
