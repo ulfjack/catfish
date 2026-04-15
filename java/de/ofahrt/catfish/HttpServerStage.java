@@ -342,26 +342,46 @@ final class HttpServerStage implements Stage {
               conn);
       return startBodyOrDispatch(effective, currentHandler);
     } else if (action instanceof RequestAction.ForwardAndCapture fc) {
+      Origin origin = parseOrigin(fc.request());
+      if (origin == null) {
+        startBuffered(headers, StandardResponses.BAD_REQUEST);
+        return ConnectionControl.PAUSE;
+      }
       Executor exec = Objects.requireNonNull(this.executor, "executor");
-      SocketFactory factory = fc.useTls() ? originSocketFactory : SocketFactory.getDefault();
+      SocketFactory factory = origin.useTls() ? originSocketFactory : SocketFactory.getDefault();
       currentHandler =
           new ProxyRequestStage(
               parent,
               exec,
               serverListener,
               requestId,
-              fc.host(),
-              fc.port(),
-              fc.useTls(),
+              origin.host(),
+              origin.port(),
+              origin.useTls(),
+              fc.request(),
               factory,
               fc.captureStream());
       return startBodyOrDispatch(effective, currentHandler);
     } else if (action instanceof RequestAction.Forward f) {
+      Origin origin = parseOrigin(f.request());
+      if (origin == null) {
+        startBuffered(headers, StandardResponses.BAD_REQUEST);
+        return ConnectionControl.PAUSE;
+      }
       Executor exec = Objects.requireNonNull(this.executor, "executor");
-      SocketFactory factory = f.useTls() ? originSocketFactory : SocketFactory.getDefault();
+      SocketFactory factory = origin.useTls() ? originSocketFactory : SocketFactory.getDefault();
       currentHandler =
           new ProxyRequestStage(
-              parent, exec, serverListener, requestId, f.host(), f.port(), f.useTls(), factory);
+              parent,
+              exec,
+              serverListener,
+              requestId,
+              origin.host(),
+              origin.port(),
+              origin.useTls(),
+              f.request(),
+              factory,
+              null);
       return startBodyOrDispatch(effective, currentHandler);
     } else {
       throw new IllegalStateException("Unknown RequestAction: " + action);
@@ -650,5 +670,43 @@ final class HttpServerStage implements Stage {
           response.getStatusMessage());
     }
     parent.encourageWrites();
+  }
+
+  private record Origin(String host, int port, boolean useTls) {}
+
+  private static @Nullable Origin parseOrigin(HttpRequest request) {
+    String uri = request.getUri();
+    if (uri.startsWith("http://") || uri.startsWith("https://")) {
+      try {
+        URI parsed = new URI(uri);
+        String host = parsed.getHost();
+        if (host == null) {
+          return null;
+        }
+        boolean useTls = "https".equalsIgnoreCase(parsed.getScheme());
+        int port = parsed.getPort();
+        if (port < 0) {
+          port = useTls ? 443 : 80;
+        }
+        return new Origin(host, port, useTls);
+      } catch (URISyntaxException e) {
+        return null;
+      }
+    }
+    String hostHeader = request.getHeaders().get(HttpHeaderName.HOST);
+    if (hostHeader == null) {
+      return null;
+    }
+    int colonIdx = hostHeader.lastIndexOf(':');
+    if (colonIdx >= 0) {
+      try {
+        String host = hostHeader.substring(0, colonIdx);
+        int port = Integer.parseInt(hostHeader.substring(colonIdx + 1));
+        return new Origin(host, port, false);
+      } catch (NumberFormatException e) {
+        // fall through
+      }
+    }
+    return new Origin(hostHeader, 80, false);
   }
 }

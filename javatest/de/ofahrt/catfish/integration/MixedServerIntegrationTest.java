@@ -506,7 +506,7 @@ public class MixedServerIntegrationTest {
                     callCount[0]++;
                     if (callCount[0] <= 1) {
                       // Forward to origin (same server).
-                      return RequestAction.forward("localhost", port);
+                      return RequestAction.forward(request);
                     }
                     // Serve locally via the handler defined above.
                     return new RequestAction.ServeLocally(

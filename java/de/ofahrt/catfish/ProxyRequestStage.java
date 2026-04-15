@@ -31,6 +31,7 @@ final class ProxyRequestStage implements HttpRequestStage {
   private final String host;
   private final int port;
   private final boolean useTls;
+  private final HttpRequest forwardRequest;
   private final SocketFactory socketFactory;
   private final @Nullable OutputStream captureStream;
 
@@ -46,18 +47,7 @@ final class ProxyRequestStage implements HttpRequestStage {
       String host,
       int port,
       boolean useTls,
-      SocketFactory socketFactory) {
-    this(parent, executor, serverListener, requestId, host, port, useTls, socketFactory, null);
-  }
-
-  ProxyRequestStage(
-      Pipeline parent,
-      Executor executor,
-      HttpServerListener serverListener,
-      UUID requestId,
-      String host,
-      int port,
-      boolean useTls,
+      HttpRequest forwardRequest,
       SocketFactory socketFactory,
       @Nullable OutputStream captureStream) {
     this.parent = parent;
@@ -67,6 +57,7 @@ final class ProxyRequestStage implements HttpRequestStage {
     this.host = host;
     this.port = port;
     this.useTls = useTls;
+    this.forwardRequest = forwardRequest;
     this.socketFactory = socketFactory;
     this.captureStream = captureStream;
   }
@@ -93,7 +84,7 @@ final class ProxyRequestStage implements HttpRequestStage {
               parent.encourageWrites();
             },
             () -> parent.queue(parent::encourageReads));
-    executor.execute(() -> forwarder.run(headers));
+    executor.execute(() -> forwarder.run(forwardRequest));
     return Decision.CONTINUE;
   }
 

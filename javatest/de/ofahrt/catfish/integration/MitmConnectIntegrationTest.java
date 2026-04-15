@@ -819,7 +819,7 @@ public class MitmConnectIntegrationTest {
 
           @Override
           public RequestAction applyProxy(HttpRequest request) {
-            return new RequestAction.ForwardAndCapture("localhost", HTTPS_PORT, true, captured);
+            return RequestAction.forwardAndCapture(request, captured);
           }
         });
 
