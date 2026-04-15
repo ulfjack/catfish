@@ -7,20 +7,27 @@ import javax.servlet.http.HttpSession;
 public final class XsrfToken {
   private static final String TOKEN_KEY = "xsrf-token";
 
-  @SuppressWarnings("NullAway") // AtomicReference.get() non-null after compareAndSet
   public static String getToken(HttpSession session) {
     if (session == null) {
       throw new NullPointerException();
     }
-    AtomicReference<String> result = cast(session.getAttribute(TOKEN_KEY));
-    if (result == null) {
+    AtomicReference<String> ref = cast(session.getAttribute(TOKEN_KEY));
+    if (ref == null) {
       session.setAttribute(TOKEN_KEY, new AtomicReference<String>());
-      result = cast(session.getAttribute(TOKEN_KEY));
+      ref = cast(session.getAttribute(TOKEN_KEY));
     }
-    if (result.get() == null) {
-      result.compareAndSet(null, UUID.randomUUID().toString());
+    String token = ref.get();
+    if (token != null) {
+      return token;
     }
-    return result.get();
+    String newToken = UUID.randomUUID().toString();
+    ref.compareAndSet(null, newToken);
+    // Non-null: either our CAS succeeded, or another thread set a value first.
+    String result = ref.get();
+    if (result == null) {
+      throw new IllegalStateException("Token was cleared concurrently");
+    }
+    return result;
   }
 
   public static boolean isValid(HttpSession session, String token) {
