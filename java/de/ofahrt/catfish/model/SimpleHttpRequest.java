@@ -60,6 +60,17 @@ public final class SimpleHttpRequest implements HttpRequest {
       reset();
     }
 
+    public Builder(HttpRequest request) {
+      this.version = request.getVersion();
+      this.method = request.getMethod();
+      this.unparsedUri = request.getUri();
+      this.headers = new TreeMap<>();
+      for (Map.Entry<String, String> e : request.getHeaders()) {
+        this.headers.put(e.getKey(), e.getValue());
+      }
+      this.body = request.getBody();
+    }
+
     public void reset() {
       version = HttpVersion.HTTP_0_9;
       method = "UNKNOWN";
