@@ -1,5 +1,6 @@
 package de.ofahrt.catfish.bridge;
 
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.servlet.http.HttpSession;
@@ -23,11 +24,7 @@ public final class XsrfToken {
     String newToken = UUID.randomUUID().toString();
     ref.compareAndSet(null, newToken);
     // Non-null: either our CAS succeeded, or another thread set a value first.
-    String result = ref.get();
-    if (result == null) {
-      throw new IllegalStateException("Token was cleared concurrently");
-    }
-    return result;
+    return Objects.requireNonNull(ref.get(), "token");
   }
 
   public static boolean isValid(HttpSession session, String token) {

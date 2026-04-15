@@ -37,6 +37,7 @@ import javax.servlet.ServletInputStream;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
+import org.jspecify.annotations.Nullable;
 
 @SuppressWarnings("NullAway") // Servlet API methods return null by design; not JSpecify-annotated.
 public final class RequestImpl implements HttpServletRequest {
@@ -73,7 +74,7 @@ public final class RequestImpl implements HttpServletRequest {
   public RequestImpl(
       HttpRequest request,
       Connection connection,
-      SessionManager sessionManager,
+      @Nullable SessionManager sessionManager,
       HttpResponseWriter writer)
       throws MalformedRequestException {
     this.request = request;

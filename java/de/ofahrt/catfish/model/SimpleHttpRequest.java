@@ -80,47 +80,45 @@ public final class SimpleHttpRequest implements HttpRequest {
       return new SimpleHttpRequest(this);
     }
 
-    @SuppressWarnings({"unused", "NullAway"}) // setError() guarantees errorResponse is non-null
     public HttpRequest build() throws MalformedRequestException {
       if (errorResponse != null) {
         throw new MalformedRequestException(errorResponse);
       }
       if (unparsedUri == null) {
-        setError(HttpStatusCode.BAD_REQUEST, "Missing URI!");
-        throw new MalformedRequestException(errorResponse);
+        throw buildError(HttpStatusCode.BAD_REQUEST, "Missing URI!");
       }
       try {
         URI parsed = new URI(unparsedUri);
         if (!unparsedUri.equals("*") && !parsed.isAbsolute() && !unparsedUri.startsWith("/")) {
-          setError(HttpStatusCode.BAD_REQUEST, "Malformed URI");
-          throw new MalformedRequestException(errorResponse);
+          throw buildError(HttpStatusCode.BAD_REQUEST, "Malformed URI");
         }
       } catch (URISyntaxException e) {
-        setError(HttpStatusCode.BAD_REQUEST, "Malformed URI");
-        throw new MalformedRequestException(errorResponse);
+        throw buildError(HttpStatusCode.BAD_REQUEST, "Malformed URI");
       }
       if ((version.compareTo(HttpVersion.HTTP_1_1) >= 0)
           && !headers.containsKey(HttpHeaderName.HOST)) {
-        setError(HttpStatusCode.BAD_REQUEST, "Missing 'Host' field");
-        throw new MalformedRequestException(errorResponse);
+        throw buildError(HttpStatusCode.BAD_REQUEST, "Missing 'Host' field");
       }
       boolean hasContentLength = headers.containsKey(HttpHeaderName.CONTENT_LENGTH);
       boolean hasTransferEncoding = headers.containsKey(HttpHeaderName.TRANSFER_ENCODING);
       boolean mustHaveBody = hasContentLength || hasTransferEncoding;
       if (mustHaveBody) {
         if (body == null) {
-          setError(
+          throw buildError(
               HttpStatusCode.BAD_REQUEST,
               "Requests with a Content-Length or Transfer-Encoding header must have a body");
-          throw new MalformedRequestException(errorResponse);
         }
       } else if (body != null) {
-        setError(
+        throw buildError(
             HttpStatusCode.BAD_REQUEST,
             "Requests without a Content-Length or Transfer-Encoding header must not have a body");
-        throw new MalformedRequestException(errorResponse);
       }
       return new SimpleHttpRequest(this);
+    }
+
+    private MalformedRequestException buildError(HttpStatusCode statusCode, String error) {
+      this.errorResponse = new PreconstructedResponse(statusCode, error);
+      return new MalformedRequestException(errorResponse);
     }
 
     public Builder setVersion(HttpVersion version) {

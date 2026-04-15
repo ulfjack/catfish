@@ -55,7 +55,6 @@ public final class ServletHttpHandler implements HttpHandler {
     }
 
     @Override
-    @SuppressWarnings("NullAway") // sessionManager is nullable; RequestImpl handles it.
     public void handle(
         Connection connection, HttpRequest request, HttpResponseWriter responseWriter)
         throws IOException {

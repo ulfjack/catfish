@@ -27,6 +27,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import javax.net.SocketFactory;
@@ -323,10 +324,7 @@ final class HttpServerStage implements Stage {
         isAbsoluteUri(headers.getUri())
             ? headers.withUri(toRelativeUri(headers.getUri()))
             : headers;
-    Connection conn = this.connection;
-    if (conn == null) {
-      throw new IllegalStateException("applyRoutingDecision called before connect");
-    }
+    Connection conn = Objects.requireNonNull(this.connection, "connection");
     if (action instanceof RequestAction.Deny d) {
       startBuffered(headers, d.response() != null ? d.response() : StandardResponses.FORBIDDEN);
       return ConnectionControl.PAUSE;
@@ -344,10 +342,7 @@ final class HttpServerStage implements Stage {
               conn);
       return startBodyOrDispatch(effective, currentHandler);
     } else if (action instanceof RequestAction.ForwardAndCapture fc) {
-      Executor exec = this.executor;
-      if (exec == null) {
-        throw new IllegalStateException("Forward action requires an executor");
-      }
+      Executor exec = Objects.requireNonNull(this.executor, "executor");
       SocketFactory factory = fc.useTls() ? originSocketFactory : SocketFactory.getDefault();
       currentHandler =
           new ProxyRequestStage(
@@ -362,10 +357,7 @@ final class HttpServerStage implements Stage {
               fc.captureStream());
       return startBodyOrDispatch(effective, currentHandler);
     } else if (action instanceof RequestAction.Forward f) {
-      Executor exec = this.executor;
-      if (exec == null) {
-        throw new IllegalStateException("Forward action requires an executor");
-      }
+      Executor exec = Objects.requireNonNull(this.executor, "executor");
       SocketFactory factory = f.useTls() ? originSocketFactory : SocketFactory.getDefault();
       currentHandler =
           new ProxyRequestStage(
@@ -394,10 +386,7 @@ final class HttpServerStage implements Stage {
     if (!inputBuffer.hasRemaining()) {
       return ConnectionControl.CONTINUE;
     }
-    HttpRequestStage handler = this.currentHandler;
-    if (handler == null) {
-      throw new IllegalStateException("readBody called without a current handler");
-    }
+    HttpRequestStage handler = Objects.requireNonNull(this.currentHandler, "currentHandler");
     // Content-Length: stream raw bytes directly to the handler (no parser buffering).
     if (contentLengthRemaining >= 0) {
       int toFeed = (int) Math.min(inputBuffer.remaining(), contentLengthRemaining);
@@ -447,10 +436,7 @@ final class HttpServerStage implements Stage {
       return ConnectionControl.CONTINUE;
     }
     // Fallback for bodyParser (shouldn't be reached with current code paths).
-    HttpRequestBodyParser parser = this.bodyParser;
-    if (parser == null) {
-      throw new IllegalStateException("readBody called without body parser or framing");
-    }
+    HttpRequestBodyParser parser = Objects.requireNonNull(this.bodyParser, "bodyParser");
     int consumed =
         parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.remaining());
     inputBuffer.position(inputBuffer.position() + consumed);
@@ -646,9 +632,7 @@ final class HttpServerStage implements Stage {
 
   private void notifyRequestComplete(
       @Nullable HttpRequest request, @Nullable HttpResponse response) {
-    if (response == null) {
-      throw new IllegalStateException("notifyRequestComplete called without response");
-    }
+    Objects.requireNonNull(response, "response");
     serverListener.onRequestComplete(
         requestId, connectHost, connectPort, request, RequestOutcome.success(response, 0));
     requestId = UUID.randomUUID();

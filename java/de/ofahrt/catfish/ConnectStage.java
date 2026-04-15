@@ -16,6 +16,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import javax.net.ssl.SNIHostName;
@@ -253,10 +254,8 @@ final class ConnectStage implements Stage {
     return switch (state) {
       case CONNECTING -> ConnectionControl.PAUSE;
       case SENDING_RESPONSE -> {
-        byte[] responseBytes = this.pendingResponseBytes;
-        if (responseBytes == null) {
-          throw new IllegalStateException("SENDING_RESPONSE without pendingResponseBytes");
-        }
+        byte[] responseBytes =
+            Objects.requireNonNull(this.pendingResponseBytes, "pendingResponseBytes");
         outputBuffer.compact();
         int toCopy = Math.min(outputBuffer.remaining(), responseBytes.length - responseOffset);
         outputBuffer.put(responseBytes, responseOffset, toCopy);
@@ -279,14 +278,8 @@ final class ConnectStage implements Stage {
   }
 
   private void setupTunnel() throws IOException {
-    Socket sock = this.tunnelSocket;
-    if (sock == null) {
-      throw new IllegalStateException("setupTunnel called without tunnelSocket");
-    }
-    Runnable closeCallback = this.onClose;
-    if (closeCallback == null) {
-      throw new IllegalStateException("setupTunnel called without onClose");
-    }
+    Socket sock = Objects.requireNonNull(this.tunnelSocket, "tunnelSocket");
+    Runnable closeCallback = Objects.requireNonNull(this.onClose, "onClose");
     TunnelForwardStage tunnelStage =
         new TunnelForwardStage(parent, inputBuffer, outputBuffer, executor, sock, closeCallback);
     tunnelSocket = null; // ownership transferred to tunnelStage
@@ -294,18 +287,9 @@ final class ConnectStage implements Stage {
   }
 
   private void setupMitm() {
-    SSLContext ctx = this.fakeCtx;
-    if (ctx == null) {
-      throw new IllegalStateException("setupMitm called without fakeCtx");
-    }
-    String capturedOriginHost = this.originHost;
-    if (capturedOriginHost == null) {
-      throw new IllegalStateException("setupMitm called without originHost");
-    }
-    Runnable closeCallback = this.onClose;
-    if (closeCallback == null) {
-      throw new IllegalStateException("setupMitm called without onClose");
-    }
+    SSLContext ctx = Objects.requireNonNull(this.fakeCtx, "fakeCtx");
+    String capturedOriginHost = Objects.requireNonNull(this.originHost, "originHost");
+    Runnable closeCallback = Objects.requireNonNull(this.onClose, "onClose");
     // The inner HttpServerStage gets a ConnectHandler scoped to the MITM tunnel:
     // - applyConnect: deny (nested CONNECT inside a decrypted tunnel is meaningless)
     // - applyLocal: reconstruct the absolute URI and call the user's applyProxy, so the user

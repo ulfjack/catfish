@@ -5,6 +5,7 @@ import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.network.Connection;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 import java.util.concurrent.Executor;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
@@ -97,10 +98,7 @@ final class SslServerStage implements Stage {
   private class InnerPipeline implements Pipeline {
     @Override
     public void replaceWith(Stage nextStage) {
-      Connection conn = connection;
-      if (conn == null) {
-        throw new IllegalStateException("replaceWith called before connect");
-      }
+      Connection conn = Objects.requireNonNull(connection, "replaceWith called before connect");
       next = nextStage;
       InitialConnectionState s = nextStage.connect(conn);
       if (s != InitialConnectionState.WRITE_ONLY) {
@@ -223,10 +221,7 @@ final class SslServerStage implements Stage {
       findSni();
       return status == FlowStatus.SEND_ALERT ? ConnectionControl.PAUSE : ConnectionControl.CONTINUE;
     }
-    SSLEngine engine = this.sslEngine;
-    if (engine == null) {
-      throw new IllegalStateException("read called after SNI phase without sslEngine");
-    }
+    SSLEngine engine = Objects.requireNonNull(this.sslEngine, "sslEngine");
     if (status == FlowStatus.HANDSHAKE) {
       if (taskPending) return ConnectionControl.PAUSE;
       parent.log(
@@ -259,10 +254,8 @@ final class SslServerStage implements Stage {
         // the OPEN-state transition from write(): record the new state, encourage writes if
         // the next stage wants to write, and return CONTINUE so the driver re-enters read()
         // and takes the OPEN branch on the next call.
-        InitialConnectionState phs = this.postHandshakeState;
-        if (phs == null) {
-          throw new IllegalStateException("Handshake complete without postHandshakeState");
-        }
+        InitialConnectionState phs =
+            Objects.requireNonNull(this.postHandshakeState, "postHandshakeState");
         status = FlowStatus.OPEN;
         if (phs != InitialConnectionState.READ_ONLY) {
           parent.encourageWrites();
@@ -339,10 +332,8 @@ final class SslServerStage implements Stage {
         return ConnectionControl.PAUSE;
       }
       if (engine.getHandshakeStatus() == HandshakeStatus.NOT_HANDSHAKING) {
-        InitialConnectionState phs = this.postHandshakeState;
-        if (phs == null) {
-          throw new IllegalStateException("Handshake complete without postHandshakeState");
-        }
+        InitialConnectionState phs =
+            Objects.requireNonNull(this.postHandshakeState, "postHandshakeState");
         status = FlowStatus.OPEN;
         if (phs != InitialConnectionState.WRITE_ONLY) {
           parent.encourageReads();
@@ -398,10 +389,7 @@ final class SslServerStage implements Stage {
       return nextState;
     } else { // status == FlowStatus.CLOSING
       parent.log("SSL Write");
-      ConnectionControl closing = this.pendingClose;
-      if (closing == null) {
-        throw new IllegalStateException("CLOSING state without pendingClose");
-      }
+      ConnectionControl closing = Objects.requireNonNull(this.pendingClose, "pendingClose");
       // invariant: both netOutputBuffer and outputBuffer are readable
       if (!netOutputBuffer.hasRemaining() && outputBuffer.hasRemaining()) {
         netOutputBuffer.clear(); // prepare for writing
