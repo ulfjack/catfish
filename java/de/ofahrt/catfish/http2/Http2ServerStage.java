@@ -87,6 +87,7 @@ public final class Http2ServerStage implements Stage {
   // Last stream ID we processed (for GOAWAY).
   private int lastStreamId;
   private boolean goawaySent;
+  private boolean goawayReceived;
 
   public Http2ServerStage(
       Pipeline parent,
@@ -178,7 +179,7 @@ public final class Http2ServerStage implements Stage {
     if (outputBuffer.hasRemaining()) {
       return ConnectionControl.CONTINUE;
     }
-    if (goawaySent && streams.isEmpty()) {
+    if ((goawaySent || goawayReceived) && streams.isEmpty()) {
       return ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH;
     }
     return ConnectionControl.PAUSE;
@@ -531,8 +532,7 @@ public final class Http2ServerStage implements Stage {
   // ---- GOAWAY ----
 
   private void handleGoaway() {
-    // Peer is shutting down — stop creating new streams.
-    goawaySent = true;
+    goawayReceived = true;
   }
 
   // ---- Request dispatch ----
