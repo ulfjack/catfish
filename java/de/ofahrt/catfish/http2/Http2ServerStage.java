@@ -212,10 +212,10 @@ public final class Http2ServerStage implements Stage {
   private void queueServerSettings() {
     Http2FrameWriter.writeSettings(
         controlFrameScratch,
-        0x3,
-        DEFAULT_MAX_CONCURRENT_STREAMS, // SETTINGS_MAX_CONCURRENT_STREAMS
-        0x2,
-        0); // SETTINGS_ENABLE_PUSH = 0
+        Setting.MAX_CONCURRENT_STREAMS.id(),
+        DEFAULT_MAX_CONCURRENT_STREAMS,
+        Setting.ENABLE_PUSH.id(),
+        0);
     flushScratch();
   }
 
