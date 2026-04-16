@@ -85,6 +85,12 @@ public final class Http2ServerStage implements Stage {
   // Flow control: send windows (how much DATA we may send).
   private int connectionSendWindow = 65535; // initial value per spec
 
+  // Flow control: pending WINDOW_UPDATE bytes for the connection. Accumulated as DATA is
+  // received and emitted once the accumulated count exceeds WINDOW_UPDATE_THRESHOLD, to avoid
+  // amplifying small DATA frames into larger WINDOW_UPDATE replies.
+  private static final int WINDOW_UPDATE_THRESHOLD = 64;
+  private int pendingConnAckBytes;
+
   // Last stream ID we processed (for GOAWAY).
   private int lastStreamId;
   private boolean goawaySent;
@@ -472,14 +478,29 @@ public final class Http2ServerStage implements Stage {
       if (dataLength > 0) {
         stream.appendBodyData(payload, dataOffset, dataLength);
       }
-      // Auto-ack the full frame payload (including padding) per flow control.
-      queueWindowUpdate(streamId, payload.length);
-      queueWindowUpdate(0, payload.length);
-      parent.encourageWrites();
+      // Accumulate pending WINDOW_UPDATE bytes (full frame payload, including padding).
+      // Emit when above threshold to avoid amplifying small DATA frames into larger replies.
+      stream.addPendingAckBytes(payload.length);
+      pendingConnAckBytes += payload.length;
+      boolean emitted = false;
+      if (stream.getPendingAckBytes() >= WINDOW_UPDATE_THRESHOLD) {
+        queueWindowUpdate(streamId, stream.takePendingAckBytes());
+        emitted = true;
+      }
+      if (pendingConnAckBytes >= WINDOW_UPDATE_THRESHOLD) {
+        queueWindowUpdate(0, pendingConnAckBytes);
+        pendingConnAckBytes = 0;
+        emitted = true;
+      }
+      if (emitted) {
+        parent.encourageWrites();
+      }
     }
 
     if (endStream) {
       stream.setState(Http2Stream.State.HALF_CLOSED_REMOTE);
+      // Per RFC 9113 §6.9, stream-level WINDOW_UPDATE can be skipped for closing streams.
+      stream.takePendingAckBytes();
       SimpleHttpRequest.Builder builder = stream.getRequestBuilder();
       RequestAction.ServeLocally serve = stream.getRoutingResult();
       if (builder != null && serve != null) {

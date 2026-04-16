@@ -58,6 +58,8 @@ final class Http2Stream {
   private int sendWindow;
   // Tracks DATA bytes sent in the last writeResponseFrames call (for connection window accounting).
   private int lastDataBytesSent;
+  // Pending bytes to ack via WINDOW_UPDATE on this stream.
+  private int pendingAckBytes;
 
   Http2Stream(int streamId, State initialState, int initialSendWindow) {
     this.streamId = streamId;
@@ -85,6 +87,20 @@ final class Http2Stream {
 
   int getLastDataBytesSent() {
     return lastDataBytesSent;
+  }
+
+  void addPendingAckBytes(int n) {
+    pendingAckBytes += n;
+  }
+
+  int getPendingAckBytes() {
+    return pendingAckBytes;
+  }
+
+  int takePendingAckBytes() {
+    int n = pendingAckBytes;
+    pendingAckBytes = 0;
+    return n;
   }
 
   // ---- Request builder (for requests with body) ----
