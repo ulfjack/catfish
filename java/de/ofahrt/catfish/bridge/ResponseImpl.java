@@ -1,5 +1,6 @@
 package de.ofahrt.catfish.bridge;
 
+import de.ofahrt.catfish.model.HtmlEscape;
 import de.ofahrt.catfish.model.HttpDate;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
@@ -415,7 +416,7 @@ public final class ResponseImpl implements HttpServletResponse {
     setContentType(MimeType.TEXT_HTML.toString());
     String msg =
         "<html><head><meta http-equiv=\"refresh\" content=\"1; URL="
-            + escapeHtmlAttribute(location)
+            + HtmlEscape.attribute(location)
             + "\"></head><body>REDIRECT</body></html>";
     HttpResponse response = buildResponse().withBody(msg.getBytes(StandardCharsets.UTF_8));
     responseWriter.commitBuffered(response);
@@ -455,13 +456,5 @@ public final class ResponseImpl implements HttpServletResponse {
       throw new IllegalStateException();
     }
     throw new UnsupportedOperationException();
-  }
-
-  private static String escapeHtmlAttribute(String value) {
-    return value
-        .replace("&", "&amp;")
-        .replace("\"", "&quot;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;");
   }
 }

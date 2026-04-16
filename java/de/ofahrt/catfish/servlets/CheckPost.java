@@ -1,5 +1,6 @@
 package de.ofahrt.catfish.servlets;
 
+import de.ofahrt.catfish.model.HtmlEscape;
 import de.ofahrt.catfish.utils.MimeType;
 import java.io.IOException;
 import java.io.Writer;
@@ -33,7 +34,10 @@ public final class CheckPost extends HttpServlet {
     response.setContentType(MimeType.TEXT_HTML.toString());
     Writer out = response.getWriter();
     out.write("<html><title>Check Post</title><body>");
-    out.write("<p>" + request.getParameter("a") + "</p>");
+    String a = request.getParameter("a");
+    if (a != null) {
+      out.write("<p>" + HtmlEscape.text(a) + "</p>");
+    }
 
     //    out.write("<form method=\"post\" enctype=\"multipart/form-data\">");
     out.write("<form method=\"post\" enctype=\"application/x-www-form-urlencoded\">");
