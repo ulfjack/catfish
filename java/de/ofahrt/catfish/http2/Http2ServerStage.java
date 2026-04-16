@@ -17,11 +17,16 @@ import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.RequestAction;
+import java.io.FilterOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
@@ -98,15 +103,45 @@ public final class Http2ServerStage implements Stage {
   // Set by read() when the control frame queue fills; cleared by write() after drain.
   private boolean readsPausedForBackpressure;
 
+  // Per-connection request dispatch throttling. Bounds the number of handlers running on
+  // the executor for this connection at any time; additional requests wait in heldRequests.
+  // Defends against Rapid Reset (CVE-2023-44487): the attacker can send HEADERS+RST_STREAM
+  // fast, but only maxConcurrentDispatches handlers actually run, and new requests are only
+  // released when a previous handler finishes. Each handler is charged regardless of whether
+  // its response is ultimately sent, so RST_STREAM doesn't free the slot early.
+  private final int maxConcurrentDispatches;
+  private int inFlightRequests;
+  private final ArrayDeque<HeldRequest> heldRequests = new ArrayDeque<>();
+
+  private record HeldRequest(
+      Http2Stream stream, SimpleHttpRequest.Builder builder, RequestAction.ServeLocally serve) {}
+
   public Http2ServerStage(
       Pipeline parent,
       RequestQueue requestHandler,
       ConnectHandler connectHandler,
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer) {
+    this(
+        parent,
+        requestHandler,
+        connectHandler,
+        inputBuffer,
+        outputBuffer,
+        Runtime.getRuntime().availableProcessors());
+  }
+
+  public Http2ServerStage(
+      Pipeline parent,
+      RequestQueue requestHandler,
+      ConnectHandler connectHandler,
+      ByteBuffer inputBuffer,
+      ByteBuffer outputBuffer,
+      int maxConcurrentDispatches) {
     this.parent = parent;
     this.requestHandler = requestHandler;
     this.connectHandler = connectHandler;
+    this.maxConcurrentDispatches = maxConcurrentDispatches;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
     controlFrameQueue.flip(); // start in read mode, empty
@@ -571,6 +606,9 @@ public final class Http2ServerStage implements Stage {
         buf.cancelStream();
       }
     }
+    // Drop any held request for this stream. A dispatched handler keeps running — its slot
+    // is only freed when the handler completes, not by RST_STREAM (Rapid Reset defense).
+    heldRequests.removeIf(h -> h.stream().getStreamId() == streamId);
   }
 
   // ---- GOAWAY ----
@@ -583,6 +621,16 @@ public final class Http2ServerStage implements Stage {
 
   @SuppressWarnings("NullAway") // connection is non-null after connect()
   private void dispatchRequest(
+      Http2Stream stream, SimpleHttpRequest.Builder builder, RequestAction.ServeLocally serve) {
+    if (inFlightRequests >= maxConcurrentDispatches) {
+      heldRequests.add(new HeldRequest(stream, builder, serve));
+      return;
+    }
+    doDispatch(stream, builder, serve);
+  }
+
+  @SuppressWarnings("NullAway") // connection is non-null after connect()
+  private void doDispatch(
       Http2Stream stream, SimpleHttpRequest.Builder builder, RequestAction.ServeLocally serve) {
     HttpRequest request;
     byte[] bodyBytes = stream.getBodyBytes();
@@ -597,8 +645,77 @@ public final class Http2ServerStage implements Stage {
       return;
     }
 
-    HttpResponseWriter writer = new Http2ResponseWriter(stream);
+    inFlightRequests++;
+    AtomicBoolean completed = new AtomicBoolean();
+    Runnable notify =
+        () -> {
+          if (completed.compareAndSet(false, true)) {
+            parent.queue(this::onRequestComplete);
+          }
+        };
+    // Completion fires when commitBuffered returns, or when the commitStreamed OutputStream
+    // is closed — not when the handler returns, since the handler may keep writing async.
+    HttpResponseWriter writer = new NotifyingWriter(new Http2ResponseWriter(stream), notify);
     requestHandler.queueRequest(serve.handler(), connection, request, writer);
+  }
+
+  /**
+   * Called on the NIO thread when a dispatched request finishes. Decrements the in-flight counter
+   * and dispatches the next held request, if any.
+   */
+  private void onRequestComplete() {
+    inFlightRequests--;
+    while (!heldRequests.isEmpty() && inFlightRequests < maxConcurrentDispatches) {
+      HeldRequest next = heldRequests.poll();
+      // Skip if the stream was RST_STREAMed while held.
+      if (streams.containsKey(next.stream().getStreamId())) {
+        doDispatch(next.stream(), next.builder(), next.serve());
+      }
+    }
+  }
+
+  /**
+   * Wraps a response writer to notify completion: after commitBuffered returns, or after the
+   * OutputStream from commitStreamed is closed. Handler return does NOT trigger completion — the
+   * handler may return while continuing to write asynchronously.
+   */
+  private static final class NotifyingWriter implements HttpResponseWriter {
+    private final HttpResponseWriter delegate;
+    private final Runnable onComplete;
+
+    NotifyingWriter(HttpResponseWriter delegate, Runnable onComplete) {
+      this.delegate = delegate;
+      this.onComplete = onComplete;
+    }
+
+    @Override
+    public void commitBuffered(HttpResponse response) throws IOException {
+      try {
+        delegate.commitBuffered(response);
+      } finally {
+        onComplete.run();
+      }
+    }
+
+    @Override
+    public OutputStream commitStreamed(HttpResponse response) throws IOException {
+      OutputStream inner = delegate.commitStreamed(response);
+      return new FilterOutputStream(inner) {
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+          inner.write(b, off, len);
+        }
+
+        @Override
+        public void close() throws IOException {
+          try {
+            inner.close();
+          } finally {
+            onComplete.run();
+          }
+        }
+      };
+    }
   }
 
   private void sendErrorResponse(Http2Stream stream, HttpResponse errorResponse) {
@@ -617,10 +734,10 @@ public final class Http2ServerStage implements Stage {
    * @param contentLength if >= 0, adds a content-length header with this value
    */
   private byte[] encodeResponseHeaders(HttpResponse response, int contentLength) {
-    var headerList = new java.util.ArrayList<Header>();
+    var headerList = new ArrayList<Header>();
     headerList.add(new Header(":status", Integer.toString(response.getStatusCode())));
     for (var entry : response.getHeaders()) {
-      String name = entry.getKey().toLowerCase(java.util.Locale.ROOT);
+      String name = entry.getKey().toLowerCase(Locale.ROOT);
       // Skip HTTP/1.1-specific headers that don't apply to HTTP/2,
       // and skip content-length if we're setting it ourselves.
       if ("connection".equals(name)
@@ -710,7 +827,7 @@ public final class Http2ServerStage implements Stage {
     }
 
     @Override
-    public java.io.OutputStream commitStreamed(HttpResponse response) throws IOException {
+    public OutputStream commitStreamed(HttpResponse response) throws IOException {
       if (!committed.compareAndSet(false, true)) {
         throw new IllegalStateException("Response already committed");
       }
@@ -719,7 +836,7 @@ public final class Http2ServerStage implements Stage {
           new Http2StreamBuffer(65536, () -> parent.queue(() -> parent.encourageWrites()));
       stream.setStreamingResponse(headerBlock, buffer);
       parent.queue(() -> parent.encourageWrites()); // send HEADERS immediately
-      return new java.io.OutputStream() {
+      return new OutputStream() {
         @Override
         public void write(int b) throws IOException {
           write(new byte[] {(byte) b}, 0, 1);
