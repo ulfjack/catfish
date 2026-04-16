@@ -559,6 +559,38 @@ public class Http2ServerStageTest {
     assertEquals(0, dispatchedRequests.size());
   }
 
+  @Test
+  public void controlFrameFlood_pausesReads() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // Build many PING frames concatenated (each PING = 17 bytes, each ACK = 17 bytes).
+    // The control frame queue holds 4096 bytes, so ~240 ACKs saturate it.
+    byte[] pingData = {0, 1, 2, 3, 4, 5, 6, 7};
+    ByteBuffer pingBuf = ByteBuffer.allocate(17);
+    Http2FrameWriter.writePing(pingBuf, pingData, false);
+    pingBuf.flip();
+    byte[] onePing = new byte[pingBuf.remaining()];
+    pingBuf.get(onePing);
+
+    ByteBuffer flood = ByteBuffer.allocate(17 * 300);
+    for (int i = 0; i < 300; i++) {
+      flood.put(onePing);
+    }
+    flood.flip();
+    byte[] floodBytes = new byte[flood.remaining()];
+    flood.get(floodBytes);
+
+    // Feed the flood without draining output — read() should PAUSE when the queue fills.
+    inputBuffer.compact();
+    inputBuffer.put(floodBytes);
+    inputBuffer.flip();
+    ConnectionControl result = stage.read();
+    assertEquals(ConnectionControl.PAUSE, result);
+    // Some input should remain unconsumed (TCP-style backpressure).
+    assertTrue("Expected input buffer to retain unconsumed bytes", inputBuffer.hasRemaining());
+  }
+
   // ---- Helpers ----
 
   /** Builds a raw frame with the given type, flags, stream ID, and payload. */

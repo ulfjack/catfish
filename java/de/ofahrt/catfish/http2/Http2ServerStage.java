@@ -17,7 +17,6 @@ import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.RequestAction;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -76,8 +75,10 @@ public final class Http2ServerStage implements Stage {
   private int peerInitialWindowSize = 65535; // SETTINGS_INITIAL_WINDOW_SIZE default
 
   // Control frame queue (accumulated during read(), drained during write()).
-  // Growable to handle bursts of WINDOW_UPDATE/PING_ACK/SETTINGS_ACK frames.
-  private final ByteArrayOutputStream controlFrameQueue = new ByteArrayOutputStream(256);
+  // Bounded: when it fills up, we apply backpressure by pausing reads — TCP flow control
+  // slows the peer to our write rate, preventing PING/SETTINGS flood DoS.
+  private static final int CONTROL_FRAME_QUEUE_CAPACITY = 4096;
+  private final ByteBuffer controlFrameQueue = ByteBuffer.allocate(CONTROL_FRAME_QUEUE_CAPACITY);
   // Scratch buffer for writing individual control frames before appending to the queue.
   private final ByteBuffer controlFrameScratch = ByteBuffer.allocate(64);
 
@@ -88,6 +89,8 @@ public final class Http2ServerStage implements Stage {
   private int lastStreamId;
   private boolean goawaySent;
   private boolean goawayReceived;
+  // Set by read() when the control frame queue fills; cleared by write() after drain.
+  private boolean readsPausedForBackpressure;
 
   public Http2ServerStage(
       Pipeline parent,
@@ -100,6 +103,7 @@ public final class Http2ServerStage implements Stage {
     this.connectHandler = connectHandler;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
+    controlFrameQueue.flip(); // start in read mode, empty
   }
 
   @Override
@@ -122,6 +126,15 @@ public final class Http2ServerStage implements Stage {
 
     // Parse frames from input buffer.
     while (inputBuffer.hasRemaining()) {
+      // Backpressure: if the control frame queue is nearly full, pause reads until write()
+      // drains it. TCP flow control will slow the peer to our write rate.
+      // Queue is in read mode; queuedBytes = remaining(), freeSpace = capacity - queuedBytes.
+      if (controlFrameQueue.remaining() >= CONTROL_FRAME_QUEUE_CAPACITY - 64) {
+        readsPausedForBackpressure = true;
+        parent.encourageWrites();
+        return ConnectionControl.PAUSE;
+      }
+
       int consumed =
           frameReader.parse(
               inputBuffer.array(),
@@ -149,12 +162,14 @@ public final class Http2ServerStage implements Stage {
   public ConnectionControl write() throws IOException {
     outputBuffer.compact();
 
-    if (!serverPrefaceSent) {
-      // Drain queued server SETTINGS into output.
-      drainControlFrames(outputBuffer);
-      serverPrefaceSent = true;
-    } else {
-      drainControlFrames(outputBuffer);
+    drainControlFrames(outputBuffer);
+    serverPrefaceSent = true;
+
+    // If reads were paused because the queue filled up, resume once it's drained enough.
+    if (readsPausedForBackpressure
+        && controlFrameQueue.remaining() < CONTROL_FRAME_QUEUE_CAPACITY / 2) {
+      readsPausedForBackpressure = false;
+      parent.encourageReads();
     }
 
     // Write response frames for streams that have pending data.
@@ -602,13 +617,15 @@ public final class Http2ServerStage implements Stage {
 
   // ---- Control frame helpers ----
 
-  /** Writes a frame to the scratch buffer, then appends the bytes to the growable queue. */
+  /**
+   * Writes the scratch buffer contents to the control frame queue. The queue is a fixed-size
+   * buffer; if it is full, read() will return PAUSE and TCP flow control will slow the peer.
+   */
   private void flushScratch() {
     controlFrameScratch.flip();
-    controlFrameQueue.write(
-        controlFrameScratch.array(),
-        controlFrameScratch.arrayOffset(),
-        controlFrameScratch.limit());
+    controlFrameQueue.compact();
+    controlFrameQueue.put(controlFrameScratch);
+    controlFrameQueue.flip();
     controlFrameScratch.clear();
   }
 
@@ -632,17 +649,13 @@ public final class Http2ServerStage implements Stage {
   }
 
   private void drainControlFrames(ByteBuffer out) {
-    byte[] queued = controlFrameQueue.toByteArray();
-    controlFrameQueue.reset();
-    int offset = 0;
-    while (offset < queued.length && out.hasRemaining()) {
-      int toCopy = Math.min(queued.length - offset, out.remaining());
-      out.put(queued, offset, toCopy);
-      offset += toCopy;
-    }
-    // If the output buffer was too small, put the remainder back.
-    if (offset < queued.length) {
-      controlFrameQueue.write(queued, offset, queued.length - offset);
+    while (controlFrameQueue.hasRemaining() && out.hasRemaining()) {
+      int toCopy = Math.min(controlFrameQueue.remaining(), out.remaining());
+      out.put(
+          controlFrameQueue.array(),
+          controlFrameQueue.arrayOffset() + controlFrameQueue.position(),
+          toCopy);
+      controlFrameQueue.position(controlFrameQueue.position() + toCopy);
     }
   }
 
