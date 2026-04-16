@@ -283,15 +283,19 @@ public final class Http2ServerStage implements Stage {
   }
 
   private void applyPeerSetting(int id, int value) throws IOException {
-    switch (id) {
-      case 1 -> {} // HEADER_TABLE_SIZE: limits our encoder's dynamic table. We don't use one.
-      case 2 -> { // ENABLE_PUSH
+    Setting setting = Setting.fromId(id);
+    if (setting == null) {
+      return; // unknown settings are ignored per spec
+    }
+    switch (setting) {
+      case HEADER_TABLE_SIZE -> {} // limits our encoder's dynamic table. We don't use one.
+      case ENABLE_PUSH -> {
         if (value != 0 && value != 1) {
           throw new IOException(
               "h2 PROTOCOL_ERROR: SETTINGS_ENABLE_PUSH must be 0 or 1, got " + value);
         }
       }
-      case 4 -> { // INITIAL_WINDOW_SIZE
+      case INITIAL_WINDOW_SIZE -> {
         if (value < 0) { // value is parsed as signed int; > 2^31-1 appears negative
           throw new IOException(
               "h2 FLOW_CONTROL_ERROR: SETTINGS_INITIAL_WINDOW_SIZE exceeds 2^31-1");
@@ -302,7 +306,7 @@ public final class Http2ServerStage implements Stage {
           stream.adjustSendWindow(delta);
         }
       }
-      case 5 -> { // MAX_FRAME_SIZE
+      case MAX_FRAME_SIZE -> {
         if (value < 16384 || value > 16777215) {
           throw new IOException(
               "h2 PROTOCOL_ERROR: SETTINGS_MAX_FRAME_SIZE must be in [16384, 16777215], got "
@@ -310,7 +314,7 @@ public final class Http2ServerStage implements Stage {
         }
         peerMaxFrameSize = value;
       }
-      default -> {} // unknown settings are ignored per spec
+      case MAX_CONCURRENT_STREAMS, MAX_HEADER_LIST_SIZE -> {} // noted but not acted on
     }
   }
 
