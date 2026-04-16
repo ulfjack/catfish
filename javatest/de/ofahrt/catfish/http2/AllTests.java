@@ -9,6 +9,7 @@ import org.junit.runners.Suite.SuiteClasses;
   HpackTest.class,
   Http2FrameReaderTest.class,
   Http2FrameWriterTest.class,
+  Http2StreamBufferTest.class,
   Http2ServerStageTest.class,
   Http2IntegrationTest.class,
 })

@@ -17,12 +17,16 @@ import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.RequestAction;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -589,6 +593,160 @@ public class Http2ServerStageTest {
     assertEquals(ConnectionControl.PAUSE, result);
     // Some input should remain unconsumed (TCP-style backpressure).
     assertTrue("Expected input buffer to retain unconsumed bytes", inputBuffer.hasRemaining());
+  }
+
+  @Test
+  public void streamingResponse_sendsDataFrames() throws IOException {
+    // Replace the stage's handler with one that streams a large response.
+    rebuildStageWithHandler(
+        (connection, request, writer) -> {
+          try (OutputStream out =
+              writer.commitStreamed(StandardResponses.OK.withBody(new byte[0]))) {
+            // Write in small chunks to exercise the streaming path.
+            for (int i = 0; i < 10; i++) {
+              out.write(("chunk" + i).getBytes(StandardCharsets.UTF_8));
+            }
+          }
+        });
+
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+    byte[] output = drainOutput();
+
+    // Parse frames from output. Should see HEADERS + at least one DATA + final DATA with
+    // END_STREAM.
+    Http2FrameReader reader = new Http2FrameReader();
+    int offset = 0;
+    List<Integer> frameTypes = new ArrayList<>();
+    boolean sawEndStream = false;
+    ByteArrayOutputStream bodyBytes = new ByteArrayOutputStream();
+    while (offset < output.length) {
+      int consumed = reader.parse(output, offset, output.length - offset);
+      offset += consumed;
+      if (reader.isComplete()) {
+        frameTypes.add(reader.getType());
+        if (reader.getType() == FrameType.DATA) {
+          byte[] payload = reader.getPayload();
+          if (payload != null) {
+            bodyBytes.write(payload, 0, payload.length);
+          }
+          if (reader.hasFlag(Http2FrameReader.FLAG_END_STREAM)) {
+            sawEndStream = true;
+          }
+        }
+        reader.reset();
+      }
+    }
+    assertTrue("Expected HEADERS", frameTypes.contains(FrameType.HEADERS));
+    assertTrue("Expected DATA frames", frameTypes.contains(FrameType.DATA));
+    assertTrue("Expected END_STREAM on final DATA", sawEndStream);
+
+    StringBuilder expected = new StringBuilder();
+    for (int i = 0; i < 10; i++) {
+      expected.append("chunk").append(i);
+    }
+    assertEquals(expected.toString(), bodyBytes.toString(StandardCharsets.UTF_8));
+  }
+
+  @Test
+  public void dispatchThrottling_heldRequestsDrainAfterCompletion() throws IOException {
+    // Stage with max 1 concurrent dispatch and a handler we can manually complete.
+    AtomicReference<HttpResponseWriter> pendingWriter = new AtomicReference<>();
+    AtomicInteger invocations = new AtomicInteger();
+    HttpHandler slowHandler =
+        (connection, request, writer) -> {
+          invocations.incrementAndGet();
+          pendingWriter.set(writer);
+          // Don't commit. The test will complete manually.
+        };
+    ConnectHandler ch =
+        new ConnectHandler() {
+          @Override
+          public RequestAction applyLocal(HttpRequest request) {
+            return RequestAction.serveLocally(slowHandler);
+          }
+        };
+    pipeline = new TestPipeline();
+    inputBuffer = ByteBuffer.allocate(65536);
+    outputBuffer = ByteBuffer.allocate(65536);
+    inputBuffer.flip();
+    outputBuffer.flip();
+    stage =
+        new Http2ServerStage(
+            pipeline,
+            (handler, connection, request, writer) -> {
+              try {
+                handler.handle(connection, request, writer);
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
+            },
+            ch,
+            inputBuffer,
+            outputBuffer,
+            /* maxConcurrentDispatches= */ 1);
+    Connection conn =
+        new Connection(
+            new InetSocketAddress("127.0.0.1", 8443),
+            new InetSocketAddress("127.0.0.1", 12345),
+            true);
+    stage.connect(conn);
+
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // First request — should be dispatched immediately.
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+    assertEquals(1, invocations.get());
+
+    // Second request — should be held (not dispatched) because of throttling.
+    feedAndRead(buildGetHeadersFrame(3, "/"));
+    assertEquals("held request should not be dispatched", 1, invocations.get());
+
+    // Complete the first request — should dispatch the second.
+    HttpResponseWriter w = pendingWriter.get();
+    if (w == null) {
+      fail("pendingWriter should be set");
+      return;
+    }
+    w.commitBuffered(StandardResponses.OK.withBody(new byte[0]));
+    assertEquals(2, invocations.get());
+  }
+
+  /** Rebuilds the stage with a custom handler. */
+  private void rebuildStageWithHandler(HttpHandler handler) {
+    ConnectHandler ch =
+        new ConnectHandler() {
+          @Override
+          public RequestAction applyLocal(HttpRequest request) {
+            return RequestAction.serveLocally(handler);
+          }
+        };
+    pipeline = new TestPipeline();
+    inputBuffer = ByteBuffer.allocate(65536);
+    outputBuffer = ByteBuffer.allocate(65536);
+    inputBuffer.flip();
+    outputBuffer.flip();
+    stage =
+        new Http2ServerStage(
+            pipeline,
+            (h, connection, request, writer) -> {
+              try {
+                h.handle(connection, request, writer);
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
+            },
+            ch,
+            inputBuffer,
+            outputBuffer);
+    Connection conn =
+        new Connection(
+            new InetSocketAddress("127.0.0.1", 8443),
+            new InetSocketAddress("127.0.0.1", 12345),
+            true);
+    stage.connect(conn);
   }
 
   // ---- Helpers ----
