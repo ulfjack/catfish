@@ -347,4 +347,20 @@ public class ConnectionHandlingTest {
       assertEquals(HttpStatusCode.PAYLOAD_TOO_LARGE.getStatusCode(), response.getStatusCode());
     }
   }
+
+  // ---- Handler error recovery ----
+
+  @Test(timeout = 5000)
+  public void handler_throwsException_returns500() throws Exception {
+    startServer(
+        (connection, request, responseWriter) -> {
+          throw new IOException("handler failure");
+        });
+    try (HttpConnection connection = HttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT, null)) {
+      connection.write(
+          "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+      HttpResponse response = connection.readResponse();
+      assertEquals(500, response.getStatusCode());
+    }
+  }
 }

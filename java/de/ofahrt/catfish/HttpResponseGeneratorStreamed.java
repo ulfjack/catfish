@@ -389,6 +389,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     writeState = WriteState.CLOSED;
     readState = ReadState.CLOSED;
     notify();
+    dataAvailableCallback.run();
   }
 
   public OutputStream getOutputStream() {
