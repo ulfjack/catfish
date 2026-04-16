@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.http2;
 
-public class ErrorCode {
+/** HTTP/2 error codes (RFC 9113 §7). */
+public final class ErrorCode {
   public static final int NO_ERROR = 0;
   public static final int PROTOCOL_ERROR = 1;
   public static final int INTERNAL_ERROR = 2;
@@ -15,4 +16,6 @@ public class ErrorCode {
   public static final int ENHANCE_YOUR_CALM = 11;
   public static final int INADEQUATE_SECURITY = 12;
   public static final int HTTP_1_1_REQUIRED = 13;
+
+  private ErrorCode() {}
 }

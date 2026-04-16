@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.http2;
 
-public class FrameType {
+/** HTTP/2 frame type codes (RFC 9113 §6). */
+public final class FrameType {
   public static final int DATA = 0;
   public static final int HEADERS = 1;
   public static final int PRIORITY = 2;
@@ -11,4 +12,6 @@ public class FrameType {
   public static final int GOAWAY = 7;
   public static final int WINDOW_UPDATE = 8;
   public static final int CONTINUATION = 9;
+
+  private FrameType() {}
 }
