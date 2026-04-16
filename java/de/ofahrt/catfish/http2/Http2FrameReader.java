@@ -7,7 +7,7 @@ import org.jspecify.annotations.Nullable;
  * a byte stream. Call {@link #parse} with available data; when a complete frame is ready, {@link
  * #isComplete} returns true and the frame fields are accessible.
  */
-public final class Http2FrameReader {
+final class Http2FrameReader {
 
   private static final int FRAME_HEADER_SIZE = 9;
 
@@ -28,7 +28,7 @@ public final class Http2FrameReader {
    * Feeds data to the reader. Returns the number of bytes consumed. After this call, check {@link
    * #isComplete()} to see if a full frame is available.
    */
-  public int parse(byte[] data, int offset, int available) {
+  int parse(byte[] data, int offset, int available) {
     int consumed = 0;
 
     // Read frame header.
@@ -83,12 +83,12 @@ public final class Http2FrameReader {
   }
 
   /** Returns true when a complete frame has been parsed. */
-  public boolean isComplete() {
+  boolean isComplete() {
     return complete;
   }
 
   /** Resets the reader for the next frame. */
-  public void reset() {
+  void reset() {
     headerOffset = 0;
     length = 0;
     type = 0;
@@ -100,45 +100,45 @@ public final class Http2FrameReader {
     complete = false;
   }
 
-  public int getLength() {
+  int getLength() {
     return length;
   }
 
-  public int getType() {
+  int getType() {
     return type;
   }
 
-  public int getFlags() {
+  int getFlags() {
     return flags;
   }
 
-  public int getStreamId() {
+  int getStreamId() {
     return streamId;
   }
 
-  public byte @Nullable [] getPayload() {
+  byte @Nullable [] getPayload() {
     return payload;
   }
 
   /** Returns true if the given flag bit is set. */
-  public boolean hasFlag(int flag) {
+  boolean hasFlag(int flag) {
     return (flags & flag) != 0;
   }
 
   /** Returns true if the frame payload exceeded the maximum allowed size. */
-  public boolean hasFrameSizeError() {
+  boolean hasFrameSizeError() {
     return frameSizeError;
   }
 
   /** Sets the maximum allowed payload size. Frames exceeding this are flagged as errors. */
-  public void setMaxPayloadSize(int maxPayloadSize) {
+  void setMaxPayloadSize(int maxPayloadSize) {
     this.maxPayloadSize = maxPayloadSize;
   }
 
   // Common frame flags.
-  public static final int FLAG_END_STREAM = 0x1;
-  public static final int FLAG_END_HEADERS = 0x4;
-  public static final int FLAG_PADDED = 0x8;
-  public static final int FLAG_PRIORITY = 0x20;
-  public static final int FLAG_ACK = 0x1;
+  static final int FLAG_END_STREAM = 0x1;
+  static final int FLAG_END_HEADERS = 0x4;
+  static final int FLAG_PADDED = 0x8;
+  static final int FLAG_PRIORITY = 0x20;
+  static final int FLAG_ACK = 0x1;
 }

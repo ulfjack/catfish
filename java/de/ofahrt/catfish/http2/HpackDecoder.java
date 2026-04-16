@@ -9,7 +9,7 @@ import java.util.List;
  * HPACK header block decoder (RFC 7541). Maintains a dynamic table across header blocks on the same
  * connection.
  */
-public final class HpackDecoder {
+final class HpackDecoder {
 
   private static final int DYNAMIC_TABLE_OVERHEAD = 32; // per RFC 7541 §4.1
 
@@ -17,7 +17,7 @@ public final class HpackDecoder {
   private int dynamicTableSize;
   private int maxDynamicTableSize = 4096; // SETTINGS_HEADER_TABLE_SIZE default
 
-  public void setMaxDynamicTableSize(int max) {
+  void setMaxDynamicTableSize(int max) {
     this.maxDynamicTableSize = max;
     evict();
   }
@@ -26,7 +26,7 @@ public final class HpackDecoder {
    * Decodes a complete header block into a list of headers. The block must be a complete HEADERS
    * frame payload (CONTINUATION not supported).
    */
-  public List<Header> decode(byte[] data, int offset, int length) throws HpackDecodingException {
+  List<Header> decode(byte[] data, int offset, int length) throws HpackDecodingException {
     List<Header> headers = new ArrayList<>();
     int end = offset + length;
     int[] pos = new int[1];
@@ -169,8 +169,8 @@ public final class HpackDecoder {
   }
 
   /** Exception thrown when an HPACK block is malformed. */
-  public static final class HpackDecodingException extends Exception {
-    public HpackDecodingException(String message) {
+  static final class HpackDecodingException extends Exception {
+    HpackDecodingException(String message) {
       super(message);
     }
   }

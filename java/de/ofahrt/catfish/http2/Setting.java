@@ -3,7 +3,7 @@ package de.ofahrt.catfish.http2;
 import org.jspecify.annotations.Nullable;
 
 /** HTTP/2 settings identifiers and their default values (RFC 9113 §6.5.2). */
-public enum Setting {
+enum Setting {
   HEADER_TABLE_SIZE(1, 4096),
   ENABLE_PUSH(2, 1),
   MAX_CONCURRENT_STREAMS(3, Integer.MAX_VALUE),
@@ -33,16 +33,16 @@ public enum Setting {
     this.defaultValue = defaultValue;
   }
 
-  public int id() {
+  int id() {
     return id;
   }
 
-  public int defaultValue() {
+  int defaultValue() {
     return defaultValue;
   }
 
   /** Returns the Setting for the given wire ID, or null if unknown. */
-  public static @Nullable Setting fromId(int id) {
+  static @Nullable Setting fromId(int id) {
     if (id < 0 || id >= BY_ID.length) {
       return null;
     }

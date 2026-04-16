@@ -1,9 +1,9 @@
 package de.ofahrt.catfish.http2;
 
 /** HPACK shared types and integer codec (RFC 7541 §5.1). */
-public final class Hpack {
+final class Hpack {
 
-  public record Header(String name, String value) {}
+  record Header(String name, String value) {}
 
   /**
    * Decodes an HPACK integer with the given prefix size (1-8 bits). Returns the decoded value and
@@ -16,7 +16,7 @@ public final class Hpack {
    * @param pos single-element array; on entry pos[0] is ignored; on return holds the new offset
    * @return the decoded integer, or -1 if the data is truncated
    */
-  public static int decodeInteger(byte[] data, int offset, int length, int prefixBits, int[] pos) {
+  static int decodeInteger(byte[] data, int offset, int length, int prefixBits, int[] pos) {
     if (length == 0) {
       return -1;
     }
@@ -49,8 +49,7 @@ public final class Hpack {
    * Encodes an HPACK integer with the given prefix size. The first byte of output is OR'd with
    * {@code firstByteBits} (the non-prefix high bits). Returns the number of bytes written.
    */
-  public static int encodeInteger(
-      byte[] out, int offset, int value, int prefixBits, int firstByteBits) {
+  static int encodeInteger(byte[] out, int offset, int value, int prefixBits, int firstByteBits) {
     int prefixMask = (1 << prefixBits) - 1;
     if (value < prefixMask) {
       out[offset] = (byte) (firstByteBits | value);

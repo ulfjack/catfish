@@ -8,10 +8,10 @@ import java.nio.charset.StandardCharsets;
  * literal-without-indexing. No dynamic table, no Huffman encoding. Produces slightly larger output
  * than an optimized encoder but is correct and simple.
  */
-public final class HpackEncoder {
+final class HpackEncoder {
 
   /** Encodes a list of headers into an HPACK header block. Thread-safe (no mutable state). */
-  public byte[] encode(Hpack.Header... headers) {
+  byte[] encode(Hpack.Header... headers) {
     ByteArrayOutputStream out = new ByteArrayOutputStream(256);
     byte[] buf = new byte[16]; // scratch for integer encoding
 
