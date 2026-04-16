@@ -36,6 +36,9 @@ public class ValidatingHttpHandlerTest {
       this.streamedResponse = response;
       return OutputStream.nullOutputStream();
     }
+
+    @Override
+    public void abort() {}
   }
 
   @Test

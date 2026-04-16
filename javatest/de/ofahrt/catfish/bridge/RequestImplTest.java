@@ -43,6 +43,11 @@ public class RequestImplTest {
         public OutputStream commitStreamed(HttpResponse response) {
           throw new UnsupportedOperationException();
         }
+
+        @Override
+        public void abort() {
+          throw new UnsupportedOperationException();
+        }
       };
 
   private RequestImpl toRequestImpl(SimpleHttpRequest.Builder builder) throws Exception {

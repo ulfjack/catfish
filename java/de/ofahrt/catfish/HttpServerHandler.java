@@ -5,7 +5,6 @@ import de.ofahrt.catfish.internal.network.NetworkEngine.NetworkHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.ConnectHandler;
@@ -96,16 +95,15 @@ final class HttpServerHandler implements NetworkHandler {
           public void run() {
             try {
               httpHandler.handle(connection, request, responseWriter);
-            } catch (IOException e) {
-              throw new RuntimeException(e);
+            } catch (Exception e) {
+              responseWriter.abort();
             }
           }
 
           @Override
           public void reject() {
             try {
-              HttpResponse responseToWrite = StandardResponses.SERVICE_UNAVAILABLE;
-              responseWriter.commitBuffered(responseToWrite);
+              responseWriter.commitBuffered(StandardResponses.SERVICE_UNAVAILABLE);
             } catch (IOException e) {
               throw new RuntimeException(e);
             }

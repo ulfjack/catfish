@@ -208,6 +208,11 @@ public class ServletHelperTest {
         public OutputStream commitStreamed(HttpResponse response) {
           throw new UnsupportedOperationException();
         }
+
+        @Override
+        public void abort() {
+          throw new UnsupportedOperationException();
+        }
       };
 
   private static RequestImpl makeRequestWithHeader(String headerName, String headerValue)

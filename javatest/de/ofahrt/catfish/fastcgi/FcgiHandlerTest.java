@@ -76,6 +76,9 @@ public class FcgiHandlerTest {
       this.response = response;
       return body;
     }
+
+    @Override
+    public void abort() {}
   }
 
   /** A captured FastCGI request, as observed by the mock backend. */
@@ -567,6 +570,9 @@ public class FcgiHandlerTest {
         }
       };
     }
+
+    @Override
+    public void abort() {}
   }
 
   @Test

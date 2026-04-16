@@ -276,6 +276,9 @@ final class LocalHttpRequestStage implements HttpRequestStage {
     private final KeepAlivePolicy keepAlivePolicy;
     private final CompressionPolicy compressionPolicy;
     private final AtomicBoolean committed = new AtomicBoolean();
+    // Set when commitStreamed is called, so abort() can force-close if the stream
+    // is already in flight.
+    private volatile @Nullable HttpResponseGeneratorStreamed streamedGenerator;
 
     ResponseWriterImpl(
         HttpRequest request, KeepAlivePolicy keepAlivePolicy, CompressionPolicy compressionPolicy) {
@@ -370,9 +373,43 @@ final class LocalHttpRequestStage implements HttpRequestStage {
       HttpResponseGeneratorStreamed gen =
           HttpResponseGeneratorStreamed.create(
               parent::encourageWrites, request, responseToWrite, !headRequest);
+      streamedGenerator = gen;
       parent.queue(() -> setResponse(gen));
       serverListener.onResponseStreamed(requestId, null, 0, request, responseToWrite);
       return compress ? new GZIPOutputStream(gen.getOutputStream()) : gen.getOutputStream();
+    }
+
+    @Override
+    public void abort() {
+      if (committed.compareAndSet(false, true)) {
+        // Not yet committed — send a 500 close-connection reply.
+        byte[] body = StandardResponses.INTERNAL_SERVER_ERROR.getBody();
+        if (body == null) {
+          body = EMPTY_BODY;
+        }
+        HttpResponse finalResponse =
+            StandardResponses.INTERNAL_SERVER_ERROR
+                .withHeaderOverrides(
+                    HttpHeaders.of(
+                        HttpHeaderName.CONNECTION,
+                        HttpConnectionHeader.CLOSE,
+                        HttpHeaderName.CONTENT_LENGTH,
+                        Integer.toString(body.length),
+                        HttpHeaderName.DATE,
+                        HttpDate.formatDate(Instant.now())))
+                .withBody(body);
+        boolean headRequest = HttpMethodName.HEAD.equals(request.getMethod());
+        HttpResponseGeneratorBuffered gen =
+            HttpResponseGeneratorBuffered.create(request, finalResponse, !headRequest);
+        parent.queue(() -> setResponse(gen));
+      } else {
+        // Already committed. If a stream is in flight, force-close it so the connection
+        // tears down cleanly. Buffered responses are already fully queued, nothing to do.
+        HttpResponseGeneratorStreamed gen = streamedGenerator;
+        if (gen != null) {
+          gen.close();
+        }
+      }
     }
 
     private boolean shouldKeepAlive() {

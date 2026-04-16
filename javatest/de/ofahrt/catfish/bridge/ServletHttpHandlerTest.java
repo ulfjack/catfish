@@ -27,6 +27,9 @@ public class ServletHttpHandlerTest {
       this.committed = response;
       return OutputStream.nullOutputStream();
     }
+
+    @Override
+    public void abort() {}
   }
 
   @Test

@@ -70,6 +70,9 @@ public class CatfishHttpServerTest {
             }
             return out;
           }
+
+          @Override
+          public void abort() {}
         };
     Connection connection =
         new Connection(

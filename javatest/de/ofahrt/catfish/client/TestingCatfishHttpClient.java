@@ -92,6 +92,9 @@ public abstract class TestingCatfishHttpClient {
         this.buffer = new ByteArrayOutputStream();
         return buffer;
       }
+
+      @Override
+      public void abort() {}
     }
 
     private final Servlet servlet;

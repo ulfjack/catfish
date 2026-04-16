@@ -76,5 +76,10 @@ public final class ValidatingHttpHandler implements HttpHandler {
       }
       return delegate.commitStreamed(response);
     }
+
+    @Override
+    public void abort() {
+      delegate.abort();
+    }
   }
 }

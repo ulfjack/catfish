@@ -34,6 +34,9 @@ public class ResponseImplTest {
       committed = r;
       return streamBuffer;
     }
+
+    @Override
+    public void abort() {}
   }
 
   private static HttpRequest SIMPLE_REQUEST;
