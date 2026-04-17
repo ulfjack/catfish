@@ -86,7 +86,7 @@ public final class RequestImpl implements HttpServletRequest {
     try {
       this.uri = new URI(unparsedUri);
     } catch (URISyntaxException e) {
-      throw new MalformedRequestException(StandardResponses.BAD_REQUEST);
+      throw new MalformedRequestException(StandardResponses.BAD_REQUEST, e);
     }
     HttpRequest.Body entity = request.getBody();
     if (entity instanceof HttpRequest.InMemoryBody) {

@@ -177,7 +177,7 @@ final class OriginForwarder {
           n = requestBodyPipe.read(buf, 0, buf.length);
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
-          throw new IOException("Interrupted while reading request body pipe");
+          throw new IOException("Interrupted while reading request body pipe", e);
         }
         if (n < 0) {
           break;

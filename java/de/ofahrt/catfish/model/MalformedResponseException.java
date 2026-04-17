@@ -8,4 +8,8 @@ public final class MalformedResponseException extends IOException {
   public MalformedResponseException(String message) {
     super(message);
   }
+
+  public MalformedResponseException(String message, Throwable cause) {
+    super(message, cause);
+  }
 }

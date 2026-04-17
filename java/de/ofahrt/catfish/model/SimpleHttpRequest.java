@@ -104,7 +104,7 @@ public final class SimpleHttpRequest implements HttpRequest {
           throw buildError(HttpStatusCode.BAD_REQUEST, "Malformed URI");
         }
       } catch (URISyntaxException e) {
-        throw buildError(HttpStatusCode.BAD_REQUEST, "Malformed URI");
+        throw buildError(HttpStatusCode.BAD_REQUEST, "Malformed URI", e);
       }
       if ((version.compareTo(HttpVersion.HTTP_1_1) >= 0)
           && !headers.containsKey(HttpHeaderName.HOST)) {
@@ -130,6 +130,12 @@ public final class SimpleHttpRequest implements HttpRequest {
     private MalformedRequestException buildError(HttpStatusCode statusCode, String error) {
       this.errorResponse = new PreconstructedResponse(statusCode, error);
       return new MalformedRequestException(errorResponse);
+    }
+
+    private MalformedRequestException buildError(
+        HttpStatusCode statusCode, String error, Throwable cause) {
+      this.errorResponse = new PreconstructedResponse(statusCode, error);
+      return new MalformedRequestException(errorResponse, cause);
     }
 
     public Builder setVersion(HttpVersion version) {

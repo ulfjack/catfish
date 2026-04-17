@@ -315,7 +315,7 @@ public final class IncrementalHttpResponseParser {
                 try {
                   contentLength = Long.parseLong(contentLengthValue);
                 } catch (NumberFormatException e) {
-                  throw new MalformedResponseException("Illegal content length value");
+                  throw new MalformedResponseException("Illegal content length value", e);
                 }
                 if (contentLength > maxContentLength) {
                   throw new MalformedResponseException("Too large content length");
