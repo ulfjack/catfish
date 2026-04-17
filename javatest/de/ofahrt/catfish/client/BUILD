@@ -40,7 +40,6 @@ java_test(
         ":test_helper",
         "//java/de/ofahrt/catfish",
         "//java/de/ofahrt/catfish/client",
-        "//java/de/ofahrt/catfish/client/legacy",
         "//java/de/ofahrt/catfish/internal/network",
         "//java/de/ofahrt/catfish/model",
         "//java/de/ofahrt/catfish/model/network",
