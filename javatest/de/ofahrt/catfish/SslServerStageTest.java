@@ -15,8 +15,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
 import java.security.SecureRandom;
-import java.security.cert.X509Certificate;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -31,6 +31,7 @@ import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 import org.junit.Test;
 
@@ -541,7 +542,8 @@ public class SslServerStageTest {
     // client session cache remembers the first session, and we use the same server SSLContext
     // (TestHelper's singleton) so the server cache also remembers it.
     SSLContext sharedClientContext = SSLContext.getInstance("TLS");
-    sharedClientContext.init(null, new TrustManager[] {TRUST_ALL}, new SecureRandom());
+    sharedClientContext.init(
+        null, new TrustManager[] {TEST_CERT_TRUST_MANAGER}, new SecureRandom());
 
     // First handshake — primes both session caches.
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
@@ -801,7 +803,7 @@ public class SslServerStageTest {
         ctx = sharedContext;
       } else {
         ctx = SSLContext.getInstance("TLS");
-        ctx.init(null, new TrustManager[] {TRUST_ALL}, new SecureRandom());
+        ctx.init(null, new TrustManager[] {TEST_CERT_TRUST_MANAGER}, new SecureRandom());
       }
       this.engine = ctx.createSSLEngine(peerHost, 443);
       this.engine.setUseClientMode(true);
@@ -979,17 +981,24 @@ public class SslServerStageTest {
     }
   }
 
-  private static final X509TrustManager TRUST_ALL =
-      new X509TrustManager() {
-        @Override
-        public void checkClientTrusted(X509Certificate[] chain, String authType) {}
+  private static final X509TrustManager TEST_CERT_TRUST_MANAGER = createTestCertTrustManager();
 
-        @Override
-        public void checkServerTrusted(X509Certificate[] chain, String authType) {}
-
-        @Override
-        public X509Certificate[] getAcceptedIssuers() {
-          return new X509Certificate[0];
+  private static X509TrustManager createTestCertTrustManager() {
+    try {
+      KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+      ks.load(null, null);
+      ks.setCertificateEntry("test", TestHelper.getSSLInfo().certificate());
+      TrustManagerFactory tmf =
+          TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+      tmf.init(ks);
+      for (TrustManager tm : tmf.getTrustManagers()) {
+        if (tm instanceof X509TrustManager x509) {
+          return x509;
         }
-      };
+      }
+      throw new IllegalStateException("No X509TrustManager found");
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
 }
