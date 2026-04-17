@@ -3,6 +3,7 @@ package de.ofahrt.catfish.http2;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.server.RequestAction;
 import java.io.ByteArrayOutputStream;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -11,6 +12,7 @@ import org.jspecify.annotations.Nullable;
  * responses (full body known upfront) and streaming responses (body written incrementally).
  */
 final class Http2Stream {
+  private static final byte[] EMPTY = new byte[0];
 
   enum State {
     OPEN,
@@ -162,7 +164,6 @@ final class Http2Stream {
    * @param connectionSendWindow the connection-level send window (limits total DATA across all
    *     streams)
    */
-  @SuppressWarnings("NullAway") // fields are non-null after responseReady
   WriteResult writeResponseFrames(
       java.nio.ByteBuffer out, int maxFrameSize, int connectionSendWindow) {
     lastDataBytesSent = 0;
@@ -171,7 +172,7 @@ final class Http2Stream {
       if (out.remaining() < 9 + 1) {
         return WriteResult.BLOCKED;
       }
-      byte[] hdr = responseHeaderBlock;
+      byte[] hdr = Objects.requireNonNull(responseHeaderBlock, "responseHeaderBlock");
       boolean noBody =
           streamingBuffer == null
               && (responseBody == null || responseBody.length == 0)
@@ -191,7 +192,6 @@ final class Http2Stream {
     }
   }
 
-  @SuppressWarnings("NullAway")
   private WriteResult writeBufferedData(
       java.nio.ByteBuffer out, int maxFrameSize, int connectionSendWindow) {
     byte[] body = responseBody;
@@ -226,10 +226,9 @@ final class Http2Stream {
     return WriteResult.DONE;
   }
 
-  @SuppressWarnings("NullAway")
   private WriteResult writeStreamingData(
       java.nio.ByteBuffer out, int maxFrameSize, int connectionSendWindow) {
-    Http2StreamBuffer buf = streamingBuffer;
+    Http2StreamBuffer buf = Objects.requireNonNull(streamingBuffer, "streamingBuffer");
 
     while (true) {
       int avail = buf.available();
@@ -239,7 +238,7 @@ final class Http2Stream {
           if (out.remaining() < 9) {
             return WriteResult.BLOCKED;
           }
-          Http2FrameWriter.writeData(out, streamId, new byte[0], 0, 0, true);
+          Http2FrameWriter.writeData(out, streamId, EMPTY, 0, 0, true);
           state = State.CLOSED;
           return WriteResult.DONE;
         }

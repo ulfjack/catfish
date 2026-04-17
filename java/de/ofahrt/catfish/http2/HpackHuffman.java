@@ -1,6 +1,8 @@
 package de.ofahrt.catfish.http2;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 /**
  * HPACK Huffman codec (RFC 7541 Appendix B). Decodes Huffman-encoded strings from HPACK header
@@ -93,9 +95,9 @@ final class HpackHuffman {
     SYMBOL = new int[capacity];
     int nodeCount = 1; // node 0 is root
 
-    java.util.Arrays.fill(LEFT, -1);
-    java.util.Arrays.fill(RIGHT, -1);
-    java.util.Arrays.fill(SYMBOL, BRANCH);
+    Arrays.fill(LEFT, -1);
+    Arrays.fill(RIGHT, -1);
+    Arrays.fill(SYMBOL, BRANCH);
 
     for (int sym = 0; sym < CODES.length; sym++) {
       int code = CODES[sym][0];
@@ -149,7 +151,7 @@ final class HpackHuffman {
       throw new IllegalArgumentException("Invalid Huffman padding (too many bits)");
     }
 
-    return out.toString(java.nio.charset.StandardCharsets.ISO_8859_1);
+    return out.toString(StandardCharsets.ISO_8859_1);
   }
 
   private HpackHuffman() {}
