@@ -1,23 +1,24 @@
 package de.ofahrt.catfish.client;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
 public class LoggingTrustManagerTest {
 
   @Test
-  public void checkClientTrusted_doesNotThrow() throws Exception {
-    new LoggingTrustManager().checkClientTrusted(null, "RSA");
+  public void checkClientTrusted_rejectsNull() {
+    assertThrows(Exception.class, () -> new LoggingTrustManager().checkClientTrusted(null, "RSA"));
   }
 
   @Test
-  public void checkServerTrusted_doesNotThrow() throws Exception {
-    new LoggingTrustManager().checkServerTrusted(null, "RSA");
+  public void checkServerTrusted_rejectsNull() {
+    assertThrows(Exception.class, () -> new LoggingTrustManager().checkServerTrusted(null, "RSA"));
   }
 
   @Test
-  public void getAcceptedIssuers_returnsEmptyArray() {
-    assertEquals(0, new LoggingTrustManager().getAcceptedIssuers().length);
+  public void getAcceptedIssuers_returnsPlatformCAs() {
+    assertTrue(new LoggingTrustManager().getAcceptedIssuers().length > 0);
   }
 }
