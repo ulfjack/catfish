@@ -11,10 +11,10 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.StringWriter;
-import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.net.URI;
 import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Enumeration;
 import java.util.Locale;
 import java.util.Map;
@@ -26,9 +26,6 @@ import javax.servlet.http.HttpServletResponse;
 
 public class ServletHelper {
   private static final String DEFAULT_CHARSET = "UTF-8";
-
-  private static final String queryPartStructure = "([^&=]*)=([^&]*)";
-  private static final Pattern queryPartPattern = Pattern.compile(queryPartStructure);
 
   private static final Pattern nameExtractorPattern = Pattern.compile(".* name=\"(.*)\".*");
   private static final Pattern filenameExtractorPattern =
@@ -140,18 +137,21 @@ public class ServletHelper {
     Map<String, String> result = new TreeMap<>();
     String queryData = request.getQueryString();
     if (queryData != null) {
-      Matcher mq = queryPartPattern.matcher(queryData);
-      while (mq.find()) {
-        try {
-          String key = URLDecoder.decode(mq.group(1), DEFAULT_CHARSET);
-          String value = URLDecoder.decode(mq.group(2), DEFAULT_CHARSET);
-          result.put(key, value);
-        } catch (UnsupportedEncodingException e) {
-          throw new RuntimeException("\"" + queryData + "\"", e);
-        }
-      }
+      parseUrlEncoded(queryData, result);
     }
     return result;
+  }
+
+  private static void parseUrlEncoded(String data, Map<String, String> out) {
+    for (String pair : data.split("&", -1)) {
+      int eq = pair.indexOf('=');
+      if (eq < 0) {
+        continue;
+      }
+      String key = URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8);
+      String value = URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
+      out.put(key, value);
+    }
   }
 
   private static byte[] readByteArray(InputStream in, int length) throws IOException {
@@ -270,21 +270,8 @@ public class ServletHelper {
     }
 
     if (contentType.equalsIgnoreCase("application/x-www-form-urlencoded")) {
-      // String ce = request.getHeader(HeaderKey.CONTENT_ENCODING.toString());
-      String footerData = new String(ba);
-
-      Matcher mq = queryPartPattern.matcher(footerData);
-      while (mq.find()) {
-        try {
-          String first = URLDecoder.decode(mq.group(1), DEFAULT_CHARSET);
-          String last = URLDecoder.decode(mq.group(2), DEFAULT_CHARSET);
-          result.data.put(first, last);
-        } catch (UnsupportedEncodingException e) {
-          IOException e2 = new IOException("Internal Error!");
-          e2.initCause(e);
-          throw e2;
-        }
-      }
+      String footerData = new String(ba, StandardCharsets.UTF_8);
+      parseUrlEncoded(footerData, result.data);
     }
     return result;
   }
