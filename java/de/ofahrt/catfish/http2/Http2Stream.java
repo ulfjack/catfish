@@ -83,8 +83,14 @@ final class Http2Stream {
 
   // ---- Flow control ----
 
-  void adjustSendWindow(int delta) {
-    sendWindow += delta;
+  /** Returns true if the adjustment succeeded, false if it would overflow. */
+  boolean adjustSendWindow(int delta) {
+    long newWindow = (long) sendWindow + delta;
+    if (newWindow > Integer.MAX_VALUE) {
+      return false;
+    }
+    sendWindow = (int) newWindow;
+    return true;
   }
 
   int getLastDataBytesSent() {

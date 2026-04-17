@@ -359,7 +359,9 @@ public final class Http2ServerStage implements Stage {
         int delta = value - peerInitialWindowSize;
         peerInitialWindowSize = value;
         for (Http2Stream stream : streams.values()) {
-          stream.adjustSendWindow(delta);
+          if (!stream.adjustSendWindow(delta)) {
+            throw new IOException("h2 FLOW_CONTROL_ERROR: stream send window overflow");
+          }
         }
       }
       case MAX_FRAME_SIZE -> {
@@ -583,11 +585,24 @@ public final class Http2ServerStage implements Stage {
           "h2 PROTOCOL_ERROR: WINDOW_UPDATE increment is 0 on stream " + streamId);
     }
     if (streamId == 0) {
-      connectionSendWindow += increment;
+      long newWindow = (long) connectionSendWindow + increment;
+      if (newWindow > Integer.MAX_VALUE) {
+        throw new IOException(
+            "h2 FLOW_CONTROL_ERROR: connection send window overflow ("
+                + connectionSendWindow
+                + " + "
+                + increment
+                + ")");
+      }
+      connectionSendWindow = (int) newWindow;
     } else {
       Http2Stream stream = streams.get(streamId);
-      if (stream != null) {
-        stream.adjustSendWindow(increment);
+      if (stream != null && !stream.adjustSendWindow(increment)) {
+        // RFC 9113 §6.9.1: stream-level flow control overflow is a stream error.
+        streams.remove(streamId);
+        stream.setState(Http2Stream.State.CLOSED);
+        queueRstStream(streamId, ErrorCode.FLOW_CONTROL_ERROR);
+        return;
       }
     }
     // Window opened — there may be streams blocked on flow control.
@@ -775,6 +790,11 @@ public final class Http2ServerStage implements Stage {
 
   private void queueWindowUpdate(int streamId, int increment) {
     Http2FrameWriter.writeWindowUpdate(controlFrameScratch, streamId, increment);
+    flushScratch();
+  }
+
+  private void queueRstStream(int streamId, int errorCode) {
+    Http2FrameWriter.writeRstStream(controlFrameScratch, streamId, errorCode);
     flushScratch();
   }
 
