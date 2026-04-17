@@ -1,5 +1,6 @@
 package de.ofahrt.catfish.example;
 
+import de.ofahrt.catfish.model.HtmlEscape;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpMethodName;
@@ -65,9 +66,15 @@ public final class CheckPostHandler implements HttpHandler {
       if (formData != null) {
         out.append("<pre>\n");
         for (FormEntry entry : formData) {
-          out.append("Name=").append(entry.getName()).append("\n");
-          out.append("Content-Type=").append(entry.getContentType()).append("\n");
-          out.append("Value=").append(entry.getValue()).append("\n");
+          out.append("Name=").append(HtmlEscape.text(entry.getName())).append("\n");
+          String ct = entry.getContentType();
+          if (ct != null) {
+            out.append("Content-Type=").append(HtmlEscape.text(ct)).append("\n");
+          }
+          String value = entry.getValue();
+          if (value != null) {
+            out.append("Value=").append(HtmlEscape.text(value)).append("\n");
+          }
           if (entry.getBody() != null) {
             out.append("Size=").append(Integer.toString(entry.getBody().length)).append("\n");
           }
