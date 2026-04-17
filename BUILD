@@ -125,3 +125,23 @@ sh_runner(
     name = "coverage_html",
     script = _COVERAGE_HTML_SCRIPT,
 )
+
+_CPD_SCRIPT = """#!/usr/bin/env bash
+set -euo pipefail
+RUNFILES_DIR="${RUNFILES_DIR:-$0.runfiles}"
+# Find pmd binary in runfiles (handles bzlmod repo naming)
+PMD=$(find "$RUNFILES_DIR" -path "*/bin/pmd" | head -1)
+if [[ -z "$PMD" ]]; then
+  echo "ERROR: pmd binary not found in runfiles" >&2
+  exit 1
+fi
+cd "$BUILD_WORKSPACE_DIRECTORY"
+"$PMD" cpd --dir java/ --minimum-tokens 100 --language java --no-fail-on-violation
+"""
+
+# `bazel run //:cpd` - runs PMD copy-paste detection on Java sources.
+sh_runner(
+    name = "cpd",
+    script = _CPD_SCRIPT,
+    data = ["@pmd//:bin/pmd"],
+)

@@ -13,11 +13,5 @@ http_archive(
     url = "https://github.com/pmd/pmd/releases/download/pmd_releases/7.23.0/pmd-dist-7.23.0-bin.zip",
     sha256 = "d099c3b46e0cc6564d3dfeae02449b8e0f75ea2fb061f072273b39927204e1be",
     strip_prefix = "pmd-bin-7.23.0",
-    build_file_content = """
-filegroup(
-    name = "lib",
-    srcs = glob(["lib/**"]),
-    visibility = ["//visibility:public"],
-)
-""",
+    build_file_content = """exports_files(glob(["**"]))""",
 )
