@@ -18,18 +18,20 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 public final class DirectoryHandler implements HttpHandler {
-  private final String internalPath;
+  private final Path root;
 
   public DirectoryHandler(String internalPath) {
     Objects.requireNonNull(internalPath, "internalPath");
     if (!internalPath.endsWith("/")) {
       throw new IllegalArgumentException("Path must end with a '/'");
     }
-    this.internalPath = internalPath;
+    this.root = Path.of(internalPath).normalize();
   }
 
   @Override
@@ -48,7 +50,7 @@ public final class DirectoryHandler implements HttpHandler {
       responseWriter.commitBuffered(StandardResponses.BAD_REQUEST);
       return;
     }
-    if (!f.exists() || !f.isFile() || f.isHidden() || !f.canRead()) {
+    if (f == null || !f.exists() || !f.isFile() || f.isHidden() || !f.canRead()) {
       // Silently return 404.
       responseWriter.commitBuffered(StandardResponses.NOT_FOUND);
       return;
@@ -82,9 +84,13 @@ public final class DirectoryHandler implements HttpHandler {
     }
   }
 
-  private File getFile(HttpRequest request) throws URISyntaxException {
+  private @Nullable File getFile(HttpRequest request) throws URISyntaxException {
     String filename = getFilename(request);
-    return new File(new File(internalPath), filename);
+    Path resolved = root.resolve(filename).normalize();
+    if (!resolved.startsWith(root)) {
+      return null;
+    }
+    return resolved.toFile();
   }
 
   private static String getFilename(HttpRequest request) throws URISyntaxException {
