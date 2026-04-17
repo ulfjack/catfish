@@ -183,7 +183,7 @@ public class ServletHelper {
         case -1 -> requestFinished = true;
         case 0 -> {}
         case 10 -> {
-          if (line.equals("")) {
+          if ("".equals(line)) {
             requestFinished = true;
           } else {
             int i = line.indexOf(':');
@@ -233,7 +233,7 @@ public class ServletHelper {
       }
     }
 
-    if (contentType.equalsIgnoreCase("multipart/form-data")) {
+    if ("multipart/form-data".equalsIgnoreCase(contentType)) {
       int k = ctHeader.indexOf("=");
       String boundary = "--" + ctHeader.substring(k + 1).trim();
       byte[] bounds = boundary.getBytes();
@@ -261,7 +261,7 @@ public class ServletHelper {
       }
     }
 
-    if (contentType.equalsIgnoreCase("application/x-www-form-urlencoded")) {
+    if ("application/x-www-form-urlencoded".equalsIgnoreCase(contentType)) {
       for (FormEntry entry : new UrlEncodedParser().parse(ba)) {
         result.data.put(entry.getName(), entry.getValue());
       }

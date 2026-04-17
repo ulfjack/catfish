@@ -100,7 +100,7 @@ public final class SimpleHttpRequest implements HttpRequest {
       }
       try {
         URI parsed = new URI(unparsedUri);
-        if (!unparsedUri.equals("*") && !parsed.isAbsolute() && !unparsedUri.startsWith("/")) {
+        if (!"*".equals(unparsedUri) && !parsed.isAbsolute() && !unparsedUri.startsWith("/")) {
           throw buildError(HttpStatusCode.BAD_REQUEST, "Malformed URI");
         }
       } catch (URISyntaxException e) {

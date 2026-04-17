@@ -444,31 +444,31 @@ public class HttpResponseValidator {
 
   /** Returns true if {@code value} is a valid {@code Access-Control-Allow-Credentials} value. */
   public static boolean isValidAccessControlAllowCredentials(String value) {
-    return value.trim().equals("true");
+    return "true".equals(value.trim());
   }
 
   /** Returns true if {@code value} is a valid {@code Access-Control-Allow-Headers} value. */
   public static boolean isValidAccessControlAllowHeaders(String value) {
     String trimmed = value.trim();
-    return trimmed.equals("*") || isValidTokenList(trimmed);
+    return "*".equals(trimmed) || isValidTokenList(trimmed);
   }
 
   /** Returns true if {@code value} is a valid {@code Access-Control-Allow-Methods} value. */
   public static boolean isValidAccessControlAllowMethods(String value) {
     String trimmed = value.trim();
-    return trimmed.equals("*") || isValidTokenList(trimmed);
+    return "*".equals(trimmed) || isValidTokenList(trimmed);
   }
 
   /** Returns true if {@code value} is a valid {@code Access-Control-Allow-Origin} value. */
   public static boolean isValidAccessControlAllowOrigin(String value) {
     String trimmed = value.trim();
-    return trimmed.equals("*") || trimmed.equals("null") || isValidOrigin(trimmed);
+    return "*".equals(trimmed) || "null".equals(trimmed) || isValidOrigin(trimmed);
   }
 
   /** Returns true if {@code value} is a valid {@code Access-Control-Expose-Headers} value. */
   public static boolean isValidAccessControlExposeHeaders(String value) {
     String trimmed = value.trim();
-    return trimmed.equals("*") || isValidTokenList(trimmed);
+    return "*".equals(trimmed) || isValidTokenList(trimmed);
   }
 
   /** Returns true if {@code value} is a valid {@code Access-Control-Max-Age} value. */
@@ -540,18 +540,18 @@ public class HttpResponseValidator {
   /** Returns true if {@code value} is a valid {@code Vary} value. */
   public static boolean isValidVary(String value) {
     String trimmed = value.trim();
-    return trimmed.equals("*") || isValidTokenList(trimmed);
+    return "*".equals(trimmed) || isValidTokenList(trimmed);
   }
 
   /** Returns true if {@code value} is a valid {@code X-Content-Type-Options} value. */
   public static boolean isValidXContentTypeOptions(String value) {
-    return value.trim().equalsIgnoreCase("nosniff");
+    return "nosniff".equalsIgnoreCase(value.trim());
   }
 
   /** Returns true if {@code value} is a valid {@code X-Frame-Options} value. */
   public static boolean isValidXFrameOptions(String value) {
     String xfo = value.trim().toUpperCase(Locale.US);
-    return xfo.equals("DENY") || xfo.equals("SAMEORIGIN");
+    return "DENY".equals(xfo) || "SAMEORIGIN".equals(xfo);
   }
 
   /**
@@ -587,7 +587,7 @@ public class HttpResponseValidator {
             return false;
           }
           String nameLower = name.toLowerCase(Locale.US);
-          if (nameLower.equals("max-age") || nameLower.equals("s-maxage")) {
+          if ("max-age".equals(nameLower) || "s-maxage".equals(nameLower)) {
             return false;
           }
         } else {
@@ -712,11 +712,11 @@ public class HttpResponseValidator {
 
     // complete-length or "*"
     if (completeLengthOrStar.isEmpty()) return false;
-    if (!completeLengthOrStar.equals("*") && !isNonNegativeInteger(completeLengthOrStar))
+    if (!"*".equals(completeLengthOrStar) && !isNonNegativeInteger(completeLengthOrStar))
       return false;
 
     // For "bytes" range-unit: first-pos <= last-pos (RFC 9110 §14.1.2)
-    if (rangeUnit.equalsIgnoreCase("bytes")) {
+    if ("bytes".equalsIgnoreCase(rangeUnit)) {
       try {
         long firstPos = Long.parseLong(firstPosStr);
         long lastPos = Long.parseLong(lastPosStr);
@@ -813,7 +813,7 @@ public class HttpResponseValidator {
   /** Returns true if {@code value} is a valid {@code Cross-Origin-Resource-Policy} value. */
   public static boolean isValidCrossOriginResourcePolicy(String value) {
     String v = value.trim().toLowerCase(Locale.US);
-    return v.equals("same-site") || v.equals("same-origin") || v.equals("cross-origin");
+    return "same-site".equals(v) || "same-origin".equals(v) || "cross-origin".equals(v);
   }
 
   /** Returns true if {@code value} is a valid {@code Cross-Origin-Embedder-Policy} value. */

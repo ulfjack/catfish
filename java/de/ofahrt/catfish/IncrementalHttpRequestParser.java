@@ -350,7 +350,7 @@ final class IncrementalHttpRequestParser {
 
   /** Validates header-level constraints and marks parsing as done. Called at the blank line. */
   private int validateAndFinish(int i) {
-    if (unparsedUri != null && !unparsedUri.equals("*") && !unparsedUri.startsWith("/")) {
+    if (unparsedUri != null && !"*".equals(unparsedUri) && !unparsedUri.startsWith("/")) {
       try {
         URI parsed = new URI(unparsedUri);
         if (!parsed.isAbsolute()) {

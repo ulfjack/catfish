@@ -77,7 +77,7 @@ public final class Router {
   }
 
   private static String[] splitPath(String path) {
-    if (path.isEmpty() || path.equals("/")) {
+    if (path.isEmpty() || "/".equals(path)) {
       return new String[0];
     }
     // Strip leading slash.
