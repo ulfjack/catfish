@@ -1,6 +1,8 @@
 package de.ofahrt.catfish.http2;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import de.ofahrt.catfish.http2.Hpack.Header;
 import de.ofahrt.catfish.http2.HpackDecoder.HpackDecodingException;
@@ -270,5 +272,116 @@ public class HpackTest {
     assertEquals(4, headers.size());
     assertEquals(":authority", headers.get(3).name());
     assertEquals("www.example.com", headers.get(3).value());
+  }
+
+  // ---- Decoder error paths ----
+
+  @Test
+  public void decode_truncatedIndexedHeader_throws() {
+    // 0xFF = indexed with 7-bit prefix = 127, needs multi-byte continuation.
+    byte[] block = {(byte) 0xff};
+    HpackDecoder decoder = new HpackDecoder();
+    try {
+      decoder.decode(block, 0, block.length);
+      fail("expected HpackDecodingException");
+    } catch (HpackDecodingException e) {
+      assertEquals("Truncated indexed header", e.getMessage());
+    }
+  }
+
+  @Test
+  public void decode_truncatedString_throws() {
+    // Literal without indexing, name length 10, but only 3 bytes follow.
+    byte[] block = {0x00, 0x0a, 'a', 'b', 'c'};
+    HpackDecoder decoder = new HpackDecoder();
+    try {
+      decoder.decode(block, 0, block.length);
+      fail("expected HpackDecodingException");
+    } catch (HpackDecodingException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("String extends past block end"));
+    }
+  }
+
+  @Test
+  public void decode_invalidIndexZero_throws() {
+    // Indexed header with index 0 is invalid.
+    byte[] block = {(byte) 0x80};
+    HpackDecoder decoder = new HpackDecoder();
+    try {
+      decoder.decode(block, 0, block.length);
+      fail("expected HpackDecodingException");
+    } catch (HpackDecodingException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("Invalid index"));
+    }
+  }
+
+  @Test
+  public void decode_dynamicTableIndexOutOfRange_throws() {
+    // Index 62 = first dynamic table entry, but the table is empty.
+    byte[] block = {(byte) 0xbe};
+    HpackDecoder decoder = new HpackDecoder();
+    try {
+      decoder.decode(block, 0, block.length);
+      fail("expected HpackDecodingException");
+    } catch (HpackDecodingException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("Dynamic table index out of range"));
+    }
+  }
+
+  @Test
+  public void decode_dynamicTableSizeUpdateExceedsMax_throws() {
+    HpackDecoder decoder = new HpackDecoder();
+    decoder.setMaxDynamicTableSize(100);
+    // 0x3F = dynamic table size update with 5-bit prefix = 31, needs continuation.
+    // Encode 200 with 5-bit prefix: 31, 169, 1 → value = 31 + (169&0x7f) + 1*128 = 31+41+128 = 200.
+    byte[] block = {0x3f, (byte) 0xa9, 0x01};
+    try {
+      decoder.decode(block, 0, block.length);
+      fail("expected HpackDecodingException");
+    } catch (HpackDecodingException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("Dynamic table size exceeds maximum"));
+    }
+  }
+
+  @Test
+  public void decode_neverIndexedLiteral_worksAndDoesNotAddToTable() throws HpackDecodingException {
+    // Literal never indexed (§6.2.3), new name.
+    byte[] block1 = {
+      0x10, 0x03, 'f', 'o', 'o', 0x03, 'b', 'a', 'r',
+    };
+    HpackDecoder decoder = new HpackDecoder();
+    List<Header> headers = decoder.decode(block1, 0, block1.length);
+    assertEquals(1, headers.size());
+    assertEquals("foo", headers.get(0).name());
+    assertEquals("bar", headers.get(0).value());
+
+    // Verify the never-indexed entry was NOT added to the dynamic table: index 62 should fail.
+    byte[] block2 = {(byte) 0xbe};
+    try {
+      decoder.decode(block2, 0, block2.length);
+      fail("expected HpackDecodingException");
+    } catch (HpackDecodingException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("Dynamic table index out of range"));
+    }
+  }
+
+  @Test
+  public void setMaxDynamicTableSize_evictsEntries() throws HpackDecodingException {
+    HpackDecoder decoder = new HpackDecoder();
+    // Add a large entry to the dynamic table.
+    byte[] block = {
+      0x40, 0x03, 'f', 'o', 'o', 0x03, 'b', 'a', 'r',
+    };
+    decoder.decode(block, 0, block.length);
+    // Shrink the table to 0 — should evict everything.
+    decoder.setMaxDynamicTableSize(0);
+    // Now referencing dynamic index 62 should fail.
+    byte[] ref = {(byte) 0xbe};
+    try {
+      decoder.decode(ref, 0, ref.length);
+      fail("expected HpackDecodingException");
+    } catch (HpackDecodingException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("Dynamic table index out of range"));
+    }
   }
 }

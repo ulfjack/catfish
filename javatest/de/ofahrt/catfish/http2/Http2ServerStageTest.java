@@ -2,6 +2,7 @@ package de.ofahrt.catfish.http2;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -596,6 +597,91 @@ public class Http2ServerStageTest {
   }
 
   @Test
+  public void postWithBody_dispatchesAfterEndStream() throws IOException {
+    // Override the handler to allow uploads.
+    List<HttpRequest> received = new ArrayList<>();
+    HttpHandler handler =
+        (connection, request, writer) -> {
+          received.add(request);
+          writer.commitBuffered(StandardResponses.OK.withBody(new byte[0]));
+        };
+    ConnectHandler ch =
+        new ConnectHandler() {
+          @Override
+          public RequestAction applyLocal(HttpRequest request) {
+            return new RequestAction.ServeLocally(
+                handler,
+                de.ofahrt.catfish.model.server.UploadPolicy.ALLOW,
+                de.ofahrt.catfish.model.server.KeepAlivePolicy.KEEP_ALIVE,
+                de.ofahrt.catfish.model.server.CompressionPolicy.NONE);
+          }
+        };
+    pipeline = new TestPipeline();
+    inputBuffer = ByteBuffer.allocate(65536);
+    outputBuffer = ByteBuffer.allocate(65536);
+    inputBuffer.flip();
+    outputBuffer.flip();
+    stage =
+        new Http2ServerStage(
+            pipeline,
+            (h, connection, request, writer) -> {
+              try {
+                h.handle(connection, request, writer);
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
+            },
+            ch,
+            inputBuffer,
+            outputBuffer);
+    Connection conn =
+        new Connection(
+            new InetSocketAddress("127.0.0.1", 8443),
+            new InetSocketAddress("127.0.0.1", 12345),
+            true);
+    stage.connect(conn);
+
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // Build a POST HEADERS frame without END_STREAM (body follows).
+    HpackEncoder encoder = new HpackEncoder();
+    byte[] headerBlock =
+        encoder.encode(
+            new Header(":method", "POST"),
+            new Header(":path", "/submit"),
+            new Header(":scheme", "https"),
+            new Header(":authority", "localhost"),
+            new Header("content-type", "text/plain"));
+    ByteBuffer hb = ByteBuffer.allocate(9 + headerBlock.length);
+    Http2FrameWriter.writeHeaders(hb, 1, headerBlock, /* endStream= */ false);
+    hb.flip();
+    byte[] headersFrame = new byte[hb.remaining()];
+    hb.get(headersFrame);
+
+    feedAndRead(headersFrame);
+    // Handler should not be dispatched yet — no END_STREAM.
+    assertEquals(0, received.size());
+
+    // Send DATA with END_STREAM.
+    byte[] bodyBytes = "hello world".getBytes(StandardCharsets.UTF_8);
+    ByteBuffer db = ByteBuffer.allocate(9 + bodyBytes.length);
+    Http2FrameWriter.writeData(db, 1, bodyBytes, 0, bodyBytes.length, /* endStream= */ true);
+    db.flip();
+    byte[] dataFrame = new byte[db.remaining()];
+    db.get(dataFrame);
+
+    feedAndRead(dataFrame);
+    assertEquals(1, received.size());
+    HttpRequest request = received.get(0);
+    assertEquals("POST", request.getMethod());
+    assertEquals("/submit", request.getUri());
+    assertEquals("11", request.getHeaders().get("Content-Length"));
+    HttpRequest.Body body = request.getBody();
+    assertTrue("body should be present", body != null);
+  }
+
+  @Test
   public void streamingResponse_sendsDataFrames() throws IOException {
     // Replace the stage's handler with one that streams a large response.
     rebuildStageWithHandler(
@@ -712,6 +798,553 @@ public class Http2ServerStageTest {
     }
     w.commitBuffered(StandardResponses.OK.withBody(new byte[0]));
     assertEquals(2, invocations.get());
+  }
+
+  @Test
+  public void connectHandlerDeny_sendsForbidden() throws IOException {
+    rebuildStageWithConnectHandler(
+        new ConnectHandler() {
+          @Override
+          public RequestAction applyLocal(HttpRequest request) {
+            return RequestAction.deny();
+          }
+        });
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    feedAndRead(buildGetHeadersFrame(1, "/denied"));
+
+    byte[] output = drainOutput();
+    // Response should be 403 — decode the HEADERS frame.
+    Http2FrameReader reader = new Http2FrameReader();
+    int offset = 0;
+    boolean foundResponseHeaders = false;
+    while (offset < output.length) {
+      int consumed = reader.parse(output, offset, output.length - offset);
+      offset += consumed;
+      if (reader.isComplete()) {
+        if (reader.getType() == FrameType.HEADERS) {
+          byte[] payload = reader.getPayload();
+          if (payload != null) {
+            HpackDecoder dec = new HpackDecoder();
+            try {
+              List<Header> hs = dec.decode(payload, 0, payload.length);
+              for (Header h : hs) {
+                if (":status".equals(h.name())) {
+                  assertEquals("403", h.value());
+                  foundResponseHeaders = true;
+                }
+              }
+            } catch (HpackDecoder.HpackDecodingException e) {
+              throw new RuntimeException(e);
+            }
+          }
+        }
+        reader.reset();
+      }
+    }
+    assertTrue("Expected 403 response", foundResponseHeaders);
+  }
+
+  @Test
+  public void connectHandlerForward_sendsNotImplemented() throws IOException {
+    rebuildStageWithConnectHandler(
+        new ConnectHandler() {
+          @Override
+          public RequestAction applyLocal(HttpRequest request) {
+            return RequestAction.forward("origin.example.com", 80);
+          }
+        });
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+
+    // Stream should receive a 501 response (forwarding over h2 is not supported).
+    byte[] output = drainOutput();
+    Http2FrameReader reader = new Http2FrameReader();
+    int offset = 0;
+    boolean foundStatus = false;
+    while (offset < output.length) {
+      int consumed = reader.parse(output, offset, output.length - offset);
+      offset += consumed;
+      if (reader.isComplete()) {
+        if (reader.getType() == FrameType.HEADERS) {
+          byte[] payload = reader.getPayload();
+          if (payload != null) {
+            HpackDecoder dec = new HpackDecoder();
+            try {
+              for (Header h : dec.decode(payload, 0, payload.length)) {
+                if (":status".equals(h.name())) {
+                  assertEquals("501", h.value());
+                  foundStatus = true;
+                }
+              }
+            } catch (HpackDecoder.HpackDecodingException e) {
+              throw new RuntimeException(e);
+            }
+          }
+        }
+        reader.reset();
+      }
+    }
+    assertTrue("Expected 501 response", foundStatus);
+  }
+
+  @Test
+  public void hpackDecodingFailure_throwsIOException() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // HEADERS frame with a malformed HPACK block (truncated indexed header).
+    byte[] badBlock = {(byte) 0xff}; // needs multi-byte continuation
+    ByteBuffer buf = ByteBuffer.allocate(9 + badBlock.length);
+    int flags = Http2FrameReader.FLAG_END_STREAM | Http2FrameReader.FLAG_END_HEADERS;
+    buf.put((byte) 0).put((byte) 0).put((byte) badBlock.length);
+    buf.put((byte) FrameType.HEADERS);
+    buf.put((byte) flags);
+    buf.putInt(1);
+    buf.put(badBlock);
+    buf.flip();
+    byte[] frame = new byte[buf.remaining()];
+    buf.get(frame);
+
+    try {
+      feedAndRead(frame);
+      fail("expected IOException");
+    } catch (IOException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("HPACK"));
+    }
+  }
+
+  @Test
+  public void windowUpdate_onStream_replenishesStreamWindow() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    // Open a stream by sending HEADERS (needed for stream-level WU to have an effect).
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+    drainOutput();
+
+    // Send WINDOW_UPDATE for stream 1.
+    ByteBuffer payload = ByteBuffer.allocate(4);
+    payload.putInt(1000);
+    byte[] wu = buildRawFrame(FrameType.WINDOW_UPDATE, 0, 1, payload.array());
+    feedAndRead(wu);
+    // Should not throw — the window is adjusted on the stream.
+  }
+
+  @Test
+  public void unknownSettingId_isIgnored() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    // SETTINGS with an unknown ID (0x99) and value 42 — should be silently ignored.
+    ByteBuffer p = ByteBuffer.allocate(6);
+    p.putShort((short) 0x99);
+    p.putInt(42);
+    byte[] frame = buildRawFrame(FrameType.SETTINGS, 0, 0, p.array());
+    feedAndRead(frame);
+  }
+
+  @Test
+  public void initialWindowSize_updatesExistingStreams() throws IOException {
+    AtomicReference<HttpResponseWriter> pending = new AtomicReference<>();
+    rebuildStageWithHandler((c, r, w) -> pending.set(w));
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+
+    // SETTINGS_INITIAL_WINDOW_SIZE = 100 — adjusts existing stream send window.
+    ByteBuffer p = ByteBuffer.allocate(6);
+    p.putShort((short) Setting.INITIAL_WINDOW_SIZE.id());
+    p.putInt(100);
+    byte[] frame = buildRawFrame(FrameType.SETTINGS, 0, 0, p.array());
+    feedAndRead(frame);
+  }
+
+  @Test
+  public void responseWithConnectionAndTransferEncoding_stripsThem() throws IOException {
+    rebuildStageWithHandler(
+        (connection, request, writer) -> {
+          writer.commitBuffered(
+              StandardResponses.OK
+                  .withHeaderOverrides(
+                      de.ofahrt.catfish.model.HttpHeaders.of(
+                          "Connection", "keep-alive",
+                          "Transfer-Encoding", "chunked",
+                          "Content-Length", "99"))
+                  .withBody("hi".getBytes(StandardCharsets.UTF_8)));
+        });
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+
+    byte[] output = drainOutput();
+    Http2FrameReader reader = new Http2FrameReader();
+    int offset = 0;
+    while (offset < output.length) {
+      int consumed = reader.parse(output, offset, output.length - offset);
+      offset += consumed;
+      if (reader.isComplete() && reader.getType() == FrameType.HEADERS) {
+        byte[] payload = reader.getPayload();
+        if (payload != null) {
+          HpackDecoder dec = new HpackDecoder();
+          try {
+            for (Header h : dec.decode(payload, 0, payload.length)) {
+              assertTrue("Connection must be stripped", !"connection".equals(h.name()));
+              assertTrue(
+                  "Transfer-Encoding must be stripped", !"transfer-encoding".equals(h.name()));
+            }
+          } catch (HpackDecoder.HpackDecodingException e) {
+            throw new RuntimeException(e);
+          }
+        }
+      }
+      if (reader.isComplete()) reader.reset();
+    }
+  }
+
+  @Test
+  public void invalidPreface_throwsIOException() {
+    byte[] bad = new byte[24];
+    // Copy part of the preface, but corrupt a byte.
+    System.arraycopy(CLIENT_PREFACE, 0, bad, 0, 24);
+    bad[0] = 'X';
+    try {
+      feedAndRead(bad);
+      fail("expected IOException for invalid preface");
+    } catch (IOException e) {
+      assertTrue(
+          String.valueOf(e.getMessage()).contains("Invalid HTTP/2 client connection preface"));
+    }
+  }
+
+  @Test
+  public void close_cancelsStreamingBuffers() throws IOException {
+    AtomicReference<OutputStream> streamRef = new AtomicReference<>();
+    rebuildStageWithHandler(
+        (connection, request, writer) -> {
+          streamRef.set(writer.commitStreamed(StandardResponses.OK.withBody(new byte[0])));
+          // Don't close — simulate in-flight streaming when connection drops.
+        });
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+
+    stage.close();
+    // After close, writing to the OutputStream should fail.
+    OutputStream os = streamRef.get();
+    if (os == null) {
+      fail("stream should be set");
+      return;
+    }
+    try {
+      os.write(new byte[] {1, 2, 3});
+      fail("expected IOException after cancellation");
+    } catch (IOException e) {
+      // expected
+    }
+  }
+
+  @Test
+  public void rstStream_onStreamingStream_cancelsBuffer() throws IOException {
+    AtomicReference<OutputStream> streamRef = new AtomicReference<>();
+    rebuildStageWithHandler(
+        (connection, request, writer) -> {
+          streamRef.set(writer.commitStreamed(StandardResponses.OK.withBody(new byte[0])));
+        });
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+
+    // Send RST_STREAM for stream 1.
+    ByteBuffer errPayload = ByteBuffer.allocate(4);
+    errPayload.putInt(ErrorCode.CANCEL);
+    byte[] rst = buildRawFrame(FrameType.RST_STREAM, 0, 1, errPayload.array());
+    feedAndRead(rst);
+
+    // Writing to the stream should now throw.
+    OutputStream os = streamRef.get();
+    if (os == null) {
+      fail("stream should be set");
+      return;
+    }
+    try {
+      os.write(new byte[] {1});
+      fail("expected IOException");
+    } catch (IOException e) {
+      // expected
+    }
+  }
+
+  @Test
+  public void paddedHeadersFrame_decodesCorrectly() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // Build a HEADERS frame with PADDED flag: 1-byte pad length + header block + 4 bytes of pad.
+    HpackEncoder encoder = new HpackEncoder();
+    byte[] headerBlock =
+        encoder.encode(
+            new Header(":method", "GET"),
+            new Header(":path", "/padded"),
+            new Header(":scheme", "https"),
+            new Header(":authority", "localhost"));
+    int padLength = 4;
+    byte[] payload = new byte[1 + headerBlock.length + padLength];
+    payload[0] = (byte) padLength;
+    System.arraycopy(headerBlock, 0, payload, 1, headerBlock.length);
+    int flags =
+        Http2FrameReader.FLAG_END_STREAM
+            | Http2FrameReader.FLAG_END_HEADERS
+            | Http2FrameReader.FLAG_PADDED;
+    byte[] frame = buildRawFrame(FrameType.HEADERS, flags, 1, payload);
+
+    feedAndRead(frame);
+    assertEquals(1, dispatchedRequests.size());
+    assertEquals("/padded", dispatchedRequests.get(0).getUri());
+  }
+
+  @Test
+  public void paddedDataFrame_decodesCorrectly() throws IOException {
+    // Handler with ALLOW upload policy to accept the body.
+    List<HttpRequest> received = new ArrayList<>();
+    HttpHandler h =
+        (c, r, w) -> {
+          received.add(r);
+          w.commitBuffered(StandardResponses.OK.withBody(new byte[0]));
+        };
+    ConnectHandler ch =
+        new ConnectHandler() {
+          @Override
+          public RequestAction applyLocal(HttpRequest request) {
+            return new RequestAction.ServeLocally(
+                h,
+                de.ofahrt.catfish.model.server.UploadPolicy.ALLOW,
+                de.ofahrt.catfish.model.server.KeepAlivePolicy.KEEP_ALIVE,
+                de.ofahrt.catfish.model.server.CompressionPolicy.NONE);
+          }
+        };
+    rebuildStageWithConnectHandler(ch);
+
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // POST without END_STREAM.
+    HpackEncoder encoder = new HpackEncoder();
+    byte[] headerBlock =
+        encoder.encode(
+            new Header(":method", "POST"),
+            new Header(":path", "/p"),
+            new Header(":scheme", "https"),
+            new Header(":authority", "localhost"));
+    int hdrFlags = Http2FrameReader.FLAG_END_HEADERS;
+    byte[] headersFrame = buildRawFrame(FrameType.HEADERS, hdrFlags, 1, headerBlock);
+    feedAndRead(headersFrame);
+
+    // Padded DATA with END_STREAM: pad length + "hi" + 3 bytes pad.
+    byte[] body = {(byte) 3, 'h', 'i', 0, 0, 0};
+    int dataFlags = Http2FrameReader.FLAG_END_STREAM | Http2FrameReader.FLAG_PADDED;
+    byte[] dataFrame = buildRawFrame(FrameType.DATA, dataFlags, 1, body);
+    feedAndRead(dataFrame);
+
+    assertEquals(1, received.size());
+    HttpRequest.Body b = received.get(0).getBody();
+    assertNotNull(b);
+  }
+
+  @Test
+  public void partialPreface_returnsNeedMoreData() throws IOException {
+    // Send only half of the client preface.
+    byte[] partial = new byte[12];
+    System.arraycopy(CLIENT_PREFACE, 0, partial, 0, 12);
+    ConnectionControl result = feedAndRead(partial);
+    assertEquals(ConnectionControl.NEED_MORE_DATA, result);
+  }
+
+  @Test
+  public void partialFrame_returnsNeedMoreData() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // Send only 5 bytes of a 9-byte frame header.
+    byte[] partial = new byte[5];
+    ConnectionControl result = feedAndRead(partial);
+    assertEquals(ConnectionControl.NEED_MORE_DATA, result);
+  }
+
+  @Test
+  public void inputClosed_callable() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    // Should not throw.
+    stage.inputClosed();
+  }
+
+  @Test
+  public void doubleCommit_throwsIllegalState() throws IOException {
+    AtomicInteger committedOk = new AtomicInteger();
+    rebuildStageWithHandler(
+        (connection, request, writer) -> {
+          writer.commitBuffered(StandardResponses.OK.withBody(new byte[0]));
+          committedOk.incrementAndGet();
+          try {
+            writer.commitBuffered(StandardResponses.OK.withBody(new byte[0]));
+            fail("Expected IllegalStateException on double commit");
+          } catch (IllegalStateException e) {
+            // expected
+          }
+        });
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+    assertEquals(1, committedOk.get());
+  }
+
+  @Test
+  public void commitStreamedWriteSingleByte_works() throws IOException {
+    rebuildStageWithHandler(
+        (connection, request, writer) -> {
+          try (OutputStream out =
+              writer.commitStreamed(StandardResponses.OK.withBody(new byte[0]))) {
+            out.write(42); // single-byte write path
+          }
+        });
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+    byte[] output = drainOutput();
+    // Verify one of the DATA frames contains byte 42.
+    Http2FrameReader reader = new Http2FrameReader();
+    int offset = 0;
+    boolean foundByte = false;
+    while (offset < output.length) {
+      int consumed = reader.parse(output, offset, output.length - offset);
+      offset += consumed;
+      if (reader.isComplete()) {
+        if (reader.getType() == FrameType.DATA) {
+          byte[] p = reader.getPayload();
+          if (p != null) {
+            for (byte b : p) {
+              if (b == 42) foundByte = true;
+            }
+          }
+        }
+        reader.reset();
+      }
+    }
+    assertTrue("Expected DATA frame containing 42", foundByte);
+  }
+
+  @Test
+  public void rstStream_dropsHeldRequest() throws IOException {
+    AtomicInteger dispatched = new AtomicInteger();
+    AtomicReference<HttpResponseWriter> pending = new AtomicReference<>();
+    HttpHandler slowHandler =
+        (c, r, w) -> {
+          dispatched.incrementAndGet();
+          pending.set(w);
+        };
+    ConnectHandler ch =
+        new ConnectHandler() {
+          @Override
+          public RequestAction applyLocal(HttpRequest request) {
+            return RequestAction.serveLocally(slowHandler);
+          }
+        };
+    pipeline = new TestPipeline();
+    inputBuffer = ByteBuffer.allocate(65536);
+    outputBuffer = ByteBuffer.allocate(65536);
+    inputBuffer.flip();
+    outputBuffer.flip();
+    stage =
+        new Http2ServerStage(
+            pipeline,
+            (h, conn, req, w) -> {
+              try {
+                h.handle(conn, req, w);
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
+            },
+            ch,
+            inputBuffer,
+            outputBuffer,
+            /* maxConcurrentDispatches= */ 1);
+    Connection conn =
+        new Connection(
+            new InetSocketAddress("127.0.0.1", 8443),
+            new InetSocketAddress("127.0.0.1", 12345),
+            true);
+    stage.connect(conn);
+
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+    feedAndRead(buildGetHeadersFrame(3, "/")); // held
+    assertEquals(1, dispatched.get());
+
+    // Send RST_STREAM for stream 3 (the held one).
+    ByteBuffer errPayload = ByteBuffer.allocate(4);
+    errPayload.putInt(ErrorCode.CANCEL);
+    byte[] rst = buildRawFrame(FrameType.RST_STREAM, 0, 3, errPayload.array());
+    feedAndRead(rst);
+
+    // Complete the first request — the held-but-cancelled request should NOT be dispatched.
+    HttpResponseWriter w = pending.get();
+    if (w == null) {
+      fail("pending writer not set");
+      return;
+    }
+    w.commitBuffered(StandardResponses.OK.withBody(new byte[0]));
+    assertEquals("cancelled held request should not be dispatched", 1, dispatched.get());
+  }
+
+  @Test
+  public void pingAck_isIgnored() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // Send a PING with the ACK flag — should be silently ignored (no response).
+    byte[] opaque = new byte[8];
+    byte[] pingAck = buildRawFrame(FrameType.PING, Http2FrameReader.FLAG_ACK, 0, opaque);
+    feedAndRead(pingAck);
+    byte[] output = drainOutput();
+    // No PING response.
+    Http2FrameReader reader = new Http2FrameReader();
+    int offset = 0;
+    while (offset < output.length) {
+      int consumed = reader.parse(output, offset, output.length - offset);
+      offset += consumed;
+      if (reader.isComplete()) {
+        assertTrue("No PING frame expected in response", reader.getType() != FrameType.PING);
+        reader.reset();
+      }
+    }
+  }
+
+  private void rebuildStageWithConnectHandler(ConnectHandler ch) {
+    pipeline = new TestPipeline();
+    inputBuffer = ByteBuffer.allocate(65536);
+    outputBuffer = ByteBuffer.allocate(65536);
+    inputBuffer.flip();
+    outputBuffer.flip();
+    stage =
+        new Http2ServerStage(
+            pipeline,
+            (h, connection, request, writer) -> {
+              try {
+                h.handle(connection, request, writer);
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
+            },
+            ch,
+            inputBuffer,
+            outputBuffer);
+    Connection conn =
+        new Connection(
+            new InetSocketAddress("127.0.0.1", 8443),
+            new InetSocketAddress("127.0.0.1", 12345),
+            true);
+    stage.connect(conn);
   }
 
   /** Rebuilds the stage with a custom handler. */
