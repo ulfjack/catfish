@@ -11,6 +11,8 @@ import org.junit.runners.Suite.SuiteClasses;
   ChunkedBodyScannerTest.class,
   ContinueResponseGeneratorTest.class,
   HashConflictGeneratorTest.class,
+  Http2EndpointTest.class,
+  Http2HandlerTest.class,
   HttpVirtualHostTest.class,
   IncrementalHttpParserIncrementalTest.class,
   IncrementalHttpParserTest.class,
