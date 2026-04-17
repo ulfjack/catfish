@@ -6,14 +6,21 @@ import static org.junit.Assert.assertNotNull;
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
-import de.ofahrt.catfish.client.legacy.StatefulClient;
+import de.ofahrt.catfish.RawHttpConnection;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
+import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.HttpVersion;
+import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.upload.SimpleUploadPolicy;
+import de.ofahrt.catfish.utils.HttpConnectionHeader;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
@@ -58,18 +65,67 @@ public class StatefulClientIntegrationTest {
     server.listen(listener);
   }
 
+  private HttpResponse get(String url, @Nullable String cookie) throws IOException {
+    SimpleHttpRequest.Builder b = new SimpleHttpRequest.Builder();
+    b.setVersion(HttpVersion.HTTP_1_1);
+    b.setMethod(HttpMethodName.GET);
+    b.setUri(url);
+    b.addHeader(HttpHeaderName.HOST, HOST);
+    if (cookie != null) {
+      b.addHeader(HttpHeaderName.COOKIE, cookie);
+    }
+    b.addHeader(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE);
+    try (RawHttpConnection conn = RawHttpConnection.connect(HOST, HTTP_PORT)) {
+      return conn.send(b.build());
+    }
+  }
+
+  private HttpResponse post(String url, @Nullable String cookie, Map<String, String> data)
+      throws IOException {
+    StringBuilder body = new StringBuilder();
+    for (Map.Entry<String, String> entry : data.entrySet()) {
+      if (body.length() > 0) {
+        body.append("&");
+      }
+      body.append(entry.getKey()).append("=").append(entry.getValue());
+    }
+    byte[] bodyBytes = body.toString().getBytes(StandardCharsets.UTF_8);
+    SimpleHttpRequest.Builder b = new SimpleHttpRequest.Builder();
+    b.setVersion(HttpVersion.HTTP_1_1);
+    b.setMethod(HttpMethodName.POST);
+    b.setUri(url);
+    b.addHeader(HttpHeaderName.HOST, HOST);
+    if (cookie != null) {
+      b.addHeader(HttpHeaderName.COOKIE, cookie);
+    }
+    b.addHeader(HttpHeaderName.CONNECTION, HttpConnectionHeader.CLOSE);
+    b.addHeader(HttpHeaderName.CONTENT_TYPE, "application/x-www-form-urlencoded");
+    b.addHeader(HttpHeaderName.CONTENT_LENGTH, Integer.toString(bodyBytes.length));
+    b.setBody(new HttpRequest.InMemoryBody(bodyBytes));
+    try (RawHttpConnection conn = RawHttpConnection.connect(HOST, HTTP_PORT)) {
+      return conn.send(b.build());
+    }
+  }
+
+  private static @Nullable String extractCookie(HttpResponse response) {
+    String setCookie = response.getHeaders().get(HttpHeaderName.SET_COOKIE);
+    if (setCookie == null) {
+      return null;
+    }
+    int semi = setCookie.indexOf(';');
+    return semi >= 0 ? setCookie.substring(0, semi) : setCookie;
+  }
+
   @Test
   public void getReturns200() throws Exception {
     startServer((conn, req, writer) -> writer.commitBuffered(StandardResponses.OK));
-    StatefulClient client = new StatefulClient(HOST, HTTP_PORT);
-    assertEquals(200, client.get("/").getStatusCode());
+    assertEquals(200, get("/", null).getStatusCode());
   }
 
   @Test
   public void postReturns200() throws Exception {
     startServer((conn, req, writer) -> writer.commitBuffered(StandardResponses.OK));
-    StatefulClient client = new StatefulClient(HOST, HTTP_PORT);
-    assertEquals(200, client.post("/", Map.of("key", "value")).getStatusCode());
+    assertEquals(200, post("/", null, Map.of("key", "value")).getStatusCode());
   }
 
   @Test
@@ -82,9 +138,9 @@ public class StatefulClientIntegrationTest {
               StandardResponses.OK.withHeaderOverrides(
                   HttpHeaders.of(HttpHeaderName.SET_COOKIE, "session=abc;")));
         });
-    StatefulClient client = new StatefulClient(HOST, HTTP_PORT);
-    client.get("/"); // receives Set-Cookie
-    client.get("/"); // should send Cookie back
+    HttpResponse first = get("/", null);
+    String cookie = extractCookie(first);
+    get("/", cookie);
     assertNotNull(lastRequest.get().getHeaders().get(HttpHeaderName.COOKIE));
   }
 }

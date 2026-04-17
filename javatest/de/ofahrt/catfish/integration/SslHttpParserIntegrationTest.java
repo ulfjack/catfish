@@ -4,7 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import de.ofahrt.catfish.client.legacy.HttpConnection;
+import de.ofahrt.catfish.RawHttpConnection;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.upload.SimpleUploadPolicy;
@@ -39,7 +39,7 @@ public class SslHttpParserIntegrationTest extends ServletEngineTest {
 
   @Override
   public HttpServletRequest parseLegacy(byte[] data) throws Exception {
-    HttpConnection connection = localServer.connect(/* ssl= */ true);
+    RawHttpConnection connection = localServer.connect(/* ssl= */ true);
     connection.write(data);
     HttpResponse response = connection.readResponse();
     connection.close();

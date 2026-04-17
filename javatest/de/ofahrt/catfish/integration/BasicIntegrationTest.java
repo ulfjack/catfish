@@ -5,8 +5,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import de.ofahrt.catfish.RawHttpConnection;
 import de.ofahrt.catfish.bridge.TestHelper;
-import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -141,7 +141,7 @@ public class BasicIntegrationTest {
 
   @Test
   public void doubleGetInOnePacket() throws Exception {
-    try (HttpConnection connection = localServer.connect(/* ssl= */ false)) {
+    try (RawHttpConnection connection = localServer.connect(/* ssl= */ false)) {
       connection.write(
           toBytes("GET / HTTP/1.1\nHost: localhost\n\nGET / HTTP/1.1\nHost: localhost\n\n"));
       HttpResponse response1 = connection.readResponse();
@@ -158,7 +158,7 @@ public class BasicIntegrationTest {
     // read() to parse the second request. The malformed request triggers CLOSE_INPUT from read().
     // Before the fix, readAndResume() threw IllegalStateException for CLOSE_INPUT, crashing the
     // connection before the 400 response could be sent.
-    try (HttpConnection connection = localServer.connect(/* ssl= */ false)) {
+    try (RawHttpConnection connection = localServer.connect(/* ssl= */ false)) {
       connection.write(toBytes("GET / HTTP/1.1\nHost: localhost\n\nINVALID\n\n"));
       HttpResponse response1 = connection.readResponse();
       assertEquals(200, response1.getStatusCode());
@@ -169,7 +169,7 @@ public class BasicIntegrationTest {
 
   @Test
   public void sslDoubleGetInOnePacket() throws Exception {
-    try (HttpConnection connection = localServer.connect(/* ssl= */ true)) {
+    try (RawHttpConnection connection = localServer.connect(/* ssl= */ true)) {
       connection.write(
           toBytes("GET / HTTP/1.1\nHost: localhost\n\nGET / HTTP/1.1\nHost: localhost\n\n"));
       HttpResponse response1 = connection.readResponse();
@@ -181,8 +181,8 @@ public class BasicIntegrationTest {
 
   @Test
   public void sslConnectionBad() throws Exception {
-    try (HttpConnection connection =
-        HttpConnection.connect(
+    try (RawHttpConnection connection =
+        RawHttpConnection.connect(
             // Note the use of the SSL port here!
             LocalCatfishServer.HTTP_SERVER, LocalCatfishServer.HTTPS_PORT)) {
       connection.write(toBytes("GET / HTTP/1.1\nHost: localhost\n\n"));
@@ -190,7 +190,7 @@ public class BasicIntegrationTest {
         connection.readResponse();
         fail();
       } catch (IOException e) {
-        assertEquals("Connection closed prematurely!", e.getMessage());
+        assertEquals("Connection closed before response completed", e.getMessage());
       }
     }
   }
@@ -219,7 +219,7 @@ public class BasicIntegrationTest {
 
   @Test
   public void getSplitAcrossTwoPackets() throws Exception {
-    try (HttpConnection connection = localServer.connect(/* ssl= */ false)) {
+    try (RawHttpConnection connection = localServer.connect(/* ssl= */ false)) {
       connection.write(toBytes("GET / HTTP/1.1\n"));
       Thread.sleep(20);
       connection.write(toBytes("Host: localhost\n\n"));

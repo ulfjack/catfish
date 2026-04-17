@@ -6,10 +6,10 @@ import static org.junit.Assert.assertNull;
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
+import de.ofahrt.catfish.RawHttpConnection;
 import de.ofahrt.catfish.ValidatingHttpHandler;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
-import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -202,7 +202,7 @@ public class HttpResponseValidationIntegrationTest {
   }
 
   private HttpResponse get(String path) throws IOException {
-    try (HttpConnection connection = HttpConnection.connect(HOST, HTTP_PORT, null)) {
+    try (RawHttpConnection connection = RawHttpConnection.connect(HOST, HTTP_PORT, null)) {
       connection.write(
           ("GET " + path + " HTTP/1.1\r\nHost: localhost\r\n\r\n").getBytes("ISO-8859-1"));
       return connection.readResponse();

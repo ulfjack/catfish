@@ -1,6 +1,6 @@
 package de.ofahrt.catfish.integration;
 
-import de.ofahrt.catfish.client.legacy.HttpConnection;
+import de.ofahrt.catfish.RawHttpConnection;
 import de.ofahrt.catfish.model.HttpResponse;
 import java.io.IOException;
 
@@ -18,7 +18,7 @@ interface Server {
 
   HttpResponse sendSsl(String content) throws IOException;
 
-  HttpConnection connect(boolean ssl) throws IOException;
+  RawHttpConnection connect(boolean ssl) throws IOException;
 
   void waitForNoOpenConnections();
 }

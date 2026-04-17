@@ -4,11 +4,11 @@ import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.HttpsEndpoint;
+import de.ofahrt.catfish.RawHttpConnection;
 import de.ofahrt.catfish.TestServlet;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
 import de.ofahrt.catfish.bridge.TestHelper;
-import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
@@ -106,8 +106,9 @@ final class LocalCatfishServer implements Server {
     if (ssl && !startSsl) {
       throw new IllegalStateException();
     }
-    try (HttpConnection connection =
-        HttpConnection.connect(hostname, port, ssl ? TestHelper.getSSLInfo().sslContext() : null)) {
+    try (RawHttpConnection connection =
+        RawHttpConnection.connect(
+            hostname, port, ssl ? TestHelper.getSSLInfo().sslContext() : null)) {
       connection.write(content);
       return connection.readResponse();
     }
@@ -130,18 +131,18 @@ final class LocalCatfishServer implements Server {
   }
 
   public HttpResponse sendHead(String content) throws IOException {
-    try (HttpConnection connection = connect(false)) {
+    try (RawHttpConnection connection = connect(false)) {
       connection.write(toBytes(content));
       return connection.readHeadResponse();
     }
   }
 
   @Override
-  public HttpConnection connect(boolean ssl) throws IOException {
+  public RawHttpConnection connect(boolean ssl) throws IOException {
     if (ssl && !startSsl) {
       throw new IllegalStateException();
     }
-    return HttpConnection.connect(
+    return RawHttpConnection.connect(
         HTTP_SERVER,
         ssl ? HTTPS_PORT : HTTP_PORT,
         ssl ? TestHelper.getSSLInfo().sslContext() : null);

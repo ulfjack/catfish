@@ -7,7 +7,7 @@ import static org.junit.Assert.assertNull;
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
-import de.ofahrt.catfish.client.legacy.HttpConnection;
+import de.ofahrt.catfish.RawHttpConnection;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -84,7 +84,7 @@ public class CompressionIntegrationTest {
   }
 
   private HttpResponse send(String rawRequest) throws IOException {
-    try (HttpConnection connection = HttpConnection.connect(HOST, HTTP_PORT)) {
+    try (RawHttpConnection connection = RawHttpConnection.connect(HOST, HTTP_PORT)) {
       connection.write(rawRequest.replace("\n", "\r\n").getBytes("ISO-8859-1"));
       return connection.readResponse();
     }

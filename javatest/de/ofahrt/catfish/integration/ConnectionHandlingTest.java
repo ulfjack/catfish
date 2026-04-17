@@ -8,9 +8,9 @@ import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.HttpsEndpoint;
+import de.ofahrt.catfish.RawHttpConnection;
 import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.client.CatfishHttpClient;
-import de.ofahrt.catfish.client.legacy.HttpConnection;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -186,7 +186,7 @@ public class ConnectionHandlingTest {
                 }
               });
         });
-    try (HttpConnection conn = HttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT, null)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT, null)) {
       conn.write(
           ("GET / HTTP/1.1\r\nHost: " + HTTP_SERVER_NAME + "\r\nConnection: close\r\n\r\n")
               .getBytes("ISO-8859-1"));
@@ -280,7 +280,7 @@ public class ConnectionHandlingTest {
     startServer(
         (connection, request, responseWriter) ->
             responseWriter.commitBuffered(StandardResponses.OK));
-    try (HttpConnection conn = HttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT)) {
       conn.write(
           "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
               .getBytes(StandardCharsets.UTF_8));
@@ -298,7 +298,7 @@ public class ConnectionHandlingTest {
         (connection, request, responseWriter) ->
             responseWriter.commitBuffered(StandardResponses.OK),
         request -> true);
-    try (HttpConnection connection = HttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT)) {
+    try (RawHttpConnection connection = RawHttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT)) {
       // Send headers only, with Expect: 100-continue.
       String headers =
           "POST / HTTP/1.1\r\n"
@@ -333,7 +333,7 @@ public class ConnectionHandlingTest {
         (connection, request, responseWriter) ->
             responseWriter.commitBuffered(StandardResponses.OK),
         UploadPolicy.DENY);
-    try (HttpConnection connection = HttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT)) {
+    try (RawHttpConnection connection = RawHttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT)) {
       String headers =
           "POST / HTTP/1.1\r\n"
               + "Host: localhost\r\n"
@@ -356,7 +356,8 @@ public class ConnectionHandlingTest {
         (connection, request, responseWriter) -> {
           throw new IOException("handler failure");
         });
-    try (HttpConnection connection = HttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT, null)) {
+    try (RawHttpConnection connection =
+        RawHttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT, null)) {
       connection.write(
           "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".getBytes(StandardCharsets.UTF_8));
       HttpResponse response = connection.readResponse();

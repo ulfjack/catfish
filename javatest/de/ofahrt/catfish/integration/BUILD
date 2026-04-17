@@ -13,7 +13,6 @@ java_test(
         "//java/de/ofahrt/catfish",
         "//java/de/ofahrt/catfish/bridge",
         "//java/de/ofahrt/catfish/client",
-        "//java/de/ofahrt/catfish/client/legacy",
         "//java/de/ofahrt/catfish/model",
         "//java/de/ofahrt/catfish/model/network",
         "//java/de/ofahrt/catfish/model/server",

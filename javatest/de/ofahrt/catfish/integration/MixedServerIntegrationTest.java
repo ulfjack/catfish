@@ -5,7 +5,7 @@ import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpEndpoint;
-import de.ofahrt.catfish.client.legacy.HttpConnection;
+import de.ofahrt.catfish.RawHttpConnection;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -237,7 +237,7 @@ public class MixedServerIntegrationTest {
   /** Normal HTTP request with a relative URI is served by the local virtual host. */
   @Test
   public void normalHttp() throws Exception {
-    try (HttpConnection conn = HttpConnection.connect("localhost", MIXED_PORT)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect("localhost", MIXED_PORT)) {
       var response =
           conn.send(
               new SimpleHttpRequest.Builder()
@@ -256,7 +256,7 @@ public class MixedServerIntegrationTest {
   /** Proxy-GET with an absolute URI is forwarded to the origin (the same server in this test). */
   @Test
   public void proxyGet() throws Exception {
-    try (HttpConnection conn = HttpConnection.connect("localhost", MIXED_PORT)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect("localhost", MIXED_PORT)) {
       var response =
           conn.send(
               new SimpleHttpRequest.Builder()
@@ -303,7 +303,7 @@ public class MixedServerIntegrationTest {
             throw new RuntimeException("policy error");
           }
         });
-    try (HttpConnection conn = HttpConnection.connect("localhost", port)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect("localhost", port)) {
       var response =
           conn.send(
               new SimpleHttpRequest.Builder()
@@ -321,7 +321,7 @@ public class MixedServerIntegrationTest {
   public void proxyGet_policyDenies_returns403() throws Exception {
     int port = 9102;
     startExtraServer(port, ConnectHandler.denyAll());
-    try (HttpConnection conn = HttpConnection.connect("localhost", port)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect("localhost", port)) {
       var response =
           conn.send(
               new SimpleHttpRequest.Builder()
@@ -337,7 +337,7 @@ public class MixedServerIntegrationTest {
   /** Proxy-GET when the origin server is unreachable returns 502. */
   @Test
   public void proxyGet_originUnreachable_returns502() throws Exception {
-    try (HttpConnection conn = HttpConnection.connect("localhost", MIXED_PORT)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect("localhost", MIXED_PORT)) {
       var response =
           conn.send(
               new SimpleHttpRequest.Builder()
@@ -353,7 +353,7 @@ public class MixedServerIntegrationTest {
   /** Proxy-GET with a query string forwards the query to the origin. */
   @Test
   public void proxyGet_withQueryString_returns200() throws Exception {
-    try (HttpConnection conn = HttpConnection.connect("localhost", MIXED_PORT)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect("localhost", MIXED_PORT)) {
       var response =
           conn.send(
               new SimpleHttpRequest.Builder()
@@ -369,7 +369,7 @@ public class MixedServerIntegrationTest {
   /** Proxy-GET with no path component (empty path) normalises to "/" on the origin. */
   @Test
   public void proxyGet_emptyPath_returns200() throws Exception {
-    try (HttpConnection conn = HttpConnection.connect("localhost", MIXED_PORT)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect("localhost", MIXED_PORT)) {
       var response =
           conn.send(
               new SimpleHttpRequest.Builder()
@@ -388,7 +388,7 @@ public class MixedServerIntegrationTest {
    */
   @Test
   public void proxyGet_hopByHopHeadersStripped_customHeaderForwarded() throws Exception {
-    try (HttpConnection conn = HttpConnection.connect("localhost", MIXED_PORT)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect("localhost", MIXED_PORT)) {
       var response =
           conn.send(
               new SimpleHttpRequest.Builder()
@@ -409,7 +409,7 @@ public class MixedServerIntegrationTest {
     int port = 9103;
     startExtraServerWithUpload(port);
     byte[] body = "post-body".getBytes(StandardCharsets.UTF_8);
-    try (HttpConnection conn = HttpConnection.connect("localhost", port)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect("localhost", port)) {
       var response =
           conn.send(
               new SimpleHttpRequest.Builder()
@@ -434,7 +434,7 @@ public class MixedServerIntegrationTest {
   public void serveLocally_get_dispatchesToLocalHandler() throws Exception {
     int port = 9104;
     startExtraServerServeLocallyEcho(port);
-    try (HttpConnection conn = HttpConnection.connect("localhost", port)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect("localhost", port)) {
       var response =
           conn.send(
               new SimpleHttpRequest.Builder()
@@ -457,7 +457,7 @@ public class MixedServerIntegrationTest {
     int port = 9105;
     startExtraServerServeLocallyEcho(port);
     byte[] body = "post-body-contents".getBytes(StandardCharsets.UTF_8);
-    try (HttpConnection conn = HttpConnection.connect("localhost", port)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect("localhost", port)) {
       var response =
           conn.send(
               new SimpleHttpRequest.Builder()
@@ -528,7 +528,7 @@ public class MixedServerIntegrationTest {
     s.listen(listener);
     extraServers.add(s);
 
-    try (HttpConnection conn = HttpConnection.connect("localhost", port)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect("localhost", port)) {
       // First request: forwarded to origin (same server, so we get RESPONSE_BODY via tunnel).
       var r1 =
           conn.send(
