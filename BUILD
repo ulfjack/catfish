@@ -145,3 +145,22 @@ sh_runner(
     script = _CPD_SCRIPT,
     data = ["@pmd//:bin/pmd"],
 )
+
+_PMD_SCRIPT = """#!/usr/bin/env bash
+set -euo pipefail
+RUNFILES_DIR="${RUNFILES_DIR:-$0.runfiles}"
+PMD=$(find "$RUNFILES_DIR" -path "*/bin/pmd" | head -1)
+if [[ -z "$PMD" ]]; then
+  echo "ERROR: pmd binary not found in runfiles" >&2
+  exit 1
+fi
+cd "$BUILD_WORKSPACE_DIRECTORY"
+"$PMD" check --dir java/ --rulesets rulesets/java/quickstart.xml --no-fail-on-violation
+"""
+
+# `bazel run //:pmd` - runs PMD static analysis on Java sources.
+sh_runner(
+    name = "pmd",
+    script = _PMD_SCRIPT,
+    data = ["@pmd//:bin/pmd"],
+)
