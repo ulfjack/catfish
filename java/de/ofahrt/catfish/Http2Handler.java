@@ -65,8 +65,8 @@ final class Http2Handler implements NetworkHandler {
           public void run() {
             try {
               httpHandler.handle(connection, request, responseWriter);
-            } catch (IOException e) {
-              throw new RuntimeException(e);
+            } catch (Exception e) {
+              responseWriter.abort();
             }
           }
 

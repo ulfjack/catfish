@@ -851,7 +851,7 @@ public class Http2ServerStageTest {
         new ConnectHandler() {
           @Override
           public RequestAction applyLocal(HttpRequest request) {
-            return RequestAction.forward("origin.example.com", 80);
+            return RequestAction.forward(request);
           }
         });
     feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));

@@ -84,6 +84,9 @@ public class Http2HandlerTest {
             public OutputStream commitStreamed(HttpResponse response) {
               return OutputStream.nullOutputStream();
             }
+
+            @Override
+            public void abort() {}
           };
       h.queueRequest(
           (conn, req, w) -> w.commitBuffered(StandardResponses.OK),
@@ -112,6 +115,9 @@ public class Http2HandlerTest {
             public OutputStream commitStreamed(HttpResponse response) {
               return OutputStream.nullOutputStream();
             }
+
+            @Override
+            public void abort() {}
           };
       h.queueRequest(
           (conn, req, w) -> {
@@ -148,6 +154,9 @@ public class Http2HandlerTest {
             public OutputStream commitStreamed(HttpResponse response) {
               return OutputStream.nullOutputStream();
             }
+
+            @Override
+            public void abort() {}
           };
 
       // Saturate executor with blocking tasks. Capacity = parallelism + 128.

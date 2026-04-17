@@ -716,6 +716,12 @@ public final class Http2ServerStage implements Stage {
         }
       };
     }
+
+    @Override
+    public void abort() {
+      delegate.abort();
+      onComplete.run();
+    }
   }
 
   private void sendErrorResponse(Http2Stream stream, HttpResponse errorResponse) {
@@ -838,6 +844,20 @@ public final class Http2ServerStage implements Stage {
           buffer.close();
         }
       };
+    }
+
+    @Override
+    public void abort() {
+      if (!committed.compareAndSet(false, true)) {
+        // Already committed — force close the streaming buffer if active.
+        Http2StreamBuffer buf = stream.getStreamingBuffer();
+        if (buf != null) {
+          buf.cancelStream();
+        }
+        return;
+      }
+      // Not committed yet — send 500 Internal Server Error.
+      sendErrorResponse(stream, StandardResponses.INTERNAL_SERVER_ERROR);
     }
   }
 }

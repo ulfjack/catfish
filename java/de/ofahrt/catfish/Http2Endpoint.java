@@ -13,20 +13,20 @@ import org.jspecify.annotations.Nullable;
 /** Configures an h2-only HTTPS listener. Clients must negotiate "h2" via ALPN. */
 public final class Http2Endpoint {
 
-  private final HttpEndpoint.Binding binding;
+  private final Binding binding;
   private final Map<String, HttpVirtualHost> hosts = new LinkedHashMap<>();
   private final Map<String, SSLInfo> sslInfos = new LinkedHashMap<>();
 
-  private Http2Endpoint(HttpEndpoint.Binding binding) {
+  private Http2Endpoint(Binding binding) {
     this.binding = Objects.requireNonNull(binding, "binding");
   }
 
   public static Http2Endpoint onAny(int port) {
-    return new Http2Endpoint(new HttpEndpoint.Binding.AnyPort(port));
+    return new Http2Endpoint(new Binding.AnyPort(port));
   }
 
   public static Http2Endpoint onLocalhost(int port) {
-    return new Http2Endpoint(new HttpEndpoint.Binding.LocalhostPort(port));
+    return new Http2Endpoint(new Binding.LocalhostPort(port));
   }
 
   public Http2Endpoint addHost(String hostname, HttpVirtualHost host, SSLInfo sslInfo) {
@@ -46,7 +46,7 @@ public final class Http2Endpoint {
     SslServerStage.SSLContextProvider sslContextProvider = this::getSSLContext;
     NetworkEngine.NetworkHandler networkHandler =
         new Http2Handler(server, connectHandler, sslContextProvider);
-    HttpEndpoint.Binding.listen(binding, server.engine(), networkHandler);
+    binding.listen(server.engine(), networkHandler);
   }
 
   private @Nullable SSLContext getSSLContext(@Nullable String host) {
