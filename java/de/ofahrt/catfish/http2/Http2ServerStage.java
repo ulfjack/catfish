@@ -173,9 +173,9 @@ public final class Http2ServerStage implements Stage {
 
     // Parse frames from input buffer.
     while (inputBuffer.hasRemaining()) {
-      // Backpressure: if the control frame queue is nearly full, pause reads until write()
-      // drains it. TCP flow control will slow the peer to our write rate.
-      // Queue is in read mode; queuedBytes = remaining(), freeSpace = capacity - queuedBytes.
+      // Backpressure: if the control frame queue is nearly full (less than 64 bytes free),
+      // pause reads until write() drains it. TCP flow control will slow the peer.
+      // The queue is in read mode, so remaining() == queued bytes.
       if (controlFrameQueue.remaining() >= CONTROL_FRAME_QUEUE_CAPACITY - 64) {
         readsPausedForBackpressure = true;
         parent.encourageWrites();
