@@ -8,6 +8,7 @@ import org.junit.runners.Suite.SuiteClasses;
 @SuiteClasses({
   ClientStageTest.class,
   HttpConnectionTest.class,
+  RawHttpConnectionTest.class,
   HttpRequestGeneratorBufferedTest.class,
   IncrementalHttpResponseParserTest.class,
   IncrementalHttpResponseParserIncrementalTest.class,
