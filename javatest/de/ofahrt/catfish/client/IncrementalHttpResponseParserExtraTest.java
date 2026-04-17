@@ -1,34 +1,13 @@
-package de.ofahrt.catfish.client.legacy;
+package de.ofahrt.catfish.client;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import de.ofahrt.catfish.client.HttpResponseParserTest;
-import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.MalformedResponseException;
 import org.junit.Test;
 
-public class LegacyIncrementalHttpResponseParserTest extends HttpResponseParserTest {
-
-  @Override
-  public HttpResponse parse(byte[] data) throws Exception {
-    IncrementalHttpResponseParser parser = new IncrementalHttpResponseParser();
-    parser.parse(data);
-    return parser.getResponse();
-  }
-
-  // The legacy parser does not enforce these length limits.
-  @Override
-  @Test
-  public void badReasonPhrase_tooLong() {}
-
-  @Override
-  @Test
-  public void badHeaderName_tooLong() {}
-
-  @Override
-  @Test
-  public void badHeaderValue_tooLong() {}
+/** Extra tests for helper methods and edge cases in IncrementalHttpResponseParser. */
+public class IncrementalHttpResponseParserExtraTest {
 
   // ---- isControl ----
 
@@ -109,12 +88,12 @@ public class LegacyIncrementalHttpResponseParserTest extends HttpResponseParserT
 
   @Test
   public void isHexDigit_nonHex() {
-    assertFalse(IncrementalHttpResponseParser.isHexDigit('/')); // just below '0'
-    assertFalse(IncrementalHttpResponseParser.isHexDigit(':')); // just above '9'
-    assertFalse(IncrementalHttpResponseParser.isHexDigit('@')); // just below 'A'
-    assertFalse(IncrementalHttpResponseParser.isHexDigit('G')); // just above 'F'
-    assertFalse(IncrementalHttpResponseParser.isHexDigit('`')); // just below 'a'
-    assertFalse(IncrementalHttpResponseParser.isHexDigit('g')); // just above 'f'
+    assertFalse(IncrementalHttpResponseParser.isHexDigit('/'));
+    assertFalse(IncrementalHttpResponseParser.isHexDigit(':'));
+    assertFalse(IncrementalHttpResponseParser.isHexDigit('@'));
+    assertFalse(IncrementalHttpResponseParser.isHexDigit('G'));
+    assertFalse(IncrementalHttpResponseParser.isHexDigit('`'));
+    assertFalse(IncrementalHttpResponseParser.isHexDigit('g'));
   }
 
   // ---- isDigit ----
@@ -127,8 +106,8 @@ public class LegacyIncrementalHttpResponseParserTest extends HttpResponseParserT
 
   @Test
   public void isDigit_nonDigits() {
-    assertFalse(IncrementalHttpResponseParser.isDigit('/')); // just below '0'
-    assertFalse(IncrementalHttpResponseParser.isDigit(':')); // just above '9'
+    assertFalse(IncrementalHttpResponseParser.isDigit('/'));
+    assertFalse(IncrementalHttpResponseParser.isDigit(':'));
     assertFalse(IncrementalHttpResponseParser.isDigit('A'));
   }
 
@@ -147,20 +126,15 @@ public class LegacyIncrementalHttpResponseParserTest extends HttpResponseParserT
 
   @Test(expected = UnsupportedOperationException.class)
   public void httpMajorVersionNotZeroOrOne_throws() throws Exception {
-    // HTTP/2.0 has major version 2, which the legacy parser does not support.
-    parse(
-        "HTTP/2.0 200 OK\n\n"
-            .replace("\n", "\r\n")
-            .getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
+    IncrementalHttpResponseParser parser = new IncrementalHttpResponseParser();
+    parser.parse("HTTP/2.0 200 OK\r\n\r\n".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
   }
 
   @Test(expected = MalformedResponseException.class)
   public void httpMinorVersionTooLong_throws() throws Exception {
-    // 8-digit minor version exceeds the 7-digit limit.
-    parse(
-        "HTTP/1.12345678 200 OK\n\n"
-            .replace("\n", "\r\n")
-            .getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
+    IncrementalHttpResponseParser parser = new IncrementalHttpResponseParser();
+    parser.parse(
+        "HTTP/1.12345678 200 OK\r\n\r\n".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
   }
 
   @Test(expected = IllegalStateException.class)

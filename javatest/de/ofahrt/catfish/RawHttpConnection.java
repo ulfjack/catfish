@@ -1,6 +1,6 @@
 package de.ofahrt.catfish;
 
-import de.ofahrt.catfish.client.legacy.IncrementalHttpResponseParser;
+import de.ofahrt.catfish.client.IncrementalHttpResponseParser;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpRequest.InMemoryBody;
 import de.ofahrt.catfish.model.HttpResponse;

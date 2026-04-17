@@ -67,7 +67,7 @@ final class HttpClientStage implements Stage {
   }
 
   @Override
-  public ConnectionControl read() {
+  public ConnectionControl read() throws IOException {
     // invariant: inputBuffer is readable
     if (inputBuffer.hasRemaining()) {
       int consumed =

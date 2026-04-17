@@ -6,7 +6,7 @@ java_library(
     name = "catfish",
     srcs = glob(["*.java"]),
     deps = [
-        "//java/de/ofahrt/catfish/client/legacy",
+        "//java/de/ofahrt/catfish/client",
         "//java/de/ofahrt/catfish/http",
         "//java/de/ofahrt/catfish/internal/network",
         "//java/de/ofahrt/catfish/model",
@@ -23,6 +23,5 @@ java_binary(
     runtime_deps = [
         ":catfish",
         "//java/de/ofahrt/catfish/client",
-        "//java/de/ofahrt/catfish/client/legacy",
     ],
 )

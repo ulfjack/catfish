@@ -1,6 +1,6 @@
 package de.ofahrt.catfish;
 
-import de.ofahrt.catfish.client.legacy.IncrementalHttpResponseParser;
+import de.ofahrt.catfish.client.IncrementalHttpResponseParser;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;

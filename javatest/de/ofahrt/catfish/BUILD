@@ -20,7 +20,7 @@ java_library(
     visibility = ["//javatest/de/ofahrt/catfish:__subpackages__"],
     deps = [
         "//java/de/ofahrt/catfish/bridge",
-        "//java/de/ofahrt/catfish/client/legacy",
+        "//java/de/ofahrt/catfish/client",
         "//java/de/ofahrt/catfish/model",
         "//java/de/ofahrt/catfish/model/server",
         "//java/de/ofahrt/catfish/utils",

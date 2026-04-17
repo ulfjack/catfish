@@ -10,6 +10,7 @@ import org.junit.runners.Suite.SuiteClasses;
   RawHttpConnectionTest.class,
   HttpRequestGeneratorBufferedTest.class,
   IncrementalHttpResponseParserTest.class,
+  IncrementalHttpResponseParserExtraTest.class,
   IncrementalHttpResponseParserIncrementalTest.class,
   LoggingNetworkEventListenerTest.class,
   LoggingTrustManagerTest.class,
