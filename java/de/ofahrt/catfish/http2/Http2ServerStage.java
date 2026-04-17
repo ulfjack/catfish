@@ -796,15 +796,16 @@ public final class Http2ServerStage implements Stage {
     var headerList = new ArrayList<Header>();
     headerList.add(new Header(":status", Integer.toString(response.getStatusCode())));
     for (var entry : response.getHeaders()) {
-      String name = entry.getKey().toLowerCase(Locale.ROOT);
+      String name = entry.getKey();
       // Skip HTTP/1.1-specific headers that don't apply to HTTP/2,
       // and skip content-length if we're setting it ourselves.
-      if ("connection".equals(name)
-          || "transfer-encoding".equals(name)
-          || (contentLength >= 0 && "content-length".equals(name))) {
+      if (HttpHeaderName.CONNECTION.equals(name)
+          || HttpHeaderName.TRANSFER_ENCODING.equals(name)
+          || (contentLength >= 0 && HttpHeaderName.CONTENT_LENGTH.equals(name))) {
         continue;
       }
-      headerList.add(new Header(name, entry.getValue()));
+      // HTTP/2 requires lowercase header names (RFC 9113 §8.2).
+      headerList.add(new Header(name.toLowerCase(Locale.ROOT), entry.getValue()));
     }
     if (contentLength >= 0) {
       headerList.add(new Header("content-length", Integer.toString(contentLength)));
