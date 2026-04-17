@@ -9,6 +9,7 @@ import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.ssl.SSLInfo;
 import java.lang.reflect.Method;
 import javax.net.ssl.SSLContext;
+import org.jspecify.annotations.Nullable;
 import org.junit.Test;
 
 public class Http2EndpointTest {
@@ -45,8 +46,8 @@ public class Http2EndpointTest {
     endpoint.addHost("localhost", vhost, sslInfo);
   }
 
-  private static @org.jspecify.annotations.Nullable SSLContext invokeGetSSLContext(
-      Http2Endpoint endpoint, @org.jspecify.annotations.Nullable String host) throws Exception {
+  private static @Nullable SSLContext invokeGetSSLContext(
+      Http2Endpoint endpoint, @Nullable String host) throws Exception {
     Method m = Http2Endpoint.class.getDeclaredMethod("getSSLContext", String.class);
     m.setAccessible(true);
     return (SSLContext) m.invoke(endpoint, host);

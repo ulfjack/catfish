@@ -4,11 +4,12 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 import java.nio.ByteBuffer;
+import java.util.function.Consumer;
 import org.junit.Test;
 
 public class Http2FrameWriterTest {
 
-  private static byte[] write(java.util.function.Consumer<ByteBuffer> writer) {
+  private static byte[] write(Consumer<ByteBuffer> writer) {
     ByteBuffer buf = ByteBuffer.allocate(256);
     writer.accept(buf);
     buf.flip();
