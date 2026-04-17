@@ -1,6 +1,8 @@
 package de.ofahrt.catfish.bridge;
 
 import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.upload.FormEntry;
+import de.ofahrt.catfish.upload.UrlEncodedParser;
 import de.ofahrt.catfish.utils.MimeType;
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -13,7 +15,6 @@ import java.io.Reader;
 import java.io.StringWriter;
 import java.io.Writer;
 import java.net.URI;
-import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Enumeration;
 import java.util.Locale;
@@ -137,21 +138,12 @@ public class ServletHelper {
     Map<String, String> result = new TreeMap<>();
     String queryData = request.getQueryString();
     if (queryData != null) {
-      parseUrlEncoded(queryData, result);
+      for (FormEntry entry :
+          new UrlEncodedParser().parse(queryData.getBytes(StandardCharsets.UTF_8))) {
+        result.put(entry.getName(), entry.getValue());
+      }
     }
     return result;
-  }
-
-  private static void parseUrlEncoded(String data, Map<String, String> out) {
-    for (String pair : data.split("&", -1)) {
-      int eq = pair.indexOf('=');
-      if (eq < 0) {
-        continue;
-      }
-      String key = URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8);
-      String value = URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
-      out.put(key, value);
-    }
   }
 
   private static byte[] readByteArray(InputStream in, int length) throws IOException {
@@ -270,8 +262,9 @@ public class ServletHelper {
     }
 
     if (contentType.equalsIgnoreCase("application/x-www-form-urlencoded")) {
-      String footerData = new String(ba, StandardCharsets.UTF_8);
-      parseUrlEncoded(footerData, result.data);
+      for (FormEntry entry : new UrlEncodedParser().parse(ba)) {
+        result.data.put(entry.getName(), entry.getValue());
+      }
     }
     return result;
   }
