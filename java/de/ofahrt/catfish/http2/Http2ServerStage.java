@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 
@@ -60,6 +61,7 @@ public final class Http2ServerStage implements Stage {
   private final Pipeline parent;
   private final RequestQueue requestHandler;
   private final ConnectHandler connectHandler;
+  private final @Nullable Executor executor;
   private final ByteBuffer inputBuffer;
   private final ByteBuffer outputBuffer;
 
@@ -120,12 +122,14 @@ public final class Http2ServerStage implements Stage {
       Pipeline parent,
       RequestQueue requestHandler,
       ConnectHandler connectHandler,
+      @Nullable Executor executor,
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer) {
     this(
         parent,
         requestHandler,
         connectHandler,
+        executor,
         inputBuffer,
         outputBuffer,
         Runtime.getRuntime().availableProcessors());
@@ -135,12 +139,14 @@ public final class Http2ServerStage implements Stage {
       Pipeline parent,
       RequestQueue requestHandler,
       ConnectHandler connectHandler,
+      @Nullable Executor executor,
       ByteBuffer inputBuffer,
       ByteBuffer outputBuffer,
       int maxConcurrentDispatches) {
     this.parent = parent;
     this.requestHandler = requestHandler;
     this.connectHandler = connectHandler;
+    this.executor = executor;
     this.maxConcurrentDispatches = maxConcurrentDispatches;
     this.inputBuffer = inputBuffer;
     this.outputBuffer = outputBuffer;
@@ -470,12 +476,44 @@ public final class Http2ServerStage implements Stage {
       return;
     }
 
-    RequestAction action = connectHandler.applyLocal(partialRequest);
+    if (executor != null) {
+      boolean finalEndStream = endStream;
+      executor.execute(
+          () -> {
+            RequestAction action;
+            try {
+              action = connectHandler.applyLocal(partialRequest);
+            } catch (Exception e) {
+              parent.queue(
+                  () -> sendErrorResponse(stream, StandardResponses.INTERNAL_SERVER_ERROR));
+              return;
+            }
+            parent.queue(
+                () -> applyRoutingResult(stream, builder, partialRequest, action, finalEndStream));
+          });
+    } else {
+      RequestAction action;
+      try {
+        action = connectHandler.applyLocal(partialRequest);
+      } catch (Exception e) {
+        sendErrorResponse(stream, StandardResponses.INTERNAL_SERVER_ERROR);
+        return;
+      }
+      applyRoutingResult(stream, builder, partialRequest, action, endStream);
+    }
+  }
+
+  /** Applies a routing decision. Called on the NIO thread (either inline or via parent.queue). */
+  private void applyRoutingResult(
+      Http2Stream stream,
+      SimpleHttpRequest.Builder builder,
+      HttpRequest partialRequest,
+      RequestAction action,
+      boolean endStream) {
     if (action instanceof RequestAction.ServeLocally serve) {
       if (endStream) {
         dispatchRequest(stream, builder, serve);
       } else {
-        // Check upload policy before accepting body DATA frames.
         if (!serve.uploadPolicy().isAllowed(partialRequest)) {
           sendErrorResponse(stream, StandardResponses.PAYLOAD_TOO_LARGE);
           return;

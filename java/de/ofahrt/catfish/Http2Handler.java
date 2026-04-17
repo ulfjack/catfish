@@ -46,7 +46,12 @@ final class Http2Handler implements NetworkHandler {
         pipeline,
         (innerPipeline, plainIn, plainOut) ->
             new Http2ServerStage(
-                innerPipeline, this::queueRequest, connectHandler, plainIn, plainOut),
+                innerPipeline,
+                this::queueRequest,
+                connectHandler,
+                server.executor,
+                plainIn,
+                plainOut),
         ALPN_H2_ONLY,
         sslContextProvider,
         server.executor,

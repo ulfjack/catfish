@@ -81,6 +81,7 @@ public class Http2ServerStageTest {
               }
             },
             connectHandler,
+            null,
             inputBuffer,
             outputBuffer);
 
@@ -145,7 +146,8 @@ public class Http2ServerStageTest {
     // Already connected in setUp, but verify the return value.
     ConnectHandler noopHandler = new ConnectHandler() {};
     Http2ServerStage fresh =
-        new Http2ServerStage(pipeline, (h, c, r, w) -> {}, noopHandler, inputBuffer, outputBuffer);
+        new Http2ServerStage(
+            pipeline, (h, c, r, w) -> {}, noopHandler, null, inputBuffer, outputBuffer);
     assertEquals(InitialConnectionState.READ_ONLY, fresh.connect(conn));
   }
 
@@ -632,6 +634,7 @@ public class Http2ServerStageTest {
               }
             },
             ch,
+            null,
             inputBuffer,
             outputBuffer);
     Connection conn =
@@ -769,6 +772,7 @@ public class Http2ServerStageTest {
               }
             },
             ch,
+            null,
             inputBuffer,
             outputBuffer,
             /* maxConcurrentDispatches= */ 1);
@@ -1265,6 +1269,7 @@ public class Http2ServerStageTest {
               }
             },
             ch,
+            null,
             inputBuffer,
             outputBuffer,
             /* maxConcurrentDispatches= */ 1);
@@ -1337,6 +1342,7 @@ public class Http2ServerStageTest {
               }
             },
             ch,
+            null,
             inputBuffer,
             outputBuffer);
     Connection conn =
@@ -1372,6 +1378,7 @@ public class Http2ServerStageTest {
               }
             },
             ch,
+            null,
             inputBuffer,
             outputBuffer);
     Connection conn =
