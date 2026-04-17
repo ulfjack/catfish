@@ -153,7 +153,7 @@ final class LocalHttpRequestStage implements HttpRequestStage {
       // Parse chunk size (hex).
       int lineEnd = indexOf(raw, (byte) '\r', i);
       if (lineEnd < 0) break;
-      String sizeLine = new String(raw, i, lineEnd - i, java.nio.charset.StandardCharsets.US_ASCII);
+      String sizeLine = new String(raw, i, lineEnd - i, StandardCharsets.US_ASCII);
       // Strip chunk extensions.
       int semi = sizeLine.indexOf(';');
       if (semi >= 0) sizeLine = sizeLine.substring(0, semi);

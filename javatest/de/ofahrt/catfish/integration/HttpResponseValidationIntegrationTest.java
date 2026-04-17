@@ -22,6 +22,7 @@ import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -141,8 +142,7 @@ public class HttpResponseValidationIntegrationTest {
         (Connection conn, HttpRequest req, HttpResponseWriter writer) -> {
           try {
             writer.commitBuffered(
-                StandardResponses.NO_CONTENT.withBody(
-                    "oops".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                StandardResponses.NO_CONTENT.withBody("oops".getBytes(StandardCharsets.UTF_8)));
           } catch (IllegalArgumentException e) {
             writer.commitBuffered(StandardResponses.INTERNAL_SERVER_ERROR);
           }
