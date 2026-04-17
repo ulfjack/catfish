@@ -27,8 +27,9 @@ public final class SessionManager {
     }
 
     @Override
+    @SuppressWarnings("PMD.CompareObjectsWithEquals") // intentional identity check
     public int compareTo(SessionEntry entry) {
-      if (entry == this) return 0; // NOPMD CompareObjectsWithEquals - intentional identity check
+      if (entry == this) return 0;
       if (nextTimeOut < entry.nextTimeOut) return -1;
       if (nextTimeOut > entry.nextTimeOut) return 1;
       if (entryNumber < entry.entryNumber) return -1;
