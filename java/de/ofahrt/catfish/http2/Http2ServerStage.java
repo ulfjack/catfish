@@ -772,20 +772,6 @@ public final class Http2ServerStage implements Stage {
     flushScratch();
   }
 
-  private void sendGoaway(int errorCode) {
-    Http2FrameWriter.writeGoaway(controlFrameScratch, lastStreamId, errorCode);
-    flushScratch();
-    goawaySent = true;
-    parent.encourageWrites();
-  }
-
-  private void sendRstStream(int streamId, int errorCode) {
-    Http2FrameWriter.writeRstStream(controlFrameScratch, streamId, errorCode);
-    flushScratch();
-    streams.remove(streamId);
-    parent.encourageWrites();
-  }
-
   private void drainControlFrames(ByteBuffer out) {
     while (controlFrameQueue.hasRemaining() && out.hasRemaining()) {
       int toCopy = Math.min(controlFrameQueue.remaining(), out.remaining());
