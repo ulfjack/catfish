@@ -91,16 +91,7 @@ public final class HttpsEndpoint {
             effectiveOriginFactory,
             sslContextProvider,
             requestListener);
-    NetworkEngine engine = server.engine();
-    if (binding instanceof Binding.AnyPort b) {
-      engine.listenAll(b.port(), networkHandler);
-    } else if (binding instanceof Binding.LocalhostPort b) {
-      engine.listenLocalhost(b.port(), networkHandler);
-    } else if (binding instanceof Binding.UnixSocket b) {
-      engine.listenUnixSocket(b.path(), networkHandler);
-    } else {
-      throw new AssertionError("Unknown binding type: " + binding);
-    }
+    binding.listen(server.engine(), networkHandler);
   }
 
   private ConnectHandler buildConnectHandler() {
