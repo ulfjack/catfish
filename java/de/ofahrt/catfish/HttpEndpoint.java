@@ -14,15 +14,6 @@ import org.jspecify.annotations.Nullable;
 /** Configures a plain HTTP endpoint with per-listener virtual host isolation. */
 public final class HttpEndpoint {
 
-  /** Describes where the endpoint listens. */
-  sealed interface Binding {
-    record AnyPort(int port) implements Binding {}
-
-    record LocalhostPort(int port) implements Binding {}
-
-    record UnixSocket(Path path) implements Binding {}
-  }
-
   private final Binding binding;
   private final Map<String, HttpVirtualHost> hosts = new LinkedHashMap<>();
   private @Nullable ConnectHandler connectHandler;

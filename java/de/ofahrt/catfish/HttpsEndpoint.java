@@ -16,30 +16,30 @@ import org.jspecify.annotations.Nullable;
 /** Configures an HTTPS listener with per-vhost TLS certificates and virtual host isolation. */
 public final class HttpsEndpoint {
 
-  private final HttpEndpoint.Binding binding;
+  private final Binding binding;
   private final Map<String, HttpVirtualHost> hosts = new LinkedHashMap<>();
   private final Map<String, SSLInfo> sslInfos = new LinkedHashMap<>();
   private @Nullable ConnectHandler connectHandler;
   private @Nullable SSLSocketFactory originSslFactory;
   private HttpServerListener requestListener = new HttpServerListener() {};
 
-  private HttpsEndpoint(HttpEndpoint.Binding binding) {
+  private HttpsEndpoint(Binding binding) {
     this.binding = Objects.requireNonNull(binding, "binding");
   }
 
   /** Listen on all interfaces. */
   public static HttpsEndpoint onAny(int port) {
-    return new HttpsEndpoint(new HttpEndpoint.Binding.AnyPort(port));
+    return new HttpsEndpoint(new Binding.AnyPort(port));
   }
 
   /** Listen on localhost only. */
   public static HttpsEndpoint onLocalhost(int port) {
-    return new HttpsEndpoint(new HttpEndpoint.Binding.LocalhostPort(port));
+    return new HttpsEndpoint(new Binding.LocalhostPort(port));
   }
 
   /** Listen on a Unix domain socket. */
   public static HttpsEndpoint onUnixSocket(Path path) {
-    return new HttpsEndpoint(new HttpEndpoint.Binding.UnixSocket(path));
+    return new HttpsEndpoint(new Binding.UnixSocket(path));
   }
 
   /**
@@ -92,11 +92,11 @@ public final class HttpsEndpoint {
             sslContextProvider,
             requestListener);
     NetworkEngine engine = server.engine();
-    if (binding instanceof HttpEndpoint.Binding.AnyPort b) {
+    if (binding instanceof Binding.AnyPort b) {
       engine.listenAll(b.port(), networkHandler);
-    } else if (binding instanceof HttpEndpoint.Binding.LocalhostPort b) {
+    } else if (binding instanceof Binding.LocalhostPort b) {
       engine.listenLocalhost(b.port(), networkHandler);
-    } else if (binding instanceof HttpEndpoint.Binding.UnixSocket b) {
+    } else if (binding instanceof Binding.UnixSocket b) {
       engine.listenUnixSocket(b.path(), networkHandler);
     } else {
       throw new AssertionError("Unknown binding type: " + binding);
