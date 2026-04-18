@@ -6,15 +6,11 @@ import java.io.IOException;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** A <code>CatfishHttpServer</code> manages a HTTP-Server. */
 public final class CatfishHttpServer {
-
-  interface RequestCallback extends Runnable {
-
-    void reject();
-  }
 
   private static final int MAX_QUEUED_REQUESTS = 128;
 
@@ -40,9 +36,7 @@ public final class CatfishHttpServer {
                 });
           } else {
             pending.decrementAndGet();
-            if (task instanceof RequestCallback rc) {
-              rc.reject();
-            }
+            throw new RejectedExecutionException("Server overloaded");
           }
         };
     this.engine = new NetworkEngine(serverListener);

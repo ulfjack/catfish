@@ -3,7 +3,6 @@ package de.ofahrt.catfish;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import de.ofahrt.catfish.CatfishHttpServer.RequestCallback;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -19,6 +18,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Test;
 
@@ -124,12 +124,9 @@ public class Http2HandlerTest {
 
   @Test
   public void queueRequest_executorRejects_sends503() {
-    // An executor that always rejects by calling reject() instead of run().
     Executor rejectingExecutor =
         task -> {
-          if (task instanceof RequestCallback rc) {
-            rc.reject();
-          }
+          throw new RejectedExecutionException("test");
         };
     Http2Handler h = new Http2Handler(rejectingExecutor, new ConnectHandler() {}, host -> null);
     AtomicInteger statusCode = new AtomicInteger();

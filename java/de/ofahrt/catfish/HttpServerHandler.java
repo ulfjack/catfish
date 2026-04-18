@@ -1,6 +1,5 @@
 package de.ofahrt.catfish;
 
-import de.ofahrt.catfish.CatfishHttpServer.RequestCallback;
 import de.ofahrt.catfish.internal.network.NetworkEngine.NetworkHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
@@ -14,6 +13,7 @@ import de.ofahrt.catfish.model.server.HttpServerListener;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import javax.net.ssl.SSLSocketFactory;
 import org.jspecify.annotations.Nullable;
 
@@ -91,25 +91,21 @@ final class HttpServerHandler implements NetworkHandler {
       Connection connection,
       HttpRequest request,
       HttpResponseWriter responseWriter) {
-    executor.execute(
-        new RequestCallback() {
-          @Override
-          public void run() {
+    try {
+      executor.execute(
+          () -> {
             try {
               httpHandler.handle(connection, request, responseWriter);
             } catch (Exception e) {
               responseWriter.abort();
             }
-          }
-
-          @Override
-          public void reject() {
-            try {
-              responseWriter.commitBuffered(StandardResponses.SERVICE_UNAVAILABLE);
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          }
-        });
+          });
+    } catch (RejectedExecutionException e) {
+      try {
+        responseWriter.commitBuffered(StandardResponses.SERVICE_UNAVAILABLE);
+      } catch (IOException ioe) {
+        throw new RuntimeException(ioe);
+      }
+    }
   }
 }
