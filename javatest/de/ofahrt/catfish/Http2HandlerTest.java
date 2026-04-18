@@ -3,6 +3,7 @@ package de.ofahrt.catfish;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import de.ofahrt.catfish.CatfishHttpServer.RequestCallback;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -119,5 +120,38 @@ public class Http2HandlerTest {
         dummyRequest(),
         writer);
     if (abortCount.get() == 0) fail("abort was not called");
+  }
+
+  @Test
+  public void queueRequest_executorRejects_sends503() {
+    // An executor that always rejects by calling reject() instead of run().
+    Executor rejectingExecutor =
+        task -> {
+          if (task instanceof RequestCallback rc) {
+            rc.reject();
+          }
+        };
+    Http2Handler h = new Http2Handler(rejectingExecutor, new ConnectHandler() {}, host -> null);
+    AtomicInteger statusCode = new AtomicInteger();
+    HttpResponseWriter writer =
+        new HttpResponseWriter() {
+          @Override
+          public void commitBuffered(HttpResponse response) {
+            statusCode.set(response.getStatusCode());
+          }
+
+          @Override
+          public OutputStream commitStreamed(HttpResponse response) {
+            return OutputStream.nullOutputStream();
+          }
+
+          @Override
+          public void abort() {}
+        };
+    h.queueRequest(
+        (conn, req, w) -> fail("handler should not run"), newConnection(), dummyRequest(), writer);
+    if (statusCode.get() != 503) {
+      fail("expected 503, got " + statusCode.get());
+    }
   }
 }
