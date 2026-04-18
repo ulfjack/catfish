@@ -9,6 +9,7 @@ import org.junit.runners.Suite.SuiteClasses;
   CatfishHttpServerTest.class,
   ChunkedDecodingOutputStreamTest.class,
   ChunkedBodyScannerTest.class,
+  ConnectStageTest.class,
   ContinueResponseGeneratorTest.class,
   HashConflictGeneratorTest.class,
   Http2EndpointTest.class,
