@@ -94,4 +94,9 @@ public class ContinueResponseGeneratorTest {
   public void keepAlive_returnsTrue() {
     assertTrue(new ContinueResponseGenerator().keepAlive());
   }
+
+  @Test
+  public void close_doesNotThrow() {
+    new ContinueResponseGenerator().close();
+  }
 }
