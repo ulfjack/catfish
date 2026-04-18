@@ -13,6 +13,7 @@ import org.junit.runners.Suite.SuiteClasses;
   HashConflictGeneratorTest.class,
   Http2EndpointTest.class,
   Http2HandlerTest.class,
+  HttpEndpointTest.class,
   HttpsEndpointTest.class,
   HttpVirtualHostTest.class,
   IncrementalHttpParserIncrementalTest.class,

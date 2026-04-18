@@ -88,4 +88,26 @@ public class HttpsEndpointTest {
     HttpsEndpoint endpoint = HttpsEndpoint.onLocalhost(443);
     assertThrows(NullPointerException.class, () -> endpoint.originSslFactory(null));
   }
+
+  @Test
+  public void build_returnsNetworkHandler() {
+    HttpsEndpoint endpoint =
+        HttpsEndpoint.onLocalhost(443).addHost("localhost", new HttpVirtualHost(DUMMY), TEST_SSL);
+    assertNotNull(endpoint.build(Runnable::run));
+  }
+
+  @Test
+  public void build_withDispatcher_returnsNetworkHandler() {
+    HttpsEndpoint endpoint = HttpsEndpoint.onLocalhost(443).dispatcher(new ConnectHandler() {});
+    assertNotNull(endpoint.build(Runnable::run));
+  }
+
+  @Test
+  public void build_addHostAndDispatcher_throws() {
+    HttpsEndpoint endpoint =
+        HttpsEndpoint.onLocalhost(443)
+            .addHost("localhost", new HttpVirtualHost(DUMMY), TEST_SSL)
+            .dispatcher(new ConnectHandler() {});
+    assertThrows(IllegalStateException.class, () -> endpoint.build(Runnable::run));
+  }
 }
