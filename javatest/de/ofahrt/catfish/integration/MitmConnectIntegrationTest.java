@@ -1092,6 +1092,68 @@ public class MitmConnectIntegrationTest {
     }
   }
 
+  @Test(timeout = 10_000)
+  public void mitmConnectProxy_clientHalfCloses_onConnectCompleteFires() throws Exception {
+    // Send a request through MITM, read the response, then half-close the raw TCP socket
+    // (shutdownOutput sends FIN without SSL close_notify). This exercises the inputClosed()
+    // path on the SslServerStage → wrapWithOnClose wrapper → HttpServerStage chain.
+    CountDownLatch latch = new CountDownLatch(1);
+
+    CatfishHttpServer server = newServer();
+    serversToStop.add(server);
+    HttpEndpoint endpoint =
+        HttpEndpoint.onLocalhost(9106)
+            .dispatcher(ConnectHandler.mitmAll(ca))
+            .originSslFactory(testSslInfo.sslContext().getSocketFactory())
+            .requestListener(
+                new HttpServerListener() {
+                  @Override
+                  public void onConnectComplete(UUID connectId, String host, int port) {
+                    latch.countDown();
+                  }
+                });
+    server.listen(endpoint);
+
+    // autoClose=false on the SSLSocket so we control the raw socket shutdown ourselves.
+    Socket rawSocket = new Socket("localhost", 9106);
+    OutputStream rawOut = rawSocket.getOutputStream();
+    InputStream rawIn = rawSocket.getInputStream();
+    rawOut.write(
+        ("CONNECT localhost:" + HTTPS_PORT + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .getBytes(StandardCharsets.ISO_8859_1));
+    rawOut.flush();
+    String connectResp = readUntilBlankLine(rawIn);
+    assertTrue("Expected 200, got: " + connectResp, connectResp.startsWith("HTTP/1.1 200"));
+
+    SSLSocket sslSocket =
+        (SSLSocket)
+            clientCtx
+                .getSocketFactory()
+                .createSocket(rawSocket, "localhost", HTTPS_PORT, /* autoClose= */ false);
+    SSLParameters sslParams = sslSocket.getSSLParameters();
+    sslParams.setServerNames(List.of(new SNIHostName("localhost")));
+    sslSocket.setSSLParameters(sslParams);
+    sslSocket.setUseClientMode(true);
+    sslSocket.startHandshake();
+
+    OutputStream sslOut = sslSocket.getOutputStream();
+    InputStream sslIn = sslSocket.getInputStream();
+
+    sslOut.write("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
+    sslOut.flush();
+    String resp = readUntilBlankLine(sslIn);
+    assertTrue("Expected 200, got: " + resp, resp.startsWith("HTTP/1.1 200"));
+    readBody(sslIn, resp);
+
+    // Half-close: shutdownOutput on the raw socket sends TCP FIN without SSL close_notify.
+    // The server's NIO engine reads -1 → calls SslServerStage.inputClosed() →
+    // wrapper.inputClosed() → HttpServerStage.inputClosed().
+    rawSocket.shutdownOutput();
+    rawSocket.close();
+
+    assertTrue("onConnectComplete not invoked within 2s", latch.await(2, TimeUnit.SECONDS));
+  }
+
   // ---- Infrastructure ----
 
   private static CatfishHttpServer newServer() throws IOException {
