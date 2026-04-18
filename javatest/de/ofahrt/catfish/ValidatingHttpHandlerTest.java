@@ -2,6 +2,7 @@ package de.ofahrt.catfish;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
@@ -25,6 +26,7 @@ public class ValidatingHttpHandlerTest {
   private static class RecordingResponseWriter implements HttpResponseWriter {
     HttpResponse bufferedResponse;
     HttpResponse streamedResponse;
+    boolean aborted;
 
     @Override
     public void commitBuffered(HttpResponse response) {
@@ -38,7 +40,9 @@ public class ValidatingHttpHandlerTest {
     }
 
     @Override
-    public void abort() {}
+    public void abort() {
+      this.aborted = true;
+    }
   }
 
   @Test
@@ -52,6 +56,16 @@ public class ValidatingHttpHandlerTest {
             });
     handler.handle((Connection) null, null, delegate);
     assertSame(StandardResponses.INTERNAL_SERVER_ERROR, delegate.bufferedResponse);
+  }
+
+  @Test
+  public void abort_delegatesToUnderlying() throws IOException {
+    RecordingResponseWriter delegate = new RecordingResponseWriter();
+    ValidatingHttpHandler handler =
+        new ValidatingHttpHandler(
+            (connection, request, responseWriter) -> responseWriter.abort());
+    handler.handle((Connection) null, null, delegate);
+    assertTrue(delegate.aborted);
   }
 
   @Test
