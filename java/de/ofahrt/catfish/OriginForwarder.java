@@ -2,7 +2,6 @@ package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.client.IncrementalHttpResponseParser;
 import de.ofahrt.catfish.http.HttpResponseGenerator;
-import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -55,7 +54,6 @@ final class OriginForwarder {
           "upgrade",
           "proxy-authorization");
 
-  private final Pipeline parent;
   private final UUID requestId;
   private final String originHost;
   private final int originPort;
@@ -66,16 +64,18 @@ final class OriginForwarder {
   private final boolean keepAlive;
   private final @Nullable OutputStream captureStream;
 
-  /** Callback to install the response generator and keepAlive flag on the NIO thread. */
+  /** Callback to deliver the response generator to the NIO thread. */
   interface ResultCallback {
     void accept(HttpResponseGenerator gen, boolean keepAlive);
+
+    /** Signal the NIO thread that response data is available for writing. */
+    void encourageWrites();
   }
 
   private final ResultCallback resultCallback;
   private final Runnable pipeSpaceCallback;
 
   OriginForwarder(
-      Pipeline parent,
       UUID requestId,
       String originHost,
       int originPort,
@@ -87,7 +87,6 @@ final class OriginForwarder {
       @Nullable OutputStream captureStream,
       ResultCallback resultCallback,
       Runnable pipeSpaceCallback) {
-    this.parent = parent;
     this.requestId = requestId;
     this.originHost = originHost;
     this.originPort = originPort;
@@ -246,7 +245,7 @@ final class OriginForwarder {
         HttpResponse forwardedResponse = originResponse.withHeaderOverrides(dateAndConnection);
         gen =
             HttpResponseGeneratorStreamed.createRaw(
-                parent::encourageWrites, originalHeaders, forwardedResponse);
+                resultCallback::encourageWrites, originalHeaders, forwardedResponse);
       } else {
         // Strip CL+TE; the generator will add its own framing.
         HttpResponse forwardedResponse =
@@ -256,7 +255,7 @@ final class OriginForwarder {
                 .withHeaderOverrides(dateAndConnection);
         gen =
             HttpResponseGeneratorStreamed.create(
-                parent::encourageWrites,
+                resultCallback::encourageWrites,
                 originalHeaders,
                 forwardedResponse,
                 /* includeBody= */ !noBody && (responseCl != null || !originKeepAlive));

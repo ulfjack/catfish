@@ -68,7 +68,6 @@ final class ProxyRequestStage implements HttpRequestStage {
 
     OriginForwarder forwarder =
         new OriginForwarder(
-            parent,
             requestId,
             host,
             port,
@@ -78,13 +77,28 @@ final class ProxyRequestStage implements HttpRequestStage {
             bodyPipe,
             keepAlive,
             captureStream,
-            (gen, ka) ->
+            new OriginForwarder.ResultCallback() {
+              private volatile boolean accepted;
+
+              @Override
+              public void accept(HttpResponseGenerator gen, boolean ka) {
+                if (accepted) {
+                  return;
+                }
+                accepted = true;
                 parent.queue(
                     () -> {
                       responseGen = gen;
                       keepAlive = ka;
                       parent.encourageWrites();
-                    }),
+                    });
+              }
+
+              @Override
+              public void encourageWrites() {
+                parent.queue(parent::encourageWrites);
+              }
+            },
             () -> parent.queue(parent::encourageReads));
     executor.execute(() -> forwarder.run(forwardRequest));
     return Decision.CONTINUE;
