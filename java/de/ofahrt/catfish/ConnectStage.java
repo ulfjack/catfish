@@ -154,7 +154,7 @@ final class ConnectStage implements Stage {
     } else if (decision instanceof ConnectDecision.Intercept i) {
       // INTERCEPT: use a cached cert if available, otherwise fetch from origin and mint.
       String cacheKey = connectHost + ":" + connectPort;
-      SSLInfo cached = sslInfoCache != null ? sslInfoCache.get(cacheKey) : null;
+      SSLInfo cached = sslInfoCache.get(cacheKey);
       SSLContext ctx;
       if (cached != null) {
         ctx = cached.sslContext();
@@ -168,9 +168,7 @@ final class ConnectStage implements Stage {
           parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
           return;
         }
-        if (sslInfoCache != null) {
-          sslInfoCache.put(cacheKey, info);
-        }
+        sslInfoCache.put(cacheKey, info);
         ctx = info.sslContext();
       }
 
