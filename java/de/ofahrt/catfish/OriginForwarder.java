@@ -5,6 +5,7 @@ import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.RequestOutcome;
 import java.io.ByteArrayOutputStream;
@@ -233,9 +234,14 @@ final class OriginForwarder {
                       originResponse.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING));
 
       // Determine if the origin connection will close after this response.
+      // HTTP/1.0 defaults to close; HTTP/1.1 defaults to keep-alive.
       String originConnection = originResponse.getHeaders().get(HttpHeaderName.CONNECTION);
-      boolean originKeepAlive =
-          originConnection == null || !"close".equalsIgnoreCase(originConnection);
+      boolean originKeepAlive;
+      if (originConnection != null) {
+        originKeepAlive = !"close".equalsIgnoreCase(originConnection);
+      } else {
+        originKeepAlive = originResponse.getProtocolVersion().compareTo(HttpVersion.HTTP_1_1) >= 0;
+      }
 
       HttpHeaders dateAndConnection =
           HttpHeaders.of(

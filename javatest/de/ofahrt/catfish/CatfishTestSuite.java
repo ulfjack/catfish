@@ -18,6 +18,7 @@ import org.junit.runners.Suite.SuiteClasses;
   HttpsEndpointTest.class,
   HttpVirtualHostTest.class,
   IncrementalHttpParserIncrementalTest.class,
+  OriginForwarderTest.class,
   IncrementalHttpParserTest.class,
   ValidatingHttpHandlerTest.class,
   HttpResponseGeneratorBufferedTest.class,
