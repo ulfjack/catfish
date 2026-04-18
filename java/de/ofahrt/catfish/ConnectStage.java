@@ -266,11 +266,6 @@ final class ConnectStage implements Stage {
     ConnectHandler mitmHandler =
         new ConnectHandler() {
           @Override
-          public ConnectDecision applyConnect(String host, int port) {
-            return ConnectDecision.deny();
-          }
-
-          @Override
           public RequestAction applyLocal(HttpRequest request) {
             if (isLocal) {
               // InterceptLocal: serve locally via the user's applyLocal.
