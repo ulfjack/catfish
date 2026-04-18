@@ -62,8 +62,7 @@ public class ValidatingHttpHandlerTest {
   public void abort_delegatesToUnderlying() throws IOException {
     RecordingResponseWriter delegate = new RecordingResponseWriter();
     ValidatingHttpHandler handler =
-        new ValidatingHttpHandler(
-            (connection, request, responseWriter) -> responseWriter.abort());
+        new ValidatingHttpHandler((connection, request, responseWriter) -> responseWriter.abort());
     handler.handle((Connection) null, null, delegate);
     assertTrue(delegate.aborted);
   }
