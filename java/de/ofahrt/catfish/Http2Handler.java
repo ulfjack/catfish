@@ -14,6 +14,7 @@ import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.Executor;
 
 /**
  * A {@link NetworkHandler} that creates an h2-only TLS endpoint. The inner stage is always {@link
@@ -22,15 +23,15 @@ import java.nio.ByteBuffer;
 final class Http2Handler implements NetworkHandler {
   private static final String[] ALPN_H2_ONLY = {"h2"};
 
-  private final CatfishHttpServer server;
+  private final Executor executor;
   private final ConnectHandler connectHandler;
   private final SslServerStage.SSLContextProvider sslContextProvider;
 
   Http2Handler(
-      CatfishHttpServer server,
+      Executor executor,
       ConnectHandler connectHandler,
       SslServerStage.SSLContextProvider sslContextProvider) {
-    this.server = server;
+    this.executor = executor;
     this.connectHandler = connectHandler;
     this.sslContextProvider = sslContextProvider;
   }
@@ -46,15 +47,10 @@ final class Http2Handler implements NetworkHandler {
         pipeline,
         (innerPipeline, plainIn, plainOut) ->
             new Http2ServerStage(
-                innerPipeline,
-                this::queueRequest,
-                connectHandler,
-                server.executor,
-                plainIn,
-                plainOut),
+                innerPipeline, this::queueRequest, connectHandler, executor, plainIn, plainOut),
         ALPN_H2_ONLY,
         sslContextProvider,
-        server.executor,
+        executor,
         inputBuffer,
         outputBuffer);
   }
@@ -64,7 +60,7 @@ final class Http2Handler implements NetworkHandler {
       Connection connection,
       HttpRequest request,
       HttpResponseWriter responseWriter) {
-    server.executor.execute(
+    executor.execute(
         new RequestCallback() {
           @Override
           public void run() {

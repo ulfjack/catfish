@@ -3,10 +3,10 @@ package de.ofahrt.catfish;
 import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.ssl.SSLInfo;
-import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Executor;
 import javax.net.ssl.SSLContext;
 import org.jspecify.annotations.Nullable;
 
@@ -41,12 +41,14 @@ public final class Http2Endpoint {
     return this;
   }
 
-  void listen(CatfishHttpServer server) throws IOException, InterruptedException {
+  Binding binding() {
+    return binding;
+  }
+
+  NetworkEngine.NetworkHandler build(Executor executor) {
     ConnectHandler connectHandler = VirtualHostRouter.buildConnectHandler(null, hosts);
     SslServerStage.SSLContextProvider sslContextProvider = this::getSSLContext;
-    NetworkEngine.NetworkHandler networkHandler =
-        new Http2Handler(server, connectHandler, sslContextProvider);
-    binding.listen(server.engine(), networkHandler);
+    return new Http2Handler(executor, connectHandler, sslContextProvider);
   }
 
   private @Nullable SSLContext getSSLContext(@Nullable String host) {

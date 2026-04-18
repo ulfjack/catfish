@@ -4,11 +4,11 @@ import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.ssl.SSLInfo;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Executor;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
 import org.jspecify.annotations.Nullable;
@@ -76,22 +76,24 @@ public final class HttpsEndpoint {
     return this;
   }
 
-  void listen(CatfishHttpServer server) throws IOException, InterruptedException {
+  Binding binding() {
+    return binding;
+  }
+
+  NetworkEngine.NetworkHandler build(Executor executor) {
     ConnectHandler effectiveHandler = buildConnectHandler();
     SSLSocketFactory effectiveOriginFactory =
         originSslFactory != null
             ? originSslFactory
             : (SSLSocketFactory) SSLSocketFactory.getDefault();
     SslServerStage.SSLContextProvider sslContextProvider = this::getSSLContext;
-    NetworkEngine.NetworkHandler networkHandler =
-        new HttpServerHandler(
-            server,
-            effectiveHandler,
-            /* needsExecutor= */ connectHandler != null,
-            effectiveOriginFactory,
-            sslContextProvider,
-            requestListener);
-    binding.listen(server.engine(), networkHandler);
+    return new HttpServerHandler(
+        executor,
+        effectiveHandler,
+        /* needsExecutor= */ connectHandler != null,
+        effectiveOriginFactory,
+        sslContextProvider,
+        requestListener);
   }
 
   private ConnectHandler buildConnectHandler() {

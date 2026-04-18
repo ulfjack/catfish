@@ -13,6 +13,7 @@ import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.Executor;
 import javax.net.ssl.SSLSocketFactory;
 import org.jspecify.annotations.Nullable;
 
@@ -22,7 +23,7 @@ import org.jspecify.annotations.Nullable;
  * interception) based on the configured {@link ConnectHandler}.
  */
 final class HttpServerHandler implements NetworkHandler {
-  private final CatfishHttpServer server;
+  private final Executor executor;
   private final ConnectHandler connectHandler;
   private final SSLSocketFactory originSocketFactory;
   private final SslInfoCache sslInfoCache = new SslInfoCache();
@@ -32,13 +33,13 @@ final class HttpServerHandler implements NetworkHandler {
   private final boolean needsExecutor;
 
   HttpServerHandler(
-      CatfishHttpServer server,
+      Executor executor,
       ConnectHandler connectHandler,
       boolean needsExecutor,
       SSLSocketFactory originSocketFactory,
       SslServerStage.@Nullable SSLContextProvider sslContextProvider,
       HttpServerListener serverListener) {
-    this.server = server;
+    this.executor = executor;
     this.connectHandler = connectHandler;
     this.needsExecutor = needsExecutor;
     this.originSocketFactory = originSocketFactory;
@@ -64,12 +65,12 @@ final class HttpServerHandler implements NetworkHandler {
                   serverListener,
                   originSocketFactory,
                   sslInfoCache,
-                  needsExecutor ? server.executor : null,
+                  needsExecutor ? executor : null,
                   plainIn,
                   plainOut),
           new String[] {"http/1.1"},
           sslContextProvider,
-          server.executor,
+          executor,
           inputBuffer,
           outputBuffer);
     }
@@ -80,7 +81,7 @@ final class HttpServerHandler implements NetworkHandler {
         serverListener,
         originSocketFactory,
         sslInfoCache,
-        needsExecutor ? server.executor : null,
+        needsExecutor ? executor : null,
         inputBuffer,
         outputBuffer);
   }
@@ -90,7 +91,7 @@ final class HttpServerHandler implements NetworkHandler {
       Connection connection,
       HttpRequest request,
       HttpResponseWriter responseWriter) {
-    server.executor.execute(
+    executor.execute(
         new RequestCallback() {
           @Override
           public void run() {

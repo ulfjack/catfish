@@ -49,19 +49,15 @@ public final class CatfishHttpServer {
   }
 
   public void listen(HttpEndpoint endpoint) throws IOException, InterruptedException {
-    endpoint.listen(this);
+    endpoint.binding().listen(engine, endpoint.build(executor));
   }
 
   public void listen(HttpsEndpoint endpoint) throws IOException, InterruptedException {
-    endpoint.listen(this);
+    endpoint.binding().listen(engine, endpoint.build(executor));
   }
 
   public void listen(Http2Endpoint endpoint) throws IOException, InterruptedException {
-    endpoint.listen(this);
-  }
-
-  NetworkEngine engine() {
-    return engine;
+    endpoint.binding().listen(engine, endpoint.build(executor));
   }
 
   public void stop() throws InterruptedException {
