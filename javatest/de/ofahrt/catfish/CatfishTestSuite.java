@@ -15,6 +15,7 @@ import org.junit.runners.Suite.SuiteClasses;
   Http2EndpointTest.class,
   Http2HandlerTest.class,
   HttpEndpointTest.class,
+  HttpServerStageTest.class,
   HttpsEndpointTest.class,
   HttpVirtualHostTest.class,
   IncrementalHttpParserIncrementalTest.class,
