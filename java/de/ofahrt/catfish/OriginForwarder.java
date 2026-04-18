@@ -261,7 +261,7 @@ final class OriginForwarder {
                 /* includeBody= */ !noBody && (responseCl != null || !originKeepAlive));
       }
       HttpResponseGeneratorStreamed genFinal = gen;
-      parent.queue(() -> resultCallback.accept(genFinal, keepAlive));
+      resultCallback.accept(genFinal, keepAlive);
       if (!noBody) {
         serverListener.onResponseStreamed(
             requestId, originHost, originPort, originalHeaders, originResponse);
@@ -394,7 +394,7 @@ final class OriginForwarder {
       gen.getOutputStream().close();
     } catch (IOException ignored) {
     }
-    parent.queue(() -> resultCallback.accept(gen, false));
+    resultCallback.accept(gen, false);
   }
 
   static byte[] requestHeadersToBytes(HttpRequest request) throws IOException {

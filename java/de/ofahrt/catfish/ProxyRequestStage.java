@@ -78,11 +78,13 @@ final class ProxyRequestStage implements HttpRequestStage {
             bodyPipe,
             keepAlive,
             captureStream,
-            (gen, ka) -> {
-              responseGen = gen;
-              keepAlive = ka;
-              parent.encourageWrites();
-            },
+            (gen, ka) ->
+                parent.queue(
+                    () -> {
+                      responseGen = gen;
+                      keepAlive = ka;
+                      parent.encourageWrites();
+                    }),
             () -> parent.queue(parent::encourageReads));
     executor.execute(() -> forwarder.run(forwardRequest));
     return Decision.CONTINUE;
