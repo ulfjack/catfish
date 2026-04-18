@@ -1392,6 +1392,67 @@ public class Http2ServerStageTest {
   // ---- Helpers ----
 
   /** Builds a raw frame with the given type, flags, stream ID, and payload. */
+  // ---- WINDOW_UPDATE overflow ----
+
+  @Test
+  public void windowUpdate_connectionOverflow_throwsFlowControlError() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // Connection send window starts at 65535. Send a WINDOW_UPDATE that would overflow int.
+    ByteBuffer payload = ByteBuffer.allocate(4);
+    payload.putInt(Integer.MAX_VALUE);
+    byte[] frame = buildRawFrame(FrameType.WINDOW_UPDATE, 0, 0, payload.array());
+    try {
+      feedAndRead(frame);
+      fail("Expected IOException for connection send window overflow");
+    } catch (IOException e) {
+      assertTrue(
+          "message should mention FLOW_CONTROL_ERROR, got: " + e.getMessage(),
+          String.valueOf(e.getMessage()).contains("FLOW_CONTROL_ERROR"));
+    }
+  }
+
+  @Test
+  public void windowUpdate_streamOverflow_sendsRstStream() throws IOException {
+    // Send preface + GET on stream 1, then WINDOW_UPDATE overflow — all in one feedAndRead
+    // so the stream hasn't been drained yet when the WINDOW_UPDATE arrives.
+    ByteBuffer payload = ByteBuffer.allocate(4);
+    payload.putInt(Integer.MAX_VALUE);
+    byte[] wu = buildRawFrame(FrameType.WINDOW_UPDATE, 0, 1, payload.array());
+
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings(), buildGetHeadersFrame(1, "/"), wu));
+
+    // Drain all output.
+    byte[] output = drainOutput();
+    assertTrue("expected output", output.length > 0);
+    // Find RST_STREAM frame (type=3) for stream 1.
+    boolean foundRst = false;
+    int i = 0;
+    while (i + 9 <= output.length) {
+      int len = ((output[i] & 0xff) << 16) | ((output[i + 1] & 0xff) << 8) | (output[i + 2] & 0xff);
+      int type = output[i + 3] & 0xff;
+      int sid =
+          ((output[i + 5] & 0x7f) << 24)
+              | ((output[i + 6] & 0xff) << 16)
+              | ((output[i + 7] & 0xff) << 8)
+              | (output[i + 8] & 0xff);
+      if (type == FrameType.RST_STREAM && sid == 1) {
+        assertEquals(4, len);
+        int errorCode =
+            ((output[i + 9] & 0xff) << 24)
+                | ((output[i + 10] & 0xff) << 16)
+                | ((output[i + 11] & 0xff) << 8)
+                | (output[i + 12] & 0xff);
+        assertEquals(ErrorCode.FLOW_CONTROL_ERROR, errorCode);
+        foundRst = true;
+        break;
+      }
+      i += 9 + len;
+    }
+    assertTrue("expected RST_STREAM with FLOW_CONTROL_ERROR", foundRst);
+  }
+
   private static byte[] buildRawFrame(int type, int flags, int streamId, byte[] payload) {
     ByteBuffer buf = ByteBuffer.allocate(9 + payload.length);
     buf.put((byte) ((payload.length >>> 16) & 0xff));

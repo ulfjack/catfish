@@ -640,6 +640,7 @@ public final class Http2ServerStage implements Stage {
         streams.remove(streamId);
         stream.setState(Http2Stream.State.CLOSED);
         queueRstStream(streamId, ErrorCode.FLOW_CONTROL_ERROR);
+        parent.encourageWrites();
         return;
       }
     }
