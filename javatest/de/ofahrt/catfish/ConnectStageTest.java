@@ -157,4 +157,70 @@ public class ConnectStageTest {
       // onConnect threw — that's expected. The stage should still be usable.
     }
   }
+
+  @Test
+  public void read_returnsPause() throws Exception {
+    ConnectStage stage = buildStage(DENY_ALL, new HttpServerListener() {});
+    assertEquals(ConnectionControl.PAUSE, stage.read());
+  }
+
+  @Test
+  public void write_inConnectingState_returnsPause() throws Exception {
+    // Don't call connect() — stage stays in CONNECTING.
+    ConnectStage stage = buildStage(DENY_ALL, new HttpServerListener() {});
+    assertEquals(ConnectionControl.PAUSE, stage.write());
+  }
+
+  @Test
+  public void inputClosed_closesParent() throws Exception {
+    boolean[] closed = {false};
+    Pipeline closingPipeline =
+        new Pipeline() {
+          @Override
+          public void encourageWrites() {}
+
+          @Override
+          public void encourageReads() {}
+
+          @Override
+          public void close() {
+            closed[0] = true;
+          }
+
+          @Override
+          public void queue(Runnable runnable) {
+            queued.add(runnable);
+          }
+
+          @Override
+          public void replaceWith(Stage nextStage) {}
+
+          @Override
+          public void log(String text, Object... params) {}
+        };
+    ByteBuffer in = ByteBuffer.allocate(1024);
+    in.flip();
+    ByteBuffer out = ByteBuffer.allocate(1024);
+    out.flip();
+    ConnectStage stage =
+        new ConnectStage(
+            closingPipeline,
+            in,
+            out,
+            Runnable::run,
+            UUID.randomUUID(),
+            "example.com",
+            443,
+            DENY_ALL,
+            new HttpServerListener() {},
+            (h, p) -> {
+              throw new java.io.IOException("test");
+            },
+            new SslInfoCache(),
+            (p, inBuf, outBuf, ch, ex, cHost, cPort) -> {
+              throw new UnsupportedOperationException();
+            });
+    stage.inputClosed();
+    assertTrue(closed[0]);
+  }
 }
