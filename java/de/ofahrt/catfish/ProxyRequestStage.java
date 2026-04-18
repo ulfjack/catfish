@@ -3,6 +3,7 @@ package de.ofahrt.catfish;
 import de.ofahrt.catfish.http.HttpRequestStage;
 import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
+import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.server.HttpServerListener;
@@ -78,14 +79,13 @@ final class ProxyRequestStage implements HttpRequestStage {
             keepAlive,
             captureStream,
             new OriginForwarder.ResultCallback() {
-              private volatile boolean accepted;
+              private volatile boolean committed;
 
-              @Override
-              public void accept(HttpResponseGenerator gen, boolean ka) {
-                if (accepted) {
+              private void setResponse(HttpResponseGenerator gen, boolean ka) {
+                if (committed) {
                   return;
                 }
-                accepted = true;
+                committed = true;
                 parent.queue(
                     () -> {
                       responseGen = gen;
@@ -95,7 +95,32 @@ final class ProxyRequestStage implements HttpRequestStage {
               }
 
               @Override
-              public void encourageWrites() {
+              public void commitBuffered(HttpResponse response, boolean ka) {
+                setResponse(HttpResponseGeneratorBuffered.createWithBody(null, response), ka);
+              }
+
+              @Override
+              public OutputStream commitStreamed(
+                  HttpResponse response, boolean ka, boolean rawPassthrough) {
+                HttpResponseGeneratorStreamed gen;
+                if (rawPassthrough) {
+                  gen =
+                      HttpResponseGeneratorStreamed.createRaw(
+                          this::encourageWrites, null, response);
+                } else {
+                  HttpResponse stripped =
+                      response
+                          .withoutHeader(HttpHeaderName.CONTENT_LENGTH)
+                          .withoutHeader(HttpHeaderName.TRANSFER_ENCODING);
+                  gen =
+                      HttpResponseGeneratorStreamed.create(
+                          this::encourageWrites, null, stripped, true);
+                }
+                setResponse(gen, ka);
+                return gen.getOutputStream();
+              }
+
+              private void encourageWrites() {
                 parent.queue(parent::encourageWrites);
               }
             },

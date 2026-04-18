@@ -1,7 +1,6 @@
 package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.client.IncrementalHttpResponseParser;
-import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -65,11 +64,15 @@ final class OriginForwarder {
   private final @Nullable OutputStream captureStream;
 
   /** Callback to deliver the response generator to the NIO thread. */
+  /** Callback to deliver origin responses to the NIO thread. */
   interface ResultCallback {
-    void accept(HttpResponseGenerator gen, boolean keepAlive);
+    void commitBuffered(HttpResponse response, boolean keepAlive);
 
-    /** Signal the NIO thread that response data is available for writing. */
-    void encourageWrites();
+    /**
+     * @param rawPassthrough if true, body bytes are raw chunked encoding and should be forwarded
+     *     without re-framing. If false, the caller will add its own framing.
+     */
+    OutputStream commitStreamed(HttpResponse response, boolean keepAlive, boolean rawPassthrough);
   }
 
   private final ResultCallback resultCallback;
@@ -161,7 +164,6 @@ final class OriginForwarder {
       return RequestOutcome.error(e);
     }
 
-    HttpResponseGeneratorStreamed gen = null;
     HttpResponse originResponse = null;
     CountingOutputStream counter = null;
     try {
@@ -224,9 +226,11 @@ final class OriginForwarder {
               || statusCode == 304;
       String responseCl =
           noBody ? null : originResponse.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
-      String responseTe =
-          noBody ? null : originResponse.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
-      boolean chunkedResponse = responseTe != null && "chunked".equalsIgnoreCase(responseTe);
+      boolean chunkedResponse =
+          !noBody
+              && "chunked"
+                  .equalsIgnoreCase(
+                      originResponse.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING));
 
       // Determine if the origin connection will close after this response.
       String originConnection = originResponse.getHeaders().get(HttpHeaderName.CONNECTION);
@@ -240,97 +244,39 @@ final class OriginForwarder {
               HttpHeaderName.DATE,
               DateTimeFormatter.RFC_1123_DATE_TIME.format(ZonedDateTime.now(ZoneOffset.UTC)));
 
-      if (chunkedResponse) {
-        // Pass raw chunked bytes through — keep original Transfer-Encoding header.
-        HttpResponse forwardedResponse = originResponse.withHeaderOverrides(dateAndConnection);
-        gen =
-            HttpResponseGeneratorStreamed.createRaw(
-                resultCallback::encourageWrites, originalHeaders, forwardedResponse);
-      } else {
-        // Strip CL+TE; the generator will add its own framing.
-        HttpResponse forwardedResponse =
-            originResponse
-                .withoutHeader(HttpHeaderName.CONTENT_LENGTH)
-                .withoutHeader(HttpHeaderName.TRANSFER_ENCODING)
-                .withHeaderOverrides(dateAndConnection);
-        gen =
-            HttpResponseGeneratorStreamed.create(
-                resultCallback::encourageWrites,
-                originalHeaders,
-                forwardedResponse,
-                /* includeBody= */ !noBody && (responseCl != null || !originKeepAlive));
-      }
-      resultCallback.accept(gen, keepAlive);
-      if (!noBody) {
+      HttpResponse forwardedResponse = originResponse.withHeaderOverrides(dateAndConnection);
+      boolean includeBody = !noBody && (responseCl != null || chunkedResponse || !originKeepAlive);
+
+      if (includeBody) {
         serverListener.onResponseStreamed(
             requestId, originHost, originPort, originalHeaders, originResponse);
+        OutputStream responseOut =
+            resultCallback.commitStreamed(forwardedResponse, keepAlive, chunkedResponse);
+        counter = new CountingOutputStream(responseOut);
+        if (chunkedResponse) {
+          OutputStream effectiveCapture =
+              captureStream != null ? new ChunkedDecodingOutputStream(captureStream) : null;
+          OutputStream bodyOut =
+              effectiveCapture != null ? new TeeOutputStream(counter, effectiveCapture) : counter;
+          streamChunkedBody(originIn, bodyOut, readBuf, leftoverStart, leftoverLen);
+        } else {
+          OutputStream bodyOut =
+              captureStream != null ? new TeeOutputStream(counter, captureStream) : counter;
+          if (responseCl != null) {
+            streamContentLengthBody(
+                originIn, bodyOut, readBuf, leftoverStart, leftoverLen, responseCl);
+          } else {
+            streamUntilEof(originIn, bodyOut, readBuf, leftoverStart, leftoverLen);
+          }
+        }
+        counter.close();
+      } else {
+        resultCallback.commitBuffered(forwardedResponse, keepAlive);
       }
 
-      counter = new CountingOutputStream(gen.getOutputStream());
-
-      // Stream the response body. When captureStream is non-null, tee each chunk to it.
-      // For chunked responses, the capture stream receives decoded bytes (without chunk framing)
-      // so that cached responses can be replayed without Transfer-Encoding: chunked.
-      OutputStream effectiveCapture =
-          captureStream != null && chunkedResponse
-              ? new ChunkedDecodingOutputStream(captureStream)
-              : captureStream;
-      OutputStream bodyOut =
-          effectiveCapture != null ? new TeeOutputStream(counter, effectiveCapture) : counter;
-
-      if (noBody) {
-        // No body to stream (1xx/204/304/HEAD).
-      } else if (chunkedResponse) {
-        ChunkedBodyScanner responseScanner = new ChunkedBodyScanner();
-        if (leftoverLen > 0) {
-          responseScanner.advance(readBuf, leftoverStart, leftoverLen);
-          bodyOut.write(readBuf, leftoverStart, leftoverLen);
-        }
-        // TODO: Replace OriginForwarder with a non-blocking HTTP client to avoid tying up an
-        // executor thread per proxied request.
-        while (!responseScanner.isDone() && !responseScanner.hasError()) {
-          int n = originIn.read(readBuf, 0, readBuf.length);
-          if (n < 0) {
-            break;
-          }
-          responseScanner.advance(readBuf, 0, n);
-          bodyOut.write(readBuf, 0, n);
-        }
-      } else if (responseCl != null) {
-        long remaining;
-        try {
-          remaining = Long.parseLong(responseCl);
-        } catch (NumberFormatException e) {
-          remaining = 0;
-        }
-        if (leftoverLen > 0) {
-          bodyOut.write(readBuf, leftoverStart, leftoverLen);
-          remaining -= leftoverLen;
-        }
-        while (remaining > 0) {
-          int n = originIn.read(readBuf, 0, (int) Math.min(readBuf.length, remaining));
-          if (n < 0) {
-            break;
-          }
-          bodyOut.write(readBuf, 0, n);
-          remaining -= n;
-        }
-      } else if (!originKeepAlive) {
-        // No CL/chunked and origin will close connection — read until EOF.
-        if (leftoverLen > 0) {
-          bodyOut.write(readBuf, leftoverStart, leftoverLen);
-        }
-        int n;
-        while ((n = originIn.read(readBuf)) >= 0) {
-          bodyOut.write(readBuf, 0, n);
-        }
-      }
-      // else: no CL/chunked but origin is keep-alive — treat as empty body.
-
-      counter.close();
       closeCaptureStream(captureStream);
       socket.close();
-      return RequestOutcome.success(originResponse, counter.count());
+      return RequestOutcome.success(originResponse, counter != null ? counter.count() : 0);
 
     } catch (IOException e) {
       try {
@@ -338,14 +284,83 @@ final class OriginForwarder {
       } catch (IOException ignored) {
       }
       closeCaptureStream(captureStream);
-      if (gen != null) {
-        gen.close();
+      if (counter != null) {
+        try {
+          counter.close();
+        } catch (IOException ignored) {
+        }
       } else {
         drainAndClosePipe();
         sendErrorResponse();
       }
       long bytes = counter != null ? counter.count() : 0;
       return RequestOutcome.error(originResponse, e, bytes);
+    }
+  }
+
+  private static void streamChunkedBody(
+      InputStream originIn,
+      OutputStream bodyOut,
+      byte[] readBuf,
+      int leftoverStart,
+      int leftoverLen)
+      throws IOException {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    if (leftoverLen > 0) {
+      scanner.advance(readBuf, leftoverStart, leftoverLen);
+      bodyOut.write(readBuf, leftoverStart, leftoverLen);
+    }
+    while (!scanner.isDone() && !scanner.hasError()) {
+      int n = originIn.read(readBuf, 0, readBuf.length);
+      if (n < 0) {
+        break;
+      }
+      scanner.advance(readBuf, 0, n);
+      bodyOut.write(readBuf, 0, n);
+    }
+  }
+
+  private static void streamContentLengthBody(
+      InputStream originIn,
+      OutputStream bodyOut,
+      byte[] readBuf,
+      int leftoverStart,
+      int leftoverLen,
+      String contentLength)
+      throws IOException {
+    long remaining;
+    try {
+      remaining = Long.parseLong(contentLength);
+    } catch (NumberFormatException e) {
+      remaining = 0;
+    }
+    if (leftoverLen > 0) {
+      bodyOut.write(readBuf, leftoverStart, leftoverLen);
+      remaining -= leftoverLen;
+    }
+    while (remaining > 0) {
+      int n = originIn.read(readBuf, 0, (int) Math.min(readBuf.length, remaining));
+      if (n < 0) {
+        break;
+      }
+      bodyOut.write(readBuf, 0, n);
+      remaining -= n;
+    }
+  }
+
+  private static void streamUntilEof(
+      InputStream originIn,
+      OutputStream bodyOut,
+      byte[] readBuf,
+      int leftoverStart,
+      int leftoverLen)
+      throws IOException {
+    if (leftoverLen > 0) {
+      bodyOut.write(readBuf, leftoverStart, leftoverLen);
+    }
+    int n;
+    while ((n = originIn.read(readBuf)) >= 0) {
+      bodyOut.write(readBuf, 0, n);
     }
   }
 
@@ -391,7 +406,7 @@ final class OriginForwarder {
             return new byte[0];
           }
         };
-    resultCallback.accept(HttpResponseGeneratorBuffered.createWithBody(null, errResp), false);
+    resultCallback.commitBuffered(errResp, false);
   }
 
   static byte[] requestHeadersToBytes(HttpRequest request) throws IOException {

@@ -45,7 +45,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
    * OutputStream are forwarded without any framing.
    */
   public static HttpResponseGeneratorStreamed createRaw(
-      Runnable dataAvailableCallback, HttpRequest request, HttpResponse response) {
+      Runnable dataAvailableCallback, @Nullable HttpRequest request, HttpResponse response) {
     return new HttpResponseGeneratorStreamed(
         dataAvailableCallback,
         request,
