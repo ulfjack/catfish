@@ -612,6 +612,7 @@ final class HttpServerStage implements Stage {
                 out,
                 cHost,
                 cPort);
+    OriginCertFetcher certFetcher = new OriginCertFetcher.Ssl(originSocketFactory);
     parent.replaceWith(
         new ConnectStage(
             parent,
@@ -623,7 +624,7 @@ final class HttpServerStage implements Stage {
             parsedPort,
             connectHandler,
             serverListener,
-            originSocketFactory,
+            certFetcher,
             sslInfoCache,
             localFactory));
     return ConnectionControl.PAUSE;

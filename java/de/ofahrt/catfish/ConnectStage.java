@@ -8,22 +8,16 @@ import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.RequestAction;
-import de.ofahrt.catfish.ssl.CertificateAuthority;
 import de.ofahrt.catfish.ssl.SSLInfo;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
-import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Executor;
-import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLParameters;
-import javax.net.ssl.SSLSocket;
-import javax.net.ssl.SSLSocketFactory;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -73,7 +67,7 @@ final class ConnectStage implements Stage {
   private final int port;
   private final ConnectHandler handler;
   private final HttpServerListener serverListener;
-  private final SSLSocketFactory originSocketFactory;
+  private final OriginCertFetcher originCertFetcher;
   private final SslInfoCache sslInfoCache;
   private final LocalStageFactory localStageFactory;
 
@@ -101,7 +95,7 @@ final class ConnectStage implements Stage {
       int port,
       ConnectHandler handler,
       HttpServerListener serverListener,
-      SSLSocketFactory originSocketFactory,
+      OriginCertFetcher originCertFetcher,
       SslInfoCache sslInfoCache,
       LocalStageFactory localStageFactory) {
     this.parent = parent;
@@ -113,7 +107,7 @@ final class ConnectStage implements Stage {
     this.port = port;
     this.handler = handler;
     this.serverListener = serverListener;
-    this.originSocketFactory = originSocketFactory;
+    this.originCertFetcher = originCertFetcher;
     this.sslInfoCache = sslInfoCache;
     this.localStageFactory = localStageFactory;
   }
@@ -158,47 +152,22 @@ final class ConnectStage implements Stage {
         parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
       }
     } else if (decision instanceof ConnectDecision.Intercept i) {
-      // INTERCEPT: use a cached cert if available, otherwise connect to origin to mirror.
+      // INTERCEPT: use a cached cert if available, otherwise fetch from origin and mint.
       String cacheKey = connectHost + ":" + connectPort;
       SSLInfo cached = sslInfoCache != null ? sslInfoCache.get(cacheKey) : null;
       SSLContext ctx;
       if (cached != null) {
         ctx = cached.sslContext();
       } else {
-        CertificateAuthority ca = i.ca();
-        SSLSocket socket;
-        X509Certificate originCert;
-        try {
-          socket = (SSLSocket) originSocketFactory.createSocket(i.host(), i.port());
-          SSLParameters params = socket.getSSLParameters();
-          params.setServerNames(List.of(new SNIHostName(i.host())));
-          socket.setSSLParameters(params);
-          socket.startHandshake();
-          originCert = (X509Certificate) socket.getSession().getPeerCertificates()[0];
-        } catch (IOException e) {
-          notifyConnectFailed(connectHost, connectPort, e);
-          parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
-          return;
-        }
-
         SSLInfo info;
         try {
-          info = ca.create(connectHost, originCert);
+          X509Certificate originCert = originCertFetcher.fetchCertificate(i.host(), i.port());
+          info = i.ca().create(connectHost, originCert);
         } catch (Exception e) {
-          try {
-            socket.close();
-          } catch (IOException ignored) {
-          }
           notifyConnectFailed(connectHost, connectPort, e);
           parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
           return;
         }
-
-        try {
-          socket.close();
-        } catch (IOException ignored) {
-        }
-
         if (sslInfoCache != null) {
           sslInfoCache.put(cacheKey, info);
         }
