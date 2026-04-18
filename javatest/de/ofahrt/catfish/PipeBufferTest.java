@@ -135,47 +135,82 @@ public class PipeBufferTest {
   }
 
   @Test
-  public void tryWrite_wrapsAroundRingBuffer() throws InterruptedException {
+  public void tryWrite_zeroLength_returnsZero() {
     PipeBuffer pipe = new PipeBuffer();
-    // Fill up then drain to put writePos near end of buffer.
+    assertEquals(0, pipe.tryWrite(new byte[0], 0, 0));
+  }
+
+  @Test
+  public void abort_unlocksBlockedReader() throws Exception {
+    PipeBuffer pipe = new PipeBuffer();
+    CountDownLatch started = new CountDownLatch(1);
+    AtomicInteger bytesRead = new AtomicInteger(-2);
+
+    Thread reader =
+        new Thread(
+            () -> {
+              byte[] buf = new byte[10];
+              try {
+                started.countDown();
+                int n = pipe.read(buf, 0, buf.length);
+                bytesRead.set(n);
+              } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+              }
+            });
+    reader.start();
+    started.await();
+    Thread.sleep(20); // give reader time to block
+    pipe.abort();
+    reader.join(2000);
+    assertEquals(-1, bytesRead.get());
+  }
+
+  @Test
+  public void abort_readReturnsMinusOneEvenWithBufferedData() throws InterruptedException {
+    PipeBuffer pipe = new PipeBuffer();
+    pipe.tryWrite(new byte[] {1, 2, 3}, 0, 3);
+    pipe.abort();
+    assertEquals(-1, pipe.read(new byte[10], 0, 10));
+  }
+
+  @Test
+  public void tryWrite_and_read_wrapAroundRingBuffer() throws InterruptedException {
+    PipeBuffer pipe = new PipeBuffer();
+    // Fill the buffer to advance writePos to end, then drain to advance readPos to end.
     byte[] full = new byte[65536];
     pipe.tryWrite(full, 0, full.length);
-    pipe.closeWrite();
     byte[] drain = new byte[65536];
     pipe.read(drain, 0, drain.length);
-    pipe.reset();
+    // Now readPos = writePos = 0 (mod CAPACITY), count = 0. But internal positions have wrapped.
+    // Actually reset() clears positions. Don't reset — keep positions at end of buffer.
 
-    // Now write 30000 bytes (writePos ends at 30000).
-    byte[] first = new byte[30000];
-    Arrays.fill(first, (byte) 1);
-    pipe.tryWrite(first, 0, first.length);
+    // Write 60000 bytes — writePos advances to 60000, readPos stays at 0 (after wrapping).
+    // Actually after draining, both readPos and writePos are at 0 because 65536 % 65536 = 0.
+    // We need a partial fill+drain to get positions mid-buffer.
 
-    // Read half so readPos = 15000.
-    byte[] partial = new byte[15000];
-    pipe.read(partial, 0, partial.length);
+    // Step 1: write 60000 bytes → writePos = 60000.
+    byte[] chunk1 = new byte[60000];
+    Arrays.fill(chunk1, (byte) 0xAA);
+    assertEquals(60000, pipe.tryWrite(chunk1, 0, chunk1.length));
 
-    // Write 5000 more bytes (writePos = 35000).
-    byte[] wrap = new byte[5000];
-    Arrays.fill(wrap, (byte) 2);
-    int w = pipe.tryWrite(wrap, 0, wrap.length);
-    assertEquals(5000, w);
+    // Step 2: read 60000 bytes → readPos = 60000.
+    byte[] out1 = new byte[60000];
+    assertEquals(60000, pipe.read(out1, 0, out1.length));
 
-    // Read remaining 15000 + 5000 = 20000 bytes.
+    // Now writePos = readPos = 60000, count = 0.
+    // Step 3: write 10000 bytes — this wraps: 5536 bytes at end + 4464 bytes at start.
+    byte[] chunk2 = new byte[10000];
+    Arrays.fill(chunk2, (byte) 0xBB);
+    assertEquals(10000, pipe.tryWrite(chunk2, 0, chunk2.length));
+
+    // Step 4: read 10000 bytes — this also wraps: 5536 from end + 4464 from start.
     pipe.closeWrite();
-    byte[] remainder = new byte[20000];
-    int total = 0;
-    while (total < 20000) {
-      int n = pipe.read(remainder, total, remainder.length - total);
-      if (n < 0) break;
-      total += n;
-    }
-    assertEquals(20000, total);
-    // First 15000 bytes should be 1, last 5000 should be 2.
-    for (int i = 0; i < 15000; i++) {
-      assertEquals("byte " + i, 1, remainder[i]);
-    }
-    for (int i = 15000; i < 20000; i++) {
-      assertEquals("byte " + i, 2, remainder[i]);
+    byte[] out2 = new byte[10000];
+    int n = pipe.read(out2, 0, out2.length);
+    assertEquals(10000, n);
+    for (int i = 0; i < 10000; i++) {
+      assertEquals("byte " + i, (byte) 0xBB, out2[i]);
     }
   }
 }
