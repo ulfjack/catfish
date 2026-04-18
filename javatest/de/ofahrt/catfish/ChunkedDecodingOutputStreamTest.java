@@ -131,4 +131,27 @@ public class ChunkedDecodingOutputStreamTest {
     byte[] result = decode(chunked);
     assertArrayEquals(body, result);
   }
+
+  @Test
+  public void chunkedWithTrailers() throws Exception {
+    // "5\r\nhello\r\n0\r\nTrailer: value\r\n\r\n"
+    byte[] result = decode("5\r\nhello\r\n0\r\nTrailer: value\r\n\r\n");
+    assertEquals("hello", new String(result, StandardCharsets.UTF_8));
+  }
+
+  @Test
+  public void chunkedWithMultipleTrailers() throws Exception {
+    byte[] result = decode("3\r\nabc\r\n0\r\nA: 1\r\nB: 2\r\n\r\n");
+    assertEquals("abc", new String(result, StandardCharsets.UTF_8));
+  }
+
+  @Test
+  public void flushDelegatesToUnderlying() throws Exception {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    ChunkedDecodingOutputStream decoder = new ChunkedDecodingOutputStream(out);
+    decoder.write("3\r\nabc\r\n0\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+    decoder.flush();
+    decoder.close();
+    assertEquals("abc", new String(out.toByteArray(), StandardCharsets.UTF_8));
+  }
 }
