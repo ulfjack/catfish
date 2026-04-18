@@ -17,6 +17,7 @@ final class PipeBuffer {
   private int writePos;
   private int count;
   private boolean writeClosed;
+  private boolean aborted;
 
   private final ReentrantLock lock = new ReentrantLock();
   private final Condition notEmpty = lock.newCondition();
@@ -57,8 +58,11 @@ final class PipeBuffer {
   int read(byte[] dst, int off, int len) throws InterruptedException {
     lock.lock();
     try {
-      while (count == 0 && !writeClosed) {
+      while (count == 0 && !writeClosed && !aborted) {
         notEmpty.await();
+      }
+      if (aborted) {
+        return -1; // aborted — treat as premature EOF
       }
       if (count == 0) {
         return -1; // EOF
@@ -72,6 +76,20 @@ final class PipeBuffer {
       readPos = (readPos + toRead) % CAPACITY;
       count -= toRead;
       return toRead;
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  /**
+   * Called from NIO thread when the connection is closed prematurely. Unblocks pending readers;
+   * they will see EOF immediately, discarding any buffered data.
+   */
+  void abort() {
+    lock.lock();
+    try {
+      aborted = true;
+      notEmpty.signal();
     } finally {
       lock.unlock();
     }
@@ -106,6 +124,7 @@ final class PipeBuffer {
       writePos = 0;
       count = 0;
       writeClosed = false;
+      aborted = false;
     } finally {
       lock.unlock();
     }

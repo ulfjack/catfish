@@ -127,7 +127,7 @@ final class ProxyRequestStage implements HttpRequestStage {
 
   @Override
   public void close() {
-    bodyPipe.closeWrite();
+    bodyPipe.abort();
     HttpResponseGeneratorStreamed gen = responseGen;
     if (gen != null) {
       gen.close();
