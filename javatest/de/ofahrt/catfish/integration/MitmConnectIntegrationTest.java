@@ -1069,6 +1069,29 @@ public class MitmConnectIntegrationTest {
     }
   }
 
+  // ---- Nested CONNECT ----
+
+  @Test(timeout = 10_000)
+  public void mitmConnectProxy_nestedConnect_denied() throws Exception {
+    // After an intercepted CONNECT, send another CONNECT inside the TLS tunnel.
+    // Nested CONNECT inside an intercepted tunnel is denied by design (returns 403).
+    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+
+      // Send CONNECT inside the intercepted TLS connection.
+      sslOut.write(
+          ("CONNECT localhost:" + HTTPS_PORT + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
+
+      String connectResp = readUntilBlankLine(sslIn);
+      assertTrue(
+          "Expected 403 for nested CONNECT, got: " + connectResp,
+          connectResp.startsWith("HTTP/1.1 403"));
+    }
+  }
+
   // ---- Infrastructure ----
 
   private static CatfishHttpServer newServer() throws IOException {
