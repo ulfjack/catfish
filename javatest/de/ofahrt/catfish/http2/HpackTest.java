@@ -384,4 +384,47 @@ public class HpackTest {
       assertTrue(String.valueOf(e.getMessage()).contains("Dynamic table index out of range"));
     }
   }
+
+  @Test
+  public void decode_dynamicTableEvictionUnderPressure() throws HpackDecodingException {
+    // Default max dynamic table size is 4096 bytes. Each entry costs name + value + 32 overhead.
+    // "x-hdr-NN: value-NN" = 8 + 8 + 32 = 48 bytes per entry.
+    // 4096 / 48 = 85 entries fit. After adding 86+, the oldest should be evicted.
+    HpackDecoder decoder = new HpackDecoder();
+
+    // Add 100 entries via literal with incremental indexing (prefix 0x40).
+    for (int i = 0; i < 100; i++) {
+      String name = String.format("x-hdr-%02d", i);
+      String value = String.format("val--%02d", i);
+      byte[] nameBytes = name.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+      byte[] valueBytes = value.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+      byte[] block = new byte[1 + 1 + nameBytes.length + 1 + valueBytes.length];
+      block[0] = 0x40; // literal with incremental indexing, name index = 0 (new name)
+      block[1] = (byte) nameBytes.length;
+      System.arraycopy(nameBytes, 0, block, 2, nameBytes.length);
+      block[2 + nameBytes.length] = (byte) valueBytes.length;
+      System.arraycopy(valueBytes, 0, block, 3 + nameBytes.length, valueBytes.length);
+      decoder.decode(block, 0, block.length);
+    }
+
+    // The most recently added entry (x-hdr-99) should be at dynamic index 62.
+    byte[] refNewest = {(byte) 0xbe}; // indexed, index = 62
+    List<Header> headers = decoder.decode(refNewest, 0, refNewest.length);
+    assertEquals(1, headers.size());
+    assertEquals("x-hdr-99", headers.get(0).name());
+    assertEquals("val--99", headers.get(0).value());
+
+    // The oldest entries should have been evicted. Entry x-hdr-00 was added first.
+    // With 85 entries max, entries 0-14 should be gone. Entry 15 would be at index 62+84=146.
+    // But trying a high index for an evicted entry should fail.
+    // Index 62 + 100 - 1 = 161 would be x-hdr-00 if no eviction; it should be out of range.
+    // Use multi-byte index encoding for 161: 0x80 | 127 = 0xff, then 161-127 = 34.
+    byte[] refOldest = {(byte) 0xff, 34};
+    try {
+      decoder.decode(refOldest, 0, refOldest.length);
+      fail("expected HpackDecodingException for evicted entry");
+    } catch (HpackDecodingException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("Dynamic table index out of range"));
+    }
+  }
 }
