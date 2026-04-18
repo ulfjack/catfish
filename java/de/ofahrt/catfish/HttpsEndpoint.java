@@ -100,7 +100,7 @@ public final class HttpsEndpoint {
     return VirtualHostRouter.buildConnectHandler(connectHandler, hosts);
   }
 
-  private @Nullable SSLContext getSSLContext(@Nullable String host) {
+  @Nullable SSLContext getSSLContext(@Nullable String host) {
     if (host == null) {
       return null;
     }
