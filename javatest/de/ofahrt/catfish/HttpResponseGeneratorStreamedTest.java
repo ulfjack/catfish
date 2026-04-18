@@ -81,6 +81,17 @@ public class HttpResponseGeneratorStreamedTest {
   }
 
   @Test
+  public void singleByteWrite() throws Exception {
+    HttpResponseGeneratorStreamed gen =
+        HttpResponseGeneratorStreamed.create(() -> {}, null, StandardResponses.OK, true);
+    OutputStream out = gen.getOutputStream();
+    out.write('z');
+    out.close();
+    String response = new String(readUntilStop(gen), StandardCharsets.UTF_8);
+    assertEquals("HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nz", response);
+  }
+
+  @Test
   public void noBody() throws Exception {
     AtomicInteger called = new AtomicInteger();
     HttpResponseGeneratorStreamed gen =
