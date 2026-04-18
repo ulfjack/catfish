@@ -36,7 +36,7 @@ final class ProxyRequestStage implements HttpRequestStage {
   private final @Nullable OutputStream captureStream;
 
   private final PipeBuffer bodyPipe = new PipeBuffer();
-  private volatile @Nullable HttpResponseGeneratorStreamed responseGen;
+  private volatile @Nullable HttpResponseGenerator responseGen;
   private volatile boolean keepAlive;
 
   ProxyRequestStage(
@@ -102,7 +102,7 @@ final class ProxyRequestStage implements HttpRequestStage {
 
   @Override
   public HttpResponseGenerator.ContinuationToken generateResponse(ByteBuffer outputBuffer) {
-    HttpResponseGeneratorStreamed gen = responseGen;
+    HttpResponseGenerator gen = responseGen;
     if (gen == null) {
       return HttpResponseGenerator.ContinuationToken.PAUSE;
     }
@@ -130,7 +130,7 @@ final class ProxyRequestStage implements HttpRequestStage {
   @Override
   public void close() {
     bodyPipe.abort();
-    HttpResponseGeneratorStreamed gen = responseGen;
+    HttpResponseGenerator gen = responseGen;
     if (gen != null) {
       gen.close();
     }

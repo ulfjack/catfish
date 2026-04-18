@@ -1,6 +1,7 @@
 package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.client.IncrementalHttpResponseParser;
+import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
@@ -67,7 +68,7 @@ final class OriginForwarder {
 
   /** Callback to install the response generator and keepAlive flag on the NIO thread. */
   interface ResultCallback {
-    void accept(HttpResponseGeneratorStreamed gen, boolean keepAlive);
+    void accept(HttpResponseGenerator gen, boolean keepAlive);
   }
 
   private final ResultCallback resultCallback;
@@ -385,15 +386,13 @@ final class OriginForwarder {
           public HttpHeaders getHeaders() {
             return HttpHeaders.of(HttpHeaderName.CONNECTION, "close");
           }
+
+          @Override
+          public byte[] getBody() {
+            return new byte[0];
+          }
         };
-    HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(
-            parent::encourageWrites, null, errResp, /* includeBody= */ false);
-    try {
-      gen.getOutputStream().close();
-    } catch (IOException ignored) {
-    }
-    resultCallback.accept(gen, false);
+    resultCallback.accept(HttpResponseGeneratorBuffered.createWithBody(null, errResp), false);
   }
 
   static byte[] requestHeadersToBytes(HttpRequest request) throws IOException {
