@@ -260,8 +260,7 @@ final class OriginForwarder {
                 forwardedResponse,
                 /* includeBody= */ !noBody && (responseCl != null || !originKeepAlive));
       }
-      HttpResponseGeneratorStreamed genFinal = gen;
-      resultCallback.accept(genFinal, keepAlive);
+      resultCallback.accept(gen, keepAlive);
       if (!noBody) {
         serverListener.onResponseStreamed(
             requestId, originHost, originPort, originalHeaders, originResponse);
