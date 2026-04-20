@@ -91,8 +91,7 @@ public class ProxyRequestStageTest {
 
     // responseGen should be set now (error response from failed connection).
     assertNotNull(stage.getResponse());
-    // getRequest() is null because the error response was generated before the request was sent.
-    assertNull(stage.getRequest());
+    assertNotNull(stage.getRequest());
 
     // close() should close the generator without throwing.
     stage.close();

@@ -14,6 +14,7 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.server.HttpServerListener;
+import de.ofahrt.catfish.model.server.RequestOutcome;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
@@ -333,6 +334,55 @@ public class OriginForwarderTest {
       ForwarderResult r = runForwarder(mock.port(), request);
       assertNotNull(r);
       assertEquals(200, r.response.getStatusCode());
+    }
+  }
+
+  @Test
+  public void absoluteUri_notDoubledInCallback() throws Exception {
+    try (MockServer mock = new MockServer(ascii("HTTP/1.1 200 OK\nContent-Length: 2\n\nok"))) {
+      String absoluteUri = "https://localhost:" + mock.port() + "/v1/resource?limit=100";
+      HttpRequest request =
+          new SimpleHttpRequest.Builder()
+              .setVersion(HttpVersion.HTTP_1_1)
+              .setMethod(HttpMethodName.GET)
+              .setUri(absoluteUri)
+              .addHeader(HttpHeaderName.HOST, "localhost")
+              .addHeader(HttpHeaderName.CONNECTION, "close")
+              .buildPartialRequest();
+
+      AtomicReference<HttpRequest> reportedRequest = new AtomicReference<>();
+      PipeBuffer pipe = new PipeBuffer();
+      pipe.closeWrite();
+      AtomicReference<ForwarderResult> result = new AtomicReference<>();
+
+      OriginForwarder forwarder =
+          new OriginForwarder(
+              UUID.randomUUID(),
+              "localhost",
+              mock.port(),
+              false,
+              SocketFactory.getDefault(),
+              new HttpServerListener() {
+                @Override
+                public void onRequestComplete(
+                    UUID requestId,
+                    @Nullable String originHost,
+                    int originPort,
+                    @Nullable HttpRequest req,
+                    RequestOutcome outcome) {
+                  reportedRequest.set(req);
+                }
+              },
+              pipe,
+              true,
+              null,
+              createCallback(result),
+              () -> {});
+      forwarder.run(request);
+
+      // The URI reported to the listener must be the original absolute URI, not doubled.
+      assertNotNull(reportedRequest.get());
+      assertEquals(absoluteUri, reportedRequest.get().getUri());
     }
   }
 
