@@ -253,9 +253,6 @@ final class IncrementalHttpRequestParser {
             }
             minorVersion = Integer.parseInt(elementBuffer.toString());
             builder.setVersion(HttpVersion.of(majorVersion, minorVersion));
-            if (minorVersion < 1) {
-              return setError(HttpStatusCode.VERSION_NOT_SUPPORTED, "Http version not supported");
-            }
             counter = 0;
             elementBuffer.setLength(0);
             state = State.MESSAGE_HEADER_NAME;

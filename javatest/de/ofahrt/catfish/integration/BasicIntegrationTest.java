@@ -230,8 +230,9 @@ public class BasicIntegrationTest {
 
   @Test
   public void upwardsUrl() throws Exception {
+    // HTTP/1.0 is accepted but ../ is a malformed URI → 400.
     HttpResponse response = localServer.send("GET ../ HTTP/1.0\n\n");
-    assertEquals(HttpStatusCode.VERSION_NOT_SUPPORTED.getStatusCode(), response.getStatusCode());
+    assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), response.getStatusCode());
   }
 
   @Test

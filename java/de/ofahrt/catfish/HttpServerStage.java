@@ -11,6 +11,7 @@ import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
@@ -193,6 +194,11 @@ final class HttpServerStage implements Stage {
     // Route based on method/URI.
     if (HttpMethodName.CONNECT.equals(headers.getMethod())) {
       return handleConnect(headers);
+    }
+    // Reject HTTP/1.0 for non-CONNECT requests: we require HTTP/1.1+ for Host-based routing.
+    if (headers.getVersion().compareTo(HttpVersion.HTTP_1_1) < 0) {
+      startBuffered(headers, StandardResponses.VERSION_NOT_SUPPORTED);
+      return ConnectionControl.CLOSE_INPUT;
     }
     return beginRouting(headers);
   }

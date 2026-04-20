@@ -158,6 +158,36 @@ public class HttpServerStageTest {
     assertTrue(response, response.contains("400"));
   }
 
+  // ---- HTTP/1.0 handling ----
+
+  @Test
+  public void http10_get_returns505() throws Exception {
+    ByteBuffer input = inputBuffer("GET / HTTP/1.0\n\n");
+    ByteBuffer output = ByteBuffer.allocate(4096);
+    output.flip();
+    HttpServerStage stage = createStage(input, output);
+    stage.connect(new Connection(null, null, false));
+
+    stage.read();
+    String response = drainOutput(stage, output);
+    assertTrue(response, response.contains("505"));
+  }
+
+  @Test
+  public void http10_connect_returns405_noExecutor() throws Exception {
+    // CONNECT with HTTP/1.0 should be accepted at the version level (not 505).
+    // Without an executor it returns 405 (method not allowed), same as HTTP/1.1.
+    ByteBuffer input = inputBuffer("CONNECT example.com:443 HTTP/1.0\n\n");
+    ByteBuffer output = ByteBuffer.allocate(4096);
+    output.flip();
+    HttpServerStage stage = createStage(input, output);
+    stage.connect(new Connection(null, null, false));
+
+    stage.read();
+    String response = drainOutput(stage, output);
+    assertTrue(response, response.contains("405"));
+  }
+
   // ---- inputClosed when idle ----
 
   @Test

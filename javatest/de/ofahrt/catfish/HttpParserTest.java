@@ -229,7 +229,6 @@ public abstract class HttpParserTest {
     checkError("400 Http major version is too long", "GET / HTTP/12345678.1\n\n");
     checkError("400 Http minor version is too long", "GET / HTTP/1.12345678\n\n");
     checkError("505 Http version not supported", "GET / HTTP/2.0\n\n");
-    checkError("505 Http version not supported", "GET / HTTP/1.0\n\n");
     checkError("505 Http version not supported", "GET / HTTP/0.9\n\n");
   }
 
