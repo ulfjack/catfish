@@ -105,7 +105,9 @@ final class OriginForwarder {
   }
 
   void run(HttpRequest headers) {
-    String absoluteUri = buildAbsoluteUri(useTls, originHost, originPort, headers.getUri());
+    String uri = headers.getUri();
+    String absoluteUri =
+        uri.startsWith("/") ? buildAbsoluteUri(useTls, originHost, originPort, uri) : uri;
     HttpRequest absoluteHeaders = headers.withUri(absoluteUri);
     RequestOutcome outcome;
     try {
