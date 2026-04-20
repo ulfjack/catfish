@@ -55,6 +55,9 @@ public abstract class HttpResponseGenerator {
 
   public abstract void close();
 
+  /** Returns the number of response body bytes generated (excluding headers and framing). */
+  public abstract long getBodyBytesSent();
+
   public boolean keepAlive() {
     HttpResponse response = Objects.requireNonNull(getResponse(), "response");
     return HttpConnectionHeader.isKeepAlive(response.getHeaders());

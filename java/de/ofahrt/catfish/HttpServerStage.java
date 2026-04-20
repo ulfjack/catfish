@@ -85,6 +85,7 @@ final class HttpServerStage implements Stage {
   // For chunked bodies: scans raw chunked framing to detect completion without decoding.
   private @Nullable ChunkedBodyScanner chunkedScanner;
   private UUID requestId = UUID.randomUUID();
+  private long responseBytesSent;
   private @Nullable HttpRequest headersRequest;
   // Non-null while waiting for ConnectHandler.applyProxy/applyLocal to return the routing
   // decision for a request. While set, read() returns PAUSE so that body bytes remain buffered
@@ -533,11 +534,11 @@ final class HttpServerStage implements Stage {
           yield readAndResume();
         }
         if (handler != null) {
-          notifyRequestComplete(handler.getRequest(), handler.getResponse());
+          notifyRequestComplete(handler.getRequest(), handler.getResponse(), handler.getBodyBytesSent());
           keepAlive = handler.keepAlive();
           currentHandler = null;
         } else if (gen != null) {
-          notifyRequestComplete(gen.getRequest(), gen.getResponse());
+          notifyRequestComplete(gen.getRequest(), gen.getResponse(), gen.getBodyBytesSent());
           keepAlive = gen.keepAlive();
           responseGenerator = null;
         }
@@ -658,10 +659,10 @@ final class HttpServerStage implements Stage {
   }
 
   private void notifyRequestComplete(
-      @Nullable HttpRequest request, @Nullable HttpResponse response) {
+      @Nullable HttpRequest request, @Nullable HttpResponse response, long bytesSent) {
     Objects.requireNonNull(response, "response");
     serverListener.onRequestComplete(
-        requestId, connectHost, connectPort, request, RequestOutcome.success(response, 0));
+        requestId, connectHost, connectPort, request, RequestOutcome.success(response, bytesSent));
     requestId = UUID.randomUUID();
   }
 

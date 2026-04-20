@@ -63,6 +63,9 @@ public interface HttpRequestStage {
   /** The response being generated, for logging. May be null before response is committed. */
   @Nullable HttpResponse getResponse();
 
+  /** Response body bytes sent to the client. Valid after generateResponse returns STOP. */
+  long getBodyBytesSent();
+
   /** Called when the connection is closing. Clean up any resources held by this handler. */
   void close();
 }

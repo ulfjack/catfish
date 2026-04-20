@@ -7,7 +7,6 @@ import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.server.HttpServerListener;
-import de.ofahrt.catfish.model.server.RequestOutcome;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -105,19 +104,13 @@ final class OriginForwarder {
   }
 
   void run(HttpRequest headers) {
-    String uri = headers.getUri();
-    String absoluteUri =
-        uri.startsWith("/") ? buildAbsoluteUri(useTls, originHost, originPort, uri) : uri;
-    HttpRequest absoluteHeaders = headers.withUri(absoluteUri);
-    RequestOutcome outcome;
     try {
       // The request sent to the origin must use a relative URI.
       HttpRequest originRequest = headers.withUri(toRelativeUri(headers.getUri()));
-      outcome = runForwardToOrigin(requestId, absoluteHeaders, originRequest, captureStream);
+      runForwardToOrigin(requestId, headers, originRequest, captureStream);
     } catch (Exception e) {
-      outcome = RequestOutcome.error(e);
+      // Error is surfaced via the ResultCallback (502 response).
     }
-    serverListener.onRequestComplete(requestId, originHost, originPort, absoluteHeaders, outcome);
   }
 
   static String buildAbsoluteUri(boolean useTls, String host, int port, String pathAndQuery) {
@@ -146,7 +139,7 @@ final class OriginForwarder {
     }
   }
 
-  private RequestOutcome runForwardToOrigin(
+  private void runForwardToOrigin(
       UUID requestId,
       HttpRequest originalHeaders,
       HttpRequest effectiveHeaders,
@@ -164,7 +157,7 @@ final class OriginForwarder {
       drainAndClosePipe();
       sendErrorResponse();
       closeCaptureStream(captureStream);
-      return RequestOutcome.error(e);
+      return;
     }
 
     HttpResponse originResponse = null;
@@ -284,7 +277,6 @@ final class OriginForwarder {
 
       closeCaptureStream(captureStream);
       socket.close();
-      return RequestOutcome.success(originResponse, counter != null ? counter.count() : 0);
 
     } catch (IOException e) {
       try {
@@ -301,8 +293,6 @@ final class OriginForwarder {
         drainAndClosePipe();
         sendErrorResponse();
       }
-      long bytes = counter != null ? counter.count() : 0;
-      return RequestOutcome.error(originResponse, e, bytes);
     }
   }
 

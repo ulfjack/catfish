@@ -168,6 +168,11 @@ final class ProxyRequestStage implements HttpRequestStage {
   }
 
   @Override
+  public long getBodyBytesSent() {
+    return responseGen != null ? responseGen.getBodyBytesSent() : 0;
+  }
+
+  @Override
   public void close() {
     bodyPipe.abort();
     HttpResponseGenerator gen = responseGen;

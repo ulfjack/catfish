@@ -101,6 +101,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   private int readPosition;
   private int writePosition;
   private boolean isFull;
+  private long bodyBytesSent;
 
   private HttpResponseGeneratorStreamed(
       Runnable dataAvailableCallback,
@@ -258,6 +259,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
       outputBuffer.put(CRLF_BYTES);
     }
     readPosition = (readPosition + bytesToCopy) % buffer.length;
+    bodyBytesSent += bytesToCopy;
     isFull = false;
     if (DEBUG) {
       System.out.println(
@@ -390,6 +392,11 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     readState = ReadState.CLOSED;
     notify();
     dataAvailableCallback.run();
+  }
+
+  @Override
+  public long getBodyBytesSent() {
+    return bodyBytesSent;
   }
 
   public OutputStream getOutputStream() {

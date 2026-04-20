@@ -213,6 +213,11 @@ final class LocalHttpRequestStage implements HttpRequestStage {
     return responseGenerator != null ? responseGenerator.getResponse() : null;
   }
 
+  @Override
+  public long getBodyBytesSent() {
+    return responseGenerator != null ? responseGenerator.getBodyBytesSent() : 0;
+  }
+
   // ---- Response plumbing ----
 
   private void setErrorResponse(HttpRequest request, HttpResponse responseToWrite) {

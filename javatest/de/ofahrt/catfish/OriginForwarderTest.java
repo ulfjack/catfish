@@ -14,7 +14,6 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.server.HttpServerListener;
-import de.ofahrt.catfish.model.server.RequestOutcome;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
@@ -338,51 +337,46 @@ public class OriginForwarderTest {
   }
 
   @Test
-  public void absoluteUri_notDoubledInCallback() throws Exception {
-    try (MockServer mock = new MockServer(ascii("HTTP/1.1 200 OK\nContent-Length: 2\n\nok"))) {
-      String absoluteUri = "https://localhost:" + mock.port() + "/v1/resource?limit=100";
+  public void absoluteUri_sendsRelativeToOrigin() throws Exception {
+    // Regression: an absolute URI must be converted to relative before sending to the origin,
+    // not doubled as scheme://host + scheme://host/path.
+    AtomicReference<String> sentRequestLine = new AtomicReference<>();
+    byte[] response = ascii("HTTP/1.1 200 OK\nContent-Length: 2\n\nok");
+    ServerSocket serverSocket = new ServerSocket(0);
+    int port = serverSocket.getLocalPort();
+    new Thread(
+            () -> {
+              try {
+                Socket socket = serverSocket.accept();
+                byte[] buf = new byte[4096];
+                int n = socket.getInputStream().read(buf);
+                String raw = new String(buf, 0, n, StandardCharsets.US_ASCII);
+                sentRequestLine.set(raw.split("\r\n")[0]);
+                socket.getOutputStream().write(response);
+                socket.getOutputStream().flush();
+                socket.close();
+                serverSocket.close();
+              } catch (IOException e) {
+                // ignore
+              }
+            })
+        .start();
+
+    try {
       HttpRequest request =
           new SimpleHttpRequest.Builder()
               .setVersion(HttpVersion.HTTP_1_1)
               .setMethod(HttpMethodName.GET)
-              .setUri(absoluteUri)
+              .setUri("https://localhost:" + port + "/v1/resource?limit=100")
               .addHeader(HttpHeaderName.HOST, "localhost")
               .addHeader(HttpHeaderName.CONNECTION, "close")
               .buildPartialRequest();
+      runForwarder(port, request);
 
-      AtomicReference<HttpRequest> reportedRequest = new AtomicReference<>();
-      PipeBuffer pipe = new PipeBuffer();
-      pipe.closeWrite();
-      AtomicReference<ForwarderResult> result = new AtomicReference<>();
-
-      OriginForwarder forwarder =
-          new OriginForwarder(
-              UUID.randomUUID(),
-              "localhost",
-              mock.port(),
-              false,
-              SocketFactory.getDefault(),
-              new HttpServerListener() {
-                @Override
-                public void onRequestComplete(
-                    UUID requestId,
-                    @Nullable String originHost,
-                    int originPort,
-                    @Nullable HttpRequest req,
-                    RequestOutcome outcome) {
-                  reportedRequest.set(req);
-                }
-              },
-              pipe,
-              true,
-              null,
-              createCallback(result),
-              () -> {});
-      forwarder.run(request);
-
-      // The URI reported to the listener must be the original absolute URI, not doubled.
-      assertNotNull(reportedRequest.get());
-      assertEquals(absoluteUri, reportedRequest.get().getUri());
+      // The request line sent to the origin must use a relative URI.
+      assertEquals("GET /v1/resource?limit=100 HTTP/1.1", sentRequestLine.get());
+    } finally {
+      serverSocket.close();
     }
   }
 

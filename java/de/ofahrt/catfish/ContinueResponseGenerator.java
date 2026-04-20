@@ -43,6 +43,11 @@ final class ContinueResponseGenerator extends HttpResponseGenerator {
   public void close() {}
 
   @Override
+  public long getBodyBytesSent() {
+    return 0;
+  }
+
+  @Override
   public boolean keepAlive() {
     return true;
   }
