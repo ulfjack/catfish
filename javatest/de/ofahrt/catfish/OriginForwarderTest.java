@@ -474,21 +474,6 @@ public class OriginForwarderTest {
     }
   }
 
-  // ---- CountingOutputStream ----
-
-  @Test
-  public void countingOutputStream_countsBytesWritten() throws Exception {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    OriginForwarder.CountingOutputStream cos = new OriginForwarder.CountingOutputStream(baos);
-    cos.write(42);
-    assertEquals(1, cos.count());
-    cos.write(new byte[] {1, 2, 3}, 0, 3);
-    assertEquals(4, cos.count());
-    cos.flush();
-    cos.close();
-    assertEquals(4, baos.size());
-  }
-
   // ---- TeeOutputStream ----
 
   @Test

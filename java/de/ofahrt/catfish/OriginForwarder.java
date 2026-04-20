@@ -161,7 +161,7 @@ final class OriginForwarder {
     }
 
     HttpResponse originResponse = null;
-    CountingOutputStream counter = null;
+    OutputStream responseOut = null;
     try {
       OutputStream originOut = socket.getOutputStream();
       originOut.write(requestHeadersToBytes(effectiveHeaders));
@@ -251,18 +251,17 @@ final class OriginForwarder {
       if (includeBody) {
         serverListener.onResponseStreamed(
             requestId, originHost, originPort, originalHeaders, originResponse);
-        OutputStream responseOut =
+        responseOut =
             resultCallback.commitStreamed(forwardedResponse, keepAlive, chunkedResponse);
-        counter = new CountingOutputStream(responseOut);
         if (chunkedResponse) {
           OutputStream effectiveCapture =
               captureStream != null ? new ChunkedDecodingOutputStream(captureStream) : null;
           OutputStream bodyOut =
-              effectiveCapture != null ? new TeeOutputStream(counter, effectiveCapture) : counter;
+              effectiveCapture != null ? new TeeOutputStream(responseOut, effectiveCapture) : responseOut;
           streamChunkedBody(originIn, bodyOut, readBuf, leftoverStart, leftoverLen);
         } else {
           OutputStream bodyOut =
-              captureStream != null ? new TeeOutputStream(counter, captureStream) : counter;
+              captureStream != null ? new TeeOutputStream(responseOut, captureStream) : responseOut;
           if (responseCl != null) {
             streamContentLengthBody(
                 originIn, bodyOut, readBuf, leftoverStart, leftoverLen, responseCl);
@@ -270,7 +269,7 @@ final class OriginForwarder {
             streamUntilEof(originIn, bodyOut, readBuf, leftoverStart, leftoverLen);
           }
         }
-        counter.close();
+        responseOut.close();
       } else {
         resultCallback.commitBuffered(forwardedResponse, keepAlive);
       }
@@ -284,9 +283,9 @@ final class OriginForwarder {
       } catch (IOException ignored) {
       }
       closeCaptureStream(captureStream);
-      if (counter != null) {
+      if (responseOut != null) {
         try {
-          counter.close();
+          responseOut.close();
         } catch (IOException ignored) {
         }
       } else {
@@ -425,42 +424,6 @@ final class OriginForwarder {
       w.append("\r\n");
     }
     return baos.toByteArray();
-  }
-
-  /** An OutputStream wrapper that counts bytes written. */
-  static final class CountingOutputStream extends OutputStream {
-    private final OutputStream delegate;
-    private long count;
-
-    CountingOutputStream(OutputStream delegate) {
-      this.delegate = delegate;
-    }
-
-    long count() {
-      return count;
-    }
-
-    @Override
-    public void write(int b) throws IOException {
-      delegate.write(b);
-      count++;
-    }
-
-    @Override
-    public void write(byte[] b, int off, int len) throws IOException {
-      delegate.write(b, off, len);
-      count += len;
-    }
-
-    @Override
-    public void flush() throws IOException {
-      delegate.flush();
-    }
-
-    @Override
-    public void close() throws IOException {
-      delegate.close();
-    }
   }
 
   /**
