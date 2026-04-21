@@ -534,7 +534,8 @@ final class HttpServerStage implements Stage {
           yield readAndResume();
         }
         if (handler != null) {
-          notifyRequestComplete(handler.getRequest(), handler.getResponse(), handler.getBodyBytesSent());
+          notifyRequestComplete(
+              handler.getRequest(), handler.getResponse(), handler.getBodyBytesSent());
           keepAlive = handler.keepAlive();
           currentHandler = null;
         } else if (gen != null) {

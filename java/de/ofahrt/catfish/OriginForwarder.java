@@ -251,13 +251,14 @@ final class OriginForwarder {
       if (includeBody) {
         serverListener.onResponseStreamed(
             requestId, originHost, originPort, originalHeaders, originResponse);
-        responseOut =
-            resultCallback.commitStreamed(forwardedResponse, keepAlive, chunkedResponse);
+        responseOut = resultCallback.commitStreamed(forwardedResponse, keepAlive, chunkedResponse);
         if (chunkedResponse) {
           OutputStream effectiveCapture =
               captureStream != null ? new ChunkedDecodingOutputStream(captureStream) : null;
           OutputStream bodyOut =
-              effectiveCapture != null ? new TeeOutputStream(responseOut, effectiveCapture) : responseOut;
+              effectiveCapture != null
+                  ? new TeeOutputStream(responseOut, effectiveCapture)
+                  : responseOut;
           streamChunkedBody(originIn, bodyOut, readBuf, leftoverStart, leftoverLen);
         } else {
           OutputStream bodyOut =
