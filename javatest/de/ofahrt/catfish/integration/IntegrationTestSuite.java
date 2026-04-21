@@ -20,6 +20,7 @@ import org.junit.runners.Suite.SuiteClasses;
   StatefulClientIntegrationTest.class,
   HttpResponseValidationIntegrationTest.class,
   MixedServerIntegrationTest.class,
+  HttpServerListenerIntegrationTest.class,
 })
 public class IntegrationTestSuite {
   // Just a test suite; no methods.

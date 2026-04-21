@@ -2,6 +2,7 @@ package de.ofahrt.catfish.integration;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
@@ -13,6 +14,7 @@ import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
@@ -20,6 +22,7 @@ import de.ofahrt.catfish.model.server.ConnectDecision;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.RequestAction;
+import de.ofahrt.catfish.model.server.RequestOutcome;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.ssl.CertificateAuthority;
 import de.ofahrt.catfish.ssl.OpensslCertificateAuthority;
@@ -36,6 +39,7 @@ import java.security.KeyStore;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -1152,6 +1156,111 @@ public class MitmConnectIntegrationTest {
     rawSocket.close();
 
     assertTrue("onConnectComplete not invoked within 2s", latch.await(2, TimeUnit.SECONDS));
+  }
+
+  // ---- Listener callback ordering for MITM ----
+
+  @Test(timeout = 10_000)
+  public void mitmConnect_listenerCallbackOrder() throws Exception {
+    List<String> events = Collections.synchronizedList(new ArrayList<>());
+    CountDownLatch done = new CountDownLatch(1);
+    AtomicReference<RequestOutcome> capturedOutcome = new AtomicReference<>();
+
+    CatfishHttpServer server = newServer();
+    serversToStop.add(server);
+    HttpEndpoint endpoint =
+        HttpEndpoint.onLocalhost(9107)
+            .dispatcher(ConnectHandler.mitmAll(ca))
+            .originSslFactory(testSslInfo.sslContext().getSocketFactory())
+            .requestListener(
+                new HttpServerListener() {
+                  @Override
+                  public void onConnect(UUID connectId, String host, int port) {
+                    events.add("onConnect");
+                  }
+
+                  @Override
+                  public void onCertificateReady(UUID connectId, String host, int port) {
+                    events.add("onCertificateReady");
+                  }
+
+                  @Override
+                  public void onConnectFailed(UUID connectId, String host, int port, Exception e) {
+                    events.add("onConnectFailed");
+                  }
+
+                  @Override
+                  public void onConnectComplete(UUID connectId, String host, int port) {
+                    events.add("onConnectComplete");
+                    done.countDown();
+                  }
+
+                  @Override
+                  public void onRequest(UUID requestId, HttpRequest request) {
+                    events.add("onRequest:" + request.getMethod());
+                  }
+
+                  @Override
+                  public void onResponseStreamed(
+                      UUID requestId,
+                      @Nullable String originHost,
+                      int originPort,
+                      HttpRequest request,
+                      HttpResponse response) {
+                    events.add("onResponseStreamed:" + response.getStatusCode());
+                  }
+
+                  @Override
+                  public void onRequestComplete(
+                      UUID requestId,
+                      @Nullable String originHost,
+                      int originPort,
+                      @Nullable HttpRequest request,
+                      RequestOutcome outcome) {
+                    capturedOutcome.set(outcome);
+                    events.add("onRequestComplete:" + outcome.response().getStatusCode());
+                  }
+                });
+    server.listen(endpoint);
+
+    try (SSLSocket sslSocket = connectViaMitm(9107, HTTPS_PORT)) {
+      OutputStream sslOut = sslSocket.getOutputStream();
+      InputStream sslIn = sslSocket.getInputStream();
+      sslOut.write(
+          "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+              .getBytes(StandardCharsets.ISO_8859_1));
+      sslOut.flush();
+      String resp = readUntilBlankLine(sslIn);
+      assertTrue("Expected 200, got: " + resp, resp.startsWith("HTTP/1.1 200"));
+      readBody(sslIn, resp);
+    }
+
+    assertTrue("onConnectComplete not invoked", done.await(5, TimeUnit.SECONDS));
+
+    // Verify ordering:
+    // 1. onRequest:CONNECT (CONNECT request parsed)
+    // 2. onConnect (CONNECT handshake begins)
+    // 3. onCertificateReady (cert minted/cached)
+    // 4. onRequest:GET (request inside the tunnel)
+    // 5. onResponseStreamed:200 (origin response streaming begins)
+    // 6. onRequestComplete:200 (GET completes)
+    // 7. onConnectComplete (tunnel session ends)
+    assertEquals("onRequest:CONNECT", events.get(0));
+    assertEquals("onConnect", events.get(1));
+    assertEquals("onCertificateReady", events.get(2));
+    assertEquals("onRequest:GET", events.get(3));
+    assertEquals("onResponseStreamed:200", events.get(4));
+    assertEquals("onRequestComplete:200", events.get(5));
+    assertEquals("onConnectComplete", events.get(6));
+    assertEquals(7, events.size());
+
+    // Verify RequestOutcome for the proxied GET.
+    RequestOutcome outcome = capturedOutcome.get();
+    assertNotNull(outcome);
+    assertTrue(outcome.isSuccess());
+    assertNotNull(outcome.response());
+    assertEquals(200, outcome.response().getStatusCode());
+    assertTrue("Expected bytesSent > 0", outcome.bytesSent() > 0);
   }
 
   // ---- Infrastructure ----
