@@ -1,16 +1,12 @@
 package de.ofahrt.catfish;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 
-import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.model.server.CompressionPolicy;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.KeepAlivePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
-import de.ofahrt.catfish.ssl.SSLInfo;
 import org.junit.Test;
 
 public class HttpVirtualHostTest {
@@ -27,8 +23,6 @@ public class HttpVirtualHostTest {
     assertEquals(UploadPolicy.DENY, host.uploadPolicy());
     assertEquals(KeepAlivePolicy.KEEP_ALIVE, host.keepAlivePolicy());
     assertEquals(CompressionPolicy.NONE, host.compressionPolicy());
-    assertNull(host.sslInfo());
-    assertNull(host.sslContext());
   }
 
   @Test
@@ -53,15 +47,6 @@ public class HttpVirtualHostTest {
     HttpVirtualHost host = new HttpVirtualHost(DUMMY);
     HttpVirtualHost updated = host.compressionPolicy(CompressionPolicy.COMPRESS);
     assertEquals(CompressionPolicy.COMPRESS, updated.compressionPolicy());
-  }
-
-  @Test
-  @SuppressWarnings("deprecation")
-  public void ssl() {
-    SSLInfo sslInfo = TestHelper.getSSLInfo();
-    HttpVirtualHost host = new HttpVirtualHost(DUMMY).ssl(sslInfo);
-    assertEquals(sslInfo, host.sslInfo());
-    assertNotNull(host.sslContext());
   }
 
   @Test
