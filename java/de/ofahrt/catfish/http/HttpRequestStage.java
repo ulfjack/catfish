@@ -2,25 +2,34 @@ package de.ofahrt.catfish.http;
 
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
-import java.nio.ByteBuffer;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Typed next-stage API for HTTP request processing. Receives parsed HTTP request headers and
- * raw body bytes, and generates HTTP response bytes.
+ * Typed next-stage API for HTTP request input. Receives parsed HTTP request headers and raw body
+ * bytes. The response is produced via an {@link HttpResponseGeneratorInstaller} passed at
+ * construction time — the stage installs an {@link HttpResponseGenerator} when one becomes
+ * available (synchronously in {@code onHeaders}, after body completion, or asynchronously from an
+ * executor thread).
  *
- * <p>All methods are called on the NIO thread. Implementations that need to perform blocking work
- * (e.g., dispatching to an {@code HttpHandler} on an executor thread) should queue the work and
- * return immediately.
+ * <p>All methods on this interface are called on the NIO thread. Implementations that need to
+ * perform blocking work (e.g., dispatching to an {@code HttpHandler} on an executor thread) should
+ * queue the work and return immediately.
  */
 public interface HttpRequestStage {
 
+  /** Callback by which an {@link HttpRequestStage} hands its response generator to the driver. */
+  @FunctionalInterface
+  interface HttpResponseGeneratorInstaller {
+    /** Called from the NIO thread (or queued onto it) when a response generator is ready. */
+    void install(HttpResponseGenerator generator);
+  }
+
   /**
    * Called when request headers are complete. Returns {@code null} to accept the request (body will
-   * be streamed via {@link #onBodyData}/{@link #onBodyComplete}), or a non-null {@link HttpResponse}
-   * to reject it — the caller sends that response and closes the handler. If the request has no
-   * body and the handler accepts, {@link #onBodyComplete} is called immediately after this method
-   * (without any {@link #onBodyData} calls).
+   * be streamed via {@link #onBodyData}/{@link #onBodyComplete}), or a non-null {@link
+   * HttpResponse} to reject it — the caller sends that response and closes the handler. If the
+   * request has no body and the handler accepts, {@link #onBodyComplete} is called immediately
+   * after this method (without any {@link #onBodyData} calls).
    */
   @Nullable HttpResponse onHeaders(HttpRequest headers);
 
@@ -38,24 +47,6 @@ public interface HttpRequestStage {
    * no body.
    */
   void onBodyComplete();
-
-  /**
-   * Called by the write loop to pull response bytes into the output buffer. Same contract as {@link
-   * HttpResponseGenerator.ContinuationToken}.
-   */
-  HttpResponseGenerator.ContinuationToken generateResponse(ByteBuffer outputBuffer);
-
-  /** Whether the connection should be kept alive after this response completes. */
-  boolean keepAlive();
-
-  /** The request associated with the current response, for logging. May be null before response. */
-  @Nullable HttpRequest getRequest();
-
-  /** The response being generated, for logging. May be null before response is committed. */
-  @Nullable HttpResponse getResponse();
-
-  /** Response body bytes sent to the client. Valid after generateResponse returns STOP. */
-  long getBodyBytesSent();
 
   /** Called when the connection is closing. Clean up any resources held by this handler. */
   void close();

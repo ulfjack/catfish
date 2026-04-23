@@ -3,7 +3,6 @@ package de.ofahrt.catfish;
 import de.ofahrt.catfish.HttpServerStage.RequestQueue;
 import de.ofahrt.catfish.http.HttpRequestStage;
 import de.ofahrt.catfish.http.HttpResponseGenerator;
-import de.ofahrt.catfish.http.HttpResponseGenerator.ContinuationToken;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.model.HttpDate;
 import de.ofahrt.catfish.model.HttpHeaderName;
@@ -26,7 +25,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HashMap;
@@ -56,10 +54,10 @@ final class LocalHttpRequestStage implements HttpRequestStage {
   private final KeepAlivePolicy keepAlivePolicy;
   private final CompressionPolicy compressionPolicy;
   private final Connection connection;
+  private final HttpRequestStage.HttpResponseGeneratorInstaller responseInstaller;
 
   private @Nullable HttpRequest headers;
   private final ByteArrayOutputStream bodyBuffer = new ByteArrayOutputStream();
-  private @Nullable HttpResponseGenerator responseGenerator;
 
   LocalHttpRequestStage(
       Pipeline parent,
@@ -70,7 +68,8 @@ final class LocalHttpRequestStage implements HttpRequestStage {
       UploadPolicy uploadPolicy,
       KeepAlivePolicy keepAlivePolicy,
       CompressionPolicy compressionPolicy,
-      Connection connection) {
+      Connection connection,
+      HttpRequestStage.HttpResponseGeneratorInstaller responseInstaller) {
     this.parent = parent;
     this.requestHandler = requestHandler;
     this.handler = handler;
@@ -80,6 +79,7 @@ final class LocalHttpRequestStage implements HttpRequestStage {
     this.keepAlivePolicy = keepAlivePolicy;
     this.compressionPolicy = compressionPolicy;
     this.connection = connection;
+    this.responseInstaller = responseInstaller;
   }
 
   @Override
@@ -146,56 +146,19 @@ final class LocalHttpRequestStage implements HttpRequestStage {
   }
 
   @Override
-  public ContinuationToken generateResponse(ByteBuffer outputBuffer) {
-    if (responseGenerator == null) {
-      return ContinuationToken.PAUSE;
-    }
-    outputBuffer.compact();
-    ContinuationToken token = responseGenerator.generate(outputBuffer);
-    outputBuffer.flip();
-    return token;
-  }
-
-  @Override
-  public void close() {
-    if (responseGenerator != null) {
-      responseGenerator.close();
-      responseGenerator = null;
-    }
-  }
-
-  @Override
-  public boolean keepAlive() {
-    return responseGenerator != null && responseGenerator.keepAlive();
-  }
-
-  @Override
-  public @Nullable HttpRequest getRequest() {
-    return responseGenerator != null ? responseGenerator.getRequest() : null;
-  }
-
-  @Override
-  public @Nullable HttpResponse getResponse() {
-    return responseGenerator != null ? responseGenerator.getResponse() : null;
-  }
-
-  @Override
-  public long getBodyBytesSent() {
-    return responseGenerator != null ? responseGenerator.getBodyBytesSent() : 0;
-  }
+  public void close() {}
 
   // ---- Response plumbing ----
 
-  @SuppressWarnings("NullAway") // response is non-null when setResponse is called
-  private void setResponse(HttpResponseGenerator gen) {
-    this.responseGenerator = gen;
+  @SuppressWarnings("NullAway") // response is non-null when installResponse is called
+  private void installResponse(HttpResponseGenerator gen) {
     HttpResponse response = gen.getResponse();
     parent.log(
         "%s %d %s",
         response.getProtocolVersion(),
         Integer.valueOf(response.getStatusCode()),
         response.getStatusMessage());
-    parent.encourageWrites();
+    responseInstaller.install(gen);
   }
 
   private static HttpResponse buildTraceResponse(HttpRequest request) {
@@ -292,7 +255,7 @@ final class LocalHttpRequestStage implements HttpRequestStage {
       boolean headRequest = HttpMethodName.HEAD.equals(request.getMethod());
       HttpResponseGeneratorBuffered gen =
           HttpResponseGeneratorBuffered.create(request, responseToWrite, !headRequest);
-      parent.queue(() -> setResponse(gen));
+      parent.queue(() -> installResponse(gen));
     }
 
     @Override
@@ -328,7 +291,7 @@ final class LocalHttpRequestStage implements HttpRequestStage {
           HttpResponseGeneratorStreamed.create(
               parent::encourageWrites, request, responseToWrite, !headRequest);
       streamedGenerator = gen;
-      parent.queue(() -> setResponse(gen));
+      parent.queue(() -> installResponse(gen));
       serverListener.onResponseStreamed(requestId, null, 0, request, responseToWrite);
       return compress ? new GZIPOutputStream(gen.getOutputStream()) : gen.getOutputStream();
     }
@@ -355,7 +318,7 @@ final class LocalHttpRequestStage implements HttpRequestStage {
         boolean headRequest = HttpMethodName.HEAD.equals(request.getMethod());
         HttpResponseGeneratorBuffered gen =
             HttpResponseGeneratorBuffered.create(request, finalResponse, !headRequest);
-        parent.queue(() -> setResponse(gen));
+        parent.queue(() -> installResponse(gen));
       } else {
         // Already committed. If a stream is in flight, force-close it so the connection
         // tears down cleanly. Buffered responses are already fully queued, nothing to do.

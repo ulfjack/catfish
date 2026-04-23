@@ -3,6 +3,7 @@ package de.ofahrt.catfish;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
+import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.HttpHeaderName;
@@ -11,6 +12,7 @@ import de.ofahrt.catfish.model.HttpVersion;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.net.SocketFactory;
 import org.junit.Test;
 
@@ -50,6 +52,7 @@ public class ProxyRequestStageTest {
 
   @Test
   public void close_beforeResponse_doesNotThrow() {
+    AtomicReference<HttpResponseGenerator> installed = new AtomicReference<>();
     ProxyRequestStage stage =
         new ProxyRequestStage(
             QUEUING_PIPELINE,
@@ -61,17 +64,18 @@ public class ProxyRequestStageTest {
             false,
             dummyRequest(),
             SocketFactory.getDefault(),
-            null);
-    // Before forwarder runs, getRequest/getResponse return null.
-    assertNull(stage.getRequest());
-    assertNull(stage.getResponse());
+            null,
+            installed::set);
+    // No generator installed yet.
+    assertNull(installed.get());
     stage.close();
   }
 
   @Test
   public void close_afterResponse_closesGenerator() {
-    // Use port 1 which will fail to connect — the forwarder sends a 502 error response,
-    // which sets responseGen. Then close() should close the generator.
+    // Use port 1 which will fail to connect — the forwarder installs a 502 error response.
+    // close() should then close the installed generator.
+    AtomicReference<HttpResponseGenerator> installed = new AtomicReference<>();
     ProxyRequestStage stage =
         new ProxyRequestStage(
             QUEUING_PIPELINE,
@@ -83,15 +87,16 @@ public class ProxyRequestStageTest {
             false,
             dummyRequest(),
             SocketFactory.getDefault(),
-            null);
+            null,
+            installed::set);
 
-    // Trigger the forwarder — it runs inline, fails to connect, sets responseGen with 502.
+    // Trigger the forwarder — it runs inline, fails to connect, installs a 502 error generator.
     stage.onHeaders(dummyRequest());
     stage.onBodyComplete();
 
-    // responseGen should be set now (error response from failed connection).
-    assertNotNull(stage.getResponse());
-    assertNotNull(stage.getRequest());
+    HttpResponseGenerator gen = installed.get();
+    assertNotNull(gen);
+    assertNotNull(gen.getResponse());
 
     // close() should close the generator without throwing.
     stage.close();

@@ -9,7 +9,6 @@ import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import javax.net.SocketFactory;
@@ -35,10 +34,11 @@ final class ProxyRequestStage implements HttpRequestStage {
   private final HttpRequest forwardRequest;
   private final SocketFactory socketFactory;
   private final @Nullable OutputStream captureStream;
+  private final HttpRequestStage.HttpResponseGeneratorInstaller responseInstaller;
 
   private final PipeBuffer bodyPipe = new PipeBuffer();
+  // Cached for close() so we can force-close a streaming generator if the connection drops.
   private volatile @Nullable HttpResponseGenerator responseGen;
-  private volatile boolean keepAlive;
 
   ProxyRequestStage(
       Pipeline parent,
@@ -50,7 +50,8 @@ final class ProxyRequestStage implements HttpRequestStage {
       boolean useTls,
       HttpRequest forwardRequest,
       SocketFactory socketFactory,
-      @Nullable OutputStream captureStream) {
+      @Nullable OutputStream captureStream,
+      HttpRequestStage.HttpResponseGeneratorInstaller responseInstaller) {
     this.parent = parent;
     this.executor = executor;
     this.serverListener = serverListener;
@@ -61,11 +62,12 @@ final class ProxyRequestStage implements HttpRequestStage {
     this.forwardRequest = forwardRequest;
     this.socketFactory = socketFactory;
     this.captureStream = captureStream;
+    this.responseInstaller = responseInstaller;
   }
 
   @Override
   public @Nullable HttpResponse onHeaders(HttpRequest headers) {
-    keepAlive = HttpConnectionHeader.mayKeepAlive(headers);
+    boolean keepAlive = HttpConnectionHeader.mayKeepAlive(headers);
 
     OriginForwarder forwarder =
         new OriginForwarder(
@@ -81,23 +83,18 @@ final class ProxyRequestStage implements HttpRequestStage {
             new OriginForwarder.ResultCallback() {
               private volatile boolean committed;
 
-              private void setResponse(HttpResponseGenerator gen, boolean ka) {
+              private void install(HttpResponseGenerator gen) {
                 if (committed) {
                   return;
                 }
                 committed = true;
-                parent.queue(
-                    () -> {
-                      responseGen = gen;
-                      keepAlive = ka;
-                      parent.encourageWrites();
-                    });
+                responseGen = gen;
+                parent.queue(() -> responseInstaller.install(gen));
               }
 
               @Override
               public void commitBuffered(HttpResponse response, boolean ka) {
-                setResponse(
-                    HttpResponseGeneratorBuffered.createWithBody(forwardRequest, response), ka);
+                install(HttpResponseGeneratorBuffered.createWithBody(forwardRequest, response));
               }
 
               @Override
@@ -117,7 +114,7 @@ final class ProxyRequestStage implements HttpRequestStage {
                       HttpResponseGeneratorStreamed.create(
                           this::encourageWrites, forwardRequest, stripped, true);
                 }
-                setResponse(gen, ka);
+                install(gen);
                 return gen.getOutputStream();
               }
 
@@ -138,38 +135,6 @@ final class ProxyRequestStage implements HttpRequestStage {
   @Override
   public void onBodyComplete() {
     bodyPipe.closeWrite();
-  }
-
-  @Override
-  public HttpResponseGenerator.ContinuationToken generateResponse(ByteBuffer outputBuffer) {
-    HttpResponseGenerator gen = responseGen;
-    if (gen == null) {
-      return HttpResponseGenerator.ContinuationToken.PAUSE;
-    }
-    outputBuffer.compact();
-    HttpResponseGenerator.ContinuationToken token = gen.generate(outputBuffer);
-    outputBuffer.flip();
-    return token;
-  }
-
-  @Override
-  public boolean keepAlive() {
-    return keepAlive;
-  }
-
-  @Override
-  public @Nullable HttpRequest getRequest() {
-    return responseGen != null ? responseGen.getRequest() : null;
-  }
-
-  @Override
-  public @Nullable HttpResponse getResponse() {
-    return responseGen != null ? responseGen.getResponse() : null;
-  }
-
-  @Override
-  public long getBodyBytesSent() {
-    return responseGen != null ? responseGen.getBodyBytesSent() : 0;
   }
 
   @Override

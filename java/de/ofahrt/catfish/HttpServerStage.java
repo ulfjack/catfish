@@ -73,16 +73,18 @@ final class HttpServerStage implements Stage {
   private final IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
   private @Nullable Connection connection;
   private boolean keepAlive = true;
-  private @Nullable HttpResponseGenerator responseGenerator;
-  // The current request handler. Non-null while processing a request (from after header routing
-  // until response complete). Null between requests (keep-alive idle).
+  // The generator that produces response bytes for the current write. May represent a 100-Continue
+  // preliminary response, an early error response, or the final response from a request handler.
+  private @Nullable HttpResponseGenerator currentResponseGenerator;
+  // The handler currently consuming request body bytes. Non-null while a body is being streamed.
+  // May coexist with currentResponseGenerator (e.g., during 100-Continue, or when the handler has
+  // already produced its response but the client is still sending body bytes that get discarded).
   private @Nullable HttpRequestStage currentHandler;
   // For Content-Length bodies: remaining bytes to stream to the handler. -1 means not active.
   private long contentLengthRemaining = -1;
   // For chunked bodies: scans raw chunked framing to detect completion without decoding.
   private @Nullable ChunkedBodyScanner chunkedScanner;
   private UUID requestId = UUID.randomUUID();
-  private long responseBytesSent;
   private @Nullable HttpRequest headersRequest;
   // Encapsulates the NIO↔executor handoff for the routing decision. See
   // AsyncRoutingDispatcher for the thread model and memory-ordering rules.
@@ -247,7 +249,7 @@ final class HttpServerStage implements Stage {
     // Check for Expect: 100-continue.
     String expectValue = headers.getHeaders().get(HttpHeaderName.EXPECT);
     if ("100-continue".equalsIgnoreCase(expectValue)) {
-      responseGenerator = new ContinueResponseGenerator();
+      currentResponseGenerator = new ContinueResponseGenerator();
       parent.encourageWrites();
       return ConnectionControl.PAUSE;
     }
@@ -337,7 +339,8 @@ final class HttpServerStage implements Stage {
               s.uploadPolicy(),
               s.keepAlivePolicy(),
               s.compressionPolicy(),
-              conn);
+              conn,
+              this::installResponseGenerator);
       return startBodyOrDispatch(effective, currentHandler);
     } else if (action instanceof RequestAction.ForwardAndCapture fc) {
       Origin origin = parseOrigin(fc.request());
@@ -358,7 +361,8 @@ final class HttpServerStage implements Stage {
               origin.useTls(),
               fc.request(),
               factory,
-              fc.captureStream());
+              fc.captureStream(),
+              this::installResponseGenerator);
       return startBodyOrDispatch(effective, currentHandler);
     } else if (action instanceof RequestAction.Forward f) {
       Origin origin = parseOrigin(f.request());
@@ -379,11 +383,21 @@ final class HttpServerStage implements Stage {
               origin.useTls(),
               f.request(),
               factory,
-              null);
+              null,
+              this::installResponseGenerator);
       return startBodyOrDispatch(effective, currentHandler);
     } else {
       throw new IllegalStateException("Unknown RequestAction: " + action);
     }
+  }
+
+  /**
+   * Called from a request handler (on the NIO thread, possibly via {@code parent.queue}) when its
+   * response generator is ready. Installs the generator and wakes the write loop.
+   */
+  private void installResponseGenerator(HttpResponseGenerator gen) {
+    this.currentResponseGenerator = gen;
+    parent.encourageWrites();
   }
 
   private static String toRelativeUri(String absoluteUri) {
@@ -458,7 +472,7 @@ final class HttpServerStage implements Stage {
 
   @Override
   public void inputClosed() {
-    if (responseGenerator == null && currentHandler == null) {
+    if (currentResponseGenerator == null && currentHandler == null) {
       parent.close();
     } else {
       keepAlive = false;
@@ -483,39 +497,32 @@ final class HttpServerStage implements Stage {
         // cc == PAUSE — fall through to response generation below.
       }
     }
-    // Generate response bytes. The responseGenerator takes priority (used for 100-continue
-    // and pre-handler error responses). Otherwise delegate to the current handler.
-    HttpResponseGenerator gen = responseGenerator;
-    HttpRequestStage handler = currentHandler;
-    ContinuationToken token;
-    if (gen != null) {
-      outputBuffer.compact();
-      token = gen.generate(outputBuffer);
-      outputBuffer.flip();
-    } else if (handler != null) {
-      token = handler.generateResponse(outputBuffer);
-    } else {
-      // Spurious write() call. Ignore.
+    // Drive the current response generator. There is exactly one source of response bytes:
+    // the installed generator (100-continue, pre-handler error, or the request handler's response).
+    HttpResponseGenerator gen = currentResponseGenerator;
+    if (gen == null) {
+      // Spurious write() call (no response ready yet). Ignore.
       return ConnectionControl.PAUSE;
     }
+    outputBuffer.compact();
+    ContinuationToken token = gen.generate(outputBuffer);
+    outputBuffer.flip();
     return switch (token) {
       case CONTINUE -> ConnectionControl.CONTINUE;
       case PAUSE -> ConnectionControl.PAUSE;
       case STOP -> {
+        currentResponseGenerator = null;
         if (gen instanceof ContinueResponseGenerator) {
-          responseGenerator = null;
           parent.log("Sent 100 Continue, resuming body read");
           yield readAndResume();
         }
-        if (handler != null) {
-          notifyRequestComplete(
-              handler.getRequest(), handler.getResponse(), handler.getBodyBytesSent());
-          keepAlive = handler.keepAlive();
+        notifyRequestComplete(gen.getRequest(), gen.getResponse(), gen.getBodyBytesSent());
+        keepAlive = gen.keepAlive();
+        // Tear down the body handler if it is still attached; the response is done so any
+        // further body bytes are irrelevant.
+        if (currentHandler != null) {
+          currentHandler.close();
           currentHandler = null;
-        } else if (gen != null) {
-          notifyRequestComplete(gen.getRequest(), gen.getResponse(), gen.getBodyBytesSent());
-          keepAlive = gen.keepAlive();
-          responseGenerator = null;
         }
         parent.log("Completed. keepAlive=%s", Boolean.valueOf(keepAlive));
         if (keepAlive) {
@@ -549,9 +556,9 @@ final class HttpServerStage implements Stage {
       currentHandler.close();
       currentHandler = null;
     }
-    if (responseGenerator != null) {
-      responseGenerator.close();
-      responseGenerator = null;
+    if (currentResponseGenerator != null) {
+      currentResponseGenerator.close();
+      currentResponseGenerator = null;
     }
   }
 
@@ -642,7 +649,7 @@ final class HttpServerStage implements Stage {
   }
 
   private void startResponse(HttpResponseGenerator gen) {
-    this.responseGenerator = gen;
+    this.currentResponseGenerator = gen;
     this.keepAlive = gen.keepAlive();
     HttpResponse response = gen.getResponse();
     if (response != null) {
