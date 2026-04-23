@@ -64,7 +64,7 @@ final class ProxyRequestStage implements HttpRequestStage {
   }
 
   @Override
-  public Decision onHeaders(HttpRequest headers) {
+  public @Nullable HttpResponse onHeaders(HttpRequest headers) {
     keepAlive = HttpConnectionHeader.mayKeepAlive(headers);
 
     OriginForwarder forwarder =
@@ -127,7 +127,7 @@ final class ProxyRequestStage implements HttpRequestStage {
             },
             () -> parent.queue(parent::encourageReads));
     executor.execute(() -> forwarder.run(forwardRequest));
-    return Decision.CONTINUE;
+    return null;
   }
 
   @Override

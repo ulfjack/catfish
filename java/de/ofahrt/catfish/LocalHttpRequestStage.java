@@ -83,7 +83,7 @@ final class LocalHttpRequestStage implements HttpRequestStage {
   }
 
   @Override
-  public Decision onHeaders(HttpRequest headers) {
+  public @Nullable HttpResponse onHeaders(HttpRequest headers) {
     this.headers = headers;
     parent.log("%s %s %s", headers.getMethod(), headers.getUri(), headers.getVersion());
     // Check upload policy if the request has a body.
@@ -92,31 +92,25 @@ final class LocalHttpRequestStage implements HttpRequestStage {
     boolean hasBody =
         (cl != null && !"0".equals(cl)) || (te != null && "chunked".equalsIgnoreCase(te));
     if (hasBody && !uploadPolicy.isAllowed(headers)) {
-      setErrorResponse(headers, StandardResponses.PAYLOAD_TOO_LARGE);
-      return Decision.REJECT;
+      return StandardResponses.PAYLOAD_TOO_LARGE;
     }
     String expectValue = headers.getHeaders().get(HttpHeaderName.EXPECT);
     if (expectValue != null && !"100-continue".equalsIgnoreCase(expectValue)) {
-      setErrorResponse(headers, StandardResponses.EXPECTATION_FAILED);
-      return Decision.REJECT;
+      return StandardResponses.EXPECTATION_FAILED;
     }
     if (headers.getHeaders().get(HttpHeaderName.CONTENT_ENCODING) != null) {
-      setErrorResponse(headers, StandardResponses.UNSUPPORTED_MEDIA_TYPE);
-      return Decision.REJECT;
+      return StandardResponses.UNSUPPORTED_MEDIA_TYPE;
     }
     if (HttpMethodName.TRACE.equals(headers.getMethod())) {
-      setErrorResponse(headers, buildTraceResponse(headers));
-      return Decision.REJECT;
+      return buildTraceResponse(headers);
     }
     if ("*".equals(headers.getUri())) {
       if (HttpMethodName.OPTIONS.equals(headers.getMethod())) {
-        setErrorResponse(headers, StandardResponses.OK.withHeaderOverrides(OPTIONS_STAR_HEADERS));
-      } else {
-        setErrorResponse(headers, StandardResponses.BAD_REQUEST);
+        return StandardResponses.OK.withHeaderOverrides(OPTIONS_STAR_HEADERS);
       }
-      return Decision.REJECT;
+      return StandardResponses.BAD_REQUEST;
     }
-    return Decision.CONTINUE;
+    return null;
   }
 
   @Override
@@ -219,23 +213,6 @@ final class LocalHttpRequestStage implements HttpRequestStage {
   }
 
   // ---- Response plumbing ----
-
-  private void setErrorResponse(HttpRequest request, HttpResponse responseToWrite) {
-    byte[] body = responseToWrite.getBody();
-    if (body == null) {
-      throw new IllegalArgumentException();
-    }
-    HttpResponse response =
-        responseToWrite.withHeaderOverrides(
-            HttpHeaders.of(
-                HttpHeaderName.CONNECTION,
-                HttpConnectionHeader.CLOSE,
-                HttpHeaderName.CONTENT_LENGTH,
-                Integer.toString(body.length),
-                HttpHeaderName.DATE,
-                HttpDate.formatDate(Instant.now())));
-    setResponse(HttpResponseGeneratorBuffered.createWithBody(request, response));
-  }
 
   @SuppressWarnings("NullAway") // response is non-null when setResponse is called
   private void setResponse(HttpResponseGenerator gen) {

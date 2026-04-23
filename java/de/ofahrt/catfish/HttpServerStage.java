@@ -212,10 +212,11 @@ final class HttpServerStage implements Stage {
     String te = headers.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
     boolean hasBody =
         (cl != null && !"0".equals(cl)) || (te != null && "chunked".equalsIgnoreCase(te));
-    HttpRequestStage.Decision decision = handler.onHeaders(headers);
-    if (decision == HttpRequestStage.Decision.REJECT) {
-      // Handler prepared an error response. Pause reading, start writing.
-      parent.encourageWrites();
+    HttpResponse err = handler.onHeaders(headers);
+    if (err != null) {
+      handler.close();
+      currentHandler = null;
+      startBuffered(headers, err);
       return ConnectionControl.PAUSE;
     }
 

@@ -15,29 +15,19 @@ import org.jspecify.annotations.Nullable;
  */
 public interface HttpRequestStage {
 
-  enum Decision {
-    /**
-     * Accept the request. Body will be streamed via {@link #onBodyData}/{@link #onBodyComplete}.
-     */
-    CONTINUE,
-    /**
-     * Reject the request. The handler has stashed a response, which will be retrieved via {@link
-     * #generateResponse}.
-     */
-    REJECT
-  }
-
   /**
-   * Called when request headers are complete. The handler inspects the headers and returns a {@link
-   * Decision} indicating how to proceed. If the request has no body, {@link #onBodyComplete} is
-   * called immediately after this method (without any {@link #onBodyData} calls).
+   * Called when request headers are complete. Returns {@code null} to accept the request (body will
+   * be streamed via {@link #onBodyData}/{@link #onBodyComplete}), or a non-null {@link HttpResponse}
+   * to reject it — the caller sends that response and closes the handler. If the request has no
+   * body and the handler accepts, {@link #onBodyComplete} is called immediately after this method
+   * (without any {@link #onBodyData} calls).
    */
-  Decision onHeaders(HttpRequest headers);
+  @Nullable HttpResponse onHeaders(HttpRequest headers);
 
   /**
    * Called with raw request body bytes. For chunked transfer encoding, chunk framing is preserved
    * (not dechunked); for {@code Content-Length}, bytes are passed as received. Only called if
-   * {@link #onHeaders} returned {@link Decision#CONTINUE}. Returns the number of bytes actually
+   * {@link #onHeaders} returned {@code null} (accept). Returns the number of bytes actually
    * consumed (written to a pipe, buffered, etc.). If fewer than {@code length} bytes are consumed,
    * the caller pauses and retries later (backpressure).
    */
