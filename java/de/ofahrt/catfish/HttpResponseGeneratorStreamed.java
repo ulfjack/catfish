@@ -6,6 +6,7 @@ import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.utils.ConnectionClosedException;
+import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -397,6 +398,11 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
   @Override
   public long getBodyBytesSent() {
     return bodyBytesSent;
+  }
+
+  @Override
+  public boolean keepAlive() {
+    return HttpConnectionHeader.isKeepAlive(response.getHeaders());
   }
 
   public OutputStream getOutputStream() {

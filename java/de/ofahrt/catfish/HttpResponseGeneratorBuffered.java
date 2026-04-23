@@ -4,6 +4,7 @@ import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
@@ -83,5 +84,10 @@ final class HttpResponseGeneratorBuffered extends HttpResponseGenerator {
   @Override
   public long getBodyBytesSent() {
     return data.length > 2 ? data[2].length : 0;
+  }
+
+  @Override
+  public boolean keepAlive() {
+    return HttpConnectionHeader.isKeepAlive(response.getHeaders());
   }
 }

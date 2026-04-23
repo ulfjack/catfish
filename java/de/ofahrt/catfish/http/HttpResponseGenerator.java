@@ -3,12 +3,10 @@ package de.ofahrt.catfish.http;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
-import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 public abstract class HttpResponseGenerator {
@@ -58,8 +56,5 @@ public abstract class HttpResponseGenerator {
   /** Returns the number of response body bytes generated (excluding headers and framing). */
   public abstract long getBodyBytesSent();
 
-  public boolean keepAlive() {
-    HttpResponse response = Objects.requireNonNull(getResponse(), "response");
-    return HttpConnectionHeader.isKeepAlive(response.getHeaders());
-  }
+  public abstract boolean keepAlive();
 }
