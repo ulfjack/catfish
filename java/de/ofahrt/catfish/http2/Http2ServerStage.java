@@ -465,13 +465,7 @@ public final class Http2ServerStage implements Stage {
     streams.put(streamId, stream);
 
     // Route the request now (at header time) so we can check upload policy before accepting body.
-    HttpRequest partialRequest;
-    try {
-      partialRequest = builder.buildPartialRequest();
-    } catch (Exception e) {
-      sendErrorResponse(stream, StandardResponses.BAD_REQUEST);
-      return;
-    }
+    HttpRequest partialRequest = builder.buildPartialRequest();
 
     if (executor != null) {
       boolean finalEndStream = endStream;
@@ -480,22 +474,15 @@ public final class Http2ServerStage implements Stage {
             RequestAction action;
             try {
               action = connectHandler.applyLocal(partialRequest);
-            } catch (Exception e) {
-              parent.queue(
-                  () -> sendErrorResponse(stream, StandardResponses.INTERNAL_SERVER_ERROR));
+            } catch (RuntimeException | Error e) {
+              parent.queue(() -> { throw e; });
               return;
             }
             parent.queue(
                 () -> applyRoutingResult(stream, builder, partialRequest, action, finalEndStream));
           });
     } else {
-      RequestAction action;
-      try {
-        action = connectHandler.applyLocal(partialRequest);
-      } catch (Exception e) {
-        sendErrorResponse(stream, StandardResponses.INTERNAL_SERVER_ERROR);
-        return;
-      }
+      RequestAction action = connectHandler.applyLocal(partialRequest);
       applyRoutingResult(stream, builder, partialRequest, action, endStream);
     }
   }
