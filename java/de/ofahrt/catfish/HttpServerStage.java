@@ -17,7 +17,6 @@ import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
-import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.RequestAction;
@@ -78,8 +77,6 @@ final class HttpServerStage implements Stage {
   // The current request handler. Non-null while processing a request (from after header routing
   // until response complete). Null between requests (keep-alive idle).
   private @Nullable HttpRequestStage currentHandler;
-  // Set after header parsing when the request has a body to buffer.
-  private @Nullable HttpRequestBodyParser bodyParser;
   // For Content-Length bodies: remaining bytes to stream to the handler. -1 means not active.
   private long contentLengthRemaining = -1;
   // For chunked bodies: scans raw chunked framing to detect completion without decoding.
@@ -167,7 +164,7 @@ final class HttpServerStage implements Stage {
     }
 
     // Phase 2: body parsing/streaming (if active).
-    if (bodyParser != null || contentLengthRemaining >= 0 || chunkedScanner != null) {
+    if (contentLengthRemaining >= 0 || chunkedScanner != null) {
       return readBody();
     }
 
@@ -462,18 +459,7 @@ final class HttpServerStage implements Stage {
       }
       return ConnectionControl.CONTINUE;
     }
-    // Fallback for bodyParser (shouldn't be reached with current code paths).
-    HttpRequestBodyParser parser = Objects.requireNonNull(this.bodyParser, "bodyParser");
-    int consumed =
-        parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.remaining());
-    inputBuffer.position(inputBuffer.position() + consumed);
-    if (!parser.isDone()) {
-      return ConnectionControl.CONTINUE;
-    }
-    headersRequest = null;
-    bodyParser = null;
-    handler.onBodyComplete();
-    return ConnectionControl.PAUSE;
+    throw new IllegalStateException("readBody() called without active body mode");
   }
 
   @Override
