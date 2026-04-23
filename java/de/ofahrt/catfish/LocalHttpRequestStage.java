@@ -128,7 +128,13 @@ final class LocalHttpRequestStage implements HttpRequestStage {
       // If the request was chunked, decode the raw chunked bytes.
       String te = headers.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
       if (te != null && "chunked".equalsIgnoreCase(te)) {
-        rawBody = decodeChunked(rawBody);
+        ByteArrayOutputStream decoded = new ByteArrayOutputStream();
+        try (ChunkedDecodingOutputStream cd = new ChunkedDecodingOutputStream(decoded)) {
+          cd.write(rawBody);
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+        rawBody = decoded.toByteArray();
       }
       fullRequest = headers.withBody(new HttpRequest.InMemoryBody(rawBody));
     } else {
@@ -137,40 +143,6 @@ final class LocalHttpRequestStage implements HttpRequestStage {
     HttpResponseWriter writer =
         new ResponseWriterImpl(fullRequest, keepAlivePolicy, compressionPolicy);
     requestHandler.queueRequest(handler, connection, fullRequest, writer);
-  }
-
-  /** Decode chunked transfer-encoding, extracting just the payload bytes. */
-  private static byte[] decodeChunked(byte[] raw) {
-    ByteArrayOutputStream decoded = new ByteArrayOutputStream();
-    int i = 0;
-    while (i < raw.length) {
-      // Parse chunk size (hex).
-      int lineEnd = indexOf(raw, (byte) '\r', i);
-      if (lineEnd < 0) break;
-      String sizeLine = new String(raw, i, lineEnd - i, StandardCharsets.US_ASCII);
-      // Strip chunk extensions.
-      int semi = sizeLine.indexOf(';');
-      if (semi >= 0) sizeLine = sizeLine.substring(0, semi);
-      long chunkSize;
-      try {
-        chunkSize = Long.parseLong(sizeLine.trim(), 16);
-      } catch (NumberFormatException e) {
-        break;
-      }
-      i = lineEnd + 2; // skip \r\n
-      if (chunkSize == 0) break; // terminal chunk
-      int end = (int) Math.min(i + chunkSize, raw.length);
-      decoded.write(raw, i, end - i);
-      i = end + 2; // skip \r\n after chunk data
-    }
-    return decoded.toByteArray();
-  }
-
-  private static int indexOf(byte[] array, byte value, int from) {
-    for (int i = from; i < array.length; i++) {
-      if (array[i] == value) return i;
-    }
-    return -1;
   }
 
   @Override

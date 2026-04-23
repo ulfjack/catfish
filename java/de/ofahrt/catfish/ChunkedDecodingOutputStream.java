@@ -12,6 +12,7 @@ final class ChunkedDecodingOutputStream extends OutputStream {
 
   private enum State {
     SIZE,
+    SIZE_EXT,
     SIZE_CR,
     DATA,
     DATA_CR,
@@ -46,6 +47,8 @@ final class ChunkedDecodingOutputStream extends OutputStream {
           char c = (char) (buf[i] & 0xff);
           if (c == '\r') {
             state = State.SIZE_CR;
+          } else if (c == ';') {
+            state = State.SIZE_EXT;
           } else if (c >= '0' && c <= '9') {
             chunkRemaining = chunkRemaining * 16 + (c - '0');
           } else if (c >= 'a' && c <= 'f') {
@@ -53,7 +56,12 @@ final class ChunkedDecodingOutputStream extends OutputStream {
           } else if (c >= 'A' && c <= 'F') {
             chunkRemaining = chunkRemaining * 16 + (c - 'A' + 10);
           }
-          // else: skip extension characters (';' and beyond)
+          i++;
+        }
+        case SIZE_EXT -> {
+          if ((buf[i] & 0xff) == '\r') {
+            state = State.SIZE_CR;
+          }
           i++;
         }
         case SIZE_CR -> {
