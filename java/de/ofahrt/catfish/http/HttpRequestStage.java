@@ -7,7 +7,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Typed next-stage API for HTTP request processing. Receives parsed HTTP request headers and
- * decoded body chunks, and generates HTTP response bytes.
+ * raw body bytes, and generates HTTP response bytes.
  *
  * <p>All methods are called on the NIO thread. Implementations that need to perform blocking work
  * (e.g., dispatching to an {@code HttpHandler} on an executor thread) should queue the work and
@@ -17,11 +17,11 @@ public interface HttpRequestStage {
 
   enum Decision {
     /**
-     * Accept the request. Body will be streamed via {@link #onBodyChunk}/{@link #onBodyComplete}.
+     * Accept the request. Body will be streamed via {@link #onBodyData}/{@link #onBodyComplete}.
      */
     CONTINUE,
     /**
-     * Reject the request. The handler has already prepared a response via {@link
+     * Reject the request. The handler has stashed a response, which will be retrieved via {@link
      * #generateResponse}.
      */
     REJECT
@@ -30,15 +30,16 @@ public interface HttpRequestStage {
   /**
    * Called when request headers are complete. The handler inspects the headers and returns a {@link
    * Decision} indicating how to proceed. If the request has no body, {@link #onBodyComplete} is
-   * called immediately after this method (without any {@link #onBodyChunk} calls).
+   * called immediately after this method (without any {@link #onBodyData} calls).
    */
   Decision onHeaders(HttpRequest headers);
 
   /**
-   * Called with each chunk of decoded request body data. Only called if {@link #onHeaders} returned
-   * {@link Decision#CONTINUE}. Returns the number of bytes actually consumed (written to a pipe,
-   * buffered, etc.). If fewer than {@code length} bytes are consumed, the caller pauses and retries
-   * later (backpressure).
+   * Called with raw request body bytes. For chunked transfer encoding, chunk framing is preserved
+   * (not dechunked); for {@code Content-Length}, bytes are passed as received. Only called if
+   * {@link #onHeaders} returned {@link Decision#CONTINUE}. Returns the number of bytes actually
+   * consumed (written to a pipe, buffered, etc.). If fewer than {@code length} bytes are consumed,
+   * the caller pauses and retries later (backpressure).
    */
   int onBodyData(byte[] data, int offset, int length);
 
