@@ -84,17 +84,9 @@ final class HttpServerStage implements Stage {
   private UUID requestId = UUID.randomUUID();
   private long responseBytesSent;
   private @Nullable HttpRequest headersRequest;
-  // Non-null while waiting for ConnectHandler.applyProxy/applyLocal to return the routing
-  // decision for a request. While set, read() returns PAUSE so that body bytes remain buffered
-  // in inputBuffer until the decision arrives.
-  private @Nullable HttpRequest pendingAbsoluteUriRequest;
-  // Set by the executor task once the routing method has returned. Read and cleared by the
-  // next invocation of read() on the NIO thread. Null means "no decision yet" — the field is
-  // volatile because it crosses the executor↔NIO thread boundary.
-  private volatile @Nullable RequestAction pendingRequestAction;
-  // Signals that the routing method threw; produce a 403. Checked alongside
-  // pendingRequestAction.
-  private volatile boolean pendingRoutingFailed;
+  // Encapsulates the NIO↔executor handoff for the routing decision. See
+  // AsyncRoutingDispatcher for the thread model and memory-ordering rules.
+  private final AsyncRoutingDispatcher routingDispatcher = new AsyncRoutingDispatcher();
 
   private static final HttpServerListener NO_OP_LISTENER = new HttpServerListener() {};
 
@@ -159,7 +151,7 @@ final class HttpServerStage implements Stage {
     // don't advance any state machine. The decision is consumed from write() (driven by
     // encourageWrites → handleEvent), not from here — the read loop does not iterate when
     // inputBuffer is empty, so we cannot rely on read() firing for a GET forward-proxy request.
-    if (pendingAbsoluteUriRequest != null) {
+    if (routingDispatcher.isPending()) {
       return ConnectionControl.PAUSE;
     }
 
@@ -286,7 +278,7 @@ final class HttpServerStage implements Stage {
 
     if (executor != null) {
       // Async path: dispatch to executor thread (applyProxy/applyLocal may block).
-      pendingAbsoluteUriRequest = headers;
+      routingDispatcher.beginAsync(headers);
       boolean finalIsProxy = isProxy;
       executor.execute(() -> runRoutingDecision(headers, finalIsProxy));
       return ConnectionControl.PAUSE;
@@ -313,9 +305,10 @@ final class HttpServerStage implements Stage {
     try {
       RequestAction action =
           isProxy ? connectHandler.applyProxy(request) : connectHandler.applyLocal(request);
-      pendingRequestAction = action != null ? action : RequestAction.deny();
+      routingDispatcher.completeAsync(
+          request, action != null ? action : RequestAction.deny(), false);
     } catch (Exception e) {
-      pendingRoutingFailed = true;
+      routingDispatcher.completeAsync(request, null, true);
     }
     parent.encourageWrites();
   }
@@ -476,19 +469,13 @@ final class HttpServerStage implements Stage {
   public ConnectionControl write() throws IOException {
     // Consume a pending routing decision on the NIO thread. Driven by encourageWrites from the
     // executor-thread runRoutingDecision.
-    if (pendingAbsoluteUriRequest != null
-        && (pendingRequestAction != null || pendingRoutingFailed)) {
-      HttpRequest headers = pendingAbsoluteUriRequest;
-      RequestAction action = pendingRequestAction;
-      boolean failed = pendingRoutingFailed;
-      pendingAbsoluteUriRequest = null;
-      pendingRequestAction = null;
-      pendingRoutingFailed = false;
-      if (failed || action == null) {
-        startBuffered(headers, StandardResponses.FORBIDDEN);
+    AsyncRoutingDispatcher.RoutingDecision decision = routingDispatcher.tryConsume();
+    if (decision != null) {
+      if (decision.failed() || decision.action() == null) {
+        startBuffered(decision.request(), StandardResponses.FORBIDDEN);
         // Fall through to response generation below.
       } else {
-        ConnectionControl cc = applyRoutingDecision(headers, action);
+        ConnectionControl cc = applyRoutingDecision(decision.request(), decision.action());
         if (cc == ConnectionControl.CONTINUE || cc == ConnectionControl.NEED_MORE_DATA) {
           parent.encourageReads();
           return ConnectionControl.PAUSE;

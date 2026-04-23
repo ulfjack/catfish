@@ -6,6 +6,7 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
 @SuiteClasses({
+  AsyncRoutingDispatcherTest.class,
   CatfishHttpServerTest.class,
   ChunkedDecodingOutputStreamTest.class,
   ChunkedBodyScannerTest.class,
