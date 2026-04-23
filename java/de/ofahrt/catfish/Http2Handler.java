@@ -5,15 +5,12 @@ import de.ofahrt.catfish.internal.network.NetworkEngine.NetworkHandler;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Executor;
-import java.util.concurrent.RejectedExecutionException;
 
 /**
  * A {@link NetworkHandler} that creates an h2-only TLS endpoint. The inner stage is always {@link
@@ -59,21 +56,6 @@ final class Http2Handler implements NetworkHandler {
       Connection connection,
       HttpRequest request,
       HttpResponseWriter responseWriter) {
-    try {
-      executor.execute(
-          () -> {
-            try {
-              httpHandler.handle(connection, request, responseWriter);
-            } catch (Exception e) {
-              responseWriter.abort();
-            }
-          });
-    } catch (RejectedExecutionException e) {
-      try {
-        responseWriter.commitBuffered(StandardResponses.SERVICE_UNAVAILABLE);
-      } catch (IOException ioe) {
-        throw new RuntimeException(ioe);
-      }
-    }
+    RequestQueueDispatcher.dispatch(executor, httpHandler, connection, request, responseWriter);
   }
 }
