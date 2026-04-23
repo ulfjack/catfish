@@ -28,12 +28,10 @@ public record HttpVirtualHost(
   }
 
   public HttpVirtualHost keepAlivePolicy(KeepAlivePolicy p) {
-    return new HttpVirtualHost(
-        handler, uploadPolicy, Objects.requireNonNull(p), compressionPolicy);
+    return new HttpVirtualHost(handler, uploadPolicy, Objects.requireNonNull(p), compressionPolicy);
   }
 
   public HttpVirtualHost compressionPolicy(CompressionPolicy p) {
-    return new HttpVirtualHost(
-        handler, uploadPolicy, keepAlivePolicy, Objects.requireNonNull(p));
+    return new HttpVirtualHost(handler, uploadPolicy, keepAlivePolicy, Objects.requireNonNull(p));
   }
 }

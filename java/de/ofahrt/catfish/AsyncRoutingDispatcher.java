@@ -7,14 +7,14 @@ import org.jspecify.annotations.Nullable;
 /**
  * Cross-thread handoff for the forward-proxy routing decision made by {@link HttpServerStage}.
  *
- * <p>The NIO thread dispatches {@code ConnectHandler.applyProxy/applyLocal} to an executor
- * because those calls may block. This helper owns the three fields that cross the NIO↔executor
- * boundary and exposes them as a single typed {@link RoutingDecision}.
+ * <p>The NIO thread dispatches {@code ConnectHandler.applyProxy/applyLocal} to an executor because
+ * those calls may block. This helper owns the three fields that cross the NIO↔executor boundary and
+ * exposes them as a single typed {@link RoutingDecision}.
  *
- * <p>Thread model: {@link #beginAsync}, {@link #isPending}, and {@link #tryConsume} run on the
- * NIO thread; {@link #completeAsync} runs on the executor thread. Happens-before between the
- * two threads is carried by the volatile write in {@code completeAsync} and the matching read
- * in {@code tryConsume}.
+ * <p>Thread model: {@link #beginAsync}, {@link #isPending}, and {@link #tryConsume} run on the NIO
+ * thread; {@link #completeAsync} runs on the executor thread. Happens-before between the two
+ * threads is carried by the volatile write in {@code completeAsync} and the matching read in {@code
+ * tryConsume}.
  */
 final class AsyncRoutingDispatcher {
 

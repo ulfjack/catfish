@@ -475,7 +475,10 @@ public final class Http2ServerStage implements Stage {
             try {
               action = connectHandler.applyLocal(partialRequest);
             } catch (RuntimeException | Error e) {
-              parent.queue(() -> { throw e; });
+              parent.queue(
+                  () -> {
+                    throw e;
+                  });
               return;
             }
             parent.queue(
