@@ -321,22 +321,20 @@ public final class Http2ServerStage implements Stage {
       return;
     }
     byte[] payload = frameReader.getPayload();
-    if (payload != null) {
-      if (payload.length % 6 != 0) {
-        throw new IOException(
-            "h2 FRAME_SIZE_ERROR: SETTINGS payload length "
-                + payload.length
-                + " not a multiple of 6");
-      }
-      for (int i = 0; i + 5 < payload.length; i += 6) {
-        int id = ((payload[i] & 0xff) << 8) | (payload[i + 1] & 0xff);
-        int value =
-            ((payload[i + 2] & 0xff) << 24)
-                | ((payload[i + 3] & 0xff) << 16)
-                | ((payload[i + 4] & 0xff) << 8)
-                | (payload[i + 5] & 0xff);
-        applyPeerSetting(id, value);
-      }
+    if (payload.length % 6 != 0) {
+      throw new IOException(
+          "h2 FRAME_SIZE_ERROR: SETTINGS payload length "
+              + payload.length
+              + " not a multiple of 6");
+    }
+    for (int i = 0; i + 5 < payload.length; i += 6) {
+      int id = ((payload[i] & 0xff) << 8) | (payload[i + 1] & 0xff);
+      int value =
+          ((payload[i + 2] & 0xff) << 24)
+              | ((payload[i + 3] & 0xff) << 16)
+              | ((payload[i + 4] & 0xff) << 8)
+              | (payload[i + 5] & 0xff);
+      applyPeerSetting(id, value);
     }
     // Queue SETTINGS ACK.
     Http2FrameWriter.writeSettingsAck(controlFrameScratch);
@@ -384,7 +382,6 @@ public final class Http2ServerStage implements Stage {
 
   // ---- HEADERS ----
 
-  @SuppressWarnings("NullAway") // payload and connection are non-null in this context
   private void handleHeaders() throws IOException {
     if (!frameReader.hasFlag(Http2FrameReader.FLAG_END_HEADERS)) {
       // CONTINUATION frames are not supported. Per RFC 9113 §6.2, a HEADERS frame without
@@ -542,7 +539,7 @@ public final class Http2ServerStage implements Stage {
       return;
     }
 
-    if (payload != null && payload.length > 0) {
+    if (payload.length > 0) {
       int dataOffset = 0;
       int dataLength = payload.length;
       if (frameReader.hasFlag(Http2FrameReader.FLAG_PADDED)) {
@@ -586,7 +583,6 @@ public final class Http2ServerStage implements Stage {
 
   // ---- PING ----
 
-  @SuppressWarnings("NullAway") // payload is non-null when length > 0
   private void handlePing() throws IOException {
     if (frameReader.getStreamId() != 0) {
       throw new IOException("h2 PROTOCOL_ERROR: PING on stream " + frameReader.getStreamId());
@@ -605,7 +601,6 @@ public final class Http2ServerStage implements Stage {
 
   // ---- WINDOW_UPDATE ----
 
-  @SuppressWarnings("NullAway")
   private void handleWindowUpdate() throws IOException {
     if (frameReader.getLength() != 4) {
       throw new IOException(

@@ -1,7 +1,5 @@
 package de.ofahrt.catfish.http2;
 
-import org.jspecify.annotations.Nullable;
-
 /**
  * Incremental HTTP/2 frame reader (RFC 9113 §4.1). Parses the 9-byte frame header and payload from
  * a byte stream. Call {@link #parse} with available data; when a complete frame is ready, {@link
@@ -10,6 +8,7 @@ import org.jspecify.annotations.Nullable;
 final class Http2FrameReader {
 
   private static final int FRAME_HEADER_SIZE = 9;
+  private static final byte[] EMPTY = new byte[0];
 
   private final byte[] headerBuf = new byte[FRAME_HEADER_SIZE];
   private int headerOffset;
@@ -19,7 +18,7 @@ final class Http2FrameReader {
   private int type;
   private int flags;
   private int streamId;
-  private byte @Nullable [] payload;
+  private byte[] payload = EMPTY;
   private int payloadOffset;
   private boolean complete;
   private boolean frameSizeError;
@@ -57,9 +56,9 @@ final class Http2FrameReader {
       if (length > maxPayloadSize) {
         // Frame exceeds maximum allowed size. Skip the payload bytes without allocating.
         frameSizeError = true;
-        payload = new byte[0];
+        payload = EMPTY;
       } else {
-        payload = length > 0 ? new byte[length] : new byte[0];
+        payload = length > 0 ? new byte[length] : EMPTY;
       }
       payloadOffset = 0;
     }
@@ -94,7 +93,7 @@ final class Http2FrameReader {
     type = 0;
     flags = 0;
     streamId = 0;
-    payload = null;
+    payload = EMPTY;
     frameSizeError = false;
     payloadOffset = 0;
     complete = false;
@@ -116,7 +115,7 @@ final class Http2FrameReader {
     return streamId;
   }
 
-  byte @Nullable [] getPayload() {
+  byte[] getPayload() {
     return payload;
   }
 
