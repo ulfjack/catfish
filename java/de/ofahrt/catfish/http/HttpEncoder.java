@@ -7,12 +7,12 @@ import java.util.Map;
 
 /**
  * Wire-format encoding helpers for HTTP messages: status line, headers, and shared constants. Used
- * by response generators (and intended for sharing with request generators on the client side).
+ * by response generators.
  */
-public final class HttpEncoder {
-  public static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
-  public static final String CRLF = "\r\n";
-  public static final byte[] CRLF_BYTES = CRLF.getBytes(StandardCharsets.UTF_8);
+final class HttpEncoder {
+  static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
+  private static final String CRLF = "\r\n";
+  static final byte[] CRLF_BYTES = CRLF.getBytes(StandardCharsets.UTF_8);
 
   private HttpEncoder() {}
 
@@ -20,7 +20,7 @@ public final class HttpEncoder {
    * Encodes the HTTP response head — status line, headers, and the terminating blank line — as a
    * single byte array. The body (if any) is emitted separately by the caller.
    */
-  public static byte[] responseHeadToByteArray(HttpResponse response) {
+  static byte[] responseHeadToByteArray(HttpResponse response) {
     StringBuilder buffer = new StringBuilder(200);
     buffer.append(response.getProtocolVersion());
     buffer.append(" ");
