@@ -95,9 +95,8 @@ final class HttpResponseGeneratorStreamed implements HttpResponseGenerator {
   private final Runnable dataAvailableCallback;
   private final AtomicBoolean outputStreamAcquired = new AtomicBoolean();
 
-  private byte @Nullable [][] data;
-  private int currentBlock;
-  private int currentIndex;
+  private byte @Nullable [] head;
+  private int headIndex;
 
   private byte[] buffer;
   private int readPosition;
@@ -192,18 +191,13 @@ final class HttpResponseGeneratorStreamed implements HttpResponseGenerator {
   }
 
   private ReadToken generateResponse(ByteBuffer outputBuffer) {
-    byte[][] responseData = Objects.requireNonNull(this.data, "data");
-    if (currentBlock >= responseData.length) {
+    byte[] headBytes = Objects.requireNonNull(this.head, "head");
+    if (headIndex >= headBytes.length) {
       return ReadToken.FINISHED;
     }
-    int bytesCopyCount =
-        Math.min(outputBuffer.remaining(), responseData[currentBlock].length - currentIndex);
-    outputBuffer.put(responseData[currentBlock], currentIndex, bytesCopyCount);
-    currentIndex += bytesCopyCount;
-    if (currentIndex >= responseData[currentBlock].length) {
-      currentBlock++;
-      currentIndex = 0;
-    }
+    int bytesCopyCount = Math.min(outputBuffer.remaining(), headBytes.length - headIndex);
+    outputBuffer.put(headBytes, headIndex, bytesCopyCount);
+    headIndex += bytesCopyCount;
     return ReadToken.CONTINUE;
   }
 
@@ -358,7 +352,7 @@ final class HttpResponseGeneratorStreamed implements HttpResponseGenerator {
   }
 
   private void finalizeResponse(boolean close) {
-    if (data != null) {
+    if (head != null) {
       throw new IllegalStateException();
     }
     if (!rawBody) {
@@ -374,11 +368,7 @@ final class HttpResponseGeneratorStreamed implements HttpResponseGenerator {
         useChunking = true;
       }
     }
-    HttpHeaders headers = response.getHeaders();
-    data =
-        new byte[][] {
-          HttpEncoder.statusLineToByteArray(response), HttpEncoder.headersToByteArray(headers),
-        };
+    head = HttpEncoder.responseHeadToByteArray(response);
   }
 
   private synchronized void internalClose() {

@@ -2,7 +2,6 @@ package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.http.HttpEncoder;
 import de.ofahrt.catfish.http.HttpResponseGenerator;
-import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
@@ -17,11 +16,7 @@ final class HttpResponseGeneratorBuffered implements HttpResponseGenerator {
       throw new IllegalArgumentException();
     }
     byte[] body = includeBody ? response.getBody() : HttpEncoder.EMPTY_BYTE_ARRAY;
-    HttpHeaders headers = response.getHeaders();
-    byte[][] data =
-        new byte[][] {
-          HttpEncoder.statusLineToByteArray(response), HttpEncoder.headersToByteArray(headers), body
-        };
+    byte[][] data = new byte[][] {HttpEncoder.responseHeadToByteArray(response), body};
     return new HttpResponseGeneratorBuffered(request, response, data);
   }
 
@@ -86,7 +81,7 @@ final class HttpResponseGeneratorBuffered implements HttpResponseGenerator {
 
   @Override
   public long getBodyBytesSent() {
-    return data.length > 2 ? data[2].length : 0;
+    return data.length > 1 ? data[1].length : 0;
   }
 
   @Override

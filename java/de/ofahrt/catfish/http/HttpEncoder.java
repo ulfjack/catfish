@@ -17,13 +17,26 @@ public final class HttpEncoder {
 
   private HttpEncoder() {}
 
-  public static byte[] statusLineToByteArray(HttpResponse response) {
+  /**
+   * Encodes the HTTP response head — status line, headers, and the terminating blank line — as a
+   * single byte array. The body (if any) is emitted separately by the caller.
+   */
+  public static byte[] responseHeadToByteArray(HttpResponse response) {
     StringBuilder buffer = new StringBuilder(200);
     buffer.append(response.getProtocolVersion());
     buffer.append(" ");
     buffer.append(response.getStatusCode());
     buffer.append(" ");
     buffer.append(response.getStatusMessage());
+    buffer.append(CRLF);
+    Iterator<Map.Entry<String, String>> it = response.getHeaders().iterator();
+    while (it.hasNext()) {
+      Map.Entry<String, String> entry = it.next();
+      buffer.append(entry.getKey());
+      buffer.append(": ");
+      buffer.append(entry.getValue());
+      buffer.append(CRLF);
+    }
     buffer.append(CRLF);
     return buffer.toString().getBytes(StandardCharsets.UTF_8);
   }
