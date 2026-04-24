@@ -47,7 +47,7 @@ public class Http2FrameReaderTest {
     reader.parse(frame, 0, frame.length);
     assertTrue(reader.isComplete());
     assertEquals(FrameType.SETTINGS, reader.getType());
-    assertTrue(reader.hasFlag(Http2FrameReader.FLAG_ACK));
+    assertTrue(reader.hasFlag(FrameFlags.FLAG_ACK));
     assertEquals(0, reader.getLength());
   }
 
@@ -64,7 +64,7 @@ public class Http2FrameReaderTest {
     reader.parse(frame, 0, frame.length);
     assertTrue(reader.isComplete());
     assertEquals(FrameType.PING, reader.getType());
-    assertFalse(reader.hasFlag(Http2FrameReader.FLAG_ACK));
+    assertFalse(reader.hasFlag(FrameFlags.FLAG_ACK));
     assertEquals(8, reader.getLength());
     assertArrayEquals(opaqueData, reader.getPayload());
   }
@@ -107,7 +107,7 @@ public class Http2FrameReaderTest {
     assertTrue(reader.isComplete());
     assertEquals(FrameType.DATA, reader.getType());
     assertEquals(1, reader.getStreamId());
-    assertTrue(reader.hasFlag(Http2FrameReader.FLAG_END_STREAM));
+    assertTrue(reader.hasFlag(FrameFlags.FLAG_END_STREAM));
     assertArrayEquals(data, reader.getPayload());
   }
 
@@ -129,7 +129,7 @@ public class Http2FrameReaderTest {
     assertTrue(reader.isComplete());
     assertEquals(FrameType.DATA, reader.getType());
     assertEquals(3, reader.getStreamId());
-    assertFalse(reader.hasFlag(Http2FrameReader.FLAG_END_STREAM));
+    assertFalse(reader.hasFlag(FrameFlags.FLAG_END_STREAM));
     assertArrayEquals(data, reader.getPayload());
   }
 
@@ -153,7 +153,7 @@ public class Http2FrameReaderTest {
     reader.parse(frame2, 0, frame2.length);
     assertTrue(reader.isComplete());
     assertEquals(FrameType.SETTINGS, reader.getType());
-    assertTrue(reader.hasFlag(Http2FrameReader.FLAG_ACK));
+    assertTrue(reader.hasFlag(FrameFlags.FLAG_ACK));
   }
 
   @Test

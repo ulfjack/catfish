@@ -8,12 +8,12 @@ package de.ofahrt.catfish.http2;
 final class Http2FrameReader {
 
   private static final int FRAME_HEADER_SIZE = 9;
+  private static final int MAX_PAYLOAD_SIZE = 16384; // SETTINGS_MAX_FRAME_SIZE default
   private static final byte[] EMPTY = new byte[0];
 
   private final byte[] headerBuf = new byte[FRAME_HEADER_SIZE];
   private int headerOffset;
 
-  private int maxPayloadSize = 16384; // SETTINGS_MAX_FRAME_SIZE default
   private int length;
   private int type;
   private int flags;
@@ -53,7 +53,7 @@ final class Http2FrameReader {
               | ((headerBuf[6] & 0xff) << 16)
               | ((headerBuf[7] & 0xff) << 8)
               | (headerBuf[8] & 0xff);
-      if (length > maxPayloadSize) {
+      if (length > MAX_PAYLOAD_SIZE) {
         // Frame exceeds maximum allowed size. Skip the payload bytes without allocating.
         frameSizeError = true;
         payload = EMPTY;
@@ -128,16 +128,4 @@ final class Http2FrameReader {
   boolean hasFrameSizeError() {
     return frameSizeError;
   }
-
-  /** Sets the maximum allowed payload size. Frames exceeding this are flagged as errors. */
-  void setMaxPayloadSize(int maxPayloadSize) {
-    this.maxPayloadSize = maxPayloadSize;
-  }
-
-  // Common frame flags.
-  static final int FLAG_END_STREAM = 0x1;
-  static final int FLAG_END_HEADERS = 0x4;
-  static final int FLAG_PADDED = 0x8;
-  static final int FLAG_PRIORITY = 0x20;
-  static final int FLAG_ACK = 0x1;
 }

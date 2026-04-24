@@ -45,7 +45,7 @@ public class Http2FrameWriterTest {
     assertEquals(9, frame.length);
     assertEquals(0, frame[2]); // length = 0
     assertEquals(FrameType.SETTINGS, frame[3]);
-    assertEquals(Http2FrameReader.FLAG_ACK, frame[4]);
+    assertEquals(FrameFlags.FLAG_ACK, frame[4]);
   }
 
   @Test
@@ -55,7 +55,7 @@ public class Http2FrameWriterTest {
     assertEquals(10, frame.length); // 9 header + 1 payload
     assertEquals(FrameType.HEADERS, frame[3]);
     int flags = frame[4] & 0xff;
-    assertEquals(Http2FrameReader.FLAG_END_HEADERS | Http2FrameReader.FLAG_END_STREAM, flags);
+    assertEquals(FrameFlags.FLAG_END_HEADERS | FrameFlags.FLAG_END_STREAM, flags);
     assertEquals(1, frame[8]); // stream ID = 1 (last byte)
     assertEquals((byte) 0x82, frame[9]); // payload
   }
@@ -65,7 +65,7 @@ public class Http2FrameWriterTest {
     byte[] headerBlock = {(byte) 0x82};
     byte[] frame = write(buf -> Http2FrameWriter.writeHeaders(buf, 3, headerBlock, false));
     int flags = frame[4] & 0xff;
-    assertEquals(Http2FrameReader.FLAG_END_HEADERS, flags);
+    assertEquals(FrameFlags.FLAG_END_HEADERS, flags);
     assertEquals(3, frame[8]); // stream ID = 3
   }
 
@@ -75,7 +75,7 @@ public class Http2FrameWriterTest {
     byte[] frame = write(buf -> Http2FrameWriter.writeData(buf, 5, data, 0, data.length, true));
     assertEquals(12, frame.length); // 9 + 3
     assertEquals(FrameType.DATA, frame[3]);
-    assertEquals(Http2FrameReader.FLAG_END_STREAM, frame[4]);
+    assertEquals(FrameFlags.FLAG_END_STREAM, frame[4]);
     assertEquals(5, frame[8]); // stream ID
     assertEquals(1, frame[9]);
     assertEquals(2, frame[10]);
@@ -122,7 +122,7 @@ public class Http2FrameWriterTest {
   public void writePing_withAck() {
     byte[] opaqueData = {8, 7, 6, 5, 4, 3, 2, 1};
     byte[] frame = write(buf -> Http2FrameWriter.writePing(buf, opaqueData, true));
-    assertEquals(Http2FrameReader.FLAG_ACK, frame[4]);
+    assertEquals(FrameFlags.FLAG_ACK, frame[4]);
   }
 
   @Test

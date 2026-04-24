@@ -167,7 +167,7 @@ public class Http2ServerStageTest {
     assertTrue(reader.isComplete());
     assertEquals(FrameType.SETTINGS, reader.getType());
     // Should not be an ACK (this is the server's own settings).
-    assertEquals(0, reader.getFlags() & Http2FrameReader.FLAG_ACK);
+    assertEquals(0, reader.getFlags() & FrameFlags.FLAG_ACK);
   }
 
   @Test
@@ -189,7 +189,7 @@ public class Http2ServerStageTest {
     reader.parse(output2, 0, output2.length);
     if (reader.isComplete()) {
       assertEquals(FrameType.SETTINGS, reader.getType());
-      assertTrue(reader.hasFlag(Http2FrameReader.FLAG_ACK));
+      assertTrue(reader.hasFlag(FrameFlags.FLAG_ACK));
     }
   }
 
@@ -251,7 +251,7 @@ public class Http2ServerStageTest {
     reader.parse(output, 0, output.length);
     assertTrue(reader.isComplete());
     assertEquals(FrameType.PING, reader.getType());
-    assertTrue(reader.hasFlag(Http2FrameReader.FLAG_ACK));
+    assertTrue(reader.hasFlag(FrameFlags.FLAG_ACK));
     assertArrayEquals(pingData, reader.getPayload());
   }
 
@@ -324,7 +324,7 @@ public class Http2ServerStageTest {
       't'
     };
     ByteBuffer h1 = ByteBuffer.allocate(9 + headerBlock1.length);
-    int flags1 = Http2FrameReader.FLAG_END_STREAM | Http2FrameReader.FLAG_END_HEADERS;
+    int flags1 = FrameFlags.FLAG_END_STREAM | FrameFlags.FLAG_END_HEADERS;
     h1.put((byte) 0);
     h1.put((byte) 0);
     h1.put((byte) headerBlock1.length);
@@ -382,7 +382,7 @@ public class Http2ServerStageTest {
     buf.put((byte) 0);
     buf.put((byte) headerBlock.length);
     buf.put((byte) FrameType.HEADERS);
-    buf.put((byte) Http2FrameReader.FLAG_END_STREAM); // no END_HEADERS
+    buf.put((byte) FrameFlags.FLAG_END_STREAM); // no END_HEADERS
     buf.putInt(1); // stream ID = 1
     buf.put(headerBlock);
     buf.flip();
@@ -720,7 +720,7 @@ public class Http2ServerStageTest {
           if (payload != null) {
             bodyBytes.write(payload, 0, payload.length);
           }
-          if (reader.hasFlag(Http2FrameReader.FLAG_END_STREAM)) {
+          if (reader.hasFlag(FrameFlags.FLAG_END_STREAM)) {
             sawEndStream = true;
           }
         }
@@ -901,7 +901,7 @@ public class Http2ServerStageTest {
     // HEADERS frame with a malformed HPACK block (truncated indexed header).
     byte[] badBlock = {(byte) 0xff}; // needs multi-byte continuation
     ByteBuffer buf = ByteBuffer.allocate(9 + badBlock.length);
-    int flags = Http2FrameReader.FLAG_END_STREAM | Http2FrameReader.FLAG_END_HEADERS;
+    int flags = FrameFlags.FLAG_END_STREAM | FrameFlags.FLAG_END_HEADERS;
     buf.put((byte) 0).put((byte) 0).put((byte) badBlock.length);
     buf.put((byte) FrameType.HEADERS);
     buf.put((byte) flags);
@@ -1096,9 +1096,9 @@ public class Http2ServerStageTest {
     payload[0] = (byte) padLength;
     System.arraycopy(headerBlock, 0, payload, 1, headerBlock.length);
     int flags =
-        Http2FrameReader.FLAG_END_STREAM
-            | Http2FrameReader.FLAG_END_HEADERS
-            | Http2FrameReader.FLAG_PADDED;
+        FrameFlags.FLAG_END_STREAM
+            | FrameFlags.FLAG_END_HEADERS
+            | FrameFlags.FLAG_PADDED;
     byte[] frame = buildRawFrame(FrameType.HEADERS, flags, 1, payload);
 
     feedAndRead(frame);
@@ -1139,13 +1139,13 @@ public class Http2ServerStageTest {
             new Header(":path", "/p"),
             new Header(":scheme", "https"),
             new Header(":authority", "localhost"));
-    int hdrFlags = Http2FrameReader.FLAG_END_HEADERS;
+    int hdrFlags = FrameFlags.FLAG_END_HEADERS;
     byte[] headersFrame = buildRawFrame(FrameType.HEADERS, hdrFlags, 1, headerBlock);
     feedAndRead(headersFrame);
 
     // Padded DATA with END_STREAM: pad length + "hi" + 3 bytes pad.
     byte[] body = {(byte) 3, 'h', 'i', 0, 0, 0};
-    int dataFlags = Http2FrameReader.FLAG_END_STREAM | Http2FrameReader.FLAG_PADDED;
+    int dataFlags = FrameFlags.FLAG_END_STREAM | FrameFlags.FLAG_PADDED;
     byte[] dataFrame = buildRawFrame(FrameType.DATA, dataFlags, 1, body);
     feedAndRead(dataFrame);
 
@@ -1309,7 +1309,7 @@ public class Http2ServerStageTest {
 
     // Send a PING with the ACK flag — should be silently ignored (no response).
     byte[] opaque = new byte[8];
-    byte[] pingAck = buildRawFrame(FrameType.PING, Http2FrameReader.FLAG_ACK, 0, opaque);
+    byte[] pingAck = buildRawFrame(FrameType.PING, FrameFlags.FLAG_ACK, 0, opaque);
     feedAndRead(pingAck);
     byte[] output = drainOutput();
     // No PING response.

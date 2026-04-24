@@ -317,7 +317,7 @@ public final class Http2ServerStage implements Stage {
       throw new IOException(
           "h2 PROTOCOL_ERROR: SETTINGS frame on stream " + frameReader.getStreamId());
     }
-    if (frameReader.hasFlag(Http2FrameReader.FLAG_ACK)) {
+    if (frameReader.hasFlag(FrameFlags.FLAG_ACK)) {
       return;
     }
     byte[] payload = frameReader.getPayload();
@@ -383,7 +383,7 @@ public final class Http2ServerStage implements Stage {
   // ---- HEADERS ----
 
   private void handleHeaders() throws IOException {
-    if (!frameReader.hasFlag(Http2FrameReader.FLAG_END_HEADERS)) {
+    if (!frameReader.hasFlag(FrameFlags.FLAG_END_HEADERS)) {
       // CONTINUATION frames are not supported. Per RFC 9113 §6.2, a HEADERS frame without
       // END_HEADERS must be followed by CONTINUATION frames. Reject with a connection error.
       throw new IOException("h2 HEADERS without END_HEADERS (CONTINUATION not supported)");
@@ -399,17 +399,17 @@ public final class Http2ServerStage implements Stage {
           "h2 PROTOCOL_ERROR: invalid stream ID " + streamId + " (last=" + lastStreamId + ")");
     }
     byte[] payload = frameReader.getPayload();
-    boolean endStream = frameReader.hasFlag(Http2FrameReader.FLAG_END_STREAM);
+    boolean endStream = frameReader.hasFlag(FrameFlags.FLAG_END_STREAM);
 
     // Strip padding and priority fields to find the HPACK header block.
     int hpackOffset = 0;
     int hpackLength = payload.length;
-    if (frameReader.hasFlag(Http2FrameReader.FLAG_PADDED)) {
+    if (frameReader.hasFlag(FrameFlags.FLAG_PADDED)) {
       int padLength = payload[0] & 0xff;
       hpackOffset += 1;
       hpackLength -= 1 + padLength;
     }
-    if (frameReader.hasFlag(Http2FrameReader.FLAG_PRIORITY)) {
+    if (frameReader.hasFlag(FrameFlags.FLAG_PRIORITY)) {
       hpackOffset += 5; // 4-byte stream dependency + 1-byte weight
       hpackLength -= 5;
     }
@@ -520,7 +520,7 @@ public final class Http2ServerStage implements Stage {
 
   private void handleData() {
     int streamId = frameReader.getStreamId();
-    boolean endStream = frameReader.hasFlag(Http2FrameReader.FLAG_END_STREAM);
+    boolean endStream = frameReader.hasFlag(FrameFlags.FLAG_END_STREAM);
     byte[] payload = frameReader.getPayload();
 
     Http2Stream stream = streams.get(streamId);
@@ -532,7 +532,7 @@ public final class Http2ServerStage implements Stage {
     if (payload.length > 0) {
       int dataOffset = 0;
       int dataLength = payload.length;
-      if (frameReader.hasFlag(Http2FrameReader.FLAG_PADDED)) {
+      if (frameReader.hasFlag(FrameFlags.FLAG_PADDED)) {
         int padLength = payload[0] & 0xff;
         dataOffset = 1;
         dataLength -= 1 + padLength;
@@ -580,7 +580,7 @@ public final class Http2ServerStage implements Stage {
     if (frameReader.getLength() != 8) {
       throw new IOException("h2 FRAME_SIZE_ERROR: PING payload length " + frameReader.getLength());
     }
-    if (frameReader.hasFlag(Http2FrameReader.FLAG_ACK)) {
+    if (frameReader.hasFlag(FrameFlags.FLAG_ACK)) {
       return;
     }
     byte[] payload = frameReader.getPayload();

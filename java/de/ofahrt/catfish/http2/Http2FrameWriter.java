@@ -27,7 +27,7 @@ final class Http2FrameWriter {
 
   /** Writes a SETTINGS ACK frame. */
   static void writeSettingsAck(ByteBuffer buf) {
-    writeFrameHeader(buf, 0, FrameType.SETTINGS, Http2FrameReader.FLAG_ACK, 0);
+    writeFrameHeader(buf, 0, FrameType.SETTINGS, FrameFlags.FLAG_ACK, 0);
   }
 
   /**
@@ -35,9 +35,9 @@ final class Http2FrameWriter {
    * CONTINUATION support).
    */
   static void writeHeaders(ByteBuffer buf, int streamId, byte[] headerBlock, boolean endStream) {
-    int flags = Http2FrameReader.FLAG_END_HEADERS;
+    int flags = FrameFlags.FLAG_END_HEADERS;
     if (endStream) {
-      flags |= Http2FrameReader.FLAG_END_STREAM;
+      flags |= FrameFlags.FLAG_END_STREAM;
     }
     writeFrameHeader(buf, headerBlock.length, FrameType.HEADERS, flags, streamId);
     buf.put(headerBlock);
@@ -46,7 +46,7 @@ final class Http2FrameWriter {
   /** Writes a DATA frame. */
   static void writeData(
       ByteBuffer buf, int streamId, byte[] data, int offset, int length, boolean endStream) {
-    int flags = endStream ? Http2FrameReader.FLAG_END_STREAM : 0;
+    int flags = endStream ? FrameFlags.FLAG_END_STREAM : 0;
     writeFrameHeader(buf, length, FrameType.DATA, flags, streamId);
     buf.put(data, offset, length);
   }
@@ -57,7 +57,7 @@ final class Http2FrameWriter {
    */
   static void writeDataFrameHeader(
       ByteBuffer buf, int streamId, int payloadLength, boolean endStream) {
-    int flags = endStream ? Http2FrameReader.FLAG_END_STREAM : 0;
+    int flags = endStream ? FrameFlags.FLAG_END_STREAM : 0;
     writeFrameHeader(buf, payloadLength, FrameType.DATA, flags, streamId);
   }
 
@@ -69,7 +69,7 @@ final class Http2FrameWriter {
 
   /** Writes a PING frame. opaqueData must be exactly 8 bytes. */
   static void writePing(ByteBuffer buf, byte[] opaqueData, boolean ack) {
-    int flags = ack ? Http2FrameReader.FLAG_ACK : 0;
+    int flags = ack ? FrameFlags.FLAG_ACK : 0;
     writeFrameHeader(buf, 8, FrameType.PING, flags, 0);
     buf.put(opaqueData, 0, 8);
   }
