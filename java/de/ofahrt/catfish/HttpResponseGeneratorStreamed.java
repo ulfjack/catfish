@@ -1,5 +1,6 @@
 package de.ofahrt.catfish;
 
+import de.ofahrt.catfish.http.HttpEncoder;
 import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
@@ -15,7 +16,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 
-final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
+final class HttpResponseGeneratorStreamed implements HttpResponseGenerator {
   private static final boolean DEBUG = false;
 
   private static final int DEFAULT_BUFFER_SIZE = 65536;
@@ -257,7 +258,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
       outputBuffer.put(buffer, readPosition, bytesToCopy);
     }
     if (useChunking) {
-      outputBuffer.put(CRLF_BYTES);
+      outputBuffer.put(HttpEncoder.CRLF_BYTES);
     }
     readPosition = (readPosition + bytesToCopy) % buffer.length;
     bodyBytesSent += bytesToCopy;
@@ -376,7 +377,7 @@ final class HttpResponseGeneratorStreamed extends HttpResponseGenerator {
     HttpHeaders headers = response.getHeaders();
     data =
         new byte[][] {
-          statusLineToByteArray(response), headersToByteArray(headers),
+          HttpEncoder.statusLineToByteArray(response), HttpEncoder.headersToByteArray(headers),
         };
   }
 

@@ -12,7 +12,7 @@ import org.jspecify.annotations.Nullable;
  * generator does not represent a final response, so {@link #getRequest()} and {@link
  * #getResponse()} both return null.
  */
-final class ContinueResponseGenerator extends HttpResponseGenerator {
+final class ContinueResponseGenerator implements HttpResponseGenerator {
 
   private static final byte[] CONTINUE_RESPONSE_BYTES =
       "HTTP/1.1 100 Continue\r\n\r\n".getBytes(StandardCharsets.UTF_8);

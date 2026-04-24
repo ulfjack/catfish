@@ -1,5 +1,6 @@
 package de.ofahrt.catfish;
 
+import de.ofahrt.catfish.http.HttpEncoder;
 import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -9,16 +10,18 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
-final class HttpResponseGeneratorBuffered extends HttpResponseGenerator {
+final class HttpResponseGeneratorBuffered implements HttpResponseGenerator {
   public static HttpResponseGeneratorBuffered create(
       @Nullable HttpRequest request, HttpResponse response, boolean includeBody) {
     if (response.getBody() == null) {
       throw new IllegalArgumentException();
     }
-    byte[] body = includeBody ? response.getBody() : EMPTY_BYTE_ARRAY;
+    byte[] body = includeBody ? response.getBody() : HttpEncoder.EMPTY_BYTE_ARRAY;
     HttpHeaders headers = response.getHeaders();
     byte[][] data =
-        new byte[][] {statusLineToByteArray(response), headersToByteArray(headers), body};
+        new byte[][] {
+          HttpEncoder.statusLineToByteArray(response), HttpEncoder.headersToByteArray(headers), body
+        };
     return new HttpResponseGeneratorBuffered(request, response, data);
   }
 
