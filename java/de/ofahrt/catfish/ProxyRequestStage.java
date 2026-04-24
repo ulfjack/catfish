@@ -2,6 +2,8 @@ package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.http.HttpRequestStage;
 import de.ofahrt.catfish.http.HttpResponseGenerator;
+import de.ofahrt.catfish.http.HttpResponseGeneratorBuffered;
+import de.ofahrt.catfish.http.HttpResponseGeneratorStreamed;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;

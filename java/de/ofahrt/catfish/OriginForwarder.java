@@ -32,7 +32,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * Runs on the executor thread. Connects to the origin server, forwards the request (headers + body
  * from the pipe), parses the origin response headers, and streams the response body back through an
- * {@link HttpResponseGeneratorStreamed} that the NIO thread drains.
+ * {@link de.ofahrt.catfish.http.HttpResponseGeneratorStreamed} that the NIO thread drains.
  *
  * <p>Used by {@link ProxyRequestStage} for both HTTPS MITM and HTTP forward proxy.
  */

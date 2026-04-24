@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.http;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;

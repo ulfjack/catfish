@@ -1,7 +1,5 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.http;
 
-import de.ofahrt.catfish.http.HttpEncoder;
-import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -16,7 +14,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 
-final class HttpResponseGeneratorStreamed implements HttpResponseGenerator {
+public final class HttpResponseGeneratorStreamed implements HttpResponseGenerator {
   private static final boolean DEBUG = false;
 
   private static final int DEFAULT_BUFFER_SIZE = 65536;

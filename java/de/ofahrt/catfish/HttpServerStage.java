@@ -1,8 +1,10 @@
 package de.ofahrt.catfish;
 
+import de.ofahrt.catfish.http.ContinueResponseGenerator;
 import de.ofahrt.catfish.http.HttpRequestStage;
 import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.http.HttpResponseGenerator.ContinuationToken;
+import de.ofahrt.catfish.http.HttpResponseGeneratorBuffered;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.HttpDate;
