@@ -3,6 +3,9 @@ package de.ofahrt.catfish.model;
 public final class StandardResponses {
   private StandardResponses() {}
 
+  // 100
+  public static final HttpResponse CONTINUE = new PreconstructedResponse(HttpStatusCode.CONTINUE);
+
   // 200
   public static final HttpResponse OK = new PreconstructedResponse(HttpStatusCode.OK);
   public static final HttpResponse NO_CONTENT =

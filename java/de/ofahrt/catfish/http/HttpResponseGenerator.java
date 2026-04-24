@@ -13,9 +13,11 @@ public interface HttpResponseGenerator {
     STOP;
   }
 
+  /** The request associated with this response, if known. May be null for pre-handler errors. */
   @Nullable HttpRequest getRequest();
 
-  @Nullable HttpResponse getResponse();
+  /** The response this generator is producing bytes for. Non-null. */
+  HttpResponse getResponse();
 
   ContinuationToken generate(ByteBuffer buffer);
 
@@ -25,4 +27,13 @@ public interface HttpResponseGenerator {
   long getBodyBytesSent();
 
   boolean keepAlive();
+
+  /**
+   * Returns true if this generator represents a final response (status ≥ 200) rather than an
+   * interim (1xx) response. Interim responses are followed by additional responses on the same
+   * connection; final responses complete the request-response cycle.
+   */
+  default boolean isFinal() {
+    return getResponse().getStatusCode() >= 200;
+  }
 }

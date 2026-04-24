@@ -1,6 +1,5 @@
 package de.ofahrt.catfish;
 
-import de.ofahrt.catfish.http.ContinueResponseGenerator;
 import de.ofahrt.catfish.http.HttpRequestStage;
 import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.http.HttpResponseGenerator.ContinuationToken;
@@ -251,7 +250,8 @@ final class HttpServerStage implements Stage {
     // Check for Expect: 100-continue.
     String expectValue = headers.getHeaders().get(HttpHeaderName.EXPECT);
     if ("100-continue".equalsIgnoreCase(expectValue)) {
-      currentResponseGenerator = new ContinueResponseGenerator();
+      currentResponseGenerator =
+          HttpResponseGeneratorBuffered.create(null, StandardResponses.CONTINUE);
       parent.encourageWrites();
       return ConnectionControl.PAUSE;
     }
@@ -514,8 +514,8 @@ final class HttpServerStage implements Stage {
       case PAUSE -> ConnectionControl.PAUSE;
       case STOP -> {
         currentResponseGenerator = null;
-        if (gen instanceof ContinueResponseGenerator) {
-          parent.log("Sent 100 Continue, resuming body read");
+        if (!gen.isFinal()) {
+          parent.log("Sent interim response, resuming body read");
           yield readAndResume();
         }
         notifyRequestComplete(gen.getRequest(), gen.getResponse(), gen.getBodyBytesSent());
