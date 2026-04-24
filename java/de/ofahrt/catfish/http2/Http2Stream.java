@@ -3,6 +3,7 @@ package de.ofahrt.catfish.http2;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.server.RequestAction;
 import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
@@ -31,6 +32,18 @@ final class Http2Stream {
     WAITING
   }
 
+  /**
+   * Response data handed off from the executor thread to the NIO thread. For buffered responses,
+   * {@code body} is non-null and {@code streamingBuffer} is null. For streaming responses, {@code
+   * streamingBuffer} is non-null and {@code body} is null; {@code endStream} is unused because the
+   * streaming buffer carries its own end-of-stream signal.
+   */
+  record ResponseHandoff(
+      byte[] headerBlock,
+      byte @Nullable [] body,
+      boolean endStream,
+      @Nullable Http2StreamBuffer streamingBuffer) {}
+
   private final int streamId;
   private State state;
 
@@ -42,15 +55,9 @@ final class Http2Stream {
   // Request body accumulator (DATA frames from client).
   private final ByteArrayOutputStream bodyBuffer = new ByteArrayOutputStream();
 
-  // Response data, set by the response writer on the executor thread.
-  // The NIO write loop reads these fields after the volatile responseReady flag is set.
-  private volatile boolean responseReady;
-  private byte @Nullable [] responseHeaderBlock;
-  // Buffered mode only:
-  private byte @Nullable [] responseBody;
-  private boolean responseEndStream;
-  // Streaming mode:
-  private @Nullable Http2StreamBuffer streamingBuffer;
+  // Response data, published by the response writer on the executor thread via a single volatile
+  // write and read by the NIO write loop via a single volatile read. Null until publication.
+  private volatile @Nullable ResponseHandoff handoff;
 
   // Response write progress (accessed only on NIO thread).
   private int bodyOffset;
@@ -77,13 +84,18 @@ final class Http2Stream {
     return state;
   }
 
+  /** NIO thread only. */
   void setState(State state) {
     this.state = state;
   }
 
   // ---- Flow control ----
 
-  /** Returns true if the adjustment succeeded, false if it would overflow. */
+  /**
+   * Returns true if the adjustment succeeded, false if it would overflow.
+   *
+   * <p>NIO thread only.
+   */
   boolean adjustSendWindow(int delta) {
     long newWindow = (long) sendWindow + delta;
     if (newWindow > Integer.MAX_VALUE) {
@@ -97,14 +109,17 @@ final class Http2Stream {
     return lastDataBytesSent;
   }
 
+  /** NIO thread only. */
   void addPendingAckBytes(int n) {
     pendingAckBytes += n;
   }
 
+  /** NIO thread only. */
   int getPendingAckBytes() {
     return pendingAckBytes;
   }
 
+  /** NIO thread only. */
   int takePendingAckBytes() {
     int n = pendingAckBytes;
     pendingAckBytes = 0;
@@ -113,55 +128,62 @@ final class Http2Stream {
 
   // ---- Request builder (for requests with body) ----
 
+  /** NIO thread only. */
   void setRequestBuilder(SimpleHttpRequest.Builder builder) {
     this.requestBuilder = builder;
   }
 
+  /** NIO thread only. */
   SimpleHttpRequest.@Nullable Builder getRequestBuilder() {
     return requestBuilder;
   }
 
+  /** NIO thread only. */
   void setRoutingResult(RequestAction.ServeLocally result) {
     this.routingResult = result;
   }
 
+  /** NIO thread only. */
   RequestAction.@Nullable ServeLocally getRoutingResult() {
     return routingResult;
   }
 
   // ---- Request body ----
 
+  /** NIO thread only. */
   void appendBodyData(byte[] data, int offset, int length) {
     bodyBuffer.write(data, offset, length);
   }
 
+  /** NIO thread only. */
   byte[] getBodyBytes() {
     return bodyBuffer.toByteArray();
   }
 
   // ---- Response ----
 
-  /** Set a buffered response (full body known upfront). */
+  /** Set a buffered response (full body known upfront). Called from the executor thread. */
   void setResponse(byte[] headerBlock, byte[] body, boolean endStream) {
-    this.responseHeaderBlock = headerBlock;
-    this.responseBody = body;
-    this.responseEndStream = endStream;
-    this.responseReady = true; // volatile write, publishes the above fields
+    // Single volatile write publishes all response fields atomically.
+    this.handoff = new ResponseHandoff(headerBlock, body, endStream, null);
   }
 
-  /** Set a streaming response (body written incrementally via the buffer). */
+  /**
+   * Set a streaming response (body written incrementally via the buffer). Called from the executor
+   * thread.
+   */
   void setStreamingResponse(byte[] headerBlock, Http2StreamBuffer buffer) {
-    this.responseHeaderBlock = headerBlock;
-    this.streamingBuffer = buffer;
-    this.responseReady = true; // volatile write, publishes the above fields
+    // Single volatile write publishes all response fields atomically.
+    this.handoff = new ResponseHandoff(headerBlock, null, false, buffer);
   }
 
   boolean isResponseReady() {
-    return responseReady;
+    return handoff != null;
   }
 
   @Nullable Http2StreamBuffer getStreamingBuffer() {
-    return streamingBuffer;
+    ResponseHandoff h = handoff;
+    return h == null ? null : h.streamingBuffer();
   }
 
   /**
@@ -174,16 +196,17 @@ final class Http2Stream {
       java.nio.ByteBuffer out, int maxFrameSize, int connectionSendWindow) {
     lastDataBytesSent = 0;
 
+    // Snapshot the volatile handoff once; all response fields are read off this snapshot.
+    ResponseHandoff h = Objects.requireNonNull(handoff, "handoff");
+
     if (!headersSent) {
       if (out.remaining() < 9 + 1) {
         return WriteResult.BLOCKED;
       }
-      byte[] hdr = Objects.requireNonNull(responseHeaderBlock, "responseHeaderBlock");
+      byte[] body = h.body();
       boolean noBody =
-          streamingBuffer == null
-              && (responseBody == null || responseBody.length == 0)
-              && responseEndStream;
-      Http2FrameWriter.writeHeaders(out, streamId, hdr, noBody);
+          h.streamingBuffer() == null && (body == null || body.length == 0) && h.endStream();
+      Http2FrameWriter.writeHeaders(out, streamId, h.headerBlock(), noBody);
       headersSent = true;
       if (noBody) {
         state = State.CLOSED;
@@ -191,16 +214,16 @@ final class Http2Stream {
       }
     }
 
-    if (streamingBuffer != null) {
-      return writeStreamingData(out, maxFrameSize, connectionSendWindow);
+    if (h.streamingBuffer() != null) {
+      return writeStreamingData(out, maxFrameSize, connectionSendWindow, h.streamingBuffer());
     } else {
-      return writeBufferedData(out, maxFrameSize, connectionSendWindow);
+      return writeBufferedData(out, maxFrameSize, connectionSendWindow, h);
     }
   }
 
   private WriteResult writeBufferedData(
-      java.nio.ByteBuffer out, int maxFrameSize, int connectionSendWindow) {
-    byte[] body = responseBody;
+      ByteBuffer out, int maxFrameSize, int connectionSendWindow, ResponseHandoff h) {
+    byte[] body = h.body();
     if (body == null || body.length == 0) {
       state = State.CLOSED;
       return WriteResult.DONE;
@@ -217,7 +240,7 @@ final class Http2Stream {
         return WriteResult.BLOCKED;
       }
       boolean last = (bodyOffset + chunkSize >= body.length);
-      boolean endStream = last && responseEndStream;
+      boolean endStream = last && h.endStream();
       Http2FrameWriter.writeData(out, streamId, body, bodyOffset, chunkSize, endStream);
       bodyOffset += chunkSize;
       sendWindow -= chunkSize;
@@ -233,9 +256,7 @@ final class Http2Stream {
   }
 
   private WriteResult writeStreamingData(
-      java.nio.ByteBuffer out, int maxFrameSize, int connectionSendWindow) {
-    Http2StreamBuffer buf = Objects.requireNonNull(streamingBuffer, "streamingBuffer");
-
+      ByteBuffer out, int maxFrameSize, int connectionSendWindow, Http2StreamBuffer buf) {
     while (true) {
       int avail = buf.available();
       if (avail == 0) {
