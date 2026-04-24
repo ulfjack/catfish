@@ -42,7 +42,7 @@ public class HttpResponseGeneratorBufferedTest {
     HttpResponse response =
         StandardResponses.OK.withVersion(HttpVersion.HTTP_0_9).withBody(new byte[0]);
     HttpResponseGeneratorBuffered generator =
-        HttpResponseGeneratorBuffered.create(null, response, true);
+        HttpResponseGeneratorBuffered.create(null, response);
     assertEquals("HTTP/0.9 200 OK\r\n\r\n", toString(generator));
   }
 
@@ -51,7 +51,7 @@ public class HttpResponseGeneratorBufferedTest {
     HttpResponse response =
         StandardResponses.OK.withVersion(HttpVersion.HTTP_1_0).withBody(new byte[] {'x', 'y'});
     HttpResponseGeneratorBuffered generator =
-        HttpResponseGeneratorBuffered.create(null, response, true);
+        HttpResponseGeneratorBuffered.create(null, response);
     assertEquals("HTTP/1.0 200 OK\r\n\r\nxy", toString(generator));
   }
 
@@ -60,7 +60,7 @@ public class HttpResponseGeneratorBufferedTest {
     HttpResponse response =
         StandardResponses.OK.withVersion(HttpVersion.HTTP_1_1).withBody(new byte[] {'x', 'y'});
     HttpResponseGeneratorBuffered generator =
-        HttpResponseGeneratorBuffered.create(null, response, false);
+        HttpResponseGeneratorBuffered.createForHead(null, response);
     assertEquals("HTTP/1.1 200 OK\r\n\r\n", toString(generator));
   }
 
@@ -72,7 +72,7 @@ public class HttpResponseGeneratorBufferedTest {
             .withVersion(HttpVersion.HTTP_1_1)
             .withBody("hello".getBytes(StandardCharsets.UTF_8));
     HttpResponseGeneratorBuffered generator =
-        HttpResponseGeneratorBuffered.create(null, response, true);
+        HttpResponseGeneratorBuffered.create(null, response);
     byte[] bytes = readFully(generator);
     for (int i = 0; i < bytes.length; i++) {
       if (bytes[i] == '\r') {

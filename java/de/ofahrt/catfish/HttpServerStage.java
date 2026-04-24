@@ -639,7 +639,7 @@ final class HttpServerStage implements Stage {
                 Integer.toString(body.length),
                 HttpHeaderName.DATE,
                 HttpDate.formatDate(Instant.now())));
-    startResponse(HttpResponseGeneratorBuffered.createWithBody(request, response));
+    startResponse(HttpResponseGeneratorBuffered.create(request, response));
   }
 
   private void notifyRequestComplete(

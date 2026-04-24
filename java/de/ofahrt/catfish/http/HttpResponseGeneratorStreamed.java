@@ -22,14 +22,34 @@ public final class HttpResponseGeneratorStreamed implements HttpResponseGenerato
   private static final byte[] LAST_CHUNK = "0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
   public static HttpResponseGeneratorStreamed create(
-      Runnable dataAvailableCallback,
-      @Nullable HttpRequest request,
-      HttpResponse response,
-      boolean includeBody) {
-    return create(dataAvailableCallback, request, response, includeBody, DEFAULT_BUFFER_SIZE);
+      Runnable dataAvailableCallback, @Nullable HttpRequest request, HttpResponse response) {
+    return create(
+        dataAvailableCallback, request, response, /* includeBody= */ true, DEFAULT_BUFFER_SIZE);
   }
 
   public static HttpResponseGeneratorStreamed create(
+      Runnable dataAvailableCallback,
+      @Nullable HttpRequest request,
+      HttpResponse response,
+      int bufferSize) {
+    return create(dataAvailableCallback, request, response, /* includeBody= */ true, bufferSize);
+  }
+
+  public static HttpResponseGeneratorStreamed createForHead(
+      Runnable dataAvailableCallback, @Nullable HttpRequest request, HttpResponse response) {
+    return create(
+        dataAvailableCallback, request, response, /* includeBody= */ false, DEFAULT_BUFFER_SIZE);
+  }
+
+  public static HttpResponseGeneratorStreamed createForHead(
+      Runnable dataAvailableCallback,
+      @Nullable HttpRequest request,
+      HttpResponse response,
+      int bufferSize) {
+    return create(dataAvailableCallback, request, response, /* includeBody= */ false, bufferSize);
+  }
+
+  private static HttpResponseGeneratorStreamed create(
       Runnable dataAvailableCallback,
       @Nullable HttpRequest request,
       HttpResponse response,

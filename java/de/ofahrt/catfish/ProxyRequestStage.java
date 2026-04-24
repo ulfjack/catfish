@@ -96,7 +96,7 @@ final class ProxyRequestStage implements HttpRequestStage {
 
               @Override
               public void commitBuffered(HttpResponse response, boolean ka) {
-                install(HttpResponseGeneratorBuffered.createWithBody(forwardRequest, response));
+                install(HttpResponseGeneratorBuffered.create(forwardRequest, response));
               }
 
               @Override
@@ -114,7 +114,7 @@ final class ProxyRequestStage implements HttpRequestStage {
                           .withoutHeader(HttpHeaderName.TRANSFER_ENCODING);
                   gen =
                       HttpResponseGeneratorStreamed.create(
-                          this::encourageWrites, forwardRequest, stripped, true);
+                          this::encourageWrites, forwardRequest, stripped);
                 }
                 install(gen);
                 return gen.getOutputStream();

@@ -256,7 +256,9 @@ final class LocalHttpRequestStage implements HttpRequestStage {
           responseToWrite.withHeaderOverrides(HttpHeaders.of(overrides)).withBody(body);
       boolean headRequest = HttpMethodName.HEAD.equals(request.getMethod());
       HttpResponseGeneratorBuffered gen =
-          HttpResponseGeneratorBuffered.create(request, responseToWrite, !headRequest);
+          headRequest
+              ? HttpResponseGeneratorBuffered.createForHead(request, responseToWrite)
+              : HttpResponseGeneratorBuffered.create(request, responseToWrite);
       parent.queue(() -> installResponse(gen));
     }
 
@@ -290,8 +292,11 @@ final class LocalHttpRequestStage implements HttpRequestStage {
       responseToWrite = responseToWrite.withHeaderOverrides(HttpHeaders.of(overrides));
       boolean headRequest = HttpMethodName.HEAD.equals(request.getMethod());
       HttpResponseGeneratorStreamed gen =
-          HttpResponseGeneratorStreamed.create(
-              parent::encourageWrites, request, responseToWrite, !headRequest);
+          headRequest
+              ? HttpResponseGeneratorStreamed.createForHead(
+                  parent::encourageWrites, request, responseToWrite)
+              : HttpResponseGeneratorStreamed.create(
+                  parent::encourageWrites, request, responseToWrite);
       streamedGenerator = gen;
       parent.queue(() -> installResponse(gen));
       serverListener.onResponseStreamed(requestId, null, 0, request, responseToWrite);
@@ -319,7 +324,9 @@ final class LocalHttpRequestStage implements HttpRequestStage {
                 .withBody(body);
         boolean headRequest = HttpMethodName.HEAD.equals(request.getMethod());
         HttpResponseGeneratorBuffered gen =
-            HttpResponseGeneratorBuffered.create(request, finalResponse, !headRequest);
+            headRequest
+                ? HttpResponseGeneratorBuffered.createForHead(request, finalResponse)
+                : HttpResponseGeneratorBuffered.create(request, finalResponse);
         parent.queue(() -> installResponse(gen));
       } else {
         // Already committed. If a stream is in flight, force-close it so the connection

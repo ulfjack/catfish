@@ -69,8 +69,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void smoke() throws Exception {
     AtomicInteger called = new AtomicInteger();
     HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(
-            called::incrementAndGet, null, StandardResponses.OK, true);
+        HttpResponseGeneratorStreamed.create(called::incrementAndGet, null, StandardResponses.OK);
     OutputStream out = gen.getOutputStream();
     out.write(new byte[] {'x', 'y'});
     out.close();
@@ -83,7 +82,7 @@ public class HttpResponseGeneratorStreamedTest {
   @Test
   public void singleByteWrite() throws Exception {
     HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(() -> {}, null, StandardResponses.OK, true);
+        HttpResponseGeneratorStreamed.create(() -> {}, null, StandardResponses.OK);
     OutputStream out = gen.getOutputStream();
     out.write('z');
     out.close();
@@ -95,8 +94,8 @@ public class HttpResponseGeneratorStreamedTest {
   public void noBody() throws Exception {
     AtomicInteger called = new AtomicInteger();
     HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(
-            called::incrementAndGet, null, StandardResponses.OK, /* includeBody= */ false);
+        HttpResponseGeneratorStreamed.createForHead(
+            called::incrementAndGet, null, StandardResponses.OK);
     OutputStream out = gen.getOutputStream();
     out.write(new byte[] {'x', 'y'});
     out.close();
@@ -110,8 +109,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void callbackOnFlush() throws Exception {
     AtomicInteger called = new AtomicInteger();
     HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(
-            called::incrementAndGet, null, StandardResponses.OK, true);
+        HttpResponseGeneratorStreamed.create(called::incrementAndGet, null, StandardResponses.OK);
 
     @SuppressWarnings("resource")
     OutputStream out = gen.getOutputStream();
@@ -127,8 +125,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void secondCallbackOnSecondFlush() throws Exception {
     AtomicInteger called = new AtomicInteger();
     HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(
-            called::incrementAndGet, null, StandardResponses.OK, true);
+        HttpResponseGeneratorStreamed.create(called::incrementAndGet, null, StandardResponses.OK);
 
     OutputStream out = gen.getOutputStream();
     out.write(new byte[] {'x', 'y'});
@@ -149,7 +146,7 @@ public class HttpResponseGeneratorStreamedTest {
     Semaphore called = new Semaphore(0);
     Phaser done = new Phaser(2);
     HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, true, 2);
+        HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, 2);
     Thread t =
         new Thread(
             new Runnable() {
@@ -177,7 +174,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void chunked() throws Exception {
     Semaphore called = new Semaphore(0);
     HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, true, 2);
+        HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, 2);
     Thread t =
         new Thread(
             new Runnable() {
@@ -202,7 +199,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void chunkedExactly16Bytes() throws Exception {
     Semaphore called = new Semaphore(0);
     HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, true, 16);
+        HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, 16);
     Thread t =
         new Thread(
             new Runnable() {
@@ -238,7 +235,7 @@ public class HttpResponseGeneratorStreamedTest {
     Semaphore called = new Semaphore(0);
     Semaphore released = new Semaphore(0);
     HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, true, 4);
+        HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, 4);
     Thread t =
         new Thread(
             new Runnable() {
@@ -363,7 +360,7 @@ public class HttpResponseGeneratorStreamedTest {
     Semaphore called = new Semaphore(0);
     HttpResponseGeneratorStreamed gen =
         HttpResponseGeneratorStreamed.create(
-            called::release, null, StandardResponses.OK, true, bufferSize);
+            called::release, null, StandardResponses.OK, bufferSize);
     Thread t =
         new Thread(
             () -> {
@@ -496,13 +493,13 @@ public class HttpResponseGeneratorStreamedTest {
 
   @Test(expected = IllegalArgumentException.class)
   public void nonPositiveBufferSize_throws() {
-    HttpResponseGeneratorStreamed.create(() -> {}, null, StandardResponses.OK, true, 0);
+    HttpResponseGeneratorStreamed.create(() -> {}, null, StandardResponses.OK, 0);
   }
 
   @Test(expected = IllegalStateException.class)
   public void generateWithEmptyBuffer_throws() {
     HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(() -> {}, null, StandardResponses.OK, true);
+        HttpResponseGeneratorStreamed.create(() -> {}, null, StandardResponses.OK);
     gen.generate(ByteBuffer.allocate(0));
   }
 
@@ -510,8 +507,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void generateAfterClosed_returnsStop() throws Exception {
     AtomicInteger called = new AtomicInteger();
     HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(
-            called::incrementAndGet, null, StandardResponses.OK, true);
+        HttpResponseGeneratorStreamed.create(called::incrementAndGet, null, StandardResponses.OK);
     gen.getOutputStream().close();
     readUntilStop(gen);
     // After fully reading, a subsequent generate call returns STOP immediately.
@@ -522,7 +518,7 @@ public class HttpResponseGeneratorStreamedTest {
   @Test(expected = IllegalStateException.class)
   public void writeAfterOutputStreamClosed_throws() throws Exception {
     HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(() -> {}, null, StandardResponses.OK, true);
+        HttpResponseGeneratorStreamed.create(() -> {}, null, StandardResponses.OK);
     OutputStream out = gen.getOutputStream();
     out.close();
     out.write(new byte[] {'x'});
@@ -532,7 +528,7 @@ public class HttpResponseGeneratorStreamedTest {
   public void closeNotifiesWriter() throws Exception {
     Semaphore called = new Semaphore(0);
     HttpResponseGeneratorStreamed gen =
-        HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, true, 4);
+        HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, 4);
     Thread t =
         new Thread(
             new Runnable() {

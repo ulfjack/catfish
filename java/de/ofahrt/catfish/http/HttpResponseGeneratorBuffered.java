@@ -9,6 +9,16 @@ import org.jspecify.annotations.Nullable;
 
 public final class HttpResponseGeneratorBuffered implements HttpResponseGenerator {
   public static HttpResponseGeneratorBuffered create(
+      @Nullable HttpRequest request, HttpResponse response) {
+    return create(request, response, /* includeBody= */ true);
+  }
+
+  public static HttpResponseGeneratorBuffered createForHead(
+      @Nullable HttpRequest request, HttpResponse response) {
+    return create(request, response, /* includeBody= */ false);
+  }
+
+  private static HttpResponseGeneratorBuffered create(
       @Nullable HttpRequest request, HttpResponse response, boolean includeBody) {
     if (response.getBody() == null) {
       throw new IllegalArgumentException();
@@ -16,11 +26,6 @@ public final class HttpResponseGeneratorBuffered implements HttpResponseGenerato
     byte[] body = includeBody ? response.getBody() : HttpEncoder.EMPTY_BYTE_ARRAY;
     byte[][] data = new byte[][] {HttpEncoder.responseHeadToByteArray(response), body};
     return new HttpResponseGeneratorBuffered(request, response, data);
-  }
-
-  public static HttpResponseGeneratorBuffered createWithBody(
-      @Nullable HttpRequest request, HttpResponse response) {
-    return create(request, response, true);
   }
 
   private final @Nullable HttpRequest request;
