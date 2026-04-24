@@ -1095,10 +1095,7 @@ public class Http2ServerStageTest {
     byte[] payload = new byte[1 + headerBlock.length + padLength];
     payload[0] = (byte) padLength;
     System.arraycopy(headerBlock, 0, payload, 1, headerBlock.length);
-    int flags =
-        FrameFlags.FLAG_END_STREAM
-            | FrameFlags.FLAG_END_HEADERS
-            | FrameFlags.FLAG_PADDED;
+    int flags = FrameFlags.FLAG_END_STREAM | FrameFlags.FLAG_END_HEADERS | FrameFlags.FLAG_PADDED;
     byte[] frame = buildRawFrame(FrameType.HEADERS, flags, 1, payload);
 
     feedAndRead(frame);
