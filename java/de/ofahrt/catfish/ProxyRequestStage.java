@@ -144,7 +144,7 @@ final class ProxyRequestStage implements HttpRequestStage {
     bodyPipe.abort();
     HttpResponseGenerator gen = responseGen;
     if (gen != null) {
-      gen.close();
+      gen.abort();
     }
   }
 }

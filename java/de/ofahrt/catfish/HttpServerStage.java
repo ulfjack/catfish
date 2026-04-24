@@ -559,7 +559,7 @@ final class HttpServerStage implements Stage {
       currentHandler = null;
     }
     if (currentResponseGenerator != null) {
-      currentResponseGenerator.close();
+      currentResponseGenerator.abort();
       currentResponseGenerator = null;
     }
   }

@@ -23,6 +23,14 @@ public interface HttpResponseGenerator {
 
   void close();
 
+  /**
+   * Abandons an in-progress response. Any buffered body data is discarded and the generator
+   * transitions directly to a terminal state; {@link #generate} will return {@code STOP} and no
+   * further bytes (headers or body) are produced. Intended for connection teardown paths where
+   * the response cannot be completed gracefully.
+   */
+  void abort();
+
   /** Returns the number of response body bytes generated (excluding headers and framing). */
   long getBodyBytesSent();
 

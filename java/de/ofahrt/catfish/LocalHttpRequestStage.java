@@ -333,7 +333,7 @@ final class LocalHttpRequestStage implements HttpRequestStage {
         // tears down cleanly. Buffered responses are already fully queued, nothing to do.
         HttpResponseGeneratorStreamed gen = streamedGenerator;
         if (gen != null) {
-          gen.close();
+          gen.abort();
         }
       }
     }

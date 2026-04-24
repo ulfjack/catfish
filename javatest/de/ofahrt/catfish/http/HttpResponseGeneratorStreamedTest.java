@@ -525,7 +525,7 @@ public class HttpResponseGeneratorStreamedTest {
   }
 
   @Test
-  public void closeNotifiesWriter() throws Exception {
+  public void abortNotifiesWriter() throws Exception {
     Semaphore called = new Semaphore(0);
     HttpResponseGeneratorStreamed gen =
         HttpResponseGeneratorStreamed.create(called::release, null, StandardResponses.OK, 4);
@@ -546,7 +546,7 @@ public class HttpResponseGeneratorStreamedTest {
             });
     t.start();
     called.acquire();
-    gen.close();
+    gen.abort();
     t.join(100);
     assertFalse(t.isAlive());
   }

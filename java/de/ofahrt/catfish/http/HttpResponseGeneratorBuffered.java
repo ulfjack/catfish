@@ -83,6 +83,9 @@ public final class HttpResponseGeneratorBuffered implements HttpResponseGenerato
   public void close() {}
 
   @Override
+  public void abort() {}
+
+  @Override
   public long getBodyBytesSent() {
     return data.length > 1 ? data[1].length : 0;
   }
