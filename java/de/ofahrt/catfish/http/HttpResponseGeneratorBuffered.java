@@ -80,9 +80,6 @@ public final class HttpResponseGeneratorBuffered implements HttpResponseGenerato
   }
 
   @Override
-  public void close() {}
-
-  @Override
   public void abort() {}
 
   @Override

@@ -21,8 +21,6 @@ public interface HttpResponseGenerator {
 
   ContinuationToken generate(ByteBuffer buffer);
 
-  void close();
-
   /**
    * Abandons an in-progress response. Any buffered body data is discarded and the generator
    * transitions directly to a terminal state; {@link #generate} will return {@code STOP} and no

@@ -397,9 +397,6 @@ public final class HttpResponseGeneratorStreamed implements HttpResponseGenerato
   }
 
   @Override
-  public void close() {}
-
-  @Override
   public synchronized void abort() {
     writeState = WriteState.CLOSED;
     readState = ReadState.CLOSED;
