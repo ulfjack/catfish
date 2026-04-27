@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.http;
 
 /**
  * Scans a chunked transfer-encoded byte stream to find where the body ends, without decoding. Used
@@ -9,7 +9,7 @@ package de.ofahrt.catfish;
  * actually consume bytes and update state. After {@link #advance}, {@link #isDone} reports whether
  * the terminal chunk has been reached.
  */
-final class ChunkedBodyScanner {
+public final class ChunkedBodyScanner {
 
   private enum State {
     SIZE,
@@ -37,12 +37,12 @@ final class ChunkedBodyScanner {
   private boolean error;
 
   /** Returns true once the terminal zero-length chunk and trailers have been fully scanned. */
-  boolean isDone() {
+  public boolean isDone() {
     return done;
   }
 
   /** Returns true if a parse error was detected (e.g., chunk size overflow). */
-  boolean hasError() {
+  public boolean hasError() {
     return error;
   }
 
@@ -50,7 +50,7 @@ final class ChunkedBodyScanner {
    * Dry-run scan: saves state, scans {@code len} bytes, restores state, and returns the end
    * position (number of bytes consumed to reach end) or -1 if the end was not found.
    */
-  int findEnd(byte[] arr, int off, int len) {
+  public int findEnd(byte[] arr, int off, int len) {
     State savedState = state;
     long savedChunkSize = currentChunkSize;
     int savedChunkSizeDigits = chunkSizeDigits;
@@ -76,7 +76,7 @@ final class ChunkedBodyScanner {
    * sets {@link #isDone()} to true and returns the number of bytes consumed. Otherwise returns
    * {@code len}.
    */
-  int advance(byte[] arr, int off, int len) {
+  public int advance(byte[] arr, int off, int len) {
     if (error) {
       return 0;
     }
@@ -181,7 +181,7 @@ final class ChunkedBodyScanner {
   }
 
   /** Resets the scanner for reuse on the next request. */
-  void reset() {
+  public void reset() {
     state = State.SIZE;
     currentChunkSize = 0;
     chunkSizeDigits = 0;

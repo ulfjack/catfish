@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
 import de.ofahrt.catfish.bridge.SessionManager;
+import de.ofahrt.catfish.http.IncrementalHttpRequestParser;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;

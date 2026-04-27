@@ -6,7 +6,11 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
 @SuiteClasses({
+  ChunkedBodyScannerTest.class,
+  ChunkedDecodingOutputStreamTest.class,
   HttpResponseGeneratorBufferedTest.class,
   HttpResponseGeneratorStreamedTest.class,
+  IncrementalHttpParserIncrementalTest.class,
+  IncrementalHttpParserTest.class,
 })
 public class HttpTestSuite {}

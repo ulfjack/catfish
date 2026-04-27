@@ -1,5 +1,6 @@
 package de.ofahrt.catfish;
 
+import de.ofahrt.catfish.http.IncrementalHttpRequestParser;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;

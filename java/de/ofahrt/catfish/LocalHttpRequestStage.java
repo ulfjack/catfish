@@ -1,6 +1,7 @@
 package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.HttpServerStage.RequestQueue;
+import de.ofahrt.catfish.http.ChunkedDecodingOutputStream;
 import de.ofahrt.catfish.http.HttpRequestStage;
 import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.http.HttpResponseGeneratorBuffered;

@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.http;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -8,7 +8,7 @@ import java.io.OutputStream;
  * decoded body bytes to the wrapped stream. Used to capture decoded response bodies when the origin
  * sends chunked encoding.
  */
-final class ChunkedDecodingOutputStream extends OutputStream {
+public final class ChunkedDecodingOutputStream extends OutputStream {
 
   private enum State {
     SIZE,
@@ -28,7 +28,7 @@ final class ChunkedDecodingOutputStream extends OutputStream {
   private State state = State.SIZE;
   private long chunkRemaining;
 
-  ChunkedDecodingOutputStream(OutputStream delegate) {
+  public ChunkedDecodingOutputStream(OutputStream delegate) {
     this.delegate = delegate;
   }
 

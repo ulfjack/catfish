@@ -1,4 +1,4 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.http;
 
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
@@ -15,7 +15,7 @@ import org.jspecify.annotations.Nullable;
  * parsing is the caller's responsibility. After {@link #isDone()} returns true, call {@link
  * #getRequest()} to get the headers-only request.
  */
-final class IncrementalHttpRequestParser {
+public final class IncrementalHttpRequestParser {
   private static final int MAX_URI_LENGTH = 10_000;
   private static final int MAX_HEADER_NAME_LENGTH = 1000;
   private static final int MAX_HEADER_VALUE_LENGTH = 10_000;
@@ -49,7 +49,7 @@ final class IncrementalHttpRequestParser {
     return (CHAR_FLAGS[c] & CONTROL) != 0;
   }
 
-  static boolean isTokenCharacter(char c) {
+  public static boolean isTokenCharacter(char c) {
     return (CHAR_FLAGS[c] & TOKEN) != 0;
   }
 
@@ -90,11 +90,11 @@ final class IncrementalHttpRequestParser {
   private @Nullable String messageHeaderName;
   private @Nullable String messageHeaderValue;
 
-  IncrementalHttpRequestParser() {
+  public IncrementalHttpRequestParser() {
     reset();
   }
 
-  void reset() {
+  public void reset() {
     state = State.REQUEST_METHOD;
     elementBuffer = new StringBuilder();
     counter = 0;

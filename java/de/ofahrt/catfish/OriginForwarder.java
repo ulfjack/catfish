@@ -1,6 +1,8 @@
 package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.client.IncrementalHttpResponseParser;
+import de.ofahrt.catfish.http.ChunkedBodyScanner;
+import de.ofahrt.catfish.http.ChunkedDecodingOutputStream;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;

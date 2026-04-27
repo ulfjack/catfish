@@ -1,7 +1,8 @@
-package de.ofahrt.catfish;
+package de.ofahrt.catfish.http;
 
 import static org.junit.Assert.assertTrue;
 
+import de.ofahrt.catfish.HttpParserTest;
 import de.ofahrt.catfish.model.HttpRequest;
 import info.adams.junit.NamedParameterized;
 import info.adams.junit.NamedParameterized.Parameters;

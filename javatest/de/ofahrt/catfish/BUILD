@@ -65,6 +65,7 @@ java_binary(
     plugins = ["//third_party/jmh:jmh_annprocess"],
     deps = [
         "//java/de/ofahrt/catfish",
+        "//java/de/ofahrt/catfish/http",
         "//java/de/ofahrt/catfish/model",
         "//java/de/ofahrt/catfish/model/network",
         "//third_party/jmh",

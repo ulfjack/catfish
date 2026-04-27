@@ -8,8 +8,6 @@ import org.junit.runners.Suite.SuiteClasses;
 @SuiteClasses({
   AsyncRoutingDispatcherTest.class,
   CatfishHttpServerTest.class,
-  ChunkedDecodingOutputStreamTest.class,
-  ChunkedBodyScannerTest.class,
   ConnectStageTest.class,
   HashConflictGeneratorTest.class,
   Http2EndpointTest.class,
@@ -18,9 +16,7 @@ import org.junit.runners.Suite.SuiteClasses;
   HttpServerStageTest.class,
   HttpsEndpointTest.class,
   HttpVirtualHostTest.class,
-  IncrementalHttpParserIncrementalTest.class,
   OriginForwarderTest.class,
-  IncrementalHttpParserTest.class,
   ValidatingHttpHandlerTest.class,
   PipeBufferTest.class,
   ProxyRequestStageTest.class,
