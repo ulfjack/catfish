@@ -62,6 +62,17 @@ public class HttpResponseGeneratorBufferedTest {
     assertEquals("HTTP/1.1 200 OK\r\n\r\n", toString(generator));
   }
 
+  @Test
+  public void abortReturnsStopAndDiscardsBody() throws Exception {
+    HttpResponse response =
+        StandardResponses.OK.withVersion(HttpVersion.HTTP_1_1).withBody(new byte[] {'x', 'y'});
+    HttpResponseGeneratorBuffered generator = HttpResponseGeneratorBuffered.create(null, response);
+    generator.abort();
+    ByteBuffer buf = ByteBuffer.allocate(100);
+    assertEquals(ContinuationToken.STOP, generator.generate(buf));
+    assertEquals(0, buf.position());
+  }
+
   // Conformance test #36: all line terminators in an HTTP response must be CRLF (RFC 7230 §3.5).
   @Test
   public void responsesUseCrlfLineTerminators() throws Exception {

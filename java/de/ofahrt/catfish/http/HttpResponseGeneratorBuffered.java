@@ -80,7 +80,10 @@ public final class HttpResponseGeneratorBuffered implements HttpResponseGenerato
   }
 
   @Override
-  public void abort() {}
+  public void abort() {
+    currentBlock = data.length;
+    currentIndex = 0;
+  }
 
   @Override
   public long getBodyBytesSent() {
