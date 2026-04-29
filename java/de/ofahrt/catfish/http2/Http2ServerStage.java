@@ -673,11 +673,11 @@ public final class Http2ServerStage implements Stage {
       Http2Stream stream, SimpleHttpRequest.Builder builder, RequestAction.ServeLocally serve) {
     HttpRequest request;
     byte[] bodyBytes = stream.getBodyBytes();
-    if (bodyBytes.length > 0) {
-      builder.setBody(new HttpRequest.InMemoryBody(bodyBytes));
-      builder.addHeader(HttpHeaderName.CONTENT_LENGTH, Integer.toString(bodyBytes.length));
-    }
     try {
+      if (bodyBytes.length > 0) {
+        builder.setBody(new HttpRequest.InMemoryBody(bodyBytes));
+        builder.addHeader(HttpHeaderName.CONTENT_LENGTH, Integer.toString(bodyBytes.length));
+      }
       request = builder.build();
     } catch (MalformedRequestException e) {
       sendErrorResponse(stream, StandardResponses.BAD_REQUEST);

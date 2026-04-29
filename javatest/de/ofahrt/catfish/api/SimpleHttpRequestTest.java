@@ -3,7 +3,6 @@ package de.ofahrt.catfish.api;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpMethodName;
@@ -45,19 +44,6 @@ public class SimpleHttpRequestTest {
   }
 
   @Test
-  public void simpleErrorAlwaysContainsEmptyBody() {
-    var e =
-        assertThrows(
-            MalformedRequestException.class,
-            () ->
-                new SimpleHttpRequest.Builder()
-                    .setError(HttpStatusCode.BAD_REQUEST, "foobar")
-                    .build());
-    assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
-    assertNotNull(e.getErrorResponse().getBody());
-  }
-
-  @Test
   public void mustHaveBodyWithTransferEncoding() {
     var e =
         assertThrows(
@@ -92,12 +78,6 @@ public class SimpleHttpRequestTest {
   }
 
   @Test
-  public void getErrorResponse_throwsWhenNoError() {
-    assertThrows(
-        IllegalStateException.class, () -> new SimpleHttpRequest.Builder().getErrorResponse());
-  }
-
-  @Test
   public void addHeader_combinesMultipleOccurrenceHeader() throws MalformedRequestException {
     var request =
         new SimpleHttpRequest.Builder()
@@ -113,8 +93,11 @@ public class SimpleHttpRequestTest {
 
   @Test
   public void addHeader_invalidHost() {
-    var builder = new SimpleHttpRequest.Builder().addHeader(HttpHeaderName.HOST, "not:valid:port");
-    assertTrue(builder.hasError());
+    var e =
+        assertThrows(
+            MalformedRequestException.class,
+            () -> new SimpleHttpRequest.Builder().addHeader(HttpHeaderName.HOST, "not:valid:port"));
+    assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
   }
 
   @Test

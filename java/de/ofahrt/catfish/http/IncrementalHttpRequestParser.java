@@ -121,12 +121,12 @@ public final class IncrementalHttpRequestParser {
     }
   }
 
-  public int parse(byte[] input) {
+  public int parse(byte[] input) throws MalformedRequestException {
     return parse(input, 0, input.length);
   }
 
   @SuppressWarnings("NullAway") // state machine guarantees non-null at usage points
-  public int parse(byte[] input, int offset, int length) {
+  public int parse(byte[] input, int offset, int length) throws MalformedRequestException {
     if (done) {
       return 0;
     }
@@ -346,7 +346,7 @@ public final class IncrementalHttpRequestParser {
   }
 
   /** Validates header-level constraints and marks parsing as done. Called at the blank line. */
-  private int validateAndFinish(int i) {
+  private int validateAndFinish(int i) throws MalformedRequestException {
     if (unparsedUri != null && !"*".equals(unparsedUri) && !unparsedUri.startsWith("/")) {
       try {
         URI parsed = new URI(unparsedUri);
@@ -385,18 +385,18 @@ public final class IncrementalHttpRequestParser {
     return i + 1;
   }
 
-  private int setBadRequest(String statusMessage) {
+  private int setBadRequest(String statusMessage) throws MalformedRequestException {
     return setError(HttpStatusCode.BAD_REQUEST, statusMessage);
   }
 
-  private int setError(HttpStatusCode statusCode) {
+  private int setError(HttpStatusCode statusCode) throws MalformedRequestException {
     return setError(statusCode, statusCode.getStatusMessage());
   }
 
-  private int setError(HttpStatusCode statusCode, String statusMessage) {
-    builder.setError(statusCode, statusMessage);
+  private int setError(HttpStatusCode statusCode, String statusMessage)
+      throws MalformedRequestException {
     done = true;
-    return 1;
+    throw MalformedRequestException.of(statusCode, statusMessage);
   }
 
   public boolean isDone() {
@@ -405,14 +405,11 @@ public final class IncrementalHttpRequestParser {
 
   /**
    * Returns the parsed headers-only request. Must only be called after {@link #isDone()} returns
-   * true. Throws {@link MalformedRequestException} if the request was malformed.
+   * true and after {@link #parse} completed without throwing.
    */
-  public HttpRequest getRequest() throws MalformedRequestException {
+  public HttpRequest getRequest() {
     if (!done) {
       throw new IllegalStateException("No parsed request available!");
-    }
-    if (builder.hasError()) {
-      throw new MalformedRequestException(builder.getErrorResponse());
     }
     return builder.buildPartialRequest();
   }

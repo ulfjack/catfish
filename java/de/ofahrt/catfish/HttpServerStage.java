@@ -168,21 +168,20 @@ final class HttpServerStage implements Stage {
     // Phase 1: header parsing.
     // invariant: inputBuffer is readable
     if (inputBuffer.hasRemaining()) {
-      int consumed =
-          parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.remaining());
-      inputBuffer.position(inputBuffer.position() + consumed);
+      try {
+        int consumed =
+            parser.parse(inputBuffer.array(), inputBuffer.position(), inputBuffer.remaining());
+        inputBuffer.position(inputBuffer.position() + consumed);
+      } catch (MalformedRequestException e) {
+        startBuffered(null, e.getErrorResponse());
+        return ConnectionControl.CLOSE_INPUT;
+      }
     }
     if (!parser.isDone()) {
       return ConnectionControl.CONTINUE;
     }
 
-    HttpRequest headers;
-    try {
-      headers = parser.getRequest();
-    } catch (MalformedRequestException e) {
-      startBuffered(null, e.getErrorResponse());
-      return ConnectionControl.CLOSE_INPUT;
-    }
+    HttpRequest headers = parser.getRequest();
     parser.reset();
     serverListener.onRequest(requestId, headers);
 

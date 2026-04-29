@@ -54,8 +54,6 @@ public final class SimpleHttpRequest implements HttpRequest {
     private Map<String, String> headers = new TreeMap<>();
     private @Nullable Body body;
 
-    private @Nullable HttpResponse errorResponse;
-
     public Builder() {
       reset();
     }
@@ -77,7 +75,6 @@ public final class SimpleHttpRequest implements HttpRequest {
       unparsedUri = null;
       headers = new TreeMap<>();
       body = null;
-      errorResponse = null;
     }
 
     /**
@@ -85,57 +82,40 @@ public final class SimpleHttpRequest implements HttpRequest {
      * is null; all other fields are fully populated.
      */
     public HttpRequest buildPartialRequest() {
-      if (errorResponse != null) {
-        throw new IllegalStateException("Builder has an error");
-      }
       return new SimpleHttpRequest(this);
     }
 
     public HttpRequest build() throws MalformedRequestException {
-      if (errorResponse != null) {
-        throw new MalformedRequestException(errorResponse);
-      }
       if (unparsedUri == null) {
-        throw buildError(HttpStatusCode.BAD_REQUEST, "Missing URI!");
+        throw MalformedRequestException.of(HttpStatusCode.BAD_REQUEST, "Missing URI!");
       }
       try {
         URI parsed = new URI(unparsedUri);
         if (!"*".equals(unparsedUri) && !parsed.isAbsolute() && !unparsedUri.startsWith("/")) {
-          throw buildError(HttpStatusCode.BAD_REQUEST, "Malformed URI");
+          throw MalformedRequestException.of(HttpStatusCode.BAD_REQUEST, "Malformed URI");
         }
       } catch (URISyntaxException e) {
-        throw buildError(HttpStatusCode.BAD_REQUEST, "Malformed URI", e);
+        throw MalformedRequestException.of(HttpStatusCode.BAD_REQUEST, "Malformed URI", e);
       }
       if ((version.compareTo(HttpVersion.HTTP_1_1) >= 0)
           && !headers.containsKey(HttpHeaderName.HOST)) {
-        throw buildError(HttpStatusCode.BAD_REQUEST, "Missing 'Host' field");
+        throw MalformedRequestException.of(HttpStatusCode.BAD_REQUEST, "Missing 'Host' field");
       }
       boolean hasContentLength = headers.containsKey(HttpHeaderName.CONTENT_LENGTH);
       boolean hasTransferEncoding = headers.containsKey(HttpHeaderName.TRANSFER_ENCODING);
       boolean mustHaveBody = hasContentLength || hasTransferEncoding;
       if (mustHaveBody) {
         if (body == null) {
-          throw buildError(
+          throw MalformedRequestException.of(
               HttpStatusCode.BAD_REQUEST,
               "Requests with a Content-Length or Transfer-Encoding header must have a body");
         }
       } else if (body != null) {
-        throw buildError(
+        throw MalformedRequestException.of(
             HttpStatusCode.BAD_REQUEST,
             "Requests without a Content-Length or Transfer-Encoding header must not have a body");
       }
       return new SimpleHttpRequest(this);
-    }
-
-    private MalformedRequestException buildError(HttpStatusCode statusCode, String error) {
-      this.errorResponse = new PreconstructedResponse(statusCode, error);
-      return new MalformedRequestException(errorResponse);
-    }
-
-    private MalformedRequestException buildError(
-        HttpStatusCode statusCode, String error, Throwable cause) {
-      this.errorResponse = new PreconstructedResponse(statusCode, error);
-      return new MalformedRequestException(errorResponse, cause);
     }
 
     public Builder setVersion(HttpVersion version) {
@@ -153,23 +133,21 @@ public final class SimpleHttpRequest implements HttpRequest {
       return this;
     }
 
-    public Builder addHeader(String key, String value) {
+    public Builder addHeader(String key, String value) throws MalformedRequestException {
       Preconditions.checkNotNull(key);
       Preconditions.checkNotNull(value);
       key = HttpHeaderName.canonicalize(key);
       if (headers.get(key) != null) {
         if (!HttpHeaderName.mayOccurMultipleTimes(key)) {
-          setError(
+          throw MalformedRequestException.of(
               HttpStatusCode.BAD_REQUEST,
               "Illegal message headers: multiple occurence for non-list field");
-          return this;
         }
         value = headers.get(key) + ", " + value;
       }
       if (HttpHeaderName.HOST.equals(key)) {
         if (!HttpHeaderName.validHostPort(value)) {
-          setError(HttpStatusCode.BAD_REQUEST, "Illegal 'Host' header");
-          return this;
+          throw MalformedRequestException.of(HttpStatusCode.BAD_REQUEST, "Illegal 'Host' header");
         }
       }
       headers.put(key, value);
@@ -183,27 +161,6 @@ public final class SimpleHttpRequest implements HttpRequest {
     public Builder setBody(Body body) {
       this.body = Objects.requireNonNull(body, "body");
       return this;
-    }
-
-    public Builder setError(HttpStatusCode statusCode, String error) {
-      this.errorResponse = new PreconstructedResponse(statusCode, error);
-      return this;
-    }
-
-    public Builder setError(HttpStatusCode statusCode) {
-      this.errorResponse = new PreconstructedResponse(statusCode);
-      return this;
-    }
-
-    public boolean hasError() {
-      return errorResponse != null;
-    }
-
-    public HttpResponse getErrorResponse() {
-      if (errorResponse == null) {
-        throw new IllegalStateException("There is no getErrorResponse");
-      }
-      return errorResponse;
     }
   }
 }

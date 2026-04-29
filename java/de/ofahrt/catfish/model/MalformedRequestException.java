@@ -18,6 +18,20 @@ public final class MalformedRequestException extends IOException {
     this.errorResponse = Objects.requireNonNull(errorResponse, "errorResponse");
   }
 
+  public static MalformedRequestException of(HttpStatusCode statusCode) {
+    return new MalformedRequestException(new PreconstructedResponse(statusCode));
+  }
+
+  public static MalformedRequestException of(HttpStatusCode statusCode, String statusMessage) {
+    return new MalformedRequestException(new PreconstructedResponse(statusCode, statusMessage));
+  }
+
+  public static MalformedRequestException of(
+      HttpStatusCode statusCode, String statusMessage, Throwable cause) {
+    return new MalformedRequestException(
+        new PreconstructedResponse(statusCode, statusMessage), cause);
+  }
+
   public HttpResponse getErrorResponse() {
     return errorResponse;
   }

@@ -12,6 +12,7 @@ import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.HttpVersion;
+import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import java.io.ByteArrayOutputStream;
@@ -98,22 +99,30 @@ public class OriginForwarderTest {
   }
 
   private static HttpRequest get(String path) {
-    return new SimpleHttpRequest.Builder()
-        .setVersion(HttpVersion.HTTP_1_1)
-        .setMethod(HttpMethodName.GET)
-        .setUri(path)
-        .addHeader(HttpHeaderName.HOST, "localhost")
-        .addHeader(HttpHeaderName.CONNECTION, "close")
-        .buildPartialRequest();
+    try {
+      return new SimpleHttpRequest.Builder()
+          .setVersion(HttpVersion.HTTP_1_1)
+          .setMethod(HttpMethodName.GET)
+          .setUri(path)
+          .addHeader(HttpHeaderName.HOST, "localhost")
+          .addHeader(HttpHeaderName.CONNECTION, "close")
+          .buildPartialRequest();
+    } catch (MalformedRequestException e) {
+      throw new AssertionError(e);
+    }
   }
 
   private static HttpRequest head(String path) {
-    return new SimpleHttpRequest.Builder()
-        .setVersion(HttpVersion.HTTP_1_1)
-        .setMethod(HttpMethodName.HEAD)
-        .setUri(path)
-        .addHeader(HttpHeaderName.HOST, "localhost")
-        .buildPartialRequest();
+    try {
+      return new SimpleHttpRequest.Builder()
+          .setVersion(HttpVersion.HTTP_1_1)
+          .setMethod(HttpMethodName.HEAD)
+          .setUri(path)
+          .addHeader(HttpHeaderName.HOST, "localhost")
+          .buildPartialRequest();
+    } catch (MalformedRequestException e) {
+      throw new AssertionError(e);
+    }
   }
 
   private static byte[] ascii(String s) {

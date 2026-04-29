@@ -1,6 +1,7 @@
 package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.http.IncrementalHttpRequestParser;
+import de.ofahrt.catfish.model.MalformedRequestException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -35,7 +36,7 @@ public class IncrementalHttpRequestParserBenchmark {
   }
 
   @Benchmark
-  public int parseFullRequest() {
+  public int parseFullRequest() throws MalformedRequestException {
     parser.reset();
     return parser.parse(requestBytes);
   }

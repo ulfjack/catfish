@@ -6,12 +6,13 @@ import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpMethodName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpVersion;
+import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import org.junit.Test;
 
 public class DenyUploadPolicyTest {
   @Test
-  public void denyAnyNonZeroPayload() {
+  public void denyAnyNonZeroPayload() throws MalformedRequestException {
     HttpRequest request =
         new SimpleHttpRequest.Builder()
             .setMethod(HttpMethodName.POST)

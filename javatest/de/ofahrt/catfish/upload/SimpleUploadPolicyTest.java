@@ -5,18 +5,23 @@ import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpVersion;
+import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import org.junit.Test;
 
 public class SimpleUploadPolicyTest {
 
   private static HttpRequest buildRequest(String contentLength) {
-    return new SimpleHttpRequest.Builder()
-        .setVersion(HttpVersion.HTTP_1_1)
-        .setMethod("POST")
-        .setUri("/upload")
-        .addHeader("Content-Length", contentLength)
-        .buildPartialRequest();
+    try {
+      return new SimpleHttpRequest.Builder()
+          .setVersion(HttpVersion.HTTP_1_1)
+          .setMethod("POST")
+          .setUri("/upload")
+          .addHeader("Content-Length", contentLength)
+          .buildPartialRequest();
+    } catch (MalformedRequestException e) {
+      throw new AssertionError(e);
+    }
   }
 
   @Test

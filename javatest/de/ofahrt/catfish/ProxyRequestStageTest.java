@@ -9,6 +9,7 @@ import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpVersion;
+import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import java.util.UUID;
@@ -42,12 +43,16 @@ public class ProxyRequestStageTest {
       };
 
   private static HttpRequest dummyRequest() {
-    return new SimpleHttpRequest.Builder()
-        .setVersion(HttpVersion.HTTP_1_1)
-        .setMethod("GET")
-        .setUri("/")
-        .addHeader(HttpHeaderName.HOST, "localhost")
-        .buildPartialRequest();
+    try {
+      return new SimpleHttpRequest.Builder()
+          .setVersion(HttpVersion.HTTP_1_1)
+          .setMethod("GET")
+          .setUri("/")
+          .addHeader(HttpHeaderName.HOST, "localhost")
+          .buildPartialRequest();
+    } catch (MalformedRequestException e) {
+      throw new AssertionError(e);
+    }
   }
 
   @Test

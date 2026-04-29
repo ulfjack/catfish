@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpVersion;
+import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
 import java.io.ByteArrayOutputStream;
@@ -14,21 +15,29 @@ import org.junit.Test;
 public class RequestActionTest {
 
   private static HttpRequest requestWithUri(String uri) {
-    return new SimpleHttpRequest.Builder()
-        .setVersion(HttpVersion.HTTP_1_1)
-        .setMethod("GET")
-        .setUri(uri)
-        .addHeader("Host", "fallback.com")
-        .buildPartialRequest();
+    try {
+      return new SimpleHttpRequest.Builder()
+          .setVersion(HttpVersion.HTTP_1_1)
+          .setMethod("GET")
+          .setUri(uri)
+          .addHeader("Host", "fallback.com")
+          .buildPartialRequest();
+    } catch (MalformedRequestException e) {
+      throw new AssertionError(e);
+    }
   }
 
   private static HttpRequest requestWithUriAndHost(String uri, String host) {
-    return new SimpleHttpRequest.Builder()
-        .setVersion(HttpVersion.HTTP_1_1)
-        .setMethod("GET")
-        .setUri(uri)
-        .addHeader("Host", host)
-        .buildPartialRequest();
+    try {
+      return new SimpleHttpRequest.Builder()
+          .setVersion(HttpVersion.HTTP_1_1)
+          .setMethod("GET")
+          .setUri(uri)
+          .addHeader("Host", host)
+          .buildPartialRequest();
+    } catch (MalformedRequestException e) {
+      throw new AssertionError(e);
+    }
   }
 
   private static HttpRequest requestWithUriNoHost(String uri) {
