@@ -8,6 +8,7 @@ import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.HttpsEndpoint;
+import de.ofahrt.catfish.PortPicker;
 import de.ofahrt.catfish.RawHttpConnection;
 import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.client.CatfishHttpClient;
@@ -46,8 +47,9 @@ public class ConnectionHandlingTest {
   private static final boolean DEBUG = false;
 
   private static final String HTTP_SERVER_NAME = "localhost";
-  private static final int HTTP_PORT = 9080;
-  private static final int HTTPS_PORT = 9081;
+
+  private final int httpPort = PortPicker.pick();
+  private final int httpsPort = PortPicker.pick();
 
   private CatfishHttpServer server;
 
@@ -78,11 +80,11 @@ public class ConnectionHandlingTest {
     HttpVirtualHost host = new HttpVirtualHost(handler);
     if (startSsl) {
       HttpsEndpoint listener =
-          HttpsEndpoint.onLocalhost(HTTPS_PORT)
+          HttpsEndpoint.onLocalhost(httpsPort)
               .addHost(HTTP_SERVER_NAME, host, TestHelper.getSSLInfo());
       server.listen(listener);
     } else {
-      HttpEndpoint listener = HttpEndpoint.onLocalhost(HTTP_PORT).addHost(HTTP_SERVER_NAME, host);
+      HttpEndpoint listener = HttpEndpoint.onLocalhost(httpPort).addHost(HTTP_SERVER_NAME, host);
       server.listen(listener);
     }
   }
@@ -108,7 +110,7 @@ public class ConnectionHandlingTest {
               }
             });
     HttpVirtualHost host = new HttpVirtualHost(handler).uploadPolicy(uploadPolicy);
-    HttpEndpoint listener = HttpEndpoint.onLocalhost(HTTP_PORT).addHost(HTTP_SERVER_NAME, host);
+    HttpEndpoint listener = HttpEndpoint.onLocalhost(httpPort).addHost(HTTP_SERVER_NAME, host);
     server.listen(listener);
   }
 
@@ -154,7 +156,7 @@ public class ConnectionHandlingTest {
             .build();
     List<Future<HttpResponse>> futures = new ArrayList<>();
     for (int i = 0; i < 200; i++) {
-      Future<HttpResponse> future = client.send(HTTP_SERVER_NAME, HTTP_PORT, null, null, request);
+      Future<HttpResponse> future = client.send(HTTP_SERVER_NAME, httpPort, null, null, request);
       futures.add(future);
     }
     // Tricky: we don't know when the last request arrives at the server, so we can't reliably
@@ -186,7 +188,7 @@ public class ConnectionHandlingTest {
                 }
               });
         });
-    try (RawHttpConnection conn = RawHttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT, null)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect(HTTP_SERVER_NAME, httpPort, null)) {
       conn.write(
           ("GET / HTTP/1.1\r\nHost: " + HTTP_SERVER_NAME + "\r\nConnection: close\r\n\r\n")
               .getBytes("ISO-8859-1"));
@@ -226,7 +228,7 @@ public class ConnectionHandlingTest {
           }
         });
     Socket socket = new Socket();
-    socket.connect(new InetSocketAddress(InetAddress.getByName(HTTP_SERVER_NAME), HTTP_PORT));
+    socket.connect(new InetSocketAddress(InetAddress.getByName(HTTP_SERVER_NAME), httpPort));
     HttpRequest request =
         new SimpleHttpRequest.Builder()
             .setVersion(HttpVersion.HTTP_1_1)
@@ -280,7 +282,7 @@ public class ConnectionHandlingTest {
     startServer(
         (connection, request, responseWriter) ->
             responseWriter.commitBuffered(StandardResponses.OK));
-    try (RawHttpConnection conn = RawHttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT)) {
+    try (RawHttpConnection conn = RawHttpConnection.connect(HTTP_SERVER_NAME, httpPort)) {
       conn.write(
           "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
               .getBytes(StandardCharsets.UTF_8));
@@ -298,7 +300,7 @@ public class ConnectionHandlingTest {
         (connection, request, responseWriter) ->
             responseWriter.commitBuffered(StandardResponses.OK),
         request -> true);
-    try (RawHttpConnection connection = RawHttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT)) {
+    try (RawHttpConnection connection = RawHttpConnection.connect(HTTP_SERVER_NAME, httpPort)) {
       // Send headers only, with Expect: 100-continue.
       String headers =
           "POST / HTTP/1.1\r\n"
@@ -333,7 +335,7 @@ public class ConnectionHandlingTest {
         (connection, request, responseWriter) ->
             responseWriter.commitBuffered(StandardResponses.OK),
         UploadPolicy.DENY);
-    try (RawHttpConnection connection = RawHttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT)) {
+    try (RawHttpConnection connection = RawHttpConnection.connect(HTTP_SERVER_NAME, httpPort)) {
       String headers =
           "POST / HTTP/1.1\r\n"
               + "Host: localhost\r\n"
@@ -357,7 +359,7 @@ public class ConnectionHandlingTest {
           throw new IOException("handler failure");
         });
     try (RawHttpConnection connection =
-        RawHttpConnection.connect(HTTP_SERVER_NAME, HTTP_PORT, null)) {
+        RawHttpConnection.connect(HTTP_SERVER_NAME, httpPort, null)) {
       connection.write(
           "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".getBytes(StandardCharsets.UTF_8));
       HttpResponse response = connection.readResponse();

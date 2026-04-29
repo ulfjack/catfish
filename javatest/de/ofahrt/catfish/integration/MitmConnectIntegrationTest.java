@@ -10,6 +10,7 @@ import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.HttpsEndpoint;
+import de.ofahrt.catfish.PortPicker;
 import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpHeaders;
@@ -58,8 +59,8 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class MitmConnectIntegrationTest {
-  private static final int HTTPS_PORT = 9095;
-  private static final int MITM_PORT = 9096;
+  private static int httpsPort;
+  private static int mitmPort;
 
   private static Path workDir;
   private static SSLInfo testSslInfo;
@@ -105,15 +106,17 @@ public class MitmConnectIntegrationTest {
             .build();
     clientCtx = buildSslContextTrusting(workDir.resolve("ca.crt"));
 
-    // Start shared origin HTTPS server on HTTPS_PORT and MITM proxy on MITM_PORT. Safe to share
+    // Start shared origin HTTPS server and MITM proxy on freshly picked ports. Safe to share
     // because the proxy's SSLInfo cache is keyed by (host, port) and tests use unique ports.
     // The origin is a path-router so most tests can avoid spinning up their own origin server.
+    httpsPort = PortPicker.pick();
+    mitmPort = PortPicker.pick();
     sharedServer = newServer();
     HttpsEndpoint httpsListener =
-        HttpsEndpoint.onLocalhost(HTTPS_PORT).addHost("localhost", sharedOriginHost(), testSslInfo);
+        HttpsEndpoint.onLocalhost(httpsPort).addHost("localhost", sharedOriginHost(), testSslInfo);
     sharedServer.listen(httpsListener);
     HttpEndpoint mitmListener =
-        HttpEndpoint.onLocalhost(MITM_PORT)
+        HttpEndpoint.onLocalhost(mitmPort)
             .dispatcher(ConnectHandler.mitmAll(ca))
             .originSslFactory(testSslInfo.sslContext().getSocketFactory());
     sharedServer.listen(mitmListener);
@@ -246,10 +249,11 @@ public class MitmConnectIntegrationTest {
     CountDownLatch latch = new CountDownLatch(1);
     AtomicReference<String> threadName = new AtomicReference<>();
 
+    int proxyPort = PortPicker.pick();
     CatfishHttpServer server = newServer();
     serversToStop.add(server);
     HttpEndpoint endpoint =
-        HttpEndpoint.onLocalhost(9105)
+        HttpEndpoint.onLocalhost(proxyPort)
             .dispatcher(ConnectHandler.tunnelAll())
             .requestListener(
                 new HttpServerListener() {
@@ -261,13 +265,13 @@ public class MitmConnectIntegrationTest {
                 });
     server.listen(endpoint);
 
-    // Open a CONNECT tunnel to HTTPS_PORT and immediately close — this triggers Stage.close()
+    // Open a CONNECT tunnel to httpsPort and immediately close — this triggers Stage.close()
     // which runs onClose → handler.onConnectComplete.
-    try (Socket socket = new Socket("localhost", 9105)) {
+    try (Socket socket = new Socket("localhost", proxyPort)) {
       OutputStream out = socket.getOutputStream();
       InputStream in = socket.getInputStream();
       out.write(
-          ("CONNECT localhost:" + HTTPS_PORT + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
+          ("CONNECT localhost:" + httpsPort + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
               .getBytes(StandardCharsets.ISO_8859_1));
       out.flush();
       readUntilBlankLine(in);
@@ -282,7 +286,7 @@ public class MitmConnectIntegrationTest {
 
   @Test
   public void mitmConnectProxy_transparentlyBridgesHttps() throws Exception {
-    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(mitmPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
@@ -305,7 +309,7 @@ public class MitmConnectIntegrationTest {
   @Test
   public void mitmConnectProxy_originUnreachable_returns502() throws Exception {
     // Port 1 is not listening; the origin connect will fail immediately with ECONNREFUSED.
-    try (Socket socket = new Socket("localhost", MITM_PORT)) {
+    try (Socket socket = new Socket("localhost", mitmPort)) {
       OutputStream out = socket.getOutputStream();
       InputStream in = socket.getInputStream();
       out.write(
@@ -322,10 +326,11 @@ public class MitmConnectIntegrationTest {
 
   @Test
   public void mitmConnectProxy_policyThrows_returns502() throws Exception {
+    int proxyPort = PortPicker.pick();
     CatfishHttpServer s = newServer();
     serversToStop.add(s);
     HttpEndpoint listener =
-        HttpEndpoint.onLocalhost(9098)
+        HttpEndpoint.onLocalhost(proxyPort)
             .dispatcher(
                 new ConnectHandler() {
                   @Override
@@ -335,7 +340,7 @@ public class MitmConnectIntegrationTest {
                 });
     s.listen(listener);
 
-    try (Socket socket = new Socket("localhost", 9098)) {
+    try (Socket socket = new Socket("localhost", proxyPort)) {
       OutputStream out = socket.getOutputStream();
       InputStream in = socket.getInputStream();
       out.write(
@@ -352,6 +357,7 @@ public class MitmConnectIntegrationTest {
 
   @Test
   public void mitmConnectProxy_caFails_returns502() throws Exception {
+    int proxyPort = PortPicker.pick();
     CatfishHttpServer s = newServer();
     serversToStop.add(s);
     de.ofahrt.catfish.ssl.CertificateAuthority failingCa =
@@ -359,16 +365,16 @@ public class MitmConnectIntegrationTest {
           throw new RuntimeException("CA failed");
         };
     HttpEndpoint listener =
-        HttpEndpoint.onLocalhost(9099)
+        HttpEndpoint.onLocalhost(proxyPort)
             .dispatcher(ConnectHandler.mitmAll(failingCa))
             .originSslFactory(testSslInfo.sslContext().getSocketFactory());
     s.listen(listener);
 
-    try (Socket socket = new Socket("localhost", 9099)) {
+    try (Socket socket = new Socket("localhost", proxyPort)) {
       OutputStream out = socket.getOutputStream();
       InputStream in = socket.getInputStream();
       out.write(
-          ("CONNECT localhost:" + HTTPS_PORT + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
+          ("CONNECT localhost:" + httpsPort + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
               .getBytes(StandardCharsets.ISO_8859_1));
       out.flush();
       String response = readUntilBlankLine(in);
@@ -381,12 +387,14 @@ public class MitmConnectIntegrationTest {
 
   @Test
   public void mitmConnectProxy_deniedByPolicy_returns403() throws Exception {
+    int proxyPort = PortPicker.pick();
     CatfishHttpServer s = newServer();
     serversToStop.add(s);
-    HttpEndpoint listener = HttpEndpoint.onLocalhost(9097).dispatcher(ConnectHandler.denyAll());
+    HttpEndpoint listener =
+        HttpEndpoint.onLocalhost(proxyPort).dispatcher(ConnectHandler.denyAll());
     s.listen(listener);
 
-    try (Socket socket = new Socket("localhost", 9097)) {
+    try (Socket socket = new Socket("localhost", proxyPort)) {
       OutputStream out = socket.getOutputStream();
       InputStream in = socket.getInputStream();
       out.write(
@@ -410,7 +418,7 @@ public class MitmConnectIntegrationTest {
       expectedBody[i] = (byte) (i & 0xff);
     }
 
-    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(mitmPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
@@ -436,7 +444,7 @@ public class MitmConnectIntegrationTest {
       sentBody[i] = (byte) (i & 0xff);
     }
 
-    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(mitmPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
@@ -458,7 +466,7 @@ public class MitmConnectIntegrationTest {
   public void mitmConnectProxy_postRequest_forwardsBodyToOrigin() throws Exception {
     byte[] sentBody = "POST-BODY-DATA".getBytes(StandardCharsets.UTF_8);
 
-    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(mitmPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
@@ -480,7 +488,7 @@ public class MitmConnectIntegrationTest {
   public void mitmConnectProxy_chunkedRequestBody_forwardsBodyToOrigin() throws Exception {
     byte[] sentBody = "chunked-body-data".getBytes(StandardCharsets.UTF_8);
 
-    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(mitmPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
 
@@ -513,7 +521,7 @@ public class MitmConnectIntegrationTest {
       sentBody[i] = (byte) (i & 0xff);
     }
 
-    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(mitmPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
 
@@ -539,7 +547,7 @@ public class MitmConnectIntegrationTest {
   public void mitmConnectProxy_originChunkedResponse_streamed() throws Exception {
     byte[] originBody = "chunked-origin-data".getBytes(StandardCharsets.UTF_8);
 
-    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(mitmPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
@@ -556,7 +564,7 @@ public class MitmConnectIntegrationTest {
 
   @Test
   public void mitmConnectProxy_keepAlive_secondRequestOnSameConnection() throws Exception {
-    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(mitmPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
 
@@ -588,14 +596,15 @@ public class MitmConnectIntegrationTest {
   @Test
   public void mitmConnectProxy_originFailsDuringRequest_returns502() throws Exception {
     // Start a dedicated origin (separate from the shared one so we can kill it mid-test).
+    int originPort = PortPicker.pick();
     CatfishHttpServer failingOrigin =
         startHttpsServer(
-            9080,
+            originPort,
             new HttpVirtualHost(
                 (conn, request, writer) ->
                     writer.commitBuffered(StandardResponses.OK.withBody(new byte[0]))));
 
-    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, 9080)) {
+    try (SSLSocket sslSocket = connectViaMitm(mitmPort, originPort)) {
       // cert-mirror succeeded (we got the 200); now kill origin before the first request.
       serversToStop.remove(failingOrigin);
       failingOrigin.stop();
@@ -615,8 +624,8 @@ public class MitmConnectIntegrationTest {
 
   @Test
   public void connectHandler_interceptsAndTunnels() throws Exception {
-    int tunnelTargetPort = 9060;
-    int proxyPort = 9062;
+    int tunnelTargetPort = PortPicker.pick();
+    int proxyPort = PortPicker.pick();
 
     // Plain HTTP server as tunnel target.
     CatfishHttpServer httpServer = newServer();
@@ -675,7 +684,7 @@ public class MitmConnectIntegrationTest {
     }
 
     // Test intercept path: TLS MITM, hits shared origin's /intercept route.
-    try (SSLSocket sslSocket = connectViaMitm(proxyPort, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(proxyPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
@@ -691,7 +700,7 @@ public class MitmConnectIntegrationTest {
 
   @Test(timeout = 10_000)
   public void mitmConnectProxy_origin204NoContent_doesNotHang() throws Exception {
-    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(mitmPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
@@ -727,9 +736,10 @@ public class MitmConnectIntegrationTest {
   @Test
   public void applyProxy_serveLocally_skipsOrigin() throws Exception {
     byte[] cachedBody = "cached-response".getBytes(StandardCharsets.UTF_8);
+    int proxyPort = PortPicker.pick();
 
     startMitmProxyWithHandler(
-        9070,
+        proxyPort,
         new ConnectHandler() {
           @Override
           public ConnectDecision applyConnect(String host, int port) {
@@ -749,7 +759,7 @@ public class MitmConnectIntegrationTest {
         });
 
     // No origin server is started — the local response should be served without connecting.
-    try (SSLSocket sslSocket = connectViaMitm(9070, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(proxyPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
@@ -771,9 +781,10 @@ public class MitmConnectIntegrationTest {
     for (int i = 0; i < bodySize; i++) {
       largeBody[i] = (byte) (i & 0xff);
     }
+    int proxyPort = PortPicker.pick();
 
     startMitmProxyWithHandler(
-        9071,
+        proxyPort,
         new ConnectHandler() {
           @Override
           public ConnectDecision applyConnect(String host, int port) {
@@ -791,7 +802,7 @@ public class MitmConnectIntegrationTest {
           }
         });
 
-    try (SSLSocket sslSocket = connectViaMitm(9071, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(proxyPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
@@ -811,10 +822,11 @@ public class MitmConnectIntegrationTest {
   @Test
   public void applyProxy_forwardAndCapture_teesResponseBody() throws Exception {
     byte[] expectedBody = "MITM-OK".getBytes(StandardCharsets.UTF_8);
+    int proxyPort = PortPicker.pick();
 
     ByteArrayOutputStream captured = new ByteArrayOutputStream();
     startMitmProxyWithHandler(
-        9073,
+        proxyPort,
         new ConnectHandler() {
           @Override
           public ConnectDecision applyConnect(String host, int port) {
@@ -827,7 +839,7 @@ public class MitmConnectIntegrationTest {
           }
         });
 
-    try (SSLSocket sslSocket = connectViaMitm(9073, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(proxyPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
@@ -849,9 +861,10 @@ public class MitmConnectIntegrationTest {
   @Test
   public void applyProxy_keepAlive_secondRequestForwarded() throws Exception {
     byte[] cachedBody = "cached".getBytes(StandardCharsets.UTF_8);
+    int proxyPort = PortPicker.pick();
 
     startMitmProxyWithHandler(
-        9076,
+        proxyPort,
         new ConnectHandler() {
           @Override
           public ConnectDecision applyConnect(String host, int port) {
@@ -870,7 +883,7 @@ public class MitmConnectIntegrationTest {
           }
         });
 
-    try (SSLSocket sslSocket = connectViaMitm(9076, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(proxyPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
 
@@ -996,7 +1009,7 @@ public class MitmConnectIntegrationTest {
 
   @Test
   public void interceptLocal_servesRequestLocally() throws Exception {
-    int proxyPort = 9075;
+    int proxyPort = PortPicker.pick();
     CatfishHttpServer s = newServer();
     serversToStop.add(s);
     HttpEndpoint listener =
@@ -1079,13 +1092,13 @@ public class MitmConnectIntegrationTest {
   public void mitmConnectProxy_nestedConnect_denied() throws Exception {
     // After an intercepted CONNECT, send another CONNECT inside the TLS tunnel.
     // Nested CONNECT inside an intercepted tunnel is denied by design (returns 403).
-    try (SSLSocket sslSocket = connectViaMitm(MITM_PORT, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(mitmPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
 
       // Send CONNECT inside the intercepted TLS connection.
       sslOut.write(
-          ("CONNECT localhost:" + HTTPS_PORT + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
+          ("CONNECT localhost:" + httpsPort + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
               .getBytes(StandardCharsets.ISO_8859_1));
       sslOut.flush();
 
@@ -1102,11 +1115,12 @@ public class MitmConnectIntegrationTest {
     // (shutdownOutput sends FIN without SSL close_notify). This exercises the inputClosed()
     // path on the SslServerStage → wrapWithOnClose wrapper → HttpServerStage chain.
     CountDownLatch latch = new CountDownLatch(1);
+    int proxyPort = PortPicker.pick();
 
     CatfishHttpServer server = newServer();
     serversToStop.add(server);
     HttpEndpoint endpoint =
-        HttpEndpoint.onLocalhost(9106)
+        HttpEndpoint.onLocalhost(proxyPort)
             .dispatcher(ConnectHandler.mitmAll(ca))
             .originSslFactory(testSslInfo.sslContext().getSocketFactory())
             .requestListener(
@@ -1119,11 +1133,11 @@ public class MitmConnectIntegrationTest {
     server.listen(endpoint);
 
     // autoClose=false on the SSLSocket so we control the raw socket shutdown ourselves.
-    Socket rawSocket = new Socket("localhost", 9106);
+    Socket rawSocket = new Socket("localhost", proxyPort);
     OutputStream rawOut = rawSocket.getOutputStream();
     InputStream rawIn = rawSocket.getInputStream();
     rawOut.write(
-        ("CONNECT localhost:" + HTTPS_PORT + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
+        ("CONNECT localhost:" + httpsPort + " HTTP/1.1\r\nHost: localhost\r\n\r\n")
             .getBytes(StandardCharsets.ISO_8859_1));
     rawOut.flush();
     String connectResp = readUntilBlankLine(rawIn);
@@ -1133,7 +1147,7 @@ public class MitmConnectIntegrationTest {
         (SSLSocket)
             clientCtx
                 .getSocketFactory()
-                .createSocket(rawSocket, "localhost", HTTPS_PORT, /* autoClose= */ false);
+                .createSocket(rawSocket, "localhost", httpsPort, /* autoClose= */ false);
     SSLParameters sslParams = sslSocket.getSSLParameters();
     sslParams.setServerNames(List.of(new SNIHostName("localhost")));
     sslSocket.setSSLParameters(sslParams);
@@ -1165,11 +1179,12 @@ public class MitmConnectIntegrationTest {
     List<String> events = Collections.synchronizedList(new ArrayList<>());
     CountDownLatch done = new CountDownLatch(1);
     AtomicReference<RequestOutcome> capturedOutcome = new AtomicReference<>();
+    int proxyPort = PortPicker.pick();
 
     CatfishHttpServer server = newServer();
     serversToStop.add(server);
     HttpEndpoint endpoint =
-        HttpEndpoint.onLocalhost(9107)
+        HttpEndpoint.onLocalhost(proxyPort)
             .dispatcher(ConnectHandler.mitmAll(ca))
             .originSslFactory(testSslInfo.sslContext().getSocketFactory())
             .requestListener(
@@ -1223,7 +1238,7 @@ public class MitmConnectIntegrationTest {
                 });
     server.listen(endpoint);
 
-    try (SSLSocket sslSocket = connectViaMitm(9107, HTTPS_PORT)) {
+    try (SSLSocket sslSocket = connectViaMitm(proxyPort, httpsPort)) {
       OutputStream sslOut = sslSocket.getOutputStream();
       InputStream sslIn = sslSocket.getInputStream();
       sslOut.write(
