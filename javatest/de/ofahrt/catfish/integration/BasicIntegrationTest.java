@@ -184,7 +184,7 @@ public class BasicIntegrationTest {
     try (RawHttpConnection connection =
         RawHttpConnection.connect(
             // Note the use of the SSL port here!
-            LocalCatfishServer.HTTP_SERVER, LocalCatfishServer.HTTPS_PORT)) {
+            LocalCatfishServer.HTTP_SERVER, localServer.getHttpsPort())) {
       connection.write(toBytes("GET / HTTP/1.1\nHost: localhost\n\n"));
       try {
         connection.readResponse();
@@ -205,7 +205,7 @@ public class BasicIntegrationTest {
     params.setServerNames(Collections.singletonList(new SNIHostName("unknown.example.com")));
     socket.setSSLParameters(params);
     socket.connect(
-        new InetSocketAddress(LocalCatfishServer.HTTP_SERVER, LocalCatfishServer.HTTPS_PORT));
+        new InetSocketAddress(LocalCatfishServer.HTTP_SERVER, localServer.getHttpsPort()));
     try {
       socket.startHandshake();
       fail("Expected SSLException for unrecognized SNI");

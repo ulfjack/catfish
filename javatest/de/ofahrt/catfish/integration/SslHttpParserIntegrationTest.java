@@ -57,7 +57,7 @@ public class SslHttpParserIntegrationTest extends ServletEngineTest {
 
   @Override
   public int getPort() {
-    return LocalCatfishServer.HTTPS_PORT;
+    return localServer.getHttpsPort();
   }
 
   @Test

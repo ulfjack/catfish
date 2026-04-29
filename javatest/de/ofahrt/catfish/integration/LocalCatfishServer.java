@@ -4,6 +4,7 @@ import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.HttpsEndpoint;
+import de.ofahrt.catfish.PortPicker;
 import de.ofahrt.catfish.RawHttpConnection;
 import de.ofahrt.catfish.TestServlet;
 import de.ofahrt.catfish.bridge.ServletHttpHandler;
@@ -22,10 +23,9 @@ final class LocalCatfishServer implements Server {
   private static final boolean DEBUG = false;
 
   public static final String HTTP_SERVER = "localhost";
-  public static final int HTTP_PORT = 9080;
-  public static final int HTTPS_PORT = 9081;
-  public static final String HTTP_ROOT = "http://localhost:" + HTTP_PORT;
-  public static final String HTTPS_ROOT = "https://localhost:" + HTTPS_PORT;
+
+  private final int httpPort = PortPicker.pick();
+  private final int httpsPort = PortPicker.pick();
 
   private final CatfishHttpServer server =
       new CatfishHttpServer(
@@ -56,6 +56,22 @@ final class LocalCatfishServer implements Server {
 
   public LocalCatfishServer() throws IOException {}
 
+  public int getHttpPort() {
+    return httpPort;
+  }
+
+  public int getHttpsPort() {
+    return httpsPort;
+  }
+
+  public String getHttpRoot() {
+    return "http://" + HTTP_SERVER + ":" + httpPort;
+  }
+
+  public String getHttpsRoot() {
+    return "https://" + HTTP_SERVER + ":" + httpsPort;
+  }
+
   public LocalCatfishServer setUploadPolicy(UploadPolicy uploadPolicy) {
     this.uploadPolicy = uploadPolicy;
     return this;
@@ -76,11 +92,11 @@ final class LocalCatfishServer implements Server {
             .build();
 
     HttpVirtualHost host = new HttpVirtualHost(handler).uploadPolicy(uploadPolicy);
-    HttpEndpoint httpListener = HttpEndpoint.onAny(HTTP_PORT).addHost("localhost", host);
+    HttpEndpoint httpListener = HttpEndpoint.onAny(httpPort).addHost("localhost", host);
     server.listen(httpListener);
     if (startSsl) {
       HttpsEndpoint httpsListener =
-          HttpsEndpoint.onAny(HTTPS_PORT).addHost("localhost", host, TestHelper.getSSLInfo());
+          HttpsEndpoint.onAny(httpsPort).addHost("localhost", host, TestHelper.getSSLInfo());
       server.listen(httpsListener);
     }
   }
@@ -116,13 +132,12 @@ final class LocalCatfishServer implements Server {
 
   @Override
   public HttpResponse sendSsl(String content) throws IOException {
-    return send(
-        LocalCatfishServer.HTTP_SERVER, LocalCatfishServer.HTTPS_PORT, true, toBytes(content));
+    return send(HTTP_SERVER, httpsPort, true, toBytes(content));
   }
 
   @Override
   public HttpResponse send(byte[] content) throws IOException {
-    return send(LocalCatfishServer.HTTP_SERVER, LocalCatfishServer.HTTP_PORT, false, content);
+    return send(HTTP_SERVER, httpPort, false, content);
   }
 
   @Override
@@ -143,8 +158,6 @@ final class LocalCatfishServer implements Server {
       throw new IllegalStateException();
     }
     return RawHttpConnection.connect(
-        HTTP_SERVER,
-        ssl ? HTTPS_PORT : HTTP_PORT,
-        ssl ? TestHelper.getSSLInfo().sslContext() : null);
+        HTTP_SERVER, ssl ? httpsPort : httpPort, ssl ? TestHelper.getSSLInfo().sslContext() : null);
   }
 }

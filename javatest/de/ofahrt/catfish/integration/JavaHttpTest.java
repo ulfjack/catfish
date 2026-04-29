@@ -12,11 +12,12 @@ import org.junit.Test;
 
 public class JavaHttpTest {
 
-  private static Server localServer;
+  private static LocalCatfishServer localServer;
 
   @BeforeClass
   public static void startServer() throws Exception {
     localServer = new LocalCatfishServer();
+    localServer.setStartSsl(true);
     localServer.start();
   }
 
@@ -28,7 +29,7 @@ public class JavaHttpTest {
   @Test
   public void getWithJavaHttpUrlConnection() throws IOException {
     TestingCatfishHttpClient client = TestingCatfishHttpClient.createNetworkedClient();
-    HttpResponse response = client.get(LocalCatfishServer.HTTP_ROOT + "/compression.html");
+    HttpResponse response = client.get(localServer.getHttpRoot() + "/compression.html");
     assertNotNull(response);
     assertEquals(200, response.getStatusCode());
   }
@@ -36,7 +37,7 @@ public class JavaHttpTest {
   @Test
   public void sslGetWithJavaHttpUrlConnection() throws IOException {
     TestingCatfishHttpClient client = TestingCatfishHttpClient.createNetworkedClient();
-    HttpResponse response = client.get(LocalCatfishServer.HTTPS_ROOT + "/compression.html");
+    HttpResponse response = client.get(localServer.getHttpsRoot() + "/compression.html");
     assertNotNull(response);
     assertEquals(200, response.getStatusCode());
   }
