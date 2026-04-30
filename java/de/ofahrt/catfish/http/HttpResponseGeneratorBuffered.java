@@ -34,6 +34,7 @@ public final class HttpResponseGeneratorBuffered implements HttpResponseGenerato
   private final byte[][] data;
   private int currentBlock;
   private int currentIndex;
+  private long bodyBytesSent;
 
   HttpResponseGeneratorBuffered(
       @Nullable HttpRequest request, HttpResponse response, byte[][] data) {
@@ -63,6 +64,9 @@ public final class HttpResponseGeneratorBuffered implements HttpResponseGenerato
           Math.min(outputBuffer.remaining(), data[currentBlock].length - currentIndex);
       outputBuffer.put(data[currentBlock], currentIndex, bytesCopyCount);
       totalBytesCopied += bytesCopyCount;
+      if (currentBlock == 1) {
+        bodyBytesSent += bytesCopyCount;
+      }
       currentIndex += bytesCopyCount;
       if (currentIndex >= data[currentBlock].length) {
         currentBlock++;
@@ -87,7 +91,7 @@ public final class HttpResponseGeneratorBuffered implements HttpResponseGenerato
 
   @Override
   public long getBodyBytesSent() {
-    return data.length > 1 ? data[1].length : 0;
+    return bodyBytesSent;
   }
 
   @Override
