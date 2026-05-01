@@ -6,6 +6,7 @@ import de.ofahrt.catfish.HttpVirtualHost;
 import de.ofahrt.catfish.fastcgi.FcgiHandler;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
+import de.ofahrt.catfish.model.server.UploadPolicy;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -81,8 +82,8 @@ public final class FcgiwrapMain {
             });
     FcgiHandler fcgiHandler =
         new FcgiHandler("127.0.0.1", fcgiPort, "/script", scriptPath.toString());
-    server.listen(
-        HttpEndpoint.onAny(httpPort).addHost("default", new HttpVirtualHost(fcgiHandler)));
+    HttpVirtualHost host = new HttpVirtualHost(fcgiHandler).uploadPolicy(UploadPolicy.ALLOW);
+    server.listen(HttpEndpoint.onAny(httpPort).addHost("default", host));
 
     System.out.println();
     System.out.println("Open in browser: http://localhost:" + httpPort + "/script?hello=world");

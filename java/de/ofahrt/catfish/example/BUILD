@@ -48,6 +48,7 @@ java_binary(
         "//java/de/ofahrt/catfish",
         "//java/de/ofahrt/catfish/fastcgi",
         "//java/de/ofahrt/catfish/model/network",
+        "//java/de/ofahrt/catfish/model/server",
         "//third_party/jspecify",
     ],
 )
@@ -60,6 +61,7 @@ java_binary(
         "//java/de/ofahrt/catfish",
         "//java/de/ofahrt/catfish/fastcgi",
         "//java/de/ofahrt/catfish/model/network",
+        "//java/de/ofahrt/catfish/model/server",
         "//third_party/jspecify",
     ],
 )
