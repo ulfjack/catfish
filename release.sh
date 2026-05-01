@@ -6,6 +6,7 @@ if [[ -z "${OUTPUT_FILE:-}" ]]; then
   exit 1
 fi
 
+bazel coverage //...
 bazel build //java/de/ofahrt/catfish:catfish-dist_deploy.jar
 cp bazel-bin/java/de/ofahrt/catfish/catfish-dist_deploy.jar "$OUTPUT_FILE"
 
