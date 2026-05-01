@@ -9,6 +9,7 @@ java_library(
         exclude = [
             "ExampleMain.java",
             "FcgiwrapMain.java",
+            "PhpFpmMain.java",
         ],
     ),
     deps = [
@@ -43,6 +44,18 @@ java_binary(
     name = "fcgiwrap_main",
     srcs = ["FcgiwrapMain.java"],
     main_class = "de.ofahrt.catfish.example.FcgiwrapMain",
+    deps = [
+        "//java/de/ofahrt/catfish",
+        "//java/de/ofahrt/catfish/fastcgi",
+        "//java/de/ofahrt/catfish/model/network",
+        "//third_party/jspecify",
+    ],
+)
+
+java_binary(
+    name = "phpfpm_main",
+    srcs = ["PhpFpmMain.java"],
+    main_class = "de.ofahrt.catfish.example.PhpFpmMain",
     deps = [
         "//java/de/ofahrt/catfish",
         "//java/de/ofahrt/catfish/fastcgi",
