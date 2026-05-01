@@ -307,24 +307,6 @@ public class MitmConnectIntegrationTest {
   }
 
   @Test
-  public void mitmConnectProxy_originUnreachable_returns502() throws Exception {
-    // Port 1 is not listening; the origin connect will fail immediately with ECONNREFUSED.
-    try (Socket socket = new Socket("localhost", mitmPort)) {
-      OutputStream out = socket.getOutputStream();
-      InputStream in = socket.getInputStream();
-      out.write(
-          "CONNECT localhost:1 HTTP/1.1\r\nHost: localhost\r\n\r\n"
-              .getBytes(StandardCharsets.ISO_8859_1));
-      out.flush();
-      String response = readUntilBlankLine(in);
-      assertTrue("Expected 502, got: " + response, response.startsWith("HTTP/1.1 502"));
-      assertTrue(
-          "Expected Connection: close, got: " + response, response.contains("Connection: close"));
-      assertTrue("Expected connection closed", in.read() == -1);
-    }
-  }
-
-  @Test
   public void mitmConnectProxy_policyThrows_returns502() throws Exception {
     int proxyPort = PortPicker.pick();
     CatfishHttpServer s = newServer();
@@ -361,7 +343,7 @@ public class MitmConnectIntegrationTest {
     CatfishHttpServer s = newServer();
     serversToStop.add(s);
     de.ofahrt.catfish.ssl.CertificateAuthority failingCa =
-        (hostname, originCert) -> {
+        (hostname, port) -> {
           throw new RuntimeException("CA failed");
         };
     HttpEndpoint listener =

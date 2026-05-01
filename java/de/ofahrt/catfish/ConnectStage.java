@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.security.cert.X509Certificate;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Executor;
@@ -67,7 +66,6 @@ final class ConnectStage implements Stage {
   private final int port;
   private final ConnectHandler handler;
   private final HttpServerListener serverListener;
-  private final OriginCertFetcher originCertFetcher;
   private final SslInfoCache sslInfoCache;
   private final LocalStageFactory localStageFactory;
 
@@ -95,7 +93,6 @@ final class ConnectStage implements Stage {
       int port,
       ConnectHandler handler,
       HttpServerListener serverListener,
-      OriginCertFetcher originCertFetcher,
       SslInfoCache sslInfoCache,
       LocalStageFactory localStageFactory) {
     this.parent = parent;
@@ -107,7 +104,6 @@ final class ConnectStage implements Stage {
     this.port = port;
     this.handler = handler;
     this.serverListener = serverListener;
-    this.originCertFetcher = originCertFetcher;
     this.sslInfoCache = sslInfoCache;
     this.localStageFactory = localStageFactory;
   }
@@ -152,7 +148,8 @@ final class ConnectStage implements Stage {
         parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));
       }
     } else if (decision instanceof ConnectDecision.Intercept i) {
-      // INTERCEPT: use a cached cert if available, otherwise fetch from origin and mint.
+      // INTERCEPT: use a cached cert if available, otherwise mint one via the user-supplied CA.
+      // The CA decides whether to consult any external state (e.g. fetching the origin cert).
       String cacheKey = connectHost + ":" + connectPort;
       SSLInfo cached = sslInfoCache.get(cacheKey);
       SSLContext ctx;
@@ -161,8 +158,7 @@ final class ConnectStage implements Stage {
       } else {
         SSLInfo info;
         try {
-          X509Certificate originCert = originCertFetcher.fetchCertificate(i.host(), i.port());
-          info = i.ca().create(connectHost, originCert);
+          info = i.ca().create(connectHost, connectPort);
         } catch (Exception e) {
           notifyConnectFailed(connectHost, connectPort, e);
           parent.queue(() -> startResponse(RESPONSE_502, /* closeAfterSend= */ true));

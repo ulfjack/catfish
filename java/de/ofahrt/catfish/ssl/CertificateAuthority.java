@@ -1,12 +1,13 @@
 package de.ofahrt.catfish.ssl;
 
-import java.security.cert.X509Certificate;
-
 public interface CertificateAuthority {
   /**
-   * Generates a new SSLInfo for a fake leaf cert. The cert mirrors the SANs and CN from {@code
-   * originCert} so clients see a faithful representation of the origin. The {@code hostname} (from
-   * the CONNECT request) is used as a fallback CN/SAN when the origin cert provides none.
+   * Mints a leaf certificate for {@code hostname}:{@code port} signed by this authority's CA key.
+   * The {@code (hostname, port)} pair is the CONNECT request target — what the client expects to be
+   * connecting to. Implementations decide what subject and SANs to put on the cert; the simplest
+   * correct choice is CN={@code hostname}, SAN={@code DNS:hostname}. If the implementation needs to
+   * consult external state (an upstream server, a cached cert pool, etc.) it must do that itself —
+   * catfish does not perform any network I/O on its behalf.
    */
-  SSLInfo create(String hostname, X509Certificate originCert) throws Exception;
+  SSLInfo create(String hostname, int port) throws Exception;
 }

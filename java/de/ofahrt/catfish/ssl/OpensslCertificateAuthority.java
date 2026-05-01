@@ -21,36 +21,48 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
   private final Path caCert;
   private final Path workDir;
   private final Duration validity;
+  private final @Nullable OriginCertFetcher originCertFetcher;
 
   private OpensslCertificateAuthority(Builder builder) {
     this.caKey = builder.caKey;
     this.caCert = builder.caCert;
     this.workDir = builder.workDir;
     this.validity = builder.validity;
+    this.originCertFetcher = builder.originCertFetcher;
   }
 
   @Override
-  public SSLInfo create(String hostname, X509Certificate originCert) throws Exception {
+  public SSLInfo create(String hostname, int port) throws Exception {
     String id = UUID.randomUUID().toString();
     Path extFile = workDir.resolve(id + ".ext");
     Path keyFile = workDir.resolve(id + ".key");
     Path csrFile = workDir.resolve(id + ".csr");
     Path crtFile = workDir.resolve(id + ".crt");
 
-    // Mirror the origin cert's SANs so the fake cert covers the same names.
-    List<String> sanEntries = extractSanEntries(originCert);
+    // If an OriginCertFetcher is configured, try to fetch the upstream cert and mirror its
+    // SANs/CN. This makes the minted cert a faithful copy. If fetching fails, fall back to a
+    // hostname-only cert rather than failing the whole CONNECT.
+    X509Certificate originCert = null;
+    if (originCertFetcher != null) {
+      try {
+        originCert = originCertFetcher.fetchCertificate(hostname, port);
+      } catch (IOException ignored) {
+        // Fall back to hostname-only cert below.
+      }
+    }
+
+    List<String> sanEntries = originCert != null ? extractSanEntries(originCert) : List.of();
     if (sanEntries.isEmpty()) {
       sanEntries = List.of("DNS:" + hostname);
     }
     Files.writeString(
         extFile, "subjectAltName=" + String.join(",", sanEntries), StandardCharsets.UTF_8);
 
-    // Mirror the origin cert's CN; fall back to the hostname if absent.
-    // Strip '/' because openssl uses it as a field separator in -subj values.
-    String cn = extractCn(originCert);
+    String cn = originCert != null ? extractCn(originCert) : null;
     if (cn == null) {
       cn = hostname;
     }
+    // Strip '/' because openssl uses it as a field separator in -subj values.
     cn = cn.replace("/", "");
 
     try {
@@ -149,6 +161,7 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
     private final Path caCert;
     private final Path workDir;
     private Duration validity = DEFAULT_VALIDITY;
+    private @Nullable OriginCertFetcher originCertFetcher;
 
     public Builder(Path caKey, Path caCert, Path workDir) {
       this.caKey = Objects.requireNonNull(caKey, "caKey");
@@ -158,6 +171,16 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
 
     public Builder setValidity(Duration validity) {
       this.validity = Objects.requireNonNull(validity, "validity");
+      return this;
+    }
+
+    /**
+     * Configures the CA to fetch the upstream certificate via the given fetcher and mirror its
+     * SANs/CN onto the minted leaf cert. If unset, the leaf cert is generated from hostname only
+     * (CN={@code hostname}, SAN={@code DNS:hostname}).
+     */
+    public Builder setOriginCertFetcher(OriginCertFetcher originCertFetcher) {
+      this.originCertFetcher = Objects.requireNonNull(originCertFetcher, "originCertFetcher");
       return this;
     }
 

@@ -21,7 +21,7 @@ public class OpensslCertificateAuthorityTest {
   private static Path workDir;
   private static Path caKey;
   private static Path caCert;
-  // A real X509Certificate used as the "origin cert" in tests.
+  // A real X509Certificate used as the "origin cert" returned by the stub fetcher in tests.
   private static X509Certificate originCert;
 
   private static boolean opensslAvailable() {
@@ -80,7 +80,7 @@ public class OpensslCertificateAuthorityTest {
   public void create_returnsNonNullContext() throws Exception {
     OpensslCertificateAuthority ca =
         new OpensslCertificateAuthority.Builder(caKey, caCert, workDir).build();
-    SSLInfo info = ca.create("localhost", originCert);
+    SSLInfo info = ca.create("localhost", 443);
     assertNotNull(info.sslContext());
   }
 
@@ -88,59 +88,74 @@ public class OpensslCertificateAuthorityTest {
   public void create_differentHostnames_returnsDifferentContexts() throws Exception {
     OpensslCertificateAuthority ca =
         new OpensslCertificateAuthority.Builder(caKey, caCert, workDir).build();
-    SSLInfo info1 = ca.create("host1.example.com", originCert);
-    SSLInfo info2 = ca.create("host2.example.com", originCert);
+    SSLInfo info1 = ca.create("host1.example.com", 443);
+    SSLInfo info2 = ca.create("host2.example.com", 443);
     assertNotNull(info1.sslContext());
     assertNotNull(info2.sslContext());
   }
 
   @Test
-  public void create_mirrorsCnFromOriginCert() throws Exception {
+  public void create_noFetcher_cnIsHostname() throws Exception {
     OpensslCertificateAuthority ca =
         new OpensslCertificateAuthority.Builder(caKey, caCert, workDir).build();
-    SSLInfo info = ca.create("localhost", originCert);
+    SSLInfo info = ca.create("api.example.com", 443);
+    assertEquals("api.example.com", extractCn(info.certificate()));
+  }
+
+  @Test
+  public void create_noFetcher_sanIsHostname() throws Exception {
+    OpensslCertificateAuthority ca =
+        new OpensslCertificateAuthority.Builder(caKey, caCert, workDir).build();
+    SSLInfo info = ca.create("api.example.com", 443);
+    List<String> dnsNames = dnsSans(info.certificate());
+    assertTrue("Expected DNS:api.example.com in SANs", dnsNames.contains("api.example.com"));
+  }
+
+  @Test
+  public void create_withFetcher_mirrorsCnFromOriginCert() throws Exception {
+    OpensslCertificateAuthority ca =
+        new OpensslCertificateAuthority.Builder(caKey, caCert, workDir)
+            .setOriginCertFetcher((host, port) -> originCert)
+            .build();
+    SSLInfo info = ca.create("ignored.example.com", 443);
     assertEquals("testhost", extractCn(info.certificate()));
   }
 
   @Test
-  public void create_mirrorsSansFromOriginCert() throws Exception {
+  public void create_withFetcher_mirrorsSansFromOriginCert() throws Exception {
     OpensslCertificateAuthority ca =
-        new OpensslCertificateAuthority.Builder(caKey, caCert, workDir).build();
-    SSLInfo info = ca.create("localhost", originCert);
-
-    Collection<List<?>> sans = info.certificate().getSubjectAlternativeNames();
-    assertNotNull("Generated cert must have SANs", sans);
-    List<String> dnsNames =
-        sans.stream()
-            .filter(san -> (Integer) san.get(0) == 2) // dNSName
-            .map(san -> (String) san.get(1))
-            .collect(Collectors.toList());
-    assertTrue("Generated cert must contain DNS:testhost", dnsNames.contains("testhost"));
+        new OpensslCertificateAuthority.Builder(caKey, caCert, workDir)
+            .setOriginCertFetcher((host, port) -> originCert)
+            .build();
+    SSLInfo info = ca.create("ignored.example.com", 443);
+    assertTrue(
+        "Expected DNS:testhost mirrored from origin",
+        dnsSans(info.certificate()).contains("testhost"));
   }
 
   @Test
-  public void create_noSanOriginCert_fallsBackToHostname() throws Exception {
-    // Use a cert with no SANs: load the plain test cert (test.cert.pem has no SAN extension).
-    SSLInfo noSanInfo =
-        SSLContextFactory.loadPemKeyAndCrtFiles(
-            new File("javatest/de/ofahrt/catfish/ssl/test.key.pem"),
-            new File("javatest/de/ofahrt/catfish/ssl/test.cert.pem"));
-    X509Certificate noSanCert = noSanInfo.certificate();
-
+  public void create_withFailingFetcher_fallsBackToHostname() throws Exception {
     OpensslCertificateAuthority ca =
-        new OpensslCertificateAuthority.Builder(caKey, caCert, workDir).build();
-    SSLInfo info = ca.create("fallback.example.com", noSanCert);
-
-    Collection<List<?>> sans = info.certificate().getSubjectAlternativeNames();
-    assertNotNull("Generated cert must have SANs", sans);
-    List<String> dnsNames =
-        sans.stream()
-            .filter(san -> (Integer) san.get(0) == 2)
-            .map(san -> (String) san.get(1))
-            .collect(Collectors.toList());
+        new OpensslCertificateAuthority.Builder(caKey, caCert, workDir)
+            .setOriginCertFetcher(
+                (host, port) -> {
+                  throw new IOException("offline");
+                })
+            .build();
+    SSLInfo info = ca.create("fallback.example.com", 443);
+    assertEquals("fallback.example.com", extractCn(info.certificate()));
     assertTrue(
-        "Generated cert must fall back to DNS:fallback.example.com",
-        dnsNames.contains("fallback.example.com"));
+        "Expected DNS:fallback.example.com fallback",
+        dnsSans(info.certificate()).contains("fallback.example.com"));
+  }
+
+  private static List<String> dnsSans(X509Certificate cert) throws Exception {
+    Collection<List<?>> sans = cert.getSubjectAlternativeNames();
+    assertNotNull("Generated cert must have SANs", sans);
+    return sans.stream()
+        .filter(san -> (Integer) san.get(0) == 2)
+        .map(san -> (String) san.get(1))
+        .collect(Collectors.toList());
   }
 
   private static @Nullable String extractCn(X509Certificate cert) {

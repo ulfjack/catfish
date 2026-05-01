@@ -67,9 +67,6 @@ public class ConnectStageTest {
         443,
         handler,
         listener,
-        (h, p) -> {
-          throw new java.io.IOException("test: no origin");
-        },
         new SslInfoCache(),
         (p, inBuf, outBuf, ch, ex, cHost, cPort) -> {
           throw new UnsupportedOperationException();
@@ -95,7 +92,7 @@ public class ConnectStageTest {
 
   @Test
   public void throwingListener_onConnectFailed_doesNotBreak() throws Exception {
-    // Intercept decision — cert fetch will fail, triggering notifyConnectFailed.
+    // Intercept decision — CA throws, triggering notifyConnectFailed.
     ConnectHandler interceptHandler =
         new ConnectHandler() {
           @Override
@@ -103,7 +100,7 @@ public class ConnectStageTest {
             return ConnectDecision.intercept(
                 host,
                 port,
-                (h, cert) -> {
+                (h, p) -> {
                   throw new RuntimeException("unused");
                 });
           }
@@ -213,9 +210,6 @@ public class ConnectStageTest {
             443,
             DENY_ALL,
             new HttpServerListener() {},
-            (h, p) -> {
-              throw new java.io.IOException("test");
-            },
             new SslInfoCache(),
             (p, inBuf, outBuf, ch, ex, cHost, cPort) -> {
               throw new UnsupportedOperationException();
