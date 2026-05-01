@@ -6,7 +6,10 @@ java_library(
     name = "handlers",
     srcs = glob(
         ["*.java"],
-        exclude = ["ExampleMain.java"],
+        exclude = [
+            "ExampleMain.java",
+            "FcgiwrapMain.java",
+        ],
     ),
     deps = [
         "//java/de/ofahrt/catfish/model",
@@ -33,5 +36,17 @@ java_binary(
         "//java/de/ofahrt/catfish/ssl",
         "//java/de/ofahrt/catfish/upload",
         "//java/de/ofahrt/catfish/utils",
+    ],
+)
+
+java_binary(
+    name = "fcgiwrap_main",
+    srcs = ["FcgiwrapMain.java"],
+    main_class = "de.ofahrt.catfish.example.FcgiwrapMain",
+    deps = [
+        "//java/de/ofahrt/catfish",
+        "//java/de/ofahrt/catfish/fastcgi",
+        "//java/de/ofahrt/catfish/model/network",
+        "//third_party/jspecify",
     ],
 )
