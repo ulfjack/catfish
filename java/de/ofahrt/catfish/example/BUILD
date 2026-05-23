@@ -9,6 +9,7 @@ java_library(
         exclude = [
             "ExampleMain.java",
             "FcgiwrapMain.java",
+            "MitmProxyMain.java",
             "PhpFpmMain.java",
         ],
     ),
@@ -62,6 +63,20 @@ java_binary(
         "//java/de/ofahrt/catfish/fastcgi",
         "//java/de/ofahrt/catfish/model/network",
         "//java/de/ofahrt/catfish/model/server",
+        "//third_party/jspecify",
+    ],
+)
+
+java_binary(
+    name = "mitm_proxy_main",
+    srcs = ["MitmProxyMain.java"],
+    main_class = "de.ofahrt.catfish.example.MitmProxyMain",
+    deps = [
+        "//java/de/ofahrt/catfish",
+        "//java/de/ofahrt/catfish/model",
+        "//java/de/ofahrt/catfish/model/network",
+        "//java/de/ofahrt/catfish/model/server",
+        "//java/de/ofahrt/catfish/ssl",
         "//third_party/jspecify",
     ],
 )
