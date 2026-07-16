@@ -5,6 +5,7 @@ package de.ofahrt.catfish.utils;
  *
  * @deprecated Use {@link MediaType#parse} directly for new code.
  */
+@Deprecated
 public class HttpContentType {
   public static final String MULTIPART_FORMDATA = "multipart/form-data";
   public static final String WWW_FORM_URLENCODED = "application/x-www-form-urlencoded";
