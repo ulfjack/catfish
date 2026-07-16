@@ -215,9 +215,11 @@ public final class NetworkEngine {
       state = ConnectionState.CLOSED;
       writeState = FlowState.CLOSED;
       readState = FlowState.CLOSED;
+      // Cancel the key before anything that could throw, so a failure below cannot leave a live
+      // SelectionKey attached to a CLOSED handler — that would spin handleEvent() forever.
+      key.cancel();
       // Release resources, we may have a worker thread blocked on writing to the connection.
       current.close();
-      key.cancel();
       try {
         socketChannel.close();
       } catch (IOException e) {

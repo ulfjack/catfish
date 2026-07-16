@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.Deque;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.junit.After;
@@ -277,6 +278,32 @@ public class NetworkEngineTest {
     assertTrue(stage.awaitClose(TIMEOUT_MS));
     // The listener gets a warning, not an internal error.
     assertNotNull(listener.awaitWarning(TIMEOUT_MS));
+  }
+
+  // ---- 12c. Stage.close() throwing must not spin the selector ----
+
+  @Test
+  public void close_stageCloseThrows_doesNotSpin() throws Exception {
+    // Regression test: if Stage.close() throws (e.g. a RejectedExecutionException from an
+    // onClose lambda when the worker executor is saturated), doClose() must still cancel the
+    // SelectionKey. Otherwise the key stays valid with state=CLOSED and handleEvent() throws
+    // IllegalStateException on every subsequent select(), filling disk with error logs.
+    ProgrammableStage stage =
+        new ProgrammableStage()
+            .withInitialState(InitialConnectionState.READ_AND_WRITE)
+            .throwOnClose()
+            .enqueueReadResponse(ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY);
+    int port = startListener(stage);
+    try (Socket client = connectClient(port)) {
+      client.getOutputStream().write("bye".getBytes());
+      client.getOutputStream().flush();
+      // The close throws, which is reported as an internal error.
+      assertNotNull(listener.awaitInternalError(TIMEOUT_MS));
+      // Wait long enough that a spinning loop would rack up many more errors.
+      Thread.sleep(200);
+      int count = listener.internalErrorCount();
+      assertTrue("expected a small, bounded number of internal errors, got " + count, count <= 2);
+    }
   }
 
   // ---- 13. EOF while bytes remain in buffer → CLOSE_AFTER_FLUSH loop ----
@@ -614,6 +641,7 @@ public class NetworkEngineTest {
 
     private final CountDownLatch internalErrorLatch = new CountDownLatch(1);
     private final AtomicReference<Throwable> internalError = new AtomicReference<>();
+    private final AtomicInteger internalErrorCount = new AtomicInteger();
 
     private final CountDownLatch warningLatch = new CountDownLatch(1);
     private final AtomicReference<Throwable> warning = new AtomicReference<>();
@@ -636,7 +664,12 @@ public class NetworkEngineTest {
     @Override
     public void notifyInternalError(@Nullable Connection connection, Throwable throwable) {
       internalError.compareAndSet(null, throwable);
+      internalErrorCount.incrementAndGet();
       internalErrorLatch.countDown();
+    }
+
+    int internalErrorCount() {
+      return internalErrorCount.get();
     }
 
     @Override
@@ -691,6 +724,7 @@ public class NetworkEngineTest {
 
     private InitialConnectionState initialState = InitialConnectionState.READ_AND_WRITE;
     private boolean throwOnConnect;
+    private boolean throwOnClose;
     private boolean drainInput = true;
     private Stage replaceWithStage;
 
@@ -716,6 +750,11 @@ public class NetworkEngineTest {
 
     ProgrammableStage throwOnConnect() {
       this.throwOnConnect = true;
+      return this;
+    }
+
+    ProgrammableStage throwOnClose() {
+      this.throwOnClose = true;
       return this;
     }
 
@@ -825,6 +864,9 @@ public class NetworkEngineTest {
     @Override
     public void close() {
       closeLatch.countDown();
+      if (throwOnClose) {
+        throw new RuntimeException("stage close failure");
+      }
     }
   }
 }
