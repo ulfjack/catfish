@@ -4,8 +4,8 @@ Catfish is a Java library for embedding an HTTP/1.1 server into any JVM applicat
 low-level control over the HTTP protocol without imposing a framework: no annotation scanning, no
 dependency injection, no servlet container (though an optional servlet bridge is available).
 
-Key capabilities: non-blocking I/O, TLS with SNI-based virtual hosting, streaming responses, and
-keep-alive / compression policies per virtual host.
+Key capabilities: non-blocking I/O, TLS with SNI-based virtual hosting, HTTP/1.1 and HTTP/2,
+streaming responses, and keep-alive / compression policies per virtual host.
 
 ## Requirements
 
@@ -67,6 +67,23 @@ For loading from non-file sources (e.g. classpath resources in tests), use
 SNI is used to select the right `SSLContext` for each incoming connection. Connections that
 present an unknown hostname receive a TLS `unrecognized_name` alert before the handshake
 completes.
+
+## HTTP/2
+
+Use `Http2Endpoint` for an h2-only HTTPS listener. Clients negotiate HTTP/2 via ALPN
+(only `h2` is advertised), so a TLS certificate is required just like `HttpsEndpoint`:
+
+```java
+SSLInfo sslInfo = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
+
+server.listen(
+    Http2Endpoint.onAny(8443)
+        .addHost("localhost", new HttpVirtualHost(handler), sslInfo));
+```
+
+The same `HttpHandler` is used regardless of protocol version — `commitBuffered` and
+`commitStreamed` both work over HTTP/2, with streamed bodies delivered as DATA frames.
+SNI selects the right `SSLContext` per hostname, exactly as with HTTP/1.1 over TLS.
 
 ## Proxying and CONNECT handling
 
@@ -151,9 +168,11 @@ inspect, modify, record, forward, or serve individual requests locally.
 
 ## Design overview
 
-- **HTTP/1.1 only** — HTTP/1.0 and 0.9 requests are rejected with `505 HTTP Version
-  Not Supported` at the request line. Keep-alive, pipelining, and chunked transfer
-  encoding are all assumed to be available.
+- **HTTP/1.1 and HTTP/2** — over plaintext and TLS, HTTP/1.1 is spoken (HTTP/1.0 and 0.9
+  requests are rejected with `505 HTTP Version Not Supported` at the request line; keep-alive,
+  pipelining, and chunked transfer encoding are all assumed to be available). HTTP/2 is offered
+  on `Http2Endpoint` listeners, negotiated via ALPN (`h2`) over TLS, with HPACK header
+  compression and stream multiplexing.
 - **Non-blocking NIO** — a selector-thread pool handles all socket I/O without blocking;
   application handlers run on a separate worker pool.
 - **Pipeline stages** — TLS and HTTP are independent, composable layers. For HTTPS the stack
