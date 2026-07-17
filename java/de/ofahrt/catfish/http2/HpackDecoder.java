@@ -13,13 +13,27 @@ final class HpackDecoder {
 
   private static final int DYNAMIC_TABLE_OVERHEAD = 32; // per RFC 7541 §4.1
 
+  /**
+   * Default cap on the cumulative <em>uncompressed</em> size of a decoded header list, per
+   * RFC 9113 §6.5.2 (name length + value length + 32 per field). This bounds HPACK decompression
+   * amplification: without it, a single ~16 KB HEADERS frame full of indexed references to a large
+   * dynamic-table entry could inflate into tens of MB of decoded headers (a compression-based OOM
+   * DoS, same family as the CONTINUATION flood, CVE-2024-27316).
+   */
+  static final int DEFAULT_MAX_HEADER_LIST_SIZE = 32768;
+
   private final List<Header> dynamicTable = new ArrayList<>();
   private int dynamicTableSize;
   private int maxDynamicTableSize = 4096; // SETTINGS_HEADER_TABLE_SIZE default
+  private int maxHeaderListSize = DEFAULT_MAX_HEADER_LIST_SIZE;
 
   void setMaxDynamicTableSize(int max) {
     this.maxDynamicTableSize = max;
     evict();
+  }
+
+  void setMaxHeaderListSize(int max) {
+    this.maxHeaderListSize = max;
   }
 
   /**
@@ -30,6 +44,9 @@ final class HpackDecoder {
     List<Header> headers = new ArrayList<>();
     int end = offset + length;
     int[] pos = new int[1];
+    // Running total of the uncompressed header-list size, per RFC 9113 §6.5.2. Checked as each
+    // header is appended so decoding aborts early rather than materializing a huge list.
+    long headerListSize = 0;
 
     while (offset < end) {
       int firstByte = data[offset] & 0xff;
@@ -41,19 +58,24 @@ final class HpackDecoder {
           throw new HpackDecodingException("Truncated indexed header");
         }
         offset = pos[0];
-        headers.add(getIndexed(index));
+        Header header = getIndexed(index);
+        headerListSize = accountAndCheck(headerListSize, header);
+        headers.add(header);
 
       } else if ((firstByte & 0xc0) == 0x40) {
         // Literal with incremental indexing (§6.2.1): top bits = 01
         offset = decodeLiteral(data, offset, end, 6, headers, true);
+        headerListSize = accountAndCheck(headerListSize, headers.get(headers.size() - 1));
 
       } else if ((firstByte & 0xf0) == 0x00) {
         // Literal without indexing (§6.2.2): top bits = 0000
         offset = decodeLiteral(data, offset, end, 4, headers, false);
+        headerListSize = accountAndCheck(headerListSize, headers.get(headers.size() - 1));
 
       } else if ((firstByte & 0xf0) == 0x10) {
         // Literal never indexed (§6.2.3): top bits = 0001
         offset = decodeLiteral(data, offset, end, 4, headers, false);
+        headerListSize = accountAndCheck(headerListSize, headers.get(headers.size() - 1));
 
       } else if ((firstByte & 0xe0) == 0x20) {
         // Dynamic table size update (§6.3): top bits = 001
@@ -75,6 +97,19 @@ final class HpackDecoder {
     }
 
     return headers;
+  }
+
+  /**
+   * Adds the given header's contribution to the running header-list size and throws if the
+   * configured maximum is exceeded. Uses the RFC 9113 §6.5.2 accounting: name + value + 32.
+   */
+  private long accountAndCheck(long current, Header header) throws HpackDecodingException {
+    long updated = current + header.name().length() + header.value().length() + 32L;
+    if (updated > maxHeaderListSize) {
+      throw new HpackDecodingException(
+          "Header list size exceeds maximum (" + maxHeaderListSize + ")");
+    }
+    return updated;
   }
 
   private int decodeLiteral(

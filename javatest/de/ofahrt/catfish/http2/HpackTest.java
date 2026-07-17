@@ -366,6 +366,51 @@ public class HpackTest {
   }
 
   @Test
+  public void decode_headerListSizeExceeded_throws() throws HpackDecodingException {
+    // Add a large value to the dynamic table (name "a" + ~4000-byte value), then reference it
+    // repeatedly from a single block via cheap 1-byte indexed representations. This models the
+    // HPACK amplification DoS: a small compressed block inflating into a huge decoded list.
+    HpackDecoder decoder = new HpackDecoder();
+    decoder.setMaxHeaderListSize(32768);
+
+    int valueLen = 4000;
+    byte[] big = new byte[16 + valueLen]; // generous header room for varint length
+    int p = 0;
+    big[p++] = 0x40; // literal with incremental indexing, new name
+    big[p++] = 0x01; // name length 1
+    big[p++] = 'a';
+    // value length 4000 with 7-bit prefix: 127, then (4000-127)=3873 → 3873 = 0xF21 → varint
+    p += Hpack.encodeInteger(big, p, valueLen, 7, 0x00);
+    for (int i = 0; i < valueLen; i++) {
+      big[p++] = 'x';
+    }
+    decoder.decode(big, 0, p); // one entry: ~4033 bytes accounted, under the limit
+
+    // Now a block of 9 indexed references to dynamic entry 62 (0xBE). Each replays ~4033 bytes;
+    // 9 * 4033 = ~36k > 32768, so decoding must abort partway.
+    byte[] refs = new byte[9];
+    for (int i = 0; i < refs.length; i++) {
+      refs[i] = (byte) 0xbe;
+    }
+    try {
+      decoder.decode(refs, 0, refs.length);
+      fail("expected HpackDecodingException");
+    } catch (HpackDecodingException e) {
+      assertTrue(String.valueOf(e.getMessage()).contains("Header list size exceeds maximum"));
+    }
+  }
+
+  @Test
+  public void decode_headerListSizeWithinLimit_ok() throws HpackDecodingException {
+    HpackDecoder decoder = new HpackDecoder();
+    decoder.setMaxHeaderListSize(1000);
+    // Two small indexed headers, well under the limit.
+    byte[] block = {(byte) 0x82, (byte) 0x84}; // :method GET, :path /
+    List<Header> headers = decoder.decode(block, 0, block.length);
+    assertEquals(2, headers.size());
+  }
+
+  @Test
   public void setMaxDynamicTableSize_evictsEntries() throws HpackDecodingException {
     HpackDecoder decoder = new HpackDecoder();
     // Add a large entry to the dynamic table.

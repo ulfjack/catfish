@@ -277,7 +277,9 @@ public final class Http2ServerStage implements Stage {
         Setting.MAX_CONCURRENT_STREAMS.id(),
         DEFAULT_MAX_CONCURRENT_STREAMS,
         Setting.ENABLE_PUSH.id(),
-        0);
+        0,
+        Setting.MAX_HEADER_LIST_SIZE.id(),
+        HpackDecoder.DEFAULT_MAX_HEADER_LIST_SIZE);
     flushScratch();
   }
 
