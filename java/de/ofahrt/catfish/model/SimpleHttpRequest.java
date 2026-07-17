@@ -2,6 +2,7 @@ package de.ofahrt.catfish.model;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
@@ -48,10 +49,24 @@ public final class SimpleHttpRequest implements HttpRequest {
   }
 
   public static class Builder {
+    /**
+     * Hard cap on the total length of a single (possibly merged) header value. Repeated list-valued
+     * headers are folded into one value; without a bound an attacker can repeat a header so it
+     * inflates to tens of MB (a header-amplification DoS). 8 KB is generous for legitimate list
+     * headers (Accept, Cookie, etc.). Oversized headers are rejected with 400.
+     */
+    private static final int MAX_MERGED_VALUE_LENGTH = 8192;
+
     private HttpVersion version = HttpVersion.HTTP_0_9;
     private String method = "UNKNOWN";
     private @Nullable String unparsedUri;
     private Map<String, String> headers = new TreeMap<>();
+    // For headers that occur more than once, values are accumulated here in a StringBuilder so
+    // appending is O(value) rather than O(current length) — the naive "get(key) + sep + value"
+    // rebuild is O(n^2) over the repeats. The headers map holds the authoritative value for
+    // single-occurrence headers; multi-occurrence keys live here until materialize() folds them
+    // back.
+    private final Map<String, StringBuilder> mergedValues = new HashMap<>();
     private @Nullable Body body;
 
     public Builder() {
@@ -74,6 +89,7 @@ public final class SimpleHttpRequest implements HttpRequest {
       method = "UNKNOWN";
       unparsedUri = null;
       headers = new TreeMap<>();
+      mergedValues.clear();
       body = null;
     }
 
@@ -82,10 +98,23 @@ public final class SimpleHttpRequest implements HttpRequest {
      * is null; all other fields are fully populated.
      */
     public HttpRequest buildPartialRequest() {
+      materialize();
       return new SimpleHttpRequest(this);
     }
 
+    /**
+     * Folds any deferred multi-occurrence header accumulators back into the authoritative {@link
+     * #headers} map. Must run before the request snapshot is taken.
+     */
+    private void materialize() {
+      for (Map.Entry<String, StringBuilder> e : mergedValues.entrySet()) {
+        headers.put(e.getKey(), e.getValue().toString());
+      }
+      mergedValues.clear();
+    }
+
     public HttpRequest build() throws MalformedRequestException {
+      materialize();
       if (unparsedUri == null) {
         throw MalformedRequestException.of(HttpStatusCode.BAD_REQUEST, "Missing URI!");
       }
@@ -137,13 +166,31 @@ public final class SimpleHttpRequest implements HttpRequest {
       Preconditions.checkNotNull(key);
       Preconditions.checkNotNull(value);
       key = HttpHeaderName.canonicalize(key);
-      if (headers.get(key) != null) {
+      // Repeated list-valued headers are joined via a StringBuilder accumulator (O(value) per
+      // append) rather than rebuilding a growing String each time (O(current length) per append →
+      // O(n^2) overall). A hard length cap bounds the merged size. The separator is ", " for all
+      // fields except Cookie, which uses "; " per RFC 9113 §8.2.3 (cookie-pairs are recombined
+      // with a semicolon when a request carries multiple Cookie fields).
+      String separator = HttpHeaderName.COOKIE.equals(key) ? "; " : ", ";
+      StringBuilder acc = mergedValues.get(key);
+      if (acc != null) {
+        // Already accumulating this multi-occurrence header.
+        checkMergedLength(acc.length() + separator.length() + value.length());
+        acc.append(separator).append(value);
+        return this;
+      }
+      String existing = headers.get(key);
+      if (existing != null) {
         if (!HttpHeaderName.mayOccurMultipleTimes(key)) {
           throw MalformedRequestException.of(
               HttpStatusCode.BAD_REQUEST,
               "Illegal message headers: multiple occurence for non-list field");
         }
-        value = headers.get(key) + ", " + value;
+        // Second occurrence: switch this key over to a StringBuilder accumulator.
+        checkMergedLength(existing.length() + separator.length() + value.length());
+        acc = new StringBuilder(existing).append(separator).append(value);
+        mergedValues.put(key, acc);
+        return this;
       }
       if (HttpHeaderName.HOST.equals(key)) {
         if (!HttpHeaderName.validHostPort(value)) {
@@ -154,7 +201,19 @@ public final class SimpleHttpRequest implements HttpRequest {
       return this;
     }
 
+    private void checkMergedLength(int length) throws MalformedRequestException {
+      if (length > MAX_MERGED_VALUE_LENGTH) {
+        throw MalformedRequestException.of(
+            HttpStatusCode.BAD_REQUEST,
+            "Header value too large (exceeds " + MAX_MERGED_VALUE_LENGTH + " bytes)");
+      }
+    }
+
     public @Nullable String getHeader(String key) {
+      StringBuilder acc = mergedValues.get(key);
+      if (acc != null) {
+        return acc.toString();
+      }
       return headers.get(key);
     }
 
