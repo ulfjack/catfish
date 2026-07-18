@@ -49,6 +49,24 @@ server.listen(
 
 Call `server.stop()` to shut down.
 
+## Handler thread pool
+
+By default the server runs application handlers on a built-in `ForkJoinPool` fronted by a
+bounded queue that rejects excess work with `503 Service Unavailable` under overload.
+
+To take control of the pool that handler tasks run on, pass your own `Executor` to the
+constructor. For example, a Java 21+ virtual-thread-per-task executor:
+
+```java
+CatfishHttpServer server = new CatfishHttpServer(
+    eventListener, Executors.newVirtualThreadPerTaskExecutor());
+```
+
+Catfish never shuts the injected executor down — its lifecycle is owned by the application.
+An unbounded executor (such as a virtual-thread-per-task executor) never rejects tasks, so
+the application is responsible for its own back-pressure; an executor that throws
+`RejectedExecutionException` triggers Catfish's `503 Service Unavailable` overload response.
+
 ## TLS / HTTPS
 
 Use `HttpsEndpoint` with `SSLContextFactory` to serve over HTTPS:
