@@ -80,7 +80,6 @@ public final class HttpEndpoint {
         effectiveHandler,
         /* needsExecutor= */ connectHandler != null,
         effectiveOriginFactory,
-        /* sslContextProvider= */ null,
         requestListener);
   }
 

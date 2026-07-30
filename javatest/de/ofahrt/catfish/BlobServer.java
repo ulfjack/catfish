@@ -53,10 +53,13 @@ public class BlobServer {
             BlobServer.class.getClassLoader().getResourceAsStream("localhost-fullchain.pem")) {
       sslInfo = SSLContextFactory.loadPem(key, cert);
     }
-    server.listen(Http2Endpoint.onLocalhost(8443).addHost("localhost", host, sslInfo));
+    server.listen(
+        HttpsEndpoint.onLocalhost(8443)
+            .protocols(AlpnProtocol.HTTP_2, AlpnProtocol.HTTP_1_1)
+            .addHost("localhost", host, sslInfo));
 
     System.out.println("Server ready. Press Ctrl+C to stop.");
     System.out.println("  HTTP/1.1: http://localhost:8090/");
-    System.out.println("  HTTP/2:   https://localhost:8443/");
+    System.out.println("  HTTPS (h2 + http/1.1): https://localhost:8443/");
   }
 }

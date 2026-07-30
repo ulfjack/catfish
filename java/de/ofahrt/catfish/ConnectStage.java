@@ -275,7 +275,7 @@ final class ConnectStage implements Stage {
           }
         };
     SslServerStage.InnerStageFactory innerFactory =
-        (innerPipeline, plainIn, plainOut) ->
+        (innerPipeline, plainIn, plainOut, negotiatedProtocol) ->
             wrapWithOnClose(
                 localStageFactory.create(
                     innerPipeline,

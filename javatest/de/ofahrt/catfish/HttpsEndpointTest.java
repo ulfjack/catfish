@@ -175,6 +175,55 @@ public class HttpsEndpointTest {
     assertNotNull(endpoint.binding());
   }
 
+  // --- protocols() ---
+
+  @Test
+  public void protocols_returnsEndpoint() {
+    HttpsEndpoint endpoint = HttpsEndpoint.onLocalhost(443);
+    assertNotNull(endpoint.protocols(AlpnProtocol.HTTP_2, AlpnProtocol.HTTP_1_1));
+  }
+
+  @Test
+  public void protocols_singleProtocol_returnsEndpoint() {
+    HttpsEndpoint endpoint = HttpsEndpoint.onLocalhost(443);
+    assertNotNull(endpoint.protocols(AlpnProtocol.HTTP_2));
+  }
+
+  @Test
+  public void protocols_empty_throws() {
+    HttpsEndpoint endpoint = HttpsEndpoint.onLocalhost(443);
+    assertThrows(IllegalArgumentException.class, endpoint::protocols);
+  }
+
+  @Test
+  public void protocols_duplicate_throws() {
+    HttpsEndpoint endpoint = HttpsEndpoint.onLocalhost(443);
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> endpoint.protocols(AlpnProtocol.HTTP_2, AlpnProtocol.HTTP_2));
+  }
+
+  @Test
+  public void protocols_null_throws() {
+    HttpsEndpoint endpoint = HttpsEndpoint.onLocalhost(443);
+    assertThrows(NullPointerException.class, () -> endpoint.protocols((AlpnProtocol[]) null));
+  }
+
+  @Test
+  public void protocols_nullElement_throws() {
+    HttpsEndpoint endpoint = HttpsEndpoint.onLocalhost(443);
+    assertThrows(NullPointerException.class, () -> endpoint.protocols(AlpnProtocol.HTTP_2, null));
+  }
+
+  @Test
+  public void build_withProtocols_returnsNetworkHandler() {
+    HttpsEndpoint endpoint =
+        HttpsEndpoint.onLocalhost(443)
+            .addHost("localhost", new HttpVirtualHost(DUMMY), TEST_SSL)
+            .protocols(AlpnProtocol.HTTP_2, AlpnProtocol.HTTP_1_1);
+    assertNotNull(endpoint.build(Runnable::run));
+  }
+
   @Test
   public void build_withOriginSslFactory_returnsHandler() {
     HttpsEndpoint endpoint =

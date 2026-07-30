@@ -2,6 +2,8 @@ package de.ofahrt.catfish;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -40,11 +42,18 @@ public class SslServerStageTest {
 
   private static final int BUF_SIZE = 32768;
   private static final String HOST = "testhost";
+  private static final Connection DUMMY_CONNECTION =
+      new Connection(
+          new java.net.InetSocketAddress("127.0.0.1", 443),
+          new java.net.InetSocketAddress("127.0.0.1", 12345),
+          true);
 
   private FakePipeline pipeline;
   private ByteBuffer netIn;
   private ByteBuffer netOut;
   private CapturingNextStage next;
+  private InitialConnectionState pendingInitialState;
+  private String negotiatedProtocol;
   private SyncExecutor executor;
   private SslServerStage stage;
 
@@ -57,9 +66,14 @@ public class SslServerStageTest {
     this.stage =
         new SslServerStage(
             pipeline,
-            (innerPipeline, plainInBuf, plainOutBuf) -> {
-              this.next = new CapturingNextStage(plainInBuf, plainOutBuf);
-              return next;
+            (innerPipeline, plainInBuf, plainOutBuf, negotiatedProtocol) -> {
+              CapturingNextStage created = new CapturingNextStage(plainInBuf, plainOutBuf);
+              if (pendingInitialState != null) {
+                created.withInitialState(pendingInitialState);
+              }
+              this.next = created;
+              this.negotiatedProtocol = negotiatedProtocol;
+              return created;
             },
             new String[] {"http/1.1"},
             provider,
@@ -164,11 +178,26 @@ public class SslServerStageTest {
   // ---- 1. connect ----
 
   @Test
-  public void connect_returnsReadOnly_andForwardsToNext() {
+  public void connect_returnsReadOnly_andDoesNotYetCreateInnerStage() {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    InitialConnectionState state = stage.connect(null);
+    InitialConnectionState state = stage.connect(DUMMY_CONNECTION);
     assertEquals(InitialConnectionState.READ_ONLY, state);
+    // The inner stage is created only after the handshake completes (when the negotiated ALPN
+    // protocol is known), not at connect time.
+    assertNull(next);
+  }
+
+  @Test
+  public void handshake_createsInnerStageWithNegotiatedProtocol() throws Exception {
+    buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
+    stage.connect(DUMMY_CONNECTION);
+    assertNull("inner stage must not exist before handshake", next);
+    new InMemoryTlsClient(HOST).handshake();
+    // After the handshake the inner stage exists and was connected exactly once.
+    assertNotNull("inner stage must be created at handshake completion", next);
     assertEquals(1, next.connectCount);
+    // ALPN was not offered by the client, so the negotiated protocol is empty.
+    assertEquals("", negotiatedProtocol);
   }
 
   // ---- 2. incomplete ClientHello ----
@@ -176,7 +205,7 @@ public class SslServerStageTest {
   @Test
   public void findSni_incompleteClientHello_returnsContinue_staysInFindSni() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     feedNetIn(new byte[] {0x16, 0x03, 0x01});
     // SNIParser is not done yet; read() should not advance to HANDSHAKE.
     ConnectionControl cc = stage.read();
@@ -195,7 +224,7 @@ public class SslServerStageTest {
   @Test
   public void findSni_noSniExtension_throwsIOException() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     // Borrowed from SNIParserTest.completeRequestWithoutSNI: a ClientHello record with no SNI
     // extension. The SNIParser returns a done result with null name; SslServerStage must throw.
     feedNetIn(
@@ -222,7 +251,7 @@ public class SslServerStageTest {
   @Test
   public void findSni_unknownHost_writesAlertAndClosesAfterFlush() throws Exception {
     buildStage(nullProvider());
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     // Build a real ClientHello with SNI = "testhost" via a client SSLEngine, then feed it to
     // the stage. The context provider will return null for that host → SEND_ALERT.
     InMemoryTlsClient client = new InMemoryTlsClient(HOST);
@@ -244,7 +273,7 @@ public class SslServerStageTest {
   @Test
   public void write_inFindSni_throwsIOException() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     try {
       stage.write();
       fail("expected IOException");
@@ -258,7 +287,7 @@ public class SslServerStageTest {
   @Test
   public void handshake_reachesOpenState() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     InMemoryTlsClient client = new InMemoryTlsClient(HOST);
     client.handshake();
     // Delegated TLS tasks should have run on the executor.
@@ -272,7 +301,7 @@ public class SslServerStageTest {
   @Test
   public void handshake_thenAppData_clientToServer_reachesNextStage() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     InMemoryTlsClient client = new InMemoryTlsClient(HOST);
     client.handshake();
 
@@ -287,7 +316,7 @@ public class SslServerStageTest {
   @Test
   public void handshake_thenAppData_serverToClient() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     InMemoryTlsClient client = new InMemoryTlsClient(HOST);
     client.handshake();
 
@@ -301,11 +330,13 @@ public class SslServerStageTest {
   // ---- 9. inputClosed before handshake ----
 
   @Test
-  public void inputClosed_beforeHandshake_forwardsToNext() throws Exception {
+  public void inputClosed_beforeHandshake_doesNotThrow() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
+    // The inner stage does not exist yet (no handshake), so there is nothing to forward to; this
+    // must not NPE.
     stage.inputClosed();
-    assertEquals(1, next.inputClosedCount);
+    assertNull(next);
   }
 
   // ---- 10. inputClosed after handshake swallows SSLException ----
@@ -313,7 +344,7 @@ public class SslServerStageTest {
   @Test
   public void inputClosed_afterHandshake_swallowsSslException() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     new InMemoryTlsClient(HOST).handshake();
     // We never sent close_notify, so closeInbound() throws SSLException which must be swallowed.
     stage.inputClosed();
@@ -325,7 +356,7 @@ public class SslServerStageTest {
   @Test
   public void closing_drainsRemainingOutput() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     InMemoryTlsClient client = new InMemoryTlsClient(HOST);
     client.handshake();
 
@@ -348,7 +379,7 @@ public class SslServerStageTest {
   public void handshake_deferredTask_returnsPauseUntilTaskRuns() throws Exception {
     DeferredExecutor deferred = new DeferredExecutor();
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()), deferred);
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
 
     InMemoryTlsClient client = new InMemoryTlsClient(HOST);
     client.beginHandshake();
@@ -383,8 +414,8 @@ public class SslServerStageTest {
   @Test
   public void handshake_withReadAndWriteNextStage_transitionsOpenCleanly() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    next.withInitialState(InitialConnectionState.READ_AND_WRITE);
-    stage.connect(null);
+    pendingInitialState = InitialConnectionState.READ_AND_WRITE;
+    stage.connect(DUMMY_CONNECTION);
     new InMemoryTlsClient(HOST).handshake();
     // Sanity: the handshake reached OPEN (no exception thrown).
   }
@@ -392,8 +423,8 @@ public class SslServerStageTest {
   @Test
   public void handshake_withWriteOnlyNextStage_transitionsOpenCleanly() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    next.withInitialState(InitialConnectionState.WRITE_ONLY);
-    stage.connect(null);
+    pendingInitialState = InitialConnectionState.WRITE_ONLY;
+    stage.connect(DUMMY_CONNECTION);
     new InMemoryTlsClient(HOST).handshake();
   }
 
@@ -411,7 +442,7 @@ public class SslServerStageTest {
   @Test
   public void openState_nextWritePause_overriddenToContinue() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     new InMemoryTlsClient(HOST).handshake();
     next.enqueueOutput(largePayload()).withWriteResponse(ConnectionControl.PAUSE);
     // A single stage.write() call should wrap as much as fits, leaving outputBuffer with bytes
@@ -424,7 +455,7 @@ public class SslServerStageTest {
   @Test
   public void openState_nextWriteCloseImmediately_propagated() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     new InMemoryTlsClient(HOST).handshake();
     next.enqueueOutput(largePayload())
         .withWriteResponse(ConnectionControl.CLOSE_CONNECTION_IMMEDIATELY);
@@ -435,7 +466,7 @@ public class SslServerStageTest {
   @Test
   public void openState_nextWriteNeedMoreData_propagated() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     new InMemoryTlsClient(HOST).handshake();
     next.enqueueOutput(largePayload()).withWriteResponse(ConnectionControl.NEED_MORE_DATA);
     ConnectionControl cc = stage.write();
@@ -445,7 +476,7 @@ public class SslServerStageTest {
   @Test
   public void openState_nextWriteContinue_returnsContinue() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     new InMemoryTlsClient(HOST).handshake();
     next.enqueueOutput(largePayload()); // default CONTINUE
     ConnectionControl cc = stage.write();
@@ -455,7 +486,7 @@ public class SslServerStageTest {
   @Test
   public void openState_nextWriteCloseOutputAfterFlush_drainsAndPropagates() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     new InMemoryTlsClient(HOST).handshake();
 
     // Queue more plaintext than fits in one TLS record so the OPEN-state switch fires (the
@@ -479,7 +510,7 @@ public class SslServerStageTest {
   @Test
   public void openState_nextWriteCloseInput_throwsIllegalState() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     new InMemoryTlsClient(HOST).handshake();
 
     next.enqueueOutput(largePayload()).withWriteResponse(ConnectionControl.CLOSE_INPUT);
@@ -502,7 +533,7 @@ public class SslServerStageTest {
     // read() throws IOException("Re-entering handshake mode"). This is the policy we want — the
     // proxy doesn't have to handle the complexity of mid-stream rehandshake.
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     InMemoryTlsClient client = new InMemoryTlsClient(HOST, "TLSv1.2");
     client.handshake();
 
@@ -548,7 +579,7 @@ public class SslServerStageTest {
 
     // First handshake — primes both session caches.
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     new InMemoryTlsClient(HOST, "TLSv1.2", sharedClientContext).handshake();
 
     // Second handshake against a fresh stage with the same server SSLContext. This is the
@@ -556,7 +587,7 @@ public class SslServerStageTest {
     // read(). Before the fix, this threw IOException("Unexpected NOT_HANDSHAKING during
     // HANDSHAKE read").
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     InMemoryTlsClient resumed = new InMemoryTlsClient(HOST, "TLSv1.2", sharedClientContext);
     resumed.handshake();
 
@@ -573,7 +604,7 @@ public class SslServerStageTest {
     // (In both TLS 1.2 and 1.3 on JDK 21, the server's NOT_HANDSHAKING transition happens during
     // write(), not read(), so this does not cover the dead read-side branch at line 157+.)
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     InMemoryTlsClient client = new InMemoryTlsClient(HOST, "TLSv1.2");
     client.handshake();
 
@@ -585,7 +616,7 @@ public class SslServerStageTest {
   @Test
   public void openState_clientCloseNotify_returnsCloseConnectionImmediately() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
     InMemoryTlsClient client = new InMemoryTlsClient(HOST);
     client.handshake();
 
@@ -606,9 +637,19 @@ public class SslServerStageTest {
   // ---- 16. close() forwards to next ----
 
   @Test
-  public void close_forwardsToNext() throws Exception {
+  public void close_beforeHandshake_doesNotThrow() throws Exception {
     buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
-    stage.connect(null);
+    stage.connect(DUMMY_CONNECTION);
+    // No inner stage yet, so close() must be a no-op that does not NPE.
+    stage.close();
+    assertNull(next);
+  }
+
+  @Test
+  public void close_afterHandshake_forwardsToNext() throws Exception {
+    buildStage(staticProvider(TestHelper.getSSLInfo().sslContext()));
+    stage.connect(DUMMY_CONNECTION);
+    new InMemoryTlsClient(HOST).handshake();
     stage.close();
     assertEquals(1, next.closeCount);
   }

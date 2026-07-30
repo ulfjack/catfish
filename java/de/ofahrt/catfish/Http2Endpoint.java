@@ -2,15 +2,26 @@ package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.server.ConnectHandler;
+import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.ssl.SSLInfo;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
 import org.jspecify.annotations.Nullable;
 
-/** Configures an h2-only HTTPS listener. Clients must negotiate "h2" via ALPN. */
+/**
+ * Configures an h2-only HTTPS listener. Clients must negotiate "h2" via ALPN.
+ *
+ * @deprecated Use {@link HttpsEndpoint} with {@link HttpsEndpoint#protocols(AlpnProtocol...)
+ *     protocols(AlpnProtocol.HTTP_2)} instead. A unified {@code HttpsEndpoint} can serve HTTP/2 and
+ *     HTTP/1.1 on one port (via {@code protocols(AlpnProtocol.HTTP_2, AlpnProtocol.HTTP_1_1)}) or
+ *     HTTP/2 only (via {@code protocols(AlpnProtocol.HTTP_2)}), reproducing this endpoint's
+ *     behaviour. This class remains as a thin shim and will be removed in a future major version.
+ */
+@Deprecated
 public final class Http2Endpoint {
 
   private final Binding binding;
@@ -48,7 +59,14 @@ public final class Http2Endpoint {
   NetworkEngine.NetworkHandler build(Executor executor) {
     ConnectHandler connectHandler = VirtualHostRouter.buildConnectHandler(null, hosts);
     SslServerStage.SSLContextProvider sslContextProvider = this::getSSLContext;
-    return new Http2Handler(executor, connectHandler, sslContextProvider);
+    return new AlpnNegotiatingHandler(
+        executor,
+        connectHandler,
+        /* needsExecutor= */ false,
+        (SSLSocketFactory) SSLSocketFactory.getDefault(),
+        sslContextProvider,
+        new HttpServerListener() {},
+        new AlpnProtocol[] {AlpnProtocol.HTTP_2});
   }
 
   private @Nullable SSLContext getSSLContext(@Nullable String host) {

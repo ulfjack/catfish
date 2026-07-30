@@ -6,12 +6,13 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(Suite.class)
 @SuiteClasses({
+  AlpnNegotiatingHandlerTest.class,
+  AlpnProtocolTest.class,
   AsyncRoutingDispatcherTest.class,
   CatfishHttpServerTest.class,
   ConnectStageTest.class,
   HashConflictGeneratorTest.class,
   Http2EndpointTest.class,
-  Http2HandlerTest.class,
   HttpEndpointTest.class,
   HttpServerStageTest.class,
   HttpsEndpointTest.class,

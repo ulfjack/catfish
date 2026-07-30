@@ -13,5 +13,6 @@ import org.junit.runners.Suite.SuiteClasses;
   Http2StreamTest.class,
   Http2ServerStageTest.class,
   Http2IntegrationTest.class,
+  UnifiedHttpsEndpointIntegrationTest.class,
 })
 public class AllTests {}

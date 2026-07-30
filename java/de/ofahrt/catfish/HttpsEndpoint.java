@@ -22,6 +22,10 @@ public final class HttpsEndpoint {
   private @Nullable ConnectHandler connectHandler;
   private @Nullable SSLSocketFactory originSslFactory;
   private HttpServerListener requestListener = new HttpServerListener() {};
+  // Advertised ALPN protocols in preference order. Default is HTTP/1.1 only, byte-for-byte the
+  // historical behaviour, so a default HttpsEndpoint is non-breaking. Opt into HTTP/2 via
+  // protocols(...).
+  private AlpnProtocol[] protocols = {AlpnProtocol.HTTP_1_1};
 
   private HttpsEndpoint(Binding binding) {
     this.binding = Objects.requireNonNull(binding, "binding");
@@ -76,6 +80,45 @@ public final class HttpsEndpoint {
     return this;
   }
 
+  /**
+   * Configure the application protocols advertised over ALPN, in preference order. The server picks
+   * the first entry the client also offers; a client sending no ALPN, or offering nothing in
+   * common, is served the least-preferred (last) protocol.
+   *
+   * <p>Examples:
+   *
+   * <ul>
+   *   <li>{@code protocols(AlpnProtocol.HTTP_2, AlpnProtocol.HTTP_1_1)} — serve HTTP/2 to capable
+   *       clients, fall back to HTTP/1.1 otherwise, on a single HTTPS port.
+   *   <li>{@code protocols(AlpnProtocol.HTTP_2)} — HTTP/2 only; an HTTP/1.1-only or no-ALPN client
+   *       has no overlap and is refused.
+   *   <li>{@code protocols(AlpnProtocol.HTTP_1_1)} — HTTP/1.1 only (the default).
+   * </ul>
+   *
+   * <p>The default, if this is never called, is HTTP/1.1 only — identical to the historical
+   * behaviour of {@code HttpsEndpoint}.
+   *
+   * @throws IllegalArgumentException if {@code protocols} is empty or contains a duplicate
+   * @throws NullPointerException if {@code protocols} or any element is null
+   */
+  public HttpsEndpoint protocols(AlpnProtocol... protocols) {
+    Objects.requireNonNull(protocols, "protocols");
+    if (protocols.length == 0) {
+      throw new IllegalArgumentException("at least one protocol is required");
+    }
+    AlpnProtocol[] copy = protocols.clone();
+    for (int i = 0; i < copy.length; i++) {
+      Objects.requireNonNull(copy[i], "protocol");
+      for (int j = i + 1; j < copy.length; j++) {
+        if (copy[i] == copy[j]) {
+          throw new IllegalArgumentException("duplicate protocol: " + copy[i]);
+        }
+      }
+    }
+    this.protocols = copy;
+    return this;
+  }
+
   Binding binding() {
     return binding;
   }
@@ -87,13 +130,14 @@ public final class HttpsEndpoint {
             ? originSslFactory
             : (SSLSocketFactory) SSLSocketFactory.getDefault();
     SslServerStage.SSLContextProvider sslContextProvider = this::getSSLContext;
-    return new HttpServerHandler(
+    return new AlpnNegotiatingHandler(
         executor,
         effectiveHandler,
         /* needsExecutor= */ connectHandler != null,
         effectiveOriginFactory,
         sslContextProvider,
-        requestListener);
+        requestListener,
+        protocols);
   }
 
   private ConnectHandler buildConnectHandler() {

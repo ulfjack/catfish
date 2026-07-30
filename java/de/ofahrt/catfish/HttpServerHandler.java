@@ -12,19 +12,17 @@ import de.ofahrt.catfish.model.server.HttpServerListener;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Executor;
 import javax.net.ssl.SSLSocketFactory;
-import org.jspecify.annotations.Nullable;
 
 /**
- * A {@link NetworkHandler} that creates an {@link HttpServerStage} per connection. Supports plain
- * HTTP, HTTPS (with TLS termination), and proxy modes (CONNECT tunnel, forward proxy, MITM
- * interception) based on the configured {@link ConnectHandler}.
+ * A {@link NetworkHandler} that creates a plain (non-TLS) {@link HttpServerStage} per connection.
+ * Supports plain HTTP and proxy modes (CONNECT tunnel, forward proxy, MITM interception) based on
+ * the configured {@link ConnectHandler}. TLS endpoints use {@link AlpnNegotiatingHandler} instead.
  */
 final class HttpServerHandler implements NetworkHandler {
   private final Executor executor;
   private final ConnectHandler connectHandler;
   private final SSLSocketFactory originSocketFactory;
   private final SslInfoCache sslInfoCache = new SslInfoCache();
-  private final SslServerStage.@Nullable SSLContextProvider sslContextProvider;
   private final HttpServerListener serverListener;
 
   private final boolean needsExecutor;
@@ -34,43 +32,21 @@ final class HttpServerHandler implements NetworkHandler {
       ConnectHandler connectHandler,
       boolean needsExecutor,
       SSLSocketFactory originSocketFactory,
-      SslServerStage.@Nullable SSLContextProvider sslContextProvider,
       HttpServerListener serverListener) {
     this.executor = executor;
     this.connectHandler = connectHandler;
     this.needsExecutor = needsExecutor;
     this.originSocketFactory = originSocketFactory;
-    this.sslContextProvider = sslContextProvider;
     this.serverListener = serverListener;
   }
 
   @Override
   public boolean usesSsl() {
-    return sslContextProvider != null;
+    return false;
   }
 
   @Override
   public Stage connect(Pipeline pipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer) {
-    if (sslContextProvider != null) {
-      return new SslServerStage(
-          pipeline,
-          (innerPipeline, plainIn, plainOut) ->
-              new HttpServerStage(
-                  innerPipeline,
-                  this::queueRequest,
-                  connectHandler,
-                  serverListener,
-                  originSocketFactory,
-                  sslInfoCache,
-                  needsExecutor ? executor : null,
-                  plainIn,
-                  plainOut),
-          new String[] {"http/1.1"},
-          sslContextProvider,
-          executor,
-          inputBuffer,
-          outputBuffer);
-    }
     return new HttpServerStage(
         pipeline,
         this::queueRequest,

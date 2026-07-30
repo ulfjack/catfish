@@ -89,6 +89,12 @@ public final class CatfishHttpServer {
     endpoint.binding().listen(engine, endpoint.build(executor));
   }
 
+  /**
+   * @deprecated Use {@link HttpsEndpoint} with {@link HttpsEndpoint#protocols(AlpnProtocol...)
+   *     protocols(AlpnProtocol.HTTP_2)} and {@link #listen(HttpsEndpoint)} instead. {@link
+   *     Http2Endpoint} remains as a thin shim.
+   */
+  @Deprecated
   public void listen(Http2Endpoint endpoint) throws IOException, InterruptedException {
     endpoint.binding().listen(engine, endpoint.build(executor));
   }

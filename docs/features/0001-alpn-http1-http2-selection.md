@@ -1,7 +1,7 @@
 ---
 id: 0001
 title: Unify TLS endpoints with ALPN HTTP/1.1 + HTTP/2 selection
-status: ready
+status: implemented
 owner: Ulf Adams
 architecture_refs:
   - TLS / SslServerStage
@@ -81,14 +81,14 @@ into `next`. NullAway forces each site to be handled explicitly (guard, don't su
 Introduce a public enum for the offered application protocols and a configurator on `HttpsEndpoint`:
 
 ```java
-public enum HttpProtocol { HTTP_2, HTTP_1_1 }
+public enum AlpnProtocol { HTTP_2, HTTP_1_1 }
 
 // on HttpsEndpoint, protocols listed in ALPN preference order:
-public HttpsEndpoint protocols(HttpProtocol... protocols);
+public HttpsEndpoint protocols(AlpnProtocol... protocols);
 ```
 
 Default (no call) is `{HTTP_1_1}` — a single-entry ALPN list, byte-for-byte the current
-`HttpsEndpoint`. A single internal handler (`HttpProtocolNegotiatingHandler`) advertises the
+`HttpsEndpoint`. A single internal handler (`AlpnNegotiatingHandler`) advertises the
 configured protocol ids, and given the negotiated protocol builds either an `Http2ServerStage` or an
 `HttpServerStage`. When the set has one element the ALPN list has one entry, exactly reproducing the
 old single-protocol endpoints.
@@ -157,7 +157,7 @@ deprecation + migration note.
 - **Decision:** No-ALPN / no-overlap falls back to the least-preferred configured protocol. —
   *Rationale:* matches browser/`curl` behaviour for the default set, and cleanly yields "refuse h1"
   when the set is `{HTTP_2}` only.
-- **Decision:** Represent the offered protocols as a public `HttpProtocol` enum in ALPN preference
+- **Decision:** Represent the offered protocols as a public `AlpnProtocol` enum in ALPN preference
   order, rather than raw ALPN strings. — *Rationale:* type-safe, hides the `"h2"`/`"http/1.1"` id
   detail, and makes preference order explicit.
 
@@ -167,40 +167,40 @@ None.
 
 ## Acceptance Criteria
 
-- [ ] A default `HttpsEndpoint` (protocol set `{HTTP_1_1}`) advertises only `http/1.1` and serves an
+- [x] A default `HttpsEndpoint` (protocol set `{HTTP_1_1}`) advertises only `http/1.1` and serves an
       HTTP/1.1 client over `HttpServerStage` — byte-for-byte the current behaviour; an h2-capable
       client negotiates `http/1.1` (no silent h2).
-- [ ] A `HttpsEndpoint...protocols(HTTP_2, HTTP_1_1)` endpoint serves an HTTP/2 client (ALPN `h2`)
+- [x] A `HttpsEndpoint...protocols(HTTP_2, HTTP_1_1)` endpoint serves an HTTP/2 client (ALPN `h2`)
       over `Http2ServerStage` and an HTTP/1.1 client (ALPN `http/1.1`) over `HttpServerStage`, using
       the same `HttpHandler`, both getting a correct `200`.
-- [ ] A client offering only `http/1.1`, and a client sending no ALPN, against a
+- [x] A client offering only `http/1.1`, and a client sending no ALPN, against a
       `protocols(HTTP_2, HTTP_1_1)` endpoint are served over HTTP/1.1.
-- [ ] `HttpsEndpoint...protocols(HTTP_2)` serves an h2 client and **refuses** an h1-only / no-ALPN
+- [x] `HttpsEndpoint...protocols(HTTP_2)` serves an h2 client and **refuses** an h1-only / no-ALPN
       client (reproducing old `Http2Endpoint` behaviour).
-- [ ] `HttpsEndpoint...protocols(HTTP_1_1)` is equivalent to the default (advertises only
+- [x] `HttpsEndpoint...protocols(HTTP_1_1)` is equivalent to the default (advertises only
       `http/1.1`).
-- [ ] `Http2Endpoint` and `CatfishHttpServer.listen(Http2Endpoint)` still exist, are marked
+- [x] `Http2Endpoint` and `CatfishHttpServer.listen(Http2Endpoint)` still exist, are marked
       `@Deprecated`, and behave identically (h2 only, reject h1) by delegating to the unified
       negotiating handler with `protocols(HTTP_2)`; existing call sites compile unchanged.
-- [ ] `getApplicationProtocol()` is observed to be `h2` / `http/1.1` respectively in a unit or
+- [x] `getApplicationProtocol()` is observed to be `h2` / `http/1.1` respectively in a unit or
       integration test of the negotiating handler.
-- [ ] Tests: integration test on a `protocols(HTTP_2, HTTP_1_1)` endpoint forcing h1, forcing h2,
+- [x] Tests: integration test on a `protocols(HTTP_2, HTTP_1_1)` endpoint forcing h1, forcing h2,
       and no-ALPN; a default-endpoint test asserting only `http/1.1` is advertised; a
       `protocols(HTTP_2)` test asserting h1 refusal; a unit test that `SslServerStage` creates the
       inner stage only after handshake completion and chooses it from the negotiated protocol.
-- [ ] `bazel test //...` green and `bazel run //:format.check` passes.
+- [x] `bazel test //...` green and `bazel run //:format.check` passes.
 
 ## Implementation Plan
 
-- [ ] PR 1: Defer inner-stage creation in `SslServerStage` — pass the negotiated ALPN protocol to
+- [x] PR 1: Defer inner-stage creation in `SslServerStage` — pass the negotiated ALPN protocol to
       `InnerStageFactory`, create the inner stage at `transitionToOpen()`, handle the nullable
       pre-handshake `next` window. Behaviour-preserving for existing single-protocol endpoints
       (single-element ALPN list); existing `SslServerStageTest`/endpoint tests stay green.
-- [ ] PR 2: Add `HttpProtocol` enum + `HttpProtocolNegotiatingHandler` selecting the inner stage
+- [x] PR 2: Add `AlpnProtocol` enum + `AlpnNegotiatingHandler` selecting the inner stage
       from the negotiated protocol; unit-test selection and the no-ALPN fallback.
-- [ ] PR 3: Add `HttpsEndpoint.protocols(...)` (default `{HTTP_1_1}`, unchanged behaviour) wired to
+- [x] PR 3: Add `HttpsEndpoint.protocols(...)` (default `{HTTP_1_1}`, unchanged behaviour) wired to
       the negotiating handler.
-- [ ] PR 4: Reimplement `Http2Endpoint` as a `@Deprecated` shim delegating to the negotiating
+- [x] PR 4: Reimplement `Http2Endpoint` as a `@Deprecated` shim delegating to the negotiating
       handler with `protocols(HTTP_2)`; deprecate `listen(Http2Endpoint)`; fold `Http2Handler` into
       the negotiating handler. Existing call sites (`BlobServer`, `Http2IntegrationTest`,
       `Http2EndpointTest`) stay unchanged and green; add a README deprecation + migration note. A

@@ -88,20 +88,38 @@ completes.
 
 ## HTTP/2
 
-Use `Http2Endpoint` for an h2-only HTTPS listener. Clients negotiate HTTP/2 via ALPN
-(only `h2` is advertised), so a TLS certificate is required just like `HttpsEndpoint`:
+`HttpsEndpoint` advertises a configurable set of application protocols over ALPN. By default it
+advertises **HTTP/1.1 only** (unchanged behaviour). To serve HTTP/2 — either alongside HTTP/1.1 on
+one port, or exclusively — call `protocols(...)` with the protocols you want, in preference order:
 
 ```java
 SSLInfo sslInfo = SSLContextFactory.loadPemKeyAndCrtFiles(keyFile, certFile);
 
+// Serve HTTP/2 to capable clients, fall back to HTTP/1.1 for the rest, on a single HTTPS port:
 server.listen(
-    Http2Endpoint.onAny(8443)
+    HttpsEndpoint.onAny(8443)
+        .protocols(AlpnProtocol.HTTP_2, AlpnProtocol.HTTP_1_1)
+        .addHost("localhost", new HttpVirtualHost(handler), sslInfo));
+
+// Or HTTP/2 only — a client that offers no ALPN or only http/1.1 is refused:
+server.listen(
+    HttpsEndpoint.onAny(8443)
+        .protocols(AlpnProtocol.HTTP_2)
         .addHost("localhost", new HttpVirtualHost(handler), sslInfo));
 ```
+
+The server picks the first advertised protocol the client also offers; a client sending no ALPN, or
+offering nothing in common, is served the least-preferred (last) protocol — so a
+`protocols(HTTP_2, HTTP_1_1)` endpoint falls back to HTTP/1.1, while a `protocols(HTTP_2)` endpoint
+refuses such a client.
 
 The same `HttpHandler` is used regardless of protocol version — `commitBuffered` and
 `commitStreamed` both work over HTTP/2, with streamed bodies delivered as DATA frames.
 SNI selects the right `SSLContext` per hostname, exactly as with HTTP/1.1 over TLS.
+
+> **Deprecated:** `Http2Endpoint` still exists as a thin shim (equivalent to
+> `HttpsEndpoint.protocols(AlpnProtocol.HTTP_2)`) but is deprecated and will be removed in a future
+> major version. Migrate to `HttpsEndpoint` with `protocols(...)`.
 
 ## Proxying and CONNECT handling
 
@@ -189,8 +207,8 @@ inspect, modify, record, forward, or serve individual requests locally.
 - **HTTP/1.1 and HTTP/2** — over plaintext and TLS, HTTP/1.1 is spoken (HTTP/1.0 and 0.9
   requests are rejected with `505 HTTP Version Not Supported` at the request line; keep-alive,
   pipelining, and chunked transfer encoding are all assumed to be available). HTTP/2 is offered
-  on `Http2Endpoint` listeners, negotiated via ALPN (`h2`) over TLS, with HPACK header
-  compression and stream multiplexing.
+  on `HttpsEndpoint` listeners configured via `protocols(...)`, negotiated via ALPN (`h2`) over
+  TLS, with HPACK header compression and stream multiplexing.
 - **Non-blocking NIO** — a selector-thread pool handles all socket I/O without blocking;
   application handlers run on a separate worker pool.
 - **Pipeline stages** — TLS and HTTP are independent, composable layers. For HTTPS the stack

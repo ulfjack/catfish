@@ -24,11 +24,18 @@ final class SslServerStage implements Stage {
   /**
    * Factory for creating the inner (plaintext) stage. Receives the inner {@link Pipeline} whose
    * {@link Pipeline#replaceWith} updates this {@code SslServerStage}'s inner stage instead of
-   * replacing the outer SSL wrapper, plus the plaintext buffers allocated by the SSL stage.
+   * replacing the outer SSL wrapper, the plaintext buffers allocated by the SSL stage, and the ALPN
+   * protocol negotiated during the TLS handshake ({@code ""} if none was negotiated). The factory
+   * is invoked once the handshake completes — not in the constructor — so the negotiated protocol
+   * is known and the factory can install the matching inner stage.
    */
   @FunctionalInterface
   interface InnerStageFactory {
-    Stage create(Pipeline innerPipeline, ByteBuffer inputBuffer, ByteBuffer outputBuffer);
+    Stage create(
+        Pipeline innerPipeline,
+        ByteBuffer inputBuffer,
+        ByteBuffer outputBuffer,
+        String negotiatedProtocol);
   }
 
   static final byte[] UNRECOGNIZED_NAME_ALERT = {0x15, 0x03, 0x01, 0x00, 0x02, 0x02, 0x70};
@@ -42,11 +49,14 @@ final class SslServerStage implements Stage {
   }
 
   private final SSLContextProvider contextProvider;
+  private final InnerStageFactory innerStageFactory;
   private final String[] alpnProtocols;
   private final Executor taskExecutor;
   private final Pipeline parent;
   private final Pipeline innerPipeline;
-  private Stage next;
+  // Null until the TLS handshake completes and the inner stage is created from the negotiated ALPN
+  // protocol. Every pre-handshake use of the inner stage must guard for this window.
+  private @Nullable Stage next;
   private @Nullable Connection connection;
   private final ByteBuffer netInputBuffer;
   private final ByteBuffer netOutputBuffer;
@@ -70,6 +80,7 @@ final class SslServerStage implements Stage {
       ByteBuffer netInputBuffer,
       ByteBuffer netOutputBuffer) {
     this.contextProvider = contextProvider;
+    this.innerStageFactory = innerStageFactory;
     this.alpnProtocols = alpnProtocols;
     this.taskExecutor = taskExecutor;
     this.parent = parent;
@@ -78,7 +89,8 @@ final class SslServerStage implements Stage {
     this.inputBuffer = flippedEmpty(65536);
     this.outputBuffer = flippedEmpty(65536);
     this.innerPipeline = new InnerPipeline();
-    this.next = innerStageFactory.create(this.innerPipeline, inputBuffer, outputBuffer);
+    // The inner stage is created later, at handshake completion, once the negotiated ALPN protocol
+    // is known (see createInnerStage()).
   }
 
   private static ByteBuffer flippedEmpty(int capacity) {
@@ -90,8 +102,26 @@ final class SslServerStage implements Stage {
   @Override
   public InitialConnectionState connect(Connection connection) {
     this.connection = connection;
-    postHandshakeState = next.connect(connection);
+    // The inner stage doesn't exist yet: it is created at handshake completion, when the negotiated
+    // ALPN protocol is known, and connected there (see createInnerStage()). Until then we only ever
+    // read (the TLS handshake), so start READ_ONLY.
     return InitialConnectionState.READ_ONLY;
+  }
+
+  /**
+   * Creates the inner (plaintext) stage from the negotiated ALPN protocol and connects it,
+   * recording its requested {@link InitialConnectionState} as {@link #postHandshakeState}. Called
+   * once, at the transition from HANDSHAKE to OPEN, before any plaintext I/O flows to the inner
+   * stage.
+   */
+  private void createInnerStage(SSLEngine engine) {
+    String negotiated = engine.getApplicationProtocol();
+    Stage inner =
+        innerStageFactory.create(
+            innerPipeline, inputBuffer, outputBuffer, negotiated == null ? "" : negotiated);
+    this.next = inner;
+    Connection conn = Objects.requireNonNull(connection, "connect() not called before handshake");
+    postHandshakeState = inner.connect(conn);
   }
 
   /**
@@ -124,10 +154,12 @@ final class SslServerStage implements Stage {
       // PAUSE due to pipe backpressure), retry next.read() directly. The outer SocketHandler's
       // read loop won't fire if the network buffer is empty (all TLS records already unwrapped).
       if (status == FlowStatus.OPEN && inputBuffer.hasRemaining()) {
+        // In OPEN the inner stage exists (created at handshake completion).
+        Stage inner = Objects.requireNonNull(next, "inner stage in OPEN state");
         parent.queue(
             () -> {
               try {
-                ConnectionControl cc = next.read();
+                ConnectionControl cc = inner.read();
                 if (cc == ConnectionControl.CONTINUE || cc == ConnectionControl.NEED_MORE_DATA) {
                   parent.encourageReads();
                 }
@@ -158,7 +190,8 @@ final class SslServerStage implements Stage {
   }
 
   /** Transitions from HANDSHAKE to OPEN after the TLS handshake completes. */
-  private void transitionToOpen() {
+  private void transitionToOpen(SSLEngine engine) {
+    createInnerStage(engine);
     status = FlowStatus.OPEN;
     if (postHandshakeState != InitialConnectionState.WRITE_ONLY) {
       parent.encourageReads();
@@ -267,7 +300,7 @@ final class SslServerStage implements Stage {
       }
       if (engine.getHandshakeStatus() == HandshakeStatus.NOT_HANDSHAKING) {
         // The handshake completed via unwrap (TLS 1.2 abbreviated handshake / session resumption).
-        transitionToOpen();
+        transitionToOpen(engine);
         return postHandshakeState == InitialConnectionState.WRITE_ONLY
             ? ConnectionControl.PAUSE
             : ConnectionControl.CONTINUE;
@@ -293,7 +326,8 @@ final class SslServerStage implements Stage {
       if (engine.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING) {
         throw new IOException("Re-entering handshake mode - what's up?");
       }
-      return next.read();
+      // Reaching here means status is OPEN/CLOSING, so the inner stage has been created.
+      return Objects.requireNonNull(next, "inner stage after handshake").read();
     }
   }
 
@@ -306,7 +340,11 @@ final class SslServerStage implements Stage {
         // Peer closed without sending close_notify - this is common in practice.
       }
     }
-    next.inputClosed();
+    // If the peer closed before the handshake completed, there is no inner stage yet — nothing to
+    // forward to. The connection is torn down by the outer pipeline regardless.
+    if (next != null) {
+      next.inputClosed();
+    }
   }
 
   @Override
@@ -340,7 +378,7 @@ final class SslServerStage implements Stage {
         return ConnectionControl.PAUSE;
       }
       if (engine.getHandshakeStatus() == HandshakeStatus.NOT_HANDSHAKING) {
-        transitionToOpen();
+        transitionToOpen(engine);
         return postHandshakeState == InitialConnectionState.READ_ONLY
             ? ConnectionControl.PAUSE
             : ConnectionControl.CONTINUE;
@@ -354,7 +392,8 @@ final class SslServerStage implements Stage {
       if (availableCapacity == 0) {
         nextState = ConnectionControl.CONTINUE;
       } else {
-        nextState = next.write();
+        // In OPEN the inner stage exists (created at handshake completion).
+        nextState = Objects.requireNonNull(next, "inner stage in OPEN state").write();
       }
       parent.log("SSL next=%s", nextState);
       // invariant: both netOutputBuffer and outputBuffer are readable
@@ -410,6 +449,9 @@ final class SslServerStage implements Stage {
 
   @Override
   public void close() {
-    next.close();
+    // The inner stage may not exist yet if the connection is closed before the handshake completes.
+    if (next != null) {
+      next.close();
+    }
   }
 }

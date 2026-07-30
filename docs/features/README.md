@@ -14,6 +14,6 @@ Status column below.
 
 | # | Title | Status |
 |---|---|---|
-| [0001](0001-alpn-http1-http2-selection.md) | Unify TLS endpoints with ALPN HTTP/1.1 + HTTP/2 selection | ready |
+| [0001](0001-alpn-http1-http2-selection.md) | Unify TLS endpoints with ALPN HTTP/1.1 + HTTP/2 selection | implemented |
 | [0002](0002-chunked-gzip-uploads.md) | Uploads without Content-Length; chunked + gzipped request bodies | ready |
 | [0003](0003-http2-continuation-frames.md) | HTTP/2 CONTINUATION frame support | ready |
