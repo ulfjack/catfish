@@ -14,8 +14,8 @@ final class HpackDecoder {
   private static final int DYNAMIC_TABLE_OVERHEAD = 32; // per RFC 7541 §4.1
 
   /**
-   * Default cap on the cumulative <em>uncompressed</em> size of a decoded header list, per
-   * RFC 9113 §6.5.2 (name length + value length + 32 per field). This bounds HPACK decompression
+   * Default cap on the cumulative <em>uncompressed</em> size of a decoded header list, per RFC 9113
+   * §6.5.2 (name length + value length + 32 per field). This bounds HPACK decompression
    * amplification: without it, a single ~16 KB HEADERS frame full of indexed references to a large
    * dynamic-table entry could inflate into tens of MB of decoded headers (a compression-based OOM
    * DoS, same family as the CONTINUATION flood, CVE-2024-27316).
