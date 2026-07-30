@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+#
+# Coverage gate: fail if overall line coverage of the de.ofahrt.catfish sources
+# is below MIN_LINE_COVERAGE. Reads the combined LCOV report produced by a prior
+#
+#   bazel coverage //...
+#
+# run (the pre-commit hook runs that immediately before calling this). Does NOT
+# run the tests itself, so it stays fast and has a single source of truth for
+# the coverage data.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Floor is intentionally a few points below the current ~92% so ordinary churn
+# doesn't trip the gate, while a real regression (a whole class left untested)
+# still does. Raise this as coverage improves.
+MIN_LINE_COVERAGE="${MIN_LINE_COVERAGE:-90}"
+
+DAT="./bazel-out/_coverage/_coverage_report.dat"
+if [[ ! -f "$DAT" ]]; then
+  echo "coverage-gate: no coverage data at $DAT" >&2
+  echo "coverage-gate: run 'bazel coverage //...' first" >&2
+  exit 1
+fi
+
+read -r covered total percent < <(awk '
+  /^SF:/ { file = substr($0, 4) }
+  /^DA:/ {
+    if (file ~ /de.ofahrt.catfish/) {
+      split($0, a, ",")
+      total++
+      if (a[2] > 0) covered++
+    }
+  }
+  END {
+    if (total == 0) { print "0 0 0"; exit }
+    printf "%d %d %.2f\n", covered, total, covered * 100 / total
+  }
+' "$DAT")
+
+if [[ "$total" -eq 0 ]]; then
+  echo "coverage-gate: no de.ofahrt.catfish lines found in report" >&2
+  exit 1
+fi
+
+# Integer comparison at 1/100th-percent resolution avoids relying on floating
+# point in the shell.
+percent_scaled=${percent/./}
+min_scaled=$(( MIN_LINE_COVERAGE * 100 ))
+
+if (( percent_scaled < min_scaled )); then
+  echo "coverage-gate: FAIL line coverage ${percent}% (${covered}/${total}) < ${MIN_LINE_COVERAGE}% floor" >&2
+  exit 1
+fi
+
+echo "coverage-gate: OK line coverage ${percent}% (${covered}/${total}) >= ${MIN_LINE_COVERAGE}% floor"

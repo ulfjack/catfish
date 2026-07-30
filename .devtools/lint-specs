@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+#
+# Spec lint: enforce the conventions of the spec-driven development flow
+# (docs/development/spec-driven-development.md) so specs stay consistent and
+# reviewable.
+#
+# For every feature spec docs/features/NNNN-*.md it checks:
+#   * the filename starts with a 4-digit zero-padded, unique number;
+#   * a valid "- **Status:**" line (Draft|Accepted|Implemented|Superseded|
+#     Withdrawn);
+#   * all required section headings are present;
+#   * the spec is listed in the docs/features/README.md index.
+#
+# TEMPLATE.md and README.md are not specs and are skipped.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+FEATURES_DIR="docs/features"
+INDEX="$FEATURES_DIR/README.md"
+
+REQUIRED_SECTIONS=(
+  "## Problem"
+  "## Goals"
+  "## Non-goals"
+  "## Approach"
+  "## Public API impact"
+  "## Security & correctness considerations"
+  "## Acceptance criteria"
+  "## Testing plan"
+  "## Rollout / compatibility notes"
+)
+
+VALID_STATUS_RE='^- \*\*Status:\*\* (Draft|Accepted|Implemented|Superseded|Withdrawn)\b'
+
+errors=0
+err() {
+  echo "lint-specs: $1" >&2
+  errors=$((errors + 1))
+}
+
+if [[ ! -f "$INDEX" ]]; then
+  err "missing index $INDEX"
+fi
+
+declare -A seen_numbers=()
+
+shopt -s nullglob
+specs=("$FEATURES_DIR"/[0-9]*.md)
+shopt -u nullglob
+
+for spec in "${specs[@]}"; do
+  base="$(basename "$spec")"
+
+  # Filename must be NNNN-something.md with a 4-digit zero-padded number.
+  if [[ ! "$base" =~ ^([0-9]{4})-[a-z0-9-]+\.md$ ]]; then
+    err "$base: filename must match NNNN-kebab-title.md (4-digit number)"
+    continue
+  fi
+  number="${BASH_REMATCH[1]}"
+
+  if [[ -n "${seen_numbers[$number]+x}" ]]; then
+    err "$base: duplicate spec number $number (also ${seen_numbers[$number]})"
+  fi
+  seen_numbers[$number]="$base"
+
+  # Status line.
+  if ! grep -Eq "$VALID_STATUS_RE" "$spec"; then
+    err "$base: missing or invalid '- **Status:**' line (Draft|Accepted|Implemented|Superseded|Withdrawn)"
+  fi
+
+  # Required sections.
+  for section in "${REQUIRED_SECTIONS[@]}"; do
+    if ! grep -Fxq "$section" "$spec"; then
+      err "$base: missing required section '$section'"
+    fi
+  done
+
+  # Must be linked from the index.
+  if [[ -f "$INDEX" ]] && ! grep -q "($base)" "$INDEX"; then
+    err "$base: not listed in $INDEX index"
+  fi
+done
+
+if (( errors > 0 )); then
+  echo "lint-specs: FAIL ($errors problem(s))" >&2
+  exit 1
+fi
+
+echo "lint-specs: OK (${#specs[@]} spec(s))"

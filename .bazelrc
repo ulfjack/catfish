@@ -5,4 +5,9 @@ build --javacopt="-XepOpt:NullAway:AnnotatedPackages=de.ofahrt.catfish"
 build --plugin=//third_party/nullaway
 coverage --instrumentation_filter=//java/... --combined_report=lcov
 
+# Low-noise output for tooling (pre-commit hook, CI): use with --config=quiet.
+common:quiet --color=no --curses=no --attempt_to_print_relative_paths
+build:quiet --noshow_progress --show_result=0 --ui_event_filters=-info,-progress,-debug
+test:quiet  --test_summary=terse --print_relative_test_log_paths
+
 try-import %workspace%/.bazelrc.user

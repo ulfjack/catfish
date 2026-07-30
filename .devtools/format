@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#
+# Format Java sources with google-java-format.
+#
+#   .devtools/format           rewrite all Java files in place
+#   .devtools/format --check   fail (non-zero) if any file is mis-formatted, changing nothing
+#
+# Thin wrapper over the //:format and //:format.check Bazel targets so callers
+# (developers and the pre-commit hook) have a stable entry point.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+if [[ "${1:-}" == "--check" ]]; then
+  exec bazel run --config=quiet //:format.check
+else
+  exec bazel run --config=quiet //:format
+fi

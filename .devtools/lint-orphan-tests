@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+#
+# Orphan-test lint: fail if a concrete *Test.java under javatest/ is not run by
+# anything. Tests run only if they are either
+#
+#   * listed in some suite's @SuiteClasses({ ... }), or
+#   * named directly as a java_test's test_class in a BUILD file.
+#
+# A concrete test class that is neither is dead weight: it compiles (globbed
+# into srcs) but never executes, so it silently protects nothing. This lint
+# makes that failure loud.
+#
+# Excluded automatically:
+#   * abstract classes (base classes meant to be subclassed, not run)
+# Excluded explicitly via the allowlist below (with a reason).
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Tests intentionally not wired into any suite. Keep this list short and
+# justified; prefer wiring a test into a suite over allowlisting it.
+declare -A ALLOWLIST=(
+  # Load/soak test: spins up 1000 threads with random sleeps. Too slow/noisy
+  # for the default suite; run manually.
+  ["de.ofahrt.catfish.integration.MultiThreadedIntegrationTest"]="manual load test"
+  # Exercises the real JDK HttpURLConnection stack against a live socket; kept
+  # out of the default suite as a manually-run networked smoke test.
+  ["de.ofahrt.catfish.integration.JavaHttpTest"]="manual networked smoke test"
+)
+
+# Collect everything that is actually run: class names referenced as
+# `Something.class` in @SuiteClasses, plus test_class="...pkg.Class" in BUILDs.
+referenced="$(
+  {
+    grep -rho '[A-Za-z_][A-Za-z0-9_]*\.class' javatest --include='*.java' \
+      | sed 's/\.class$//'
+    grep -rho 'test_class = "[^"]*"' javatest --include=BUILD \
+      | sed 's/.*\.\([A-Za-z0-9_]*\)"/\1/'
+  } | sort -u
+)"
+
+orphans=()
+while IFS= read -r file; do
+  cls="$(basename "$file" .java)"
+
+  # Skip abstract base classes: they are never run directly.
+  if grep -Eq '^\s*(public\s+)?abstract\s+class\b' "$file"; then
+    continue
+  fi
+
+  # Derive the fully-qualified name from the package declaration.
+  pkg="$(sed -n 's/^package \([a-zA-Z0-9_.]*\);.*/\1/p' "$file" | head -1)"
+  fqcn="${pkg:+$pkg.}$cls"
+
+  if [[ -n "${ALLOWLIST[$fqcn]+x}" ]]; then
+    continue
+  fi
+
+  if ! grep -qx "$cls" <<< "$referenced"; then
+    orphans+=("$file ($fqcn)")
+  fi
+done < <(find javatest -name '*Test.java' | sort)
+
+if (( ${#orphans[@]} > 0 )); then
+  echo "lint-orphan-tests: FAIL the following concrete tests run in no suite:" >&2
+  for o in "${orphans[@]}"; do
+    echo "  - $o" >&2
+  done
+  echo "Add each to its package's @SuiteClasses (preferred) or to the allowlist" >&2
+  echo "in .devtools/lint-orphan-tests with a justification." >&2
+  exit 1
+fi
+
+echo "lint-orphan-tests: OK no orphan tests"

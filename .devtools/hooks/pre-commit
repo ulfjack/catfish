@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+#
+# Pre-commit gate for Catfish. Runs the same checks CI does, so a commit that
+# lands here is one that CI will accept. Configured via core.hooksPath =
+# .devtools/hooks.
+#
+# Steps (all must pass):
+#   1. spec lint         - feature specs follow the spec-driven flow conventions
+#   2. orphan-test lint  - every concrete test actually runs in some suite
+#   3. format check      - google-java-format is satisfied
+#   4. coverage + gate   - full test run with coverage, then the coverage floor
+#
+# Set SKIP_PRECOMMIT=1 to bypass (e.g. an emergency revert); use sparingly.
+set -euo pipefail
+
+if [[ "${SKIP_PRECOMMIT:-}" == "1" ]]; then
+  echo "== verify: SKIPPED (SKIP_PRECOMMIT=1) =="
+  exit 0
+fi
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "== verify: spec lint =="
+.devtools/lint-specs
+
+echo "== verify: orphan-test lint =="
+.devtools/lint-orphan-tests
+
+echo "== verify: format check =="
+.devtools/format --check
+
+echo "== verify: coverage + gate =="
+bazel coverage --config=quiet //...
+.devtools/coverage-gate
+
+echo "== verify: OK =="
