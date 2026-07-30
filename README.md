@@ -203,6 +203,13 @@ inspect, modify, record, forward, or serve individual requests locally.
 - **Virtual hosting** — each hostname has its own handler, TLS context, keep-alive policy,
   and upload policy.
 
+## Contributing / AI-assisted development
+
+Non-trivial changes to Catfish follow a **spec-driven development flow**: write a short spec in
+`docs/features/` and get it reviewed before writing code. If you're working on Catfish — with or
+without an AI agent — start with [AGENTS.md](AGENTS.md) and
+[docs/development/spec-driven-development.md](docs/development/spec-driven-development.md).
+
 ## Coverage Reports
 
 Collect coverage data first:
