@@ -13,14 +13,19 @@ architecture_refs:
 ## Summary
 
 Collapse the two TLS endpoint types into one: `HttpsEndpoint` advertises a configurable ALPN
-protocol set and installs the matching inner stage per connection, so a single HTTPS port serves
-HTTP/2 and HTTP/1.1 by negotiation. `Http2Endpoint` is removed — this is a deliberate breaking
-change.
+protocol set and installs the matching inner stage per connection, so a single HTTPS port can serve
+HTTP/2 and HTTP/1.1 by negotiation. The default stays **`http/1.1` only** — identical to today's
+`HttpsEndpoint`, so existing `HttpsEndpoint` users are unaffected — and an application opts into
+h2 with `protocols(HTTP_2, HTTP_1_1)`. `Http2Endpoint` is removed; its (few) users migrate to
+`HttpsEndpoint...protocols(HTTP_2)`.
 
 ## Goals
 
 - One TLS endpoint (`HttpsEndpoint`) whose advertised ALPN protocols are configurable, defaulting to
-  `h2` + `http/1.1` (h2 preferred, h1 fallback).
+  `http/1.1` only — byte-for-byte the current `HttpsEndpoint` behaviour, so the default is
+  non-breaking.
+- Let an application advertise `h2` + `http/1.1` (h2 preferred, h1 fallback) on one HTTPS port with
+  `protocols(HTTP_2, HTTP_1_1)`.
 - Install the matching inner stage (`Http2ServerStage` / `HttpServerStage`) based on the negotiated
   ALPN protocol, using the same `HttpHandler`.
 - Preserve every capability the two old endpoints had, including "h2 only, reject h1" and "h1 only",
@@ -44,9 +49,10 @@ two public endpoint types:
 
 There is no way to stand up a single HTTPS port that serves modern clients over HTTP/2 while falling
 back to HTTP/1.1 for older ones — the standard expectation for an `https://` endpoint. This split
-has always been a wart; unifying it necessarily breaks the public API (the `Http2Endpoint` type and
-its `listen` overload disappear), which is why it hasn't been done incrementally — this spec does
-it.
+has always been a wart. Unifying it keeps `HttpsEndpoint`'s default behaviour intact (h1-only) and
+adds an opt-in `protocols(...)` for h2; the only API break is removing the now-redundant
+`Http2Endpoint` type and its `listen` overload, whose few users migrate to
+`HttpsEndpoint...protocols(HTTP_2)`.
 
 The building blocks exist: both stages work, and ALPN is already wired into `SslServerStage`
 (`SSLParameters.setApplicationProtocols`). The one real constraint is that `SslServerStage`
@@ -81,27 +87,28 @@ public enum HttpProtocol { HTTP_2, HTTP_1_1 }
 public HttpsEndpoint protocols(HttpProtocol... protocols);
 ```
 
-Default (no call) is `{HTTP_2, HTTP_1_1}`. A single internal handler
-(`HttpProtocolNegotiatingHandler`) advertises the configured protocol ids, and given the negotiated
-protocol builds either an `Http2ServerStage` or an `HttpServerStage`. When the set has one element
-the ALPN list has one entry, exactly reproducing the old single-protocol endpoints.
+Default (no call) is `{HTTP_1_1}` — a single-entry ALPN list, byte-for-byte the current
+`HttpsEndpoint`. A single internal handler (`HttpProtocolNegotiatingHandler`) advertises the
+configured protocol ids, and given the negotiated protocol builds either an `Http2ServerStage` or an
+`HttpServerStage`. When the set has one element the ALPN list has one entry, exactly reproducing the
+old single-protocol endpoints.
 
 Migration of the old capabilities:
 
 | Old | New |
 |---|---|
-| `HttpsEndpoint...` (h1 only) | `HttpsEndpoint...protocols(HTTP_1_1)` |
+| `HttpsEndpoint...` (h1 only) | `HttpsEndpoint...` (default, unchanged) |
 | `Http2Endpoint...` (h2 only, reject h1) | `HttpsEndpoint...protocols(HTTP_2)` |
-| (new) both | `HttpsEndpoint...` (default) |
+| (new) both, h2 preferred | `HttpsEndpoint...protocols(HTTP_2, HTTP_1_1)` |
 
 ### 3. ALPN selection semantics
 
 The JDK `SSLEngine` selects the protocol server-side from the advertised list against the client's
 list, honouring server preference order. On no overlap or a client that sends no ALPN,
 `getApplicationProtocol()` returns `""`; the negotiating handler falls back to the **last**
-(least-preferred) configured protocol — HTTP/1.1 in the default set. If the set is `{HTTP_2}` only,
-a no-ALPN / h1-only client has no overlap and the connection is refused (reproducing the old
-`Http2Endpoint` strictness).
+(least-preferred) configured protocol — HTTP/1.1 in the default `{HTTP_1_1}` set and in a
+`{HTTP_2, HTTP_1_1}` set. If the set is `{HTTP_2}` only, a no-ALPN / h1-only client has no overlap
+and the connection is refused (reproducing the old `Http2Endpoint` strictness).
 
 ### 4. Remove `Http2Endpoint`
 
@@ -126,14 +133,18 @@ Delete the `Http2Endpoint` class, the `Http2Handler` (folded into the negotiatin
 
 ## Decisions
 
-- **Decision:** Remove `Http2Endpoint` and unify on `HttpsEndpoint` with a configurable protocol
-  set, accepting the breaking API change. — *Rationale:* the two-endpoint split is the root wart;
-  every capability survives as an explicit `protocols(...)` configuration, and a single endpoint is
-  the correct long-term surface. We expect and want the break.
-- **Decision:** Default protocol set is `{HTTP_2, HTTP_1_1}` (h2 preferred, h1 fallback). —
-  *Rationale:* the modern-correct default for an `https://` endpoint; the same `HttpHandler` serves
-  both, so existing h1 deployments keep working (they simply also negotiate h2 with capable
-  clients).
+- **Decision:** Unify on `HttpsEndpoint` with a configurable protocol set and remove `Http2Endpoint`.
+  — *Rationale:* the two-endpoint split is the root wart; every capability survives as an explicit
+  `protocols(...)` configuration, and a single endpoint is the correct long-term surface. The removal
+  of `Http2Endpoint` is the only remaining API break; its users (few — `BlobServer` and h2 tests
+  in-tree) migrate to `HttpsEndpoint...protocols(HTTP_2)`.
+- **Decision:** Default protocol set is `{HTTP_1_1}` only — **not** `{HTTP_2, HTTP_1_1}`. —
+  *Rationale:* this makes the default non-breaking: a default `HttpsEndpoint` behaves byte-for-byte
+  as today (advertises only `http/1.1`), so existing `HttpsEndpoint` users are completely unaffected
+  and no h2 is silently introduced. Opting into h2 is one explicit call,
+  `protocols(HTTP_2, HTTP_1_1)`. A silent `{HTTP_2, HTTP_1_1}` default would change the on-the-wire
+  protocol for every existing HTTPS deployment with an h2-capable client — an unnecessary and
+  surprising behaviour change to avoid.
 - **Decision:** No-ALPN / no-overlap falls back to the least-preferred configured protocol. —
   *Rationale:* matches browser/`curl` behaviour for the default set, and cleanly yields "refuse h1"
   when the set is `{HTTP_2}` only.
@@ -147,20 +158,24 @@ None.
 
 ## Acceptance Criteria
 
-- [ ] A default `HttpsEndpoint` (protocol set `{HTTP_2, HTTP_1_1}`) serves an HTTP/2 client (ALPN
-      `h2`) over `Http2ServerStage` and an HTTP/1.1 client (ALPN `http/1.1`) over `HttpServerStage`,
-      using the same `HttpHandler`, both getting a correct `200`.
-- [ ] A client offering only `http/1.1` against the default endpoint is served over HTTP/1.1.
-- [ ] A client sending no ALPN against the default endpoint is served over HTTP/1.1.
+- [ ] A default `HttpsEndpoint` (protocol set `{HTTP_1_1}`) advertises only `http/1.1` and serves an
+      HTTP/1.1 client over `HttpServerStage` — byte-for-byte the current behaviour; an h2-capable
+      client negotiates `http/1.1` (no silent h2).
+- [ ] A `HttpsEndpoint...protocols(HTTP_2, HTTP_1_1)` endpoint serves an HTTP/2 client (ALPN `h2`)
+      over `Http2ServerStage` and an HTTP/1.1 client (ALPN `http/1.1`) over `HttpServerStage`, using
+      the same `HttpHandler`, both getting a correct `200`.
+- [ ] A client offering only `http/1.1`, and a client sending no ALPN, against a
+      `protocols(HTTP_2, HTTP_1_1)` endpoint are served over HTTP/1.1.
 - [ ] `HttpsEndpoint...protocols(HTTP_2)` serves an h2 client and **refuses** an h1-only / no-ALPN
       client (reproducing old `Http2Endpoint` behaviour).
-- [ ] `HttpsEndpoint...protocols(HTTP_1_1)` advertises only `http/1.1` (reproducing old
-      `HttpsEndpoint` behaviour).
+- [ ] `HttpsEndpoint...protocols(HTTP_1_1)` is equivalent to the default (advertises only
+      `http/1.1`).
 - [ ] `Http2Endpoint` and `CatfishHttpServer.listen(Http2Endpoint)` no longer exist; the codebase
       (examples, tests) compiles against the unified endpoint.
 - [ ] `getApplicationProtocol()` is observed to be `h2` / `http/1.1` respectively in a unit or
       integration test of the negotiating handler.
-- [ ] Tests: integration test on a default endpoint forcing h1, forcing h2, and no-ALPN; a
+- [ ] Tests: integration test on a `protocols(HTTP_2, HTTP_1_1)` endpoint forcing h1, forcing h2,
+      and no-ALPN; a default-endpoint test asserting only `http/1.1` is advertised; a
       `protocols(HTTP_2)` test asserting h1 refusal; a unit test that `SslServerStage` creates the
       inner stage only after handshake completion and chooses it from the negotiated protocol.
 - [ ] `bazel test //...` green and `bazel run //:format.check` passes.
@@ -173,8 +188,8 @@ None.
       (single-element ALPN list); existing `SslServerStageTest`/endpoint tests stay green.
 - [ ] PR 2: Add `HttpProtocol` enum + `HttpProtocolNegotiatingHandler` selecting the inner stage
       from the negotiated protocol; unit-test selection and the no-ALPN fallback.
-- [ ] PR 3: Add `HttpsEndpoint.protocols(...)` (default `{HTTP_2, HTTP_1_1}`) wired to the
-      negotiating handler.
+- [ ] PR 3: Add `HttpsEndpoint.protocols(...)` (default `{HTTP_1_1}`, unchanged behaviour) wired to
+      the negotiating handler.
 - [ ] PR 4 (breaking): Remove `Http2Endpoint`, `Http2Handler`, and `listen(Http2Endpoint)`; migrate
       `BlobServer`, `Http2IntegrationTest`, `Http2EndpointTest` to `HttpsEndpoint.protocols(...)`;
       update the README.
@@ -183,5 +198,7 @@ None.
 
 - Risk is concentrated in PR 1 (the nullable `next` window in the TLS state machine); keeping it a
   standalone, behaviour-preserving PR isolates that risk from the API change.
-- This is a breaking release: the removal of `Http2Endpoint` and its `listen` overload requires a
-  major version bump and a migration note in the README/changelog.
+- The only breaking change is the removal of `Http2Endpoint` and its `listen` overload (a major
+  version bump + migration note in the README/changelog); the default `HttpsEndpoint` is unchanged,
+  so the vast majority of users are unaffected. `Http2Endpoint` users migrate to
+  `HttpsEndpoint...protocols(HTTP_2)`.
