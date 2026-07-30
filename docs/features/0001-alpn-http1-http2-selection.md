@@ -12,12 +12,12 @@ architecture_refs:
 
 ## Summary
 
-Collapse the two TLS endpoint types into one: `HttpsEndpoint` advertises a configurable ALPN
-protocol set and installs the matching inner stage per connection, so a single HTTPS port can serve
-HTTP/2 and HTTP/1.1 by negotiation. The default stays **`http/1.1` only** — identical to today's
-`HttpsEndpoint`, so existing `HttpsEndpoint` users are unaffected — and an application opts into
-h2 with `protocols(HTTP_2, HTTP_1_1)`. `Http2Endpoint` is removed; its (few) users migrate to
-`HttpsEndpoint...protocols(HTTP_2)`.
+Make `HttpsEndpoint` advertise a configurable ALPN protocol set and install the matching inner stage
+per connection, so a single HTTPS port can serve HTTP/2 and HTTP/1.1 by negotiation. The default
+stays **`http/1.1` only** — identical to today's `HttpsEndpoint`, so existing users are unaffected —
+and an application opts into h2 with `protocols(HTTP_2, HTTP_1_1)`. `Http2Endpoint` becomes a thin
+**deprecated** shim over the unified endpoint (`protocols(HTTP_2)`), not removed — so this change is
+entirely non-breaking.
 
 ## Goals
 
@@ -30,7 +30,8 @@ h2 with `protocols(HTTP_2, HTTP_1_1)`. `Http2Endpoint` is removed; its (few) use
   ALPN protocol, using the same `HttpHandler`.
 - Preserve every capability the two old endpoints had, including "h2 only, reject h1" and "h1 only",
   as explicit configurations of the unified endpoint.
-- Remove `Http2Endpoint` and its `CatfishHttpServer.listen(Http2Endpoint)` overload.
+- Keep `Http2Endpoint` working as a `@Deprecated` shim that delegates to the unified endpoint with
+  `protocols(HTTP_2)`, so existing code compiles and runs unchanged.
 
 ## Non-Goals
 
@@ -50,9 +51,8 @@ two public endpoint types:
 There is no way to stand up a single HTTPS port that serves modern clients over HTTP/2 while falling
 back to HTTP/1.1 for older ones — the standard expectation for an `https://` endpoint. This split
 has always been a wart. Unifying it keeps `HttpsEndpoint`'s default behaviour intact (h1-only) and
-adds an opt-in `protocols(...)` for h2; the only API break is removing the now-redundant
-`Http2Endpoint` type and its `listen` overload, whose few users migrate to
-`HttpsEndpoint...protocols(HTTP_2)`.
+adds an opt-in `protocols(...)` for h2; `Http2Endpoint` stays as a `@Deprecated` shim that delegates
+to `protocols(HTTP_2)`, so nothing breaks and its users can migrate at leisure.
 
 The building blocks exist: both stages work, and ALPN is already wired into `SslServerStage`
 (`SSLParameters.setApplicationProtocols`). The one real constraint is that `SslServerStage`
@@ -93,12 +93,13 @@ configured protocol ids, and given the negotiated protocol builds either an `Htt
 `HttpServerStage`. When the set has one element the ALPN list has one entry, exactly reproducing the
 old single-protocol endpoints.
 
-Migration of the old capabilities:
+Migration of the old capabilities (all still compile; the `Http2Endpoint` row is the recommended,
+not required, migration):
 
 | Old | New |
 |---|---|
 | `HttpsEndpoint...` (h1 only) | `HttpsEndpoint...` (default, unchanged) |
-| `Http2Endpoint...` (h2 only, reject h1) | `HttpsEndpoint...protocols(HTTP_2)` |
+| `Http2Endpoint...` (h2 only, reject h1) | still works (deprecated) → `HttpsEndpoint...protocols(HTTP_2)` |
 | (new) both, h2 preferred | `HttpsEndpoint...protocols(HTTP_2, HTTP_1_1)` |
 
 ### 3. ALPN selection semantics
@@ -110,11 +111,16 @@ list, honouring server preference order. On no overlap or a client that sends no
 `{HTTP_2, HTTP_1_1}` set. If the set is `{HTTP_2}` only, a no-ALPN / h1-only client has no overlap
 and the connection is refused (reproducing the old `Http2Endpoint` strictness).
 
-### 4. Remove `Http2Endpoint`
+### 4. Deprecate `Http2Endpoint`
 
-Delete the `Http2Endpoint` class, the `Http2Handler` (folded into the negotiating handler), and the
-`CatfishHttpServer.listen(Http2Endpoint)` overload. Update all call sites (`BlobServer`,
-`Http2IntegrationTest`, `Http2EndpointTest`) and the README.
+Keep `Http2Endpoint` and its `CatfishHttpServer.listen(Http2Endpoint)` overload, but mark both
+`@Deprecated` (javadoc pointing at `HttpsEndpoint...protocols(HTTP_2)`). Reimplement `Http2Endpoint`
+as a thin shim: it configures a unified endpoint / negotiating handler with `protocols(HTTP_2)`
+rather than carrying its own ALPN + stage-construction logic, so there is one code path and the
+deprecated type stays behaviourally identical (h2 only, reject h1). The old `Http2Handler` is folded
+into the negotiating handler; `Http2Endpoint` delegates to it. Existing call sites (`BlobServer`,
+`Http2IntegrationTest`, `Http2EndpointTest`) keep compiling untouched; the README gains a
+deprecation + migration note.
 
 ## Security Considerations
 
@@ -133,11 +139,14 @@ Delete the `Http2Endpoint` class, the `Http2Handler` (folded into the negotiatin
 
 ## Decisions
 
-- **Decision:** Unify on `HttpsEndpoint` with a configurable protocol set and remove `Http2Endpoint`.
-  — *Rationale:* the two-endpoint split is the root wart; every capability survives as an explicit
-  `protocols(...)` configuration, and a single endpoint is the correct long-term surface. The removal
-  of `Http2Endpoint` is the only remaining API break; its users (few — `BlobServer` and h2 tests
-  in-tree) migrate to `HttpsEndpoint...protocols(HTTP_2)`.
+- **Decision:** Unify on `HttpsEndpoint` with a configurable protocol set; **deprecate** rather than
+  remove `Http2Endpoint`. — *Rationale:* the two-endpoint split is the root wart; every capability
+  survives as an explicit `protocols(...)` configuration, and a single endpoint is the correct
+  long-term surface. Keeping `Http2Endpoint` as a `@Deprecated` shim over `protocols(HTTP_2)` makes
+  the whole change non-breaking — existing code compiles and runs unchanged — while still steering
+  new code to the unified endpoint and letting the shim be removed in a later major version. It also
+  collapses to one code path (the negotiating handler), so the deprecated type carries no duplicate
+  logic.
 - **Decision:** Default protocol set is `{HTTP_1_1}` only — **not** `{HTTP_2, HTTP_1_1}`. —
   *Rationale:* this makes the default non-breaking: a default `HttpsEndpoint` behaves byte-for-byte
   as today (advertises only `http/1.1`), so existing `HttpsEndpoint` users are completely unaffected
@@ -170,8 +179,9 @@ None.
       client (reproducing old `Http2Endpoint` behaviour).
 - [ ] `HttpsEndpoint...protocols(HTTP_1_1)` is equivalent to the default (advertises only
       `http/1.1`).
-- [ ] `Http2Endpoint` and `CatfishHttpServer.listen(Http2Endpoint)` no longer exist; the codebase
-      (examples, tests) compiles against the unified endpoint.
+- [ ] `Http2Endpoint` and `CatfishHttpServer.listen(Http2Endpoint)` still exist, are marked
+      `@Deprecated`, and behave identically (h2 only, reject h1) by delegating to the unified
+      negotiating handler with `protocols(HTTP_2)`; existing call sites compile unchanged.
 - [ ] `getApplicationProtocol()` is observed to be `h2` / `http/1.1` respectively in a unit or
       integration test of the negotiating handler.
 - [ ] Tests: integration test on a `protocols(HTTP_2, HTTP_1_1)` endpoint forcing h1, forcing h2,
@@ -190,15 +200,17 @@ None.
       from the negotiated protocol; unit-test selection and the no-ALPN fallback.
 - [ ] PR 3: Add `HttpsEndpoint.protocols(...)` (default `{HTTP_1_1}`, unchanged behaviour) wired to
       the negotiating handler.
-- [ ] PR 4 (breaking): Remove `Http2Endpoint`, `Http2Handler`, and `listen(Http2Endpoint)`; migrate
-      `BlobServer`, `Http2IntegrationTest`, `Http2EndpointTest` to `HttpsEndpoint.protocols(...)`;
-      update the README.
+- [ ] PR 4: Reimplement `Http2Endpoint` as a `@Deprecated` shim delegating to the negotiating
+      handler with `protocols(HTTP_2)`; deprecate `listen(Http2Endpoint)`; fold `Http2Handler` into
+      the negotiating handler. Existing call sites (`BlobServer`, `Http2IntegrationTest`,
+      `Http2EndpointTest`) stay unchanged and green; add a README deprecation + migration note. A
+      test asserts the shim still rejects h1-only clients.
 
 ## Notes
 
 - Risk is concentrated in PR 1 (the nullable `next` window in the TLS state machine); keeping it a
-  standalone, behaviour-preserving PR isolates that risk from the API change.
-- The only breaking change is the removal of `Http2Endpoint` and its `listen` overload (a major
-  version bump + migration note in the README/changelog); the default `HttpsEndpoint` is unchanged,
-  so the vast majority of users are unaffected. `Http2Endpoint` users migrate to
-  `HttpsEndpoint...protocols(HTTP_2)`.
+  standalone, behaviour-preserving PR isolates that risk from the API additions.
+- This change is **non-breaking**: the default `HttpsEndpoint` is unchanged and `Http2Endpoint`
+  stays as a `@Deprecated` shim, so all existing code compiles and runs unchanged. No major version
+  bump is required; a minor release with a deprecation note suffices. Actually removing
+  `Http2Endpoint` is a separate future major-version cleanup.
