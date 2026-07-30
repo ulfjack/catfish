@@ -68,8 +68,21 @@ The frame reader stays frame-at-a-time; reassembly lives in `Http2ServerStage`, 
   is set, decode immediately (unchanged fast path). If not, **stash** the fragment bytes + stream id
   / flags and enter "expecting CONTINUATION" mode — do **not** decode yet.
 - `processFrame`: while in assembly mode, the **only** legal next frame is a `CONTINUATION` on the
-  *same* stream id (RFC 9113 §6.2 / §6.10). Any other frame type, a CONTINUATION on a different
-  stream, or a CONTINUATION when not in assembly mode is a `PROTOCOL_ERROR` connection error.
+  *same* stream id. This is not Catfish being conservative — RFC 9113 §6.2 mandates it: "A HEADERS
+  frame without the END_HEADERS flag set MUST be followed by a CONTINUATION frame for the same
+  stream. A receiver MUST treat the receipt of any other type of frame or a frame on a different
+  stream as a connection error of type PROTOCOL_ERROR." So any other frame type, a CONTINUATION on a
+  different stream, or a CONTINUATION when not in assembly mode is a `PROTOCOL_ERROR` connection
+  error.
+
+  **Why this does not reintroduce head-of-line blocking:** HPACK's dynamic table is a single
+  connection-global, order-dependent coding stream shared by *all* streams (RFC 7541). Header
+  fragments from different streams therefore *cannot* be interleaved without corrupting every
+  subsequent decode on the connection — the spec forbids interleaving precisely because it is
+  physically impossible for HPACK, not to serialise streams. Head-of-line blocking is a concern for
+  *large payloads* (DATA frames, which remain fully interleavable across streams); header blocks are
+  small and hard-bounded (see Security Considerations), so requiring one block to be transmitted
+  contiguously costs nothing in multiplexing.
 - `handleContinuation` (new): append the fragment; when `END_HEADERS` arrives, concatenate all
   fragments, HPACK-decode the whole block **once**, and run the existing pseudo-header
   extraction / request-building / routing path (factor that tail of `handleHeaders` into a shared
@@ -102,7 +115,11 @@ This is the load-bearing section — CONTINUATION is a known DoS vector.
   `maxHeaderListSize` ceiling still applies after reassembly.
 - **Interleaving / state confusion (smuggling surface):** while assembling a header block, no other
   frame may arrive (not DATA, not another HEADERS, not SETTINGS, not a CONTINUATION for a different
-  stream). Enforced strictly as `PROTOCOL_ERROR`; a lax reader here is a framing vulnerability.
+  stream) — RFC 9113 §6.2 requires treating any such frame as a `PROTOCOL_ERROR`. This is mandated,
+  not a choice, and does not cause head-of-line blocking (HPACK's dynamic table is a single
+  connection-global ordered stream, so header fragments are inherently un-interleavable; only
+  large DATA payloads, which stay interleavable, matter for HoL). A lax reader here is a framing
+  vulnerability.
 - **HPACK dynamic-table integrity:** decode only over the fully reassembled block; a partial decode
   would desync the per-connection dynamic table for every later request. Stream-id validation
   (odd, monotonic) happens once when the HEADERS frame opens the block.
@@ -121,8 +138,10 @@ This is the load-bearing section — CONTINUATION is a known DoS vector.
 - **Decision:** Cap the number of CONTINUATION frames per header block at a small constant. —
   *Rationale:* bounds tiny-fragment amplification even under the byte cap (many 1-byte fragments).
 - **Decision:** Strict interleaving — while assembling a block, any non-CONTINUATION frame, or a
-  CONTINUATION for a different stream, is a `PROTOCOL_ERROR`. — *Rationale:* a lax reader here is a
-  framing/smuggling vulnerability; RFC 9113 forbids interleaving.
+  CONTINUATION for a different stream, is a `PROTOCOL_ERROR`. — *Rationale:* RFC 9113 §6.2 *mandates*
+  this, and HPACK's connection-global ordered dynamic table makes cross-stream header interleaving
+  impossible anyway, so it does not reintroduce head-of-line blocking (only large DATA payloads,
+  which remain interleavable, affect HoL). A lax reader here is a framing/smuggling vulnerability.
 - **Decision:** The security ceilings are internal constants, not configurable. — *Rationale:*
   generous enough not to affect legitimate traffic; a follow-up can expose them if a real deployment
   needs tuning, without changing the wire behaviour.

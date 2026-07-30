@@ -5,6 +5,7 @@ status: ready
 owner: Ulf Adams
 architecture_refs:
   - HTTP/1.1 request body handling (HttpServerStage, LocalHttpRequestStage)
+  - HTTP/2 request body handling (Http2ServerStage)
   - Upload handling (UploadPolicy, chunked decoding)
 ---
 
@@ -12,106 +13,132 @@ architecture_refs:
 
 ## Summary
 
-Accept `Content-Encoding: gzip` request bodies (instead of rejecting them with 415) and, for
-locally-served requests, transparently decode them — making the chunked + gzipped, no-Content-Length
-upload shape that `git` fetch/push relies on work end to end.
+Accept `Content-Encoding: gzip` request bodies (instead of rejecting them with 415) and
+transparently decode them for local handlers, and give `UploadPolicy` an explicit **decoded-body
+byte limit** enforced incrementally — making the chunked + gzipped, no-Content-Length upload shape
+`git` uses work, while closing the unbounded-buffering hole that chunked bodies already have today.
 
 ## Goals
 
 - Accept request bodies with `Content-Encoding: gzip` (and `x-gzip`) instead of blanket-rejecting
-  them with 415.
-- For locally-served requests, deliver the **decoded** body to the `HttpHandler`, so handlers see
-  plaintext regardless of transfer/content encoding — mirroring how chunked decoding is already
-  handled transparently.
-- Make the specific git scenario — `Transfer-Encoding: chunked` + `Content-Encoding: gzip`, no
+  them with 415, and deliver the **decoded** body to the `HttpHandler`.
+- Make the git scenario — `Transfer-Encoding: chunked` + `Content-Encoding: gzip`, no
   `Content-Length` — work end to end.
-- Keep this bounded and safe: honour the upload policy and guard against decompression-bomb
-  resource exhaustion.
+- Extend `UploadPolicy` so it governs a **maximum decoded body size**, enforced **incrementally** as
+  the body streams in, for Content-Length, chunked, and gzipped bodies alike. No magic constant.
+- Apply the limit consistently on both the HTTP/1.1 and HTTP/2 local-serve paths.
 
 ## Non-Goals
 
-- `deflate` / `br` / `zstd` request-body encodings. gzip (and its `x-gzip` alias) covers git; other
-  codecs can be a later spec.
-- Response-side compression negotiation (already handled by `CompressionPolicy`).
+- `deflate` / `br` / `zstd` request-body encodings. gzip (`x-gzip` alias) covers git; other codecs
+  can be a later spec.
+- Response-side compression (already handled by `CompressionPolicy`).
 - Streaming a partially-decoded body to handlers incrementally — handlers still receive a fully
-  assembled `InMemoryBody`, consistent with today's `LocalHttpRequestStage`.
-- Changing proxy/forward behaviour: forwarded requests already pass the body through raw (including
-  its `Content-Encoding`), and should continue to.
+  assembled `InMemoryBody`, consistent with today's `LocalHttpRequestStage`. (The *limit* is
+  enforced incrementally; the *delivery* to the handler stays buffered.)
+- Changing proxy/forward behaviour: forwarded requests pass the body through raw (including
+  `Content-Encoding`) and continue to.
 
 ## Background / Context
 
 `git` performs large fetch/push operations by POSTing request bodies that are **chunked**
-(`Transfer-Encoding: chunked`, no `Content-Length`) and **gzip-compressed**
-(`Content-Encoding: gzip`). Catfish rejects these today: `LocalHttpRequestStage.onHeaders` returns
-`415 Unsupported Media Type` whenever the request carries **any** `Content-Encoding` header, so a
-gzip upload is refused before the body is ever read.
+(`Transfer-Encoding: chunked`, no `Content-Length`) and **gzip-compressed** (`Content-Encoding:
+gzip`). Catfish rejects these today: `LocalHttpRequestStage.onHeaders` returns `415 Unsupported
+Media Type` whenever the request carries **any** `Content-Encoding` header, so a gzip upload is
+refused before the body is read.
 
-Chunked framing *itself* already works (see `ChunkedBodyIntegrationTest`), and requests without a
-`Content-Length` are handled when they're chunked. The specific gap is **compressed request
-bodies**: the server has no path to accept (and, for local handlers, decode) a gzipped body, so the
-combination git relies on is dead on arrival. Relevant code: `LocalHttpRequestStage` (onHeaders /
-onBodyComplete), `HttpServerStage.startBodyOrDispatch` / `readBody`, `ChunkedBodyScanner`,
-`ChunkedDecodingOutputStream`, `UploadPolicy`. (No `ARCHITECTURE.md` yet.)
+Two limitations in the current upload model matter here:
+
+1. **`UploadPolicy` only sees headers.** `UploadPolicy.isAllowed(HttpRequest)` is called once at
+   header time; `SimpleUploadPolicy` just parses the `Content-Length` header. A chunked body has no
+   `Content-Length`, so the only real defence is absent — and `LocalHttpRequestStage.bodyBuffer` (a
+   `ByteArrayOutputStream`) accumulates the whole body **unboundedly**. So chunked uploads already
+   have an unbounded-memory hole today, before gzip enters the picture.
+2. A gzipped body adds decompression amplification on top: a small compressed body can expand
+   enormously.
+
+A constant byte cap would be inappropriate for a low-level HTTP library — the embedder must decide
+the limit. Relevant code: `model/server/UploadPolicy`, `upload/SimpleUploadPolicy`,
+`LocalHttpRequestStage` (onHeaders / onBodyData / onBodyComplete), `HttpServerStage.readBody`,
+`Http2ServerStage` body accumulation, `ChunkedDecodingOutputStream`. (No `ARCHITECTURE.md` yet.)
 
 ## Design
 
-Decoding happens in two layers that already exist and compose:
+### 1. `UploadPolicy` gains a decoded-body byte limit
 
-1. **Transfer-Encoding (chunked)** is de-framed. `HttpServerStage.readBody` already scans chunked
-   framing (`ChunkedBodyScanner`) and `LocalHttpRequestStage.onBodyComplete` already decodes the
-   raw chunked bytes via `ChunkedDecodingOutputStream`. Unchanged.
-2. **Content-Encoding (gzip)** is decompressed. This is the new layer, applied to the
-   *transfer-decoded* bytes.
+Add a limit the body machinery can enforce as bytes arrive, not just a header-time yes/no:
 
-Concretely:
+```java
+public interface UploadPolicy {
+  boolean isAllowed(HttpRequest request);           // existing header-time gate
 
-- **Stop rejecting `Content-Encoding` in `LocalHttpRequestStage.onHeaders`.** Replace the
-  unconditional 415 with: if the encoding is `gzip`/`x-gzip` (case-insensitive, `identity` treated
-  as absent), accept it and remember to decode; otherwise return 415 (unchanged for unknown codecs).
-- **Decode in `onBodyComplete`.** After the existing chunked-decode step produces the raw entity
-  bytes, if a gzip content-encoding was recorded, run the bytes through a `GZIPInputStream` into a
-  **bounded** buffer, then hand the decoded bytes to the handler as `InMemoryBody`. The
-  handler-visible request has its `Content-Encoding` header stripped (the body it sees is decoded),
-  matching how chunked requests present today.
-- **Body-presence and upload-policy checks** in `HttpServerStage.startBodyOrDispatch` already treat
-  chunked-without-Content-Length as "has body", so no framing change is needed there. The upload
-  policy (`UploadPolicy.isAllowed`) is still consulted on headers before any body is read.
+  /** Maximum number of decoded body bytes to accept; excess -> 413. */
+  long maxDecodedBytes(HttpRequest request);
+}
+```
 
-Decompression-bomb guard: the decode loop enforces a hard **max decoded bytes** ceiling and returns
-`413 Payload Too Large` if the gzip stream expands past it (see Decisions). Malformed/truncated gzip
-yields a clean `400 Bad Request`.
+`UploadPolicy.DENY`/`ALLOW` and `SimpleUploadPolicy` implement it (`DENY` -> 0; `ALLOW` ->
+`Long.MAX_VALUE`; `SimpleUploadPolicy` -> its `maxContentLength`, generalising that field from a
+header check to an enforced streaming ceiling). This is a **breaking interface change** for external
+`UploadPolicy` implementors — acceptable and desirable (see Decisions); the two built-ins and
+`SimpleUploadPolicy` are updated in-tree.
+
+### 2. Enforce the limit incrementally while streaming
+
+The body-streaming loops (`HttpServerStage.readBody` for Content-Length and chunked;
+`Http2ServerStage` DATA accumulation) already see each chunk of body bytes. Track a running
+decoded-byte count against `maxDecodedBytes` and, the moment it is exceeded, stop and produce `413
+Payload Too Large` — never buffer past the ceiling. For chunked bodies the count is of the
+*decoded* (de-chunked) bytes; the existing `ChunkedBodyScanner`/`ChunkedDecodingOutputStream`
+already separate framing from content.
+
+### 3. Accept and decode gzip
+
+- **`LocalHttpRequestStage.onHeaders`:** replace the unconditional 415 with: `gzip`/`x-gzip`
+  (case-insensitive; `identity` ≡ absent) -> accept and mark for decode; any other encoding -> 415.
+- **Decode after transfer-decoding:** after the existing chunked-decode step produces the raw entity
+  bytes, if gzip was marked, decode through `GZIPInputStream`. Decoding is **bounded by the same
+  `maxDecodedBytes` ceiling**, enforced during inflation — the decompression-bomb defence and the
+  body-size limit are one mechanism. Strip `Content-Encoding` from the handler-visible request (it
+  sees decoded bytes), matching the transparent chunked-decode contract.
+- **Malformed / truncated gzip** -> `400 Bad Request`, cleanly (no hang, no exception leaking to the
+  network layer).
 
 ## Security Considerations
 
-- **Decompression bombs (central risk):** a small gzipped body can expand enormously. The decode
-  loop MUST enforce a hard ceiling and abort with `413`, enforced *incrementally* — never allocate
-  past the ceiling before checking. This is why the ceiling is a required acceptance criterion, not
-  a nice-to-have.
-- **Malformed / truncated gzip:** must produce a clean `400 Bad Request`, never an unhandled
-  exception, connection hang, or leaked exception to the network layer.
-- **Framing ambiguity / smuggling:** the parser already rejects requests setting both
-  `Content-Length` and `Transfer-Encoding`, and only `chunked` is an accepted transfer-coding.
-  `Content-Encoding` is orthogonal to framing and adds no smuggling surface.
-- **NIO thread:** decode runs in `onBodyComplete` (NIO thread today for the buffered local path)
-  over a bounded buffer — CPU-only, bounded by the ceiling, no I/O blocking.
-- **Upload policy still gates:** `UploadPolicy.isAllowed` is consulted on headers before any body is
-  read or decoded, so a `DENY` policy rejects gzipped uploads with `413` before decompression.
+- **Decompression bombs & unbounded buffering (the central risk):** enforced by a single mechanism —
+  the policy's `maxDecodedBytes`, checked *incrementally* on every streamed chunk and during gzip
+  inflation, aborting with `413` before allocating past the ceiling. This closes both the gzip-bomb
+  vector and the pre-existing unbounded chunked-buffer hole. The embedder sets the limit; there is
+  no built-in magic number.
+- **Malformed / truncated gzip:** yields a clean `400`, never an unhandled exception or hung
+  connection.
+- **Framing / smuggling:** the parser already rejects requests setting both `Content-Length` and
+  `Transfer-Encoding`, and only `chunked` is an accepted transfer-coding; `Content-Encoding` is
+  orthogonal to framing and adds no smuggling surface.
+- **NIO thread:** limit-checking and decode run over bounded buffers on the NIO thread (as body
+  handling does today) — CPU-only, bounded by the ceiling, no I/O blocking.
+- **Consistency across protocols:** the limit is enforced on both the HTTP/1.1 and HTTP/2
+  local-serve paths so h2 is not a bypass.
 
 ## Decisions
 
-- **Decision:** The decoded-size ceiling is a conservative internal **constant** for this spec, not
-  policy-driven. — *Rationale:* `UploadPolicy` today only sees request headers, not the decoded
-  stream; threading a size budget through it is a larger API change than this fix warrants. A
-  constant closes the decompression-bomb hole now. A follow-up spec can make it policy-driven
-  (a defaulted `UploadPolicy.maxDecodedBytes()` would be source/binary compatible) if a real
-  deployment needs tuning. This keeps the change internal to `LocalHttpRequestStage` /
-  `HttpServerStage` with **no public API impact**.
-- **Decision:** Support only `gzip`/`x-gzip` (with `identity` ≡ absent); any other
-  `Content-Encoding` still returns 415. — *Rationale:* gzip is what git uses; adding `deflate`/`br`
-  speculatively widens the attack/maintenance surface with no current consumer.
-- **Decision:** Handlers receive the fully decoded body as `InMemoryBody`, with `Content-Encoding`
-  stripped. — *Rationale:* mirrors the existing transparent chunked-decode contract; handlers never
-  deal with transfer/content framing.
+- **Decision:** The decoded-body limit is **policy-driven** via a new `UploadPolicy.maxDecodedBytes`,
+  not a constant. — *Rationale:* a low-level HTTP library must let the embedder set the ceiling; a
+  hardcoded constant is wrong. It also generalises `SimpleUploadPolicy.maxContentLength` from a
+  header-only check into an enforced streaming limit, fixing the existing chunked hole.
+- **Decision:** Adding `maxDecodedBytes` as a non-defaulted method (breaking `UploadPolicy`) is
+  accepted. — *Rationale:* the interface has two built-in impls and one in-tree impl
+  (`SimpleUploadPolicy`), all updated here; a silent `default` that returned `Long.MAX_VALUE` would
+  quietly re-open the unbounded-buffer hole for existing implementors, which is worse than a
+  compile error that forces an explicit choice.
+- **Decision:** The limit counts **decoded** bytes (post de-chunk, post gunzip) and is enforced
+  incrementally. — *Rationale:* that is the memory the server actually commits and the number an
+  embedder reasons about; enforcing it during streaming/inflation is what defeats bombs.
+- **Decision:** Support only `gzip`/`x-gzip` (`identity` ≡ absent); other encodings still 415. —
+  *Rationale:* gzip is what git uses; speculative codecs widen the surface with no consumer.
+- **Decision:** Handlers receive the fully decoded body as `InMemoryBody`, `Content-Encoding`
+  stripped. — *Rationale:* mirrors the existing transparent chunked-decode contract.
 
 ## Open Questions
 
@@ -119,38 +146,41 @@ None.
 
 ## Acceptance Criteria
 
-- [ ] A `POST` with `Content-Encoding: gzip` and a gzipped body (with `Content-Length`) is
-      accepted, and a local `HttpHandler` receives the **decoded** body bytes.
-- [ ] A `POST` with `Transfer-Encoding: chunked` **and** `Content-Encoding: gzip` and **no**
-      `Content-Length` — the git shape — is accepted, de-chunked, decompressed, and the handler
-      receives the fully decoded body.
-- [ ] `x-gzip` is treated as `gzip`; `identity` is treated as no encoding.
-- [ ] An unknown/unsupported `Content-Encoding` (e.g. `br`) still returns `415 Unsupported Media
-      Type`.
-- [ ] A gzipped body that decodes past the configured ceiling returns `413 Payload Too Large` and
-      does not exhaust memory.
-- [ ] A malformed/truncated gzip body returns `400 Bad Request` and the connection is handled
-      cleanly (no hang, no leaked exception to the network layer).
-- [ ] The upload policy is still consulted (a `DENY` policy still rejects a gzipped upload with
-      `413` before decoding).
-- [ ] Tests: raw-socket integration covering all of the above; a git-shape end-to-end round-trip;
-      unit tests against the decode helper for the ceiling and malformed-gzip paths.
-- [ ] Existing chunked and upload tests pass unchanged; `bazel test //...` green and
-      `bazel run //:format.check` passes.
+- [ ] A `POST` with `Content-Encoding: gzip` and a gzipped body is accepted and a local
+      `HttpHandler` receives the **decoded** bytes.
+- [ ] The git shape — `Transfer-Encoding: chunked` + `Content-Encoding: gzip`, no `Content-Length` —
+      is accepted, de-chunked, decompressed, and delivered decoded.
+- [ ] `x-gzip` ≡ `gzip`; `identity` ≡ no encoding.
+- [ ] An unknown `Content-Encoding` (e.g. `br`) still returns `415`.
+- [ ] A body (Content-Length, chunked, or gzipped) whose decoded size exceeds the policy's
+      `maxDecodedBytes` returns `413` and does not buffer past the ceiling — verified for a chunked
+      body with no `Content-Length` (the previously-unbounded case) and for a gzip bomb.
+- [ ] A malformed/truncated gzip body returns `400` and the connection is handled cleanly.
+- [ ] The limit is enforced identically on the HTTP/2 local-serve path.
+- [ ] `SimpleUploadPolicy(n)` accepts a body of `n` decoded bytes and rejects `n+1`, including for a
+      chunked body with no `Content-Length`.
+- [ ] Tests: raw-socket HTTP/1.1 integration for all of the above; a git-shape round-trip; an h2
+      integration test for the limit; unit tests for the bounded gzip-decode helper (ceiling +
+      truncation).
+- [ ] `bazel test //...` green and `bazel run //:format.check` passes.
 
 ## Implementation Plan
 
-- [ ] PR 1: A bounded gzip-decode helper (decode `byte[]` → `byte[]` with a max-output ceiling;
-      throws a typed "too large" and a typed "malformed" signal). Unit-tested directly for the
-      ceiling and truncation paths.
-- [ ] PR 2: Wire it into `LocalHttpRequestStage`: accept `gzip`/`x-gzip` in `onHeaders`, decode in
-      `onBodyComplete` after chunked-decode, strip `Content-Encoding`, map ceiling→413 and
-      malformed→400. Integration tests for criteria 1–7.
-- [ ] PR 3: README note under "Design overview" that gzipped request bodies are accepted and
-      transparently decoded, and that chunked+gzip (git) is supported.
+- [ ] PR 1 (breaking): Add `UploadPolicy.maxDecodedBytes`; implement in `DENY`/`ALLOW` and
+      `SimpleUploadPolicy`; update all in-tree usages. No enforcement yet — pure interface + impls,
+      plus unit tests for the policy values.
+- [ ] PR 2: Enforce `maxDecodedBytes` incrementally in the HTTP/1.1 body path
+      (`HttpServerStage.readBody` + `LocalHttpRequestStage`), covering Content-Length and chunked;
+      map excess -> 413. Closes the unbounded chunked-buffer hole. Integration tests.
+- [ ] PR 3: Accept `gzip`/`x-gzip` in `LocalHttpRequestStage.onHeaders`; add a bounded gzip-decode
+      helper (bounded by `maxDecodedBytes`, typed too-large/malformed signals); decode in
+      `onBodyComplete`, strip `Content-Encoding`, map ceiling -> 413 and malformed -> 400.
+      Unit + integration tests incl. the git shape.
+- [ ] PR 4: Apply the same limit enforcement to the HTTP/2 local-serve path (`Http2ServerStage`);
+      h2 integration test. README note under "Design overview".
 
 ## Notes
 
 - If profiling later shows decode is too much work on the selector thread, moving assembly+decode to
   the handler executor is a separate optimisation.
-- Follow-up: policy-driven ceiling (see Decisions and Security Considerations).
+- Follow-up candidate: `deflate` request bodies, if a consumer appears.
