@@ -6,9 +6,12 @@
 #
 # For every feature spec docs/features/NNNN-*.md it checks:
 #   * the filename starts with a 4-digit zero-padded, unique number;
-#   * a valid "- **Status:**" line (Draft|Accepted|Implemented|Superseded|
-#     Withdrawn);
+#   * YAML frontmatter with id (matching the filename), title, a valid status
+#     (ready|in-progress|implemented|superseded), and an owner;
 #   * all required section headings are present;
+#   * the "Open Questions" section has NO unresolved checkbox items ("- [ ]") --
+#     a spec may not be committed with open questions (resolve them into
+#     Decisions first; pre-ready thinking lives in docs/proposals/);
 #   * the spec is listed in the docs/features/README.md index.
 #
 # TEMPLATE.md and README.md are not specs and are skipped.
@@ -20,18 +23,20 @@ FEATURES_DIR="docs/features"
 INDEX="$FEATURES_DIR/README.md"
 
 REQUIRED_SECTIONS=(
-  "## Problem"
+  "## Summary"
   "## Goals"
-  "## Non-goals"
-  "## Approach"
-  "## Public API impact"
-  "## Security & correctness considerations"
-  "## Acceptance criteria"
-  "## Testing plan"
-  "## Rollout / compatibility notes"
+  "## Non-Goals"
+  "## Background / Context"
+  "## Design"
+  "## Security Considerations"
+  "## Decisions"
+  "## Open Questions"
+  "## Acceptance Criteria"
+  "## Implementation Plan"
+  "## Notes"
 )
 
-VALID_STATUS_RE='^- \*\*Status:\*\* (Draft|Accepted|Implemented|Superseded|Withdrawn)\b'
+VALID_STATUS_RE='^status:[[:space:]]*(ready|in-progress|implemented|superseded)[[:space:]]*(#.*)?$'
 
 errors=0
 err() {
@@ -64,19 +69,61 @@ for spec in "${specs[@]}"; do
   fi
   seen_numbers[$number]="$base"
 
-  # Status line.
-  if ! grep -Eq "$VALID_STATUS_RE" "$spec"; then
-    err "$base: missing or invalid '- **Status:**' line (Draft|Accepted|Implemented|Superseded|Withdrawn)"
+  # --- Frontmatter ---------------------------------------------------------
+  # Must open with a YAML frontmatter block delimited by '---' lines.
+  if [[ "$(sed -n '1p' "$spec")" != "---" ]]; then
+    err "$base: must start with a YAML frontmatter '---' line"
+    continue
+  fi
+  # Extract the frontmatter block (between the first two '---' lines).
+  frontmatter="$(awk 'NR==1 && $0=="---"{f=1;next} f && $0=="---"{exit} f{print}' "$spec")"
+
+  # id: must match the filename number.
+  id_line="$(grep -E '^id:' <<< "$frontmatter" || true)"
+  if [[ -z "$id_line" ]]; then
+    err "$base: frontmatter missing 'id:'"
+  else
+    id_val="$(sed -E 's/^id:[[:space:]]*//; s/[[:space:]]*$//' <<< "$id_line")"
+    if [[ "$id_val" != "$number" ]]; then
+      err "$base: frontmatter id '$id_val' does not match filename number '$number'"
+    fi
   fi
 
-  # Required sections.
+  # title: must be present and non-empty.
+  if ! grep -Eq '^title:[[:space:]]*\S' <<< "$frontmatter"; then
+    err "$base: frontmatter missing non-empty 'title:'"
+  fi
+
+  # status: must be one of the valid values.
+  if ! grep -Eq "$VALID_STATUS_RE" <<< "$frontmatter"; then
+    err "$base: frontmatter missing or invalid 'status:' (ready|in-progress|implemented|superseded)"
+  fi
+
+  # owner: must be present and non-empty.
+  if ! grep -Eq '^owner:[[:space:]]*\S' <<< "$frontmatter"; then
+    err "$base: frontmatter missing non-empty 'owner:'"
+  fi
+
+  # --- Required sections ---------------------------------------------------
   for section in "${REQUIRED_SECTIONS[@]}"; do
     if ! grep -Fxq "$section" "$spec"; then
       err "$base: missing required section '$section'"
     fi
   done
 
-  # Must be linked from the index.
+  # --- Open Questions must be resolved -------------------------------------
+  # Extract the body of the "## Open Questions" section (up to the next "## ")
+  # and fail if it contains any unresolved checkbox ("- [ ]").
+  open_questions="$(awk '
+    /^## Open Questions[[:space:]]*$/ { grab=1; next }
+    grab && /^## / { grab=0 }
+    grab { print }
+  ' "$spec")"
+  if grep -Eq '^[[:space:]]*-[[:space:]]*\[[[:space:]]\]' <<< "$open_questions"; then
+    err "$base: 'Open Questions' has unresolved items ('- [ ]'); resolve them into Decisions before committing"
+  fi
+
+  # --- Index linkage -------------------------------------------------------
   if [[ -f "$INDEX" ]] && ! grep -q "($base)" "$INDEX"; then
     err "$base: not listed in $INDEX index"
   fi

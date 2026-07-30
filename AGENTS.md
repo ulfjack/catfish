@@ -68,16 +68,22 @@ java/de/ofahrt/catfish/           core server, endpoints, stages
   bridge/                         optional servlet bridge
   internal/network/               NIO engine & Stage abstraction
 javatest/...                      tests, mirroring the java/ layout
-docs/features/                    numbered feature specs (see below)
+docs/features/                    numbered, reviewed feature specs (status: ready+)
+docs/proposals/                   pre-ready thinking with open questions (not linted)
 docs/development/                 process docs, incl. spec-driven-development.md
 ```
 
 ## Spec-driven development, in one paragraph
 
 For anything beyond a trivial fix: write a short spec in `docs/features/NNNN-title.md` from the
-[template](docs/features/TEMPLATE.md), covering the problem, the approach, the public-API impact,
-and explicit acceptance criteria. Get the spec reviewed *before* writing code — a wrong spec is
-cheap to fix, a wrong implementation is not. Then implement against the acceptance criteria, keep
-the spec updated if reality pushes back, and reference the spec number in the commit. The full
-process, including how to delegate implementation to subagents, is in
+[template](docs/features/TEMPLATE.md). It has YAML frontmatter (`id`, `title`, `status`, `owner`,
+`architecture_refs`) and fixed sections — Summary, Goals, Non-Goals, Background, Design, **Security
+Considerations**, Decisions, Open Questions, Acceptance Criteria, Implementation Plan, Notes. Get it
+reviewed *before* writing code — a wrong spec is cheap to fix, a wrong implementation is not. A
+committed `docs/features/` spec is **`ready`**: its *Open Questions* must be empty (each resolved
+into a **Decision** with rationale), which the pre-commit `lint-specs` gate enforces. Pre-ready
+thinking with unresolved questions lives in `docs/proposals/` until promoted. Then implement against
+the acceptance criteria, keep the spec updated if reality pushes back (new questions get resolved
+into Decisions, not left open), and reference the spec number in the commit. The full process,
+including how to delegate implementation to subagents, is in
 [docs/development/spec-driven-development.md](docs/development/spec-driven-development.md).

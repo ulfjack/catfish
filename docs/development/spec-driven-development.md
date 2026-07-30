@@ -45,14 +45,28 @@ and the server rejects `Content-Encoding`" is a frame. "Add gzip support" is not
 
 Copy [`docs/features/TEMPLATE.md`](../features/TEMPLATE.md) to
 `docs/features/NNNN-short-title.md`, where `NNNN` is the next free number (zero-padded, e.g.
-`0001`). Fill in every section. The two sections that matter most:
+`0001`). The spec opens with YAML frontmatter (`id`, `title`, `status`, `owner`,
+`architecture_refs`) and then a fixed set of sections. Fill in every one. The sections that matter
+most:
 
-- **Approach** — enough design that a reviewer can spot a wrong turn. Name the classes/stages you'll
+- **Design** — enough design that a reviewer can spot a wrong turn. Name the classes/stages you'll
   touch. Call out the tricky part (there usually is one: a flow-control transition, a buffer
   lifetime, a header interaction).
-- **Acceptance criteria** — a numbered, checkable list. Each item is something a test can assert or
+- **Security Considerations** — for a low-level HTTP library this is rarely empty. Request
+  smuggling, unbounded buffering, malformed input, TLS/ALPN, decompression bombs, NIO-thread
+  blocking. Say "None" only after genuinely concluding there are none.
+- **Decisions** — settled choices, each with a one-line rationale. Open questions that got resolved
+  during review land here.
+- **Acceptance Criteria** — a checkable list (`- [ ]`). Each item is something a test can assert or
   a reviewer can verify. These *are* the definition of done; the implementation is judged against
   them, not against a vibe.
+- **Implementation Plan** — PR-sized boxes, ordered, each a non-breaking increment.
+
+**Open Questions must be empty before a spec is committed.** A committed `docs/features/` spec is
+`ready` — the pre-commit `lint-specs` gate rejects any unresolved `- [ ]` under *Open Questions*.
+Resolve each open question (with a human) into a **Decision** with rationale first. Pre-ready
+thinking that still has open questions lives in `docs/proposals/` (free-form, not linted) until it's
+resolved and promoted into `docs/features/`.
 
 Keep it short. A good Catfish spec is one to three pages. If it's longer, the change is probably
 too big and should be split.
@@ -79,8 +93,10 @@ ideally you can point at the test that proves criterion _N_. Keep the build gree
 (`bazel test //...`) and formatted (`bazel run //:format`) as you go.
 
 If the implementation reveals that the spec was wrong or incomplete — a case you didn't foresee, an
-API that doesn't compose — **stop and update the spec**, then continue. The spec is a living
-document until the change lands; a spec that lies about the code is worse than no spec.
+API that doesn't compose — **stop and update the spec**, then continue. A new question that surfaces
+during implementation gets resolved with a human and moved into **Decisions** before you re-commit
+(the Open Questions section must stay empty). The spec is a living document until the change lands;
+a spec that lies about the code is worse than no spec.
 
 #### Delegating implementation
 
@@ -93,23 +109,26 @@ requiring judgement about the spec itself should come back to review.
 
 ### 5. Land it
 
-- Reference the spec in the commit message (e.g. "Implements docs/features/0002-alpn-h1-h2.md").
+- Reference the spec in the commit message (e.g. "Implements docs/features/0002-chunked-gzip-uploads.md").
 - Update the README if user-facing behaviour or public API changed.
-- Tick the acceptance criteria in the spec (or note deviations), and mark the spec **Accepted**.
+- Tick the acceptance criteria in the spec (or note deviations), and set the spec's `status` to
+  `implemented`.
 - Ensure `bazel test //...` and `bazel run //:format.check` pass.
 
 ## Spec lifecycle
 
-A spec's `Status` field moves through:
+A spec's `status` frontmatter field moves through:
 
-- **Draft** — being written / under review. No implementation yet.
-- **Accepted** — reviewed and signed off; implementation may proceed.
-- **Implemented** — code merged, acceptance criteria met.
-- **Superseded / Withdrawn** — replaced by a later spec, or abandoned. Leave the file in place for
-  history and link to whatever replaced it.
+- **ready** — reviewed, open questions resolved into Decisions, signed off; implementation may
+  proceed. This is the state a spec is committed to `docs/features/` in.
+- **in-progress** — implementation underway.
+- **implemented** — code merged, acceptance criteria met.
+- **superseded** — replaced by a later spec. Leave the file in place for history and link to
+  whatever replaced it.
 
-Specs are immutable history once **Implemented** — don't rewrite an old spec to describe new work;
-write a new one that references it.
+Pre-ready thinking (still has open questions) is not a `docs/features/` spec at all — it lives in
+`docs/proposals/` until resolved. Specs are immutable history once **implemented** — don't rewrite
+an old spec to describe new work; write a new one that references it.
 
 ## Why this works for AI agents
 

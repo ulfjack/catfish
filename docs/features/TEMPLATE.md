@@ -1,59 +1,76 @@
-# NNNN — <Short title>
+---
+id: NNNN
+title: <short descriptive title>
+status: ready        # ready | in-progress | implemented | superseded
+owner: <name>
+architecture_refs:   # sections/files in ARCHITECTURE.md this touches
+  - <e.g. Proxy>
+---
 
-- **Status:** Draft
-- **Author(s):** <name / agent>
-- **Created:** <YYYY-MM-DD>
-- **Related:** <links to other specs, issues, or README sections; "none" if none>
+# NNNN — <Title>
 
-## Problem
+## Summary
 
-What is broken or missing, and who is affected? Frame it concretely — a scenario that fails today,
-or a capability an embedding application cannot express. Avoid jumping to a solution here.
+One or two sentences: what this change is and why it matters.
 
 ## Goals
 
-- What this change will accomplish (bullet list).
+- What this spec is trying to achieve (bullet list, each independently checkable).
 
-## Non-goals
+## Non-Goals
 
-- What this change explicitly will **not** do, to bound scope.
+- Explicitly out of scope. Prevents scope creep during implementation.
 
-## Approach
+## Background / Context
 
-The design, in enough detail that a reviewer can spot a wrong turn without reading the eventual
-diff. Name the classes, stages, and packages you'll touch. Describe new types or methods. Call out
-the tricky part — the flow-control transition, the buffer lifetime, the header interaction, the
-parser edge case — because there almost always is one.
+Any context the implementing agent needs: current behavior, relevant code,
+constraints, prior decisions. Link to ARCHITECTURE.md sections.
 
-If there are alternatives worth mentioning, say why you chose this one.
+## Design
 
-## Public API impact
+The proposed design. Include data/schema changes, API/interface changes,
+error handling, and how it fits the existing architecture.
 
-Does this change anything in `de.ofahrt.catfish`, `de.ofahrt.catfish.model`, or
-`de.ofahrt.catfish.model.server`? List new/changed/removed public types and methods. If nothing
-changes, say "None." Note any README updates required.
+## Security Considerations
 
-## Security & correctness considerations
+Security and correctness risks this change touches, and how the design addresses each. For a
+low-level HTTP library this section is rarely empty — consider request smuggling / framing
+ambiguity, resource exhaustion / unbounded buffering, malformed-input handling, TLS/ALPN behaviour,
+decompression bombs, and whether the NIO thread can ever block. Write "None" only after genuinely
+concluding there are none.
 
-For a low-level HTTP library this section is rarely empty. Consider: request smuggling and framing
-ambiguity, resource-exhaustion / unbounded buffering, malformed-input handling, TLS/ALPN behaviour,
-and whether the NIO thread can ever block. State how the design addresses each relevant risk.
+## Decisions
 
-## Acceptance criteria
+Settled choices, each with a short rationale. (These are NOT open questions.)
 
-A numbered, checkable list. Each item should be something a test can assert or a reviewer can
-directly verify. This is the definition of done.
+- **Decision:** ... — *Rationale:* ...
 
-1. …
-2. …
-3. …
+## Open Questions
 
-## Testing plan
+Unresolved questions. This section **must have no unresolved items (`- [ ]`)
+before a spec can be committed** — the precommit spec-lint enforces it. Pre-ready
+thinking with open questions lives in `docs/proposals/` until it's resolved;
+once a spec lands in `docs/features/`, its open questions are resolved into
+Decisions. During implementation, new questions get resolved with a human and
+moved to Decisions before re-committing.
 
-Which tests prove the acceptance criteria (unit, integration, parser conformance)? Note anything
-that needs a new test fixture or a real external client (e.g. `git`, `curl --http2`).
+- [ ] <question> — *proposed answer:* ...
 
-## Rollout / compatibility notes
+## Acceptance Criteria
 
-Backwards-compatibility implications, default-behaviour changes, and anything an embedding
-application must know when upgrading. "None" if not applicable.
+Testable checklist that defines "done" for the whole spec.
+
+- [ ] ...
+- [ ] Tests: ...
+
+## Implementation Plan
+
+Break the work into small, PR-sized units. Each box = one PR. Order matters;
+prefer non-breaking, incremental steps.
+
+- [ ] PR 1: ...
+- [ ] PR 2: ...
+
+## Notes
+
+Anything else: risks, follow-ups, links to related specs.
