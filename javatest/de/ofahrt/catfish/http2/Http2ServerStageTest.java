@@ -26,8 +26,10 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.Nullable;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -682,6 +684,124 @@ public class Http2ServerStageTest {
     assertEquals("11", request.getHeaders().get("Content-Length"));
     HttpRequest.Body body = request.getBody();
     assertTrue("body should be present", body != null);
+  }
+
+  @Test
+  public void postWithBody_asyncRouting_dispatchedWhenDataPrecedesRouting() throws IOException {
+    // Regression for the reported hang: with a real executor, routing runs asynchronously, so the
+    // body's END_STREAM DATA frame can be processed BEFORE the routing result is applied.
+    // handleData
+    // then sees a not-yet-routed stream and skips dispatch; the deferred applyRoutingResult must
+    // notice the body already finished and dispatch. Every other POST-body test uses a null
+    // executor
+    // (synchronous routing), which never exercises this ordering — that is how the bug shipped.
+    List<HttpRequest> received = new ArrayList<>();
+    HttpHandler handler =
+        (c, r, w) -> {
+          received.add(r);
+          w.commitBuffered(StandardResponses.OK.withBody(new byte[0]));
+        };
+    // Executor that defers routing tasks until we run them, letting us interleave frames precisely.
+    List<Runnable> routingTasks = new ArrayList<>();
+    Executor deferredExecutor = routingTasks::add;
+    rebuildStage(uploadAllowed(handler), deferredExecutor);
+
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // HEADERS without END_STREAM → routing is handed to the executor, not yet run.
+    feedAndRead(postHeadersFrame(1, "/submit", /* endStream= */ false, /* contentLength= */ -1));
+    assertEquals("routing should be deferred to the executor", 1, routingTasks.size());
+    assertEquals("nothing dispatched before routing completes", 0, received.size());
+
+    // DATA with END_STREAM arrives while routing is still pending — the race.
+    byte[] bodyData = "hello world".getBytes(StandardCharsets.UTF_8);
+    feedAndRead(dataFrame(1, bodyData, /* endStream= */ true));
+    assertEquals("handleData must not dispatch before routing is applied", 0, received.size());
+
+    // Routing completes now; the fix dispatches even though END_STREAM already arrived.
+    for (Runnable task : routingTasks) {
+      task.run();
+    }
+    assertEquals("request must be dispatched once routing completes", 1, received.size());
+    assertArrayEquals(bodyData, bodyOf(received.get(0)));
+    assertEquals("11", received.get(0).getHeaders().get("Content-Length"));
+  }
+
+  @Test
+  public void postWithBody_clientSuppliedContentLength_notDuplicated() throws IOException {
+    // Regression: real clients (java.net.http, browsers, curl) send content-length in the HEADERS
+    // frame. content-length is not a list-valued field, so synthesizing a second one made the
+    // request malformed → 400. doDispatch must reuse the client's value instead.
+    List<HttpRequest> received = new ArrayList<>();
+    HttpHandler handler =
+        (c, r, w) -> {
+          received.add(r);
+          w.commitBuffered(StandardResponses.OK.withBody(new byte[0]));
+        };
+    rebuildStage(uploadAllowed(handler), null);
+
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    byte[] bodyData = "abcde".getBytes(StandardCharsets.UTF_8);
+    feedAndRead(postHeadersFrame(1, "/submit", /* endStream= */ false, bodyData.length));
+    feedAndRead(dataFrame(1, bodyData, /* endStream= */ true));
+
+    assertEquals("request must be dispatched, not rejected as malformed", 1, received.size());
+    assertEquals("5", received.get(0).getHeaders().get("Content-Length"));
+    assertArrayEquals(bodyData, bodyOf(received.get(0)));
+  }
+
+  @Test
+  public void postWithBody_splitAcrossDataFrames_reassembled() throws IOException {
+    // Larger bodies span multiple DATA frames; only the last carries END_STREAM. The full body must
+    // be reassembled in order before dispatch.
+    List<HttpRequest> received = new ArrayList<>();
+    HttpHandler handler =
+        (c, r, w) -> {
+          received.add(r);
+          w.commitBuffered(StandardResponses.OK.withBody(new byte[0]));
+        };
+    rebuildStage(uploadAllowed(handler), null);
+
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    feedAndRead(postHeadersFrame(1, "/upload", /* endStream= */ false, /* contentLength= */ -1));
+    feedAndRead(dataFrame(1, "Hello, ".getBytes(StandardCharsets.UTF_8), /* endStream= */ false));
+    feedAndRead(dataFrame(1, "world".getBytes(StandardCharsets.UTF_8), /* endStream= */ false));
+    assertEquals("no dispatch until END_STREAM", 0, received.size());
+    feedAndRead(dataFrame(1, "!".getBytes(StandardCharsets.UTF_8), /* endStream= */ true));
+
+    assertEquals(1, received.size());
+    byte[] expected = "Hello, world!".getBytes(StandardCharsets.UTF_8);
+    assertArrayEquals(expected, bodyOf(received.get(0)));
+    assertEquals(
+        Integer.toString(expected.length), received.get(0).getHeaders().get("Content-Length"));
+  }
+
+  @Test
+  public void postWithBody_emptyDataFrameWithEndStream_dispatchesWithoutBody() throws IOException {
+    // A body-less POST whose HEADERS lacks END_STREAM, terminated by a zero-length DATA frame with
+    // END_STREAM. No body accumulates, so no content-length is synthesized and no body is attached.
+    List<HttpRequest> received = new ArrayList<>();
+    HttpHandler handler =
+        (c, r, w) -> {
+          received.add(r);
+          w.commitBuffered(StandardResponses.OK.withBody(new byte[0]));
+        };
+    rebuildStage(uploadAllowed(handler), null);
+
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    feedAndRead(postHeadersFrame(1, "/empty", /* endStream= */ false, /* contentLength= */ -1));
+    feedAndRead(dataFrame(1, new byte[0], /* endStream= */ true));
+
+    assertEquals(1, received.size());
+    assertEquals(null, received.get(0).getBody());
+    assertEquals(null, received.get(0).getHeaders().get("Content-Length"));
   }
 
   @Test
@@ -1448,6 +1568,86 @@ public class Http2ServerStageTest {
       i += 9 + len;
     }
     assertTrue("expected RST_STREAM with FLOW_CONTROL_ERROR", foundRst);
+  }
+
+  /** Rebuilds the stage with a custom connect handler and (optionally async) executor. */
+  private void rebuildStage(ConnectHandler ch, @Nullable Executor executor) {
+    pipeline = new TestPipeline();
+    inputBuffer = ByteBuffer.allocate(65536);
+    outputBuffer = ByteBuffer.allocate(65536);
+    inputBuffer.flip();
+    outputBuffer.flip();
+    stage =
+        new Http2ServerStage(
+            pipeline,
+            (h, connection, request, writer) -> {
+              try {
+                h.handle(connection, request, writer);
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
+            },
+            ch,
+            executor,
+            inputBuffer,
+            outputBuffer);
+    stage.connect(
+        new Connection(
+            new InetSocketAddress("127.0.0.1", 8443),
+            new InetSocketAddress("127.0.0.1", 12345),
+            true));
+  }
+
+  /** A connect handler that serves the given handler locally with uploads allowed. */
+  private static ConnectHandler uploadAllowed(HttpHandler handler) {
+    return new ConnectHandler() {
+      @Override
+      public RequestAction applyLocal(HttpRequest request) {
+        return new RequestAction.ServeLocally(
+            handler,
+            de.ofahrt.catfish.model.server.UploadPolicy.ALLOW,
+            de.ofahrt.catfish.model.server.KeepAlivePolicy.KEEP_ALIVE,
+            de.ofahrt.catfish.model.server.CompressionPolicy.NONE);
+      }
+    };
+  }
+
+  /** Builds a POST HEADERS frame, optionally with a client-supplied content-length. */
+  private static byte[] postHeadersFrame(
+      int streamId, String path, boolean endStream, int contentLength) {
+    HpackEncoder encoder = new HpackEncoder();
+    List<Header> headers = new ArrayList<>();
+    headers.add(new Header(":method", "POST"));
+    headers.add(new Header(":path", path));
+    headers.add(new Header(":scheme", "https"));
+    headers.add(new Header(":authority", "localhost"));
+    if (contentLength >= 0) {
+      headers.add(new Header("content-length", Integer.toString(contentLength)));
+    }
+    byte[] headerBlock = encoder.encode(headers.toArray(new Header[0]));
+    ByteBuffer buf = ByteBuffer.allocate(9 + headerBlock.length);
+    Http2FrameWriter.writeHeaders(buf, streamId, headerBlock, endStream);
+    buf.flip();
+    byte[] frame = new byte[buf.remaining()];
+    buf.get(frame);
+    return frame;
+  }
+
+  /** Builds a DATA frame carrying the given body. */
+  private static byte[] dataFrame(int streamId, byte[] body, boolean endStream) {
+    ByteBuffer buf = ByteBuffer.allocate(9 + body.length);
+    Http2FrameWriter.writeData(buf, streamId, body, 0, body.length, endStream);
+    buf.flip();
+    byte[] frame = new byte[buf.remaining()];
+    buf.get(frame);
+    return frame;
+  }
+
+  /** Extracts the in-memory request body bytes, asserting the body is present and in-memory. */
+  private static byte[] bodyOf(HttpRequest request) {
+    HttpRequest.Body body = request.getBody();
+    assertTrue("expected an in-memory body", body instanceof HttpRequest.InMemoryBody);
+    return ((HttpRequest.InMemoryBody) java.util.Objects.requireNonNull(body)).toByteArray();
   }
 
   private static byte[] buildRawFrame(int type, int flags, int streamId, byte[] payload) {

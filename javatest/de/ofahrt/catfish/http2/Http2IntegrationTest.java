@@ -35,8 +35,15 @@ public class Http2IntegrationTest {
     SSLInfo sslInfo = TestHelper.getSSLInfo();
     HttpVirtualHost host =
         new HttpVirtualHost(
-            (conn, req, writer) ->
-                writer.commitBuffered(StandardResponses.OK.withBody("h2 works!".getBytes())));
+                (conn, req, writer) -> {
+                  de.ofahrt.catfish.model.HttpRequest.Body body = req.getBody();
+                  byte[] responseBody =
+                      body instanceof de.ofahrt.catfish.model.HttpRequest.InMemoryBody inMemory
+                          ? inMemory.toByteArray()
+                          : "h2 works!".getBytes();
+                  writer.commitBuffered(StandardResponses.OK.withBody(responseBody));
+                })
+            .uploadPolicy(de.ofahrt.catfish.model.server.UploadPolicy.ALLOW);
 
     server =
         new CatfishHttpServer(
@@ -101,6 +108,113 @@ public class Http2IntegrationTest {
       assertEquals(200, response.statusCode());
       assertEquals("h2 works!", response.body());
       assertEquals(HttpClient.Version.HTTP_2, response.version());
+    }
+  }
+
+  @Test
+  public void postWithBody_isDispatchedAndEchoed() throws Exception {
+    // Regression test: a POST whose HEADERS frame lacks END_STREAM (i.e. carries a body) must be
+    // dispatched once the body's END_STREAM DATA frame arrives, even though routing runs
+    // asynchronously and may finish after the DATA frame has already been processed. Previously
+    // the request hung. 1 byte and 5 KB exercise both a single small DATA frame and a larger body.
+    assertPostEchoes(1);
+    assertPostEchoes(5 * 1024);
+  }
+
+  @Test
+  public void emptyBodyPost_returnsOkOverH2() throws Exception {
+    // Reported to work; lock it in. An empty-body POST carries END_STREAM on the HEADERS frame.
+    try (HttpClient client =
+        HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_2)
+            .sslContext(trustAllContext())
+            .build()) {
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create("https://localhost:" + PORT + "/"))
+              .POST(HttpRequest.BodyPublishers.noBody())
+              .build();
+      HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+      assertEquals(200, response.statusCode());
+      assertEquals(HttpClient.Version.HTTP_2, response.version());
+    }
+  }
+
+  @Test
+  public void postWithStreamedBody_noContentLength_isEchoed() throws Exception {
+    // A body of unknown length is sent as DATA frames with no content-length header, exercising the
+    // branch where the server synthesizes content-length from the accumulated body.
+    byte[] payload = new byte[3000];
+    for (int i = 0; i < payload.length; i++) {
+      payload[i] = (byte) ('A' + (i % 26));
+    }
+    try (HttpClient client =
+        HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_2)
+            .sslContext(trustAllContext())
+            .build()) {
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create("https://localhost:" + PORT + "/"))
+              .POST(
+                  HttpRequest.BodyPublishers.ofInputStream(
+                      () -> new java.io.ByteArrayInputStream(payload)))
+              .build();
+      HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+      assertEquals(200, response.statusCode());
+      assertEquals(HttpClient.Version.HTTP_2, response.version());
+      org.junit.Assert.assertArrayEquals(payload, response.body());
+    }
+  }
+
+  @Test
+  public void concurrentPostsWithBody_allSucceed() throws Exception {
+    try (HttpClient client =
+        HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_2)
+            .sslContext(trustAllContext())
+            .build()) {
+      int n = 20;
+      java.util.List<java.util.concurrent.CompletableFuture<HttpResponse<byte[]>>> futures =
+          new java.util.ArrayList<>();
+      byte[][] payloads = new byte[n][];
+      for (int i = 0; i < n; i++) {
+        byte[] payload = ("request-" + i + "-").repeat(64).getBytes();
+        payloads[i] = payload;
+        HttpRequest request =
+            HttpRequest.newBuilder()
+                .uri(URI.create("https://localhost:" + PORT + "/"))
+                .POST(HttpRequest.BodyPublishers.ofByteArray(payload))
+                .build();
+        futures.add(client.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray()));
+      }
+      for (int i = 0; i < n; i++) {
+        HttpResponse<byte[]> response = futures.get(i).get();
+        assertEquals(200, response.statusCode());
+        org.junit.Assert.assertArrayEquals(payloads[i], response.body());
+      }
+    }
+  }
+
+  private static void assertPostEchoes(int size) throws Exception {
+    byte[] payload = new byte[size];
+    for (int i = 0; i < size; i++) {
+      payload[i] = (byte) ('a' + (i % 26));
+    }
+    try (HttpClient client =
+        HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_2)
+            .sslContext(trustAllContext())
+            .build()) {
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create("https://localhost:" + PORT + "/"))
+              .POST(HttpRequest.BodyPublishers.ofByteArray(payload))
+              .build();
+      HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+      assertEquals(200, response.statusCode());
+      assertEquals(HttpClient.Version.HTTP_2, response.version());
+      org.junit.Assert.assertArrayEquals(payload, response.body());
     }
   }
 }

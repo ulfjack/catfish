@@ -509,6 +509,14 @@ public final class Http2ServerStage implements Stage {
         }
         stream.setRequestBuilder(builder);
         stream.setRoutingResult(serve);
+        // Routing runs asynchronously on the executor thread, so the body's END_STREAM DATA frame
+        // may already have been processed by handleData() before this queued task runs. In that
+        // case handleData() saw a null builder/routingResult and skipped dispatch, so we must
+        // dispatch now. When END_STREAM has not yet arrived, the stream is still OPEN and a later
+        // handleData() will dispatch once the builder/routingResult we just stored are visible.
+        if (stream.getState() == Http2Stream.State.HALF_CLOSED_REMOTE) {
+          dispatchRequest(stream, builder, serve);
+        }
       }
     } else if (action instanceof RequestAction.Deny deny) {
       HttpResponse denyResponse = deny.response();
@@ -678,7 +686,12 @@ public final class Http2ServerStage implements Stage {
     try {
       if (bodyBytes.length > 0) {
         builder.setBody(new HttpRequest.InMemoryBody(bodyBytes));
-        builder.addHeader(HttpHeaderName.CONTENT_LENGTH, Integer.toString(bodyBytes.length));
+        // Most clients send an explicit content-length in the HEADERS frame; content-length is not
+        // a list-valued field, so adding a second occurrence would make the request malformed. Only
+        // synthesize one when the client omitted it (e.g. a body sent without content-length).
+        if (builder.getHeader(HttpHeaderName.CONTENT_LENGTH) == null) {
+          builder.addHeader(HttpHeaderName.CONTENT_LENGTH, Integer.toString(bodyBytes.length));
+        }
       }
       request = builder.build();
     } catch (MalformedRequestException e) {
