@@ -19,4 +19,4 @@ Status column below.
 | [0003](0003-http2-continuation-frames.md) | HTTP/2 CONTINUATION frame support | ready |
 | [0004](0004-reverse-proxy-unix-socket.md) | Reverse-proxy an upstream over a unix domain socket | implemented |
 | [0005](0005-http2-header-field-validation.md) | HTTP/2 request header field validation | implemented |
-| [0006](0006-http2-response-compression.md) | HTTP/2 response compression parity via a shared response-writer decorator | ready |
+| [0006](0006-http2-response-compression.md) | HTTP/2 response compression parity via a shared response-writer decorator | implemented |
