@@ -462,7 +462,14 @@ final class HttpServerStage implements Stage {
     if (chunkedScanner != null) {
       int pos = inputBuffer.position();
       int len = inputBuffer.remaining();
-      int consumed = handler.onBodyData(inputBuffer.array(), pos, len);
+      // Only bytes up to and including the terminal chunk belong to this body. If the body ends
+      // within this buffer, anything after it is a pipelined next request (or, for a forward
+      // proxy, bytes that must not be spliced into the upstream body) and must stay in the buffer.
+      // findEnd is a dry run that does not mutate scanner state; -1 means the body does not end
+      // here, so all remaining bytes belong to it.
+      int end = chunkedScanner.findEnd(inputBuffer.array(), pos, len);
+      int available = end >= 0 ? end : len;
+      int consumed = handler.onBodyData(inputBuffer.array(), pos, available);
       inputBuffer.position(pos + consumed);
       chunkedScanner.advance(inputBuffer.array(), pos, consumed);
       if (chunkedScanner.hasError()) {
@@ -484,7 +491,7 @@ final class HttpServerStage implements Stage {
         headersRequest = null;
         return ConnectionControl.CLOSE_INPUT;
       }
-      if (consumed < len) {
+      if (consumed < available) {
         return ConnectionControl.PAUSE;
       }
       if (chunkedScanner.isDone()) {
