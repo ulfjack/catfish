@@ -3,6 +3,7 @@ package de.ofahrt.catfish.model.server;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import java.io.OutputStream;
+import java.nio.file.Path;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
@@ -38,6 +39,19 @@ public sealed interface RequestAction {
   record ForwardAndCapture(HttpRequest request, OutputStream captureStream)
       implements RequestAction {}
 
+  /**
+   * Forward the request to a backend listening on the given unix domain socket. Body is streamed.
+   *
+   * <p>The {@code socketPath} is supplied by application code and is never inferred from the
+   * request — a reverse proxy must not let a remote client choose which local socket to connect to.
+   */
+  record ForwardToUnixSocket(HttpRequest request, Path socketPath) implements RequestAction {
+    public ForwardToUnixSocket {
+      Objects.requireNonNull(request, "request");
+      Objects.requireNonNull(socketPath, "socketPath");
+    }
+  }
+
   /** Deny with a custom response, or 403 Forbidden by default. No body is read. */
   record Deny(@Nullable HttpResponse response) implements RequestAction {
     public Deny() {
@@ -63,5 +77,13 @@ public sealed interface RequestAction {
 
   static RequestAction forwardAndCapture(HttpRequest request, OutputStream captureStream) {
     return new ForwardAndCapture(request, captureStream);
+  }
+
+  /**
+   * Forward the request to a backend listening on the unix domain socket at {@code socketPath}. The
+   * body is streamed. The path is chosen by application code, never derived from the request.
+   */
+  static RequestAction forwardToUnixSocket(Path socketPath, HttpRequest request) {
+    return new ForwardToUnixSocket(request, socketPath);
   }
 }

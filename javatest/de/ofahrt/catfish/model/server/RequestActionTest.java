@@ -10,6 +10,7 @@ import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
 import java.io.ByteArrayOutputStream;
+import java.nio.file.Path;
 import org.junit.Test;
 
 public class RequestActionTest {
@@ -114,5 +115,26 @@ public class RequestActionTest {
     RequestAction.ForwardAndCapture fc = (RequestAction.ForwardAndCapture) a;
     assertSame(request, fc.request());
     assertSame(capture, fc.captureStream());
+  }
+
+  @Test
+  public void forwardToUnixSocket_carriesRequestAndPath() {
+    HttpRequest request = requestWithUri("http://host/path");
+    Path socketPath = Path.of("/run/backend.sock");
+    RequestAction a = RequestAction.forwardToUnixSocket(socketPath, request);
+    assertTrue(a instanceof RequestAction.ForwardToUnixSocket);
+    RequestAction.ForwardToUnixSocket fu = (RequestAction.ForwardToUnixSocket) a;
+    assertSame(request, fu.request());
+    assertSame(socketPath, fu.socketPath());
+  }
+
+  @Test(expected = NullPointerException.class)
+  public void forwardToUnixSocket_nullPath_throws() {
+    RequestAction.forwardToUnixSocket(null, requestWithUri("http://host/path"));
+  }
+
+  @Test(expected = NullPointerException.class)
+  public void forwardToUnixSocket_nullRequest_throws() {
+    RequestAction.forwardToUnixSocket(Path.of("/run/backend.sock"), null);
   }
 }

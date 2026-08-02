@@ -5,12 +5,15 @@ import static org.junit.Assert.assertTrue;
 import de.ofahrt.catfish.CatfishHttpServer;
 import de.ofahrt.catfish.HttpEndpoint;
 import de.ofahrt.catfish.HttpVirtualHost;
+import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.network.NetworkEventListener;
 import de.ofahrt.catfish.model.server.ConnectHandler;
+import de.ofahrt.catfish.model.server.RequestAction;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.StandardProtocolFamily;
 import java.net.UnixDomainSocketAddress;
 import java.nio.ByteBuffer;
@@ -25,6 +28,7 @@ import org.junit.Test;
 
 public class UnixSocketIntegrationTest {
   private static final int ORIGIN_HTTP_PORT = 19170;
+  private static final int REVERSE_PROXY_PORT = 19171;
 
   private CatfishHttpServer server;
   private Path httpSocketPath;
@@ -68,6 +72,16 @@ public class UnixSocketIntegrationTest {
     HttpEndpoint httpListener =
         HttpEndpoint.onLocalhost(ORIGIN_HTTP_PORT).addHost("localhost", host);
     server.listen(httpListener);
+
+    // A TCP reverse proxy whose applyLocal forwards to the unix-socket backend above.
+    ConnectHandler reverseProxy =
+        new ConnectHandler() {
+          @Override
+          public RequestAction applyLocal(HttpRequest request) {
+            return RequestAction.forwardToUnixSocket(httpSocketPath, request);
+          }
+        };
+    server.listen(HttpEndpoint.onLocalhost(REVERSE_PROXY_PORT).dispatcher(reverseProxy));
   }
 
   @After
@@ -115,6 +129,17 @@ public class UnixSocketIntegrationTest {
       send(ch, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
       String response = readAll(ch);
       assertTrue("Expected HTTP 200, got: " + response, response.startsWith("HTTP/1.1 200"));
+    }
+  }
+
+  @Test
+  public void reverseProxyToUnixSocketBackend() throws IOException {
+    try (SocketChannel ch = SocketChannel.open(StandardProtocolFamily.INET)) {
+      ch.connect(new InetSocketAddress("localhost", REVERSE_PROXY_PORT));
+      send(ch, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+      String response = readAll(ch);
+      assertTrue("Expected HTTP 200, got: " + response, response.startsWith("HTTP/1.1 200"));
+      assertTrue("Expected body OK, got: " + response, response.contains("OK"));
     }
   }
 

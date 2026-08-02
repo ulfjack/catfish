@@ -186,6 +186,20 @@ server.listen(
         }));
 ```
 
+To forward to a backend listening on a **unix domain socket** instead of a TCP host:port, return
+`forwardToUnixSocket` with the socket path:
+
+```java
+@Override
+public RequestAction applyLocal(HttpRequest request) {
+    return RequestAction.forwardToUnixSocket(Path.of("/run/backend.sock"), request);
+}
+```
+
+The connection to the backend is plaintext HTTP/1.1 (no TLS). The socket path is chosen by your
+handler and is **never** derived from the request URI or `Host` header — a reverse proxy must not
+let a remote client pick which local socket to connect to.
+
 ### MITM interception
 
 For HTTPS traffic, `intercept` terminates the client's TLS connection with a dynamically

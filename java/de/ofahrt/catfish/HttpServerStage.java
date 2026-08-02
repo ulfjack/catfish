@@ -359,11 +359,8 @@ final class HttpServerStage implements Stage {
               exec,
               serverListener,
               requestId,
-              origin.host(),
-              origin.port(),
-              origin.useTls(),
+              OriginDialer.tcp(origin.host(), origin.port(), origin.useTls(), factory),
               fc.request(),
-              factory,
               fc.captureStream(),
               this::installResponseGenerator);
       return startBodyOrDispatch(effective, currentHandler);
@@ -381,11 +378,21 @@ final class HttpServerStage implements Stage {
               exec,
               serverListener,
               requestId,
-              origin.host(),
-              origin.port(),
-              origin.useTls(),
+              OriginDialer.tcp(origin.host(), origin.port(), origin.useTls(), factory),
               f.request(),
-              factory,
+              null,
+              this::installResponseGenerator);
+      return startBodyOrDispatch(effective, currentHandler);
+    } else if (action instanceof RequestAction.ForwardToUnixSocket fu) {
+      Executor exec = Objects.requireNonNull(this.executor, "executor");
+      currentHandler =
+          new ProxyRequestStage(
+              parent,
+              exec,
+              serverListener,
+              requestId,
+              OriginDialer.unix(fu.socketPath()),
+              fu.request(),
               null,
               this::installResponseGenerator);
       return startBodyOrDispatch(effective, currentHandler);

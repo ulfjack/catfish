@@ -18,11 +18,20 @@ import de.ofahrt.catfish.model.server.HttpServerListener;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.StandardProtocolFamily;
+import java.net.UnixDomainSocketAddress;
+import java.nio.channels.Channels;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.net.SocketFactory;
 import org.jspecify.annotations.Nullable;
@@ -70,6 +79,117 @@ public class OriginForwarderTest {
     }
   }
 
+  /**
+   * A minimal mock backend listening on a unix domain socket. Accepts one connection, records the
+   * full request it receives (headers + any Content-Length body), and writes a fixed response.
+   */
+  // Unix domain socket paths are limited to ~108 chars; use short /tmp paths (the Bazel sandbox
+  // tmpdir is too long — see UnixSocketIntegrationTest).
+  private static final AtomicInteger SOCKET_COUNTER = new AtomicInteger();
+
+  private static final class UnixMockServer implements Closeable {
+    private final ServerSocketChannel serverChannel;
+    private final Path socketPath;
+    private final AtomicReference<byte[]> received = new AtomicReference<>();
+
+    UnixMockServer(byte[] response) throws IOException {
+      this.socketPath = shortSocketPath("origin");
+      this.serverChannel = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
+      serverChannel.bind(UnixDomainSocketAddress.of(socketPath));
+      Thread thread =
+          new Thread(
+              () -> {
+                try (SocketChannel ch = serverChannel.accept()) {
+                  InputStream in = Channels.newInputStream(ch);
+                  OutputStream out = Channels.newOutputStream(ch);
+                  received.set(readFullRequest(in));
+                  out.write(response);
+                  out.flush();
+                } catch (IOException e) {
+                  // Ignore — the test may have closed the server.
+                }
+              });
+      thread.setDaemon(true);
+      thread.start();
+    }
+
+    Path path() {
+      return socketPath;
+    }
+
+    byte @Nullable [] received() {
+      return received.get();
+    }
+
+    @Override
+    public void close() throws IOException {
+      serverChannel.close();
+      Files.deleteIfExists(socketPath);
+    }
+  }
+
+  private static Path shortSocketPath(String tag) {
+    return Path.of(
+        "/tmp/cf-"
+            + tag
+            + "-"
+            + ProcessHandle.current().pid()
+            + "-"
+            + SOCKET_COUNTER.getAndIncrement()
+            + ".sock");
+  }
+
+  /**
+   * Reads a full HTTP/1.1 request: headers up to CRLFCRLF, then any declared Content-Length body.
+   */
+  private static byte[] readFullRequest(InputStream in) throws IOException {
+    ByteArrayOutputStream buf = new ByteArrayOutputStream();
+    byte[] tmp = new byte[4096];
+    int headerEnd;
+    while ((headerEnd = indexOfHeaderEnd(buf.toByteArray())) < 0) {
+      int n = in.read(tmp);
+      if (n < 0) {
+        return buf.toByteArray();
+      }
+      buf.write(tmp, 0, n);
+    }
+    byte[] soFar = buf.toByteArray();
+    int contentLength = parseContentLength(new String(soFar, 0, headerEnd, StandardCharsets.UTF_8));
+    int bodyHave = soFar.length - (headerEnd + 4);
+    while (bodyHave < contentLength) {
+      int n = in.read(tmp);
+      if (n < 0) {
+        break;
+      }
+      buf.write(tmp, 0, n);
+      bodyHave += n;
+    }
+    return buf.toByteArray();
+  }
+
+  private static int indexOfHeaderEnd(byte[] data) {
+    for (int i = 0; i + 3 < data.length; i++) {
+      if (data[i] == '\r' && data[i + 1] == '\n' && data[i + 2] == '\r' && data[i + 3] == '\n') {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  private static int parseContentLength(String headers) {
+    for (String line : headers.split("\r\n")) {
+      int colon = line.indexOf(':');
+      if (colon > 0 && line.substring(0, colon).trim().equalsIgnoreCase("Content-Length")) {
+        try {
+          return Integer.parseInt(line.substring(colon + 1).trim());
+        } catch (NumberFormatException e) {
+          return 0;
+        }
+      }
+    }
+    return 0;
+  }
+
   private record ForwarderResult(
       @Nullable HttpResponse response,
       byte @Nullable [] streamedBody,
@@ -84,10 +204,7 @@ public class OriginForwarderTest {
     OriginForwarder forwarder =
         new OriginForwarder(
             UUID.randomUUID(),
-            "localhost",
-            port,
-            false,
-            SocketFactory.getDefault(),
+            OriginDialer.tcp("localhost", port, false, SocketFactory.getDefault()),
             new HttpServerListener() {},
             pipe,
             true,
@@ -539,10 +656,7 @@ public class OriginForwarderTest {
     OriginForwarder forwarder =
         new OriginForwarder(
             UUID.randomUUID(),
-            "localhost",
-            port,
-            false,
-            SocketFactory.getDefault(),
+            OriginDialer.tcp("localhost", port, false, SocketFactory.getDefault()),
             new HttpServerListener() {},
             pipe,
             keepAlive,
@@ -566,10 +680,7 @@ public class OriginForwarderTest {
     OriginForwarder forwarder =
         new OriginForwarder(
             UUID.randomUUID(),
-            "localhost",
-            port,
-            false,
-            SocketFactory.getDefault(),
+            OriginDialer.tcp("localhost", port, false, SocketFactory.getDefault()),
             new HttpServerListener() {},
             pipe,
             true,
@@ -578,6 +689,90 @@ public class OriginForwarderTest {
             () -> {});
     forwarder.run(request);
     return result.get();
+  }
+
+  // ---- Unix domain socket upstream ----
+
+  @Test
+  public void unixSocket_forwards_returnsBackendResponse() throws Exception {
+    try (UnixMockServer mock =
+        new UnixMockServer(ascii("HTTP/1.1 200 OK\nContent-Length: 5\n\nhello"))) {
+      ForwarderResult r = runForwarderUnix(mock.path(), get("/"), new byte[0]);
+      assertNotNull(r.streamedBody);
+      assertArrayEquals("hello".getBytes(), r.streamedBody);
+      assertEquals(200, r.response.getStatusCode());
+    }
+  }
+
+  @Test
+  public void unixSocket_streamsRequestBody() throws Exception {
+    try (UnixMockServer mock =
+        new UnixMockServer(ascii("HTTP/1.1 200 OK\nContent-Length: 2\n\nok"))) {
+      byte[] body = "request-body-data".getBytes(StandardCharsets.UTF_8);
+      ForwarderResult r = runForwarderUnix(mock.path(), post("/submit", body.length), body);
+      assertNotNull(r);
+      assertEquals(200, r.response.getStatusCode());
+      byte[] received = waitForReceived(mock);
+      assertNotNull(received);
+      String receivedStr = new String(received, StandardCharsets.UTF_8);
+      assertTrue(
+          "request line: " + receivedStr, receivedStr.startsWith("POST /submit HTTP/1.1\r\n"));
+      assertTrue("body forwarded: " + receivedStr, receivedStr.endsWith("request-body-data"));
+    }
+  }
+
+  @Test
+  public void unixSocket_noBackend_returns502() throws Exception {
+    Path missing = shortSocketPath("absent");
+    Files.deleteIfExists(missing);
+    ForwarderResult r = runForwarderUnix(missing, get("/"), new byte[0]);
+    assertNotNull(r);
+    assertEquals(502, r.response.getStatusCode());
+  }
+
+  private static HttpRequest post(String path, int contentLength) {
+    try {
+      return new SimpleHttpRequest.Builder()
+          .setVersion(HttpVersion.HTTP_1_1)
+          .setMethod(HttpMethodName.POST)
+          .setUri(path)
+          .addHeader(HttpHeaderName.HOST, "localhost")
+          .addHeader(HttpHeaderName.CONTENT_LENGTH, Integer.toString(contentLength))
+          .addHeader(HttpHeaderName.CONNECTION, "close")
+          .buildPartialRequest();
+    } catch (MalformedRequestException e) {
+      throw new AssertionError(e);
+    }
+  }
+
+  private ForwarderResult runForwarderUnix(Path path, HttpRequest request, byte[] body) {
+    AtomicReference<ForwarderResult> result = new AtomicReference<>();
+    PipeBuffer pipe = new PipeBuffer();
+    if (body.length > 0) {
+      pipe.tryWrite(body, 0, body.length);
+    }
+    pipe.closeWrite();
+
+    OriginForwarder forwarder =
+        new OriginForwarder(
+            UUID.randomUUID(),
+            OriginDialer.unix(path),
+            new HttpServerListener() {},
+            pipe,
+            true,
+            null,
+            createCallback(result),
+            () -> {});
+    forwarder.run(request);
+    return result.get();
+  }
+
+  private static byte @Nullable [] waitForReceived(UnixMockServer mock)
+      throws InterruptedException {
+    for (int i = 0; i < 100 && mock.received() == null; i++) {
+      Thread.sleep(10);
+    }
+    return mock.received();
   }
 
   private OriginForwarder.ResultCallback createCallback(AtomicReference<ForwarderResult> result) {

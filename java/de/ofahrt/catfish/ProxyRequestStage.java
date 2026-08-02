@@ -13,7 +13,6 @@ import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.OutputStream;
 import java.util.UUID;
 import java.util.concurrent.Executor;
-import javax.net.SocketFactory;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -30,11 +29,8 @@ final class ProxyRequestStage implements HttpRequestStage {
   private final Executor executor;
   private final HttpServerListener serverListener;
   private final UUID requestId;
-  private final String host;
-  private final int port;
-  private final boolean useTls;
+  private final OriginDialer dialer;
   private final HttpRequest forwardRequest;
-  private final SocketFactory socketFactory;
   private final @Nullable OutputStream captureStream;
   private final HttpRequestStage.HttpResponseGeneratorInstaller responseInstaller;
 
@@ -47,22 +43,16 @@ final class ProxyRequestStage implements HttpRequestStage {
       Executor executor,
       HttpServerListener serverListener,
       UUID requestId,
-      String host,
-      int port,
-      boolean useTls,
+      OriginDialer dialer,
       HttpRequest forwardRequest,
-      SocketFactory socketFactory,
       @Nullable OutputStream captureStream,
       HttpRequestStage.HttpResponseGeneratorInstaller responseInstaller) {
     this.parent = parent;
     this.executor = executor;
     this.serverListener = serverListener;
     this.requestId = requestId;
-    this.host = host;
-    this.port = port;
-    this.useTls = useTls;
+    this.dialer = dialer;
     this.forwardRequest = forwardRequest;
-    this.socketFactory = socketFactory;
     this.captureStream = captureStream;
     this.responseInstaller = responseInstaller;
   }
@@ -74,10 +64,7 @@ final class ProxyRequestStage implements HttpRequestStage {
     OriginForwarder forwarder =
         new OriginForwarder(
             requestId,
-            host,
-            port,
-            useTls,
-            socketFactory,
+            dialer,
             serverListener,
             bodyPipe,
             keepAlive,

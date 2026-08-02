@@ -14,21 +14,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
-import java.net.Socket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import javax.net.SocketFactory;
-import javax.net.ssl.SNIHostName;
-import javax.net.ssl.SSLParameters;
-import javax.net.ssl.SSLSocket;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -56,10 +50,7 @@ final class OriginForwarder {
           "proxy-authorization");
 
   private final UUID requestId;
-  private final String originHost;
-  private final int originPort;
-  private final boolean useTls;
-  private final SocketFactory socketFactory;
+  private final OriginDialer dialer;
   private final HttpServerListener serverListener;
   private final PipeBuffer requestBodyPipe;
   private final boolean keepAlive;
@@ -82,10 +73,7 @@ final class OriginForwarder {
 
   OriginForwarder(
       UUID requestId,
-      String originHost,
-      int originPort,
-      boolean useTls,
-      SocketFactory socketFactory,
+      OriginDialer dialer,
       HttpServerListener serverListener,
       PipeBuffer requestBodyPipe,
       boolean keepAlive,
@@ -93,10 +81,7 @@ final class OriginForwarder {
       ResultCallback resultCallback,
       Runnable pipeSpaceCallback) {
     this.requestId = requestId;
-    this.originHost = originHost;
-    this.originPort = originPort;
-    this.useTls = useTls;
-    this.socketFactory = socketFactory;
+    this.dialer = dialer;
     this.serverListener = serverListener;
     this.requestBodyPipe = requestBodyPipe;
     this.keepAlive = keepAlive;
@@ -146,15 +131,9 @@ final class OriginForwarder {
       HttpRequest originalHeaders,
       HttpRequest effectiveHeaders,
       @Nullable OutputStream captureStream) {
-    Socket socket;
+    OriginConnection conn;
     try {
-      socket = socketFactory.createSocket(originHost, originPort);
-      if (useTls && socket instanceof SSLSocket sslSocket) {
-        SSLParameters params = sslSocket.getSSLParameters();
-        params.setServerNames(List.of(new SNIHostName(originHost)));
-        sslSocket.setSSLParameters(params);
-        sslSocket.startHandshake();
-      }
+      conn = dialer.connect();
     } catch (IOException e) {
       drainAndClosePipe();
       sendErrorResponse();
@@ -165,7 +144,7 @@ final class OriginForwarder {
     HttpResponse originResponse = null;
     OutputStream responseOut = null;
     try {
-      OutputStream originOut = socket.getOutputStream();
+      OutputStream originOut = conn.out();
       originOut.write(requestHeadersToBytes(effectiveHeaders));
       originOut.flush();
 
@@ -188,7 +167,7 @@ final class OriginForwarder {
       originOut.flush();
 
       // Parse response headers (headers only; body is streamed separately).
-      InputStream originIn = socket.getInputStream();
+      InputStream originIn = conn.in();
       IncrementalHttpResponseParser respParser = new IncrementalHttpResponseParser();
       respParser.setNoBody(true);
 
@@ -252,7 +231,7 @@ final class OriginForwarder {
 
       if (includeBody) {
         serverListener.onResponseStreamed(
-            requestId, originHost, originPort, originalHeaders, originResponse);
+            requestId, dialer.reportHost(), dialer.reportPort(), originalHeaders, originResponse);
         responseOut = resultCallback.commitStreamed(forwardedResponse, keepAlive, chunkedResponse);
         if (chunkedResponse) {
           OutputStream effectiveCapture =
@@ -278,11 +257,11 @@ final class OriginForwarder {
       }
 
       closeCaptureStream(captureStream);
-      socket.close();
+      conn.close();
 
     } catch (IOException e) {
       try {
-        socket.close();
+        conn.close();
       } catch (IOException ignored) {
       }
       closeCaptureStream(captureStream);

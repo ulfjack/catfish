@@ -64,11 +64,8 @@ public class ProxyRequestStageTest {
             Runnable::run,
             new HttpServerListener() {},
             UUID.randomUUID(),
-            "localhost",
-            1,
-            false,
+            OriginDialer.tcp("localhost", 1, false, SocketFactory.getDefault()),
             dummyRequest(),
-            SocketFactory.getDefault(),
             null,
             installed::set);
     // No generator installed yet.
@@ -87,11 +84,8 @@ public class ProxyRequestStageTest {
             Runnable::run,
             new HttpServerListener() {},
             UUID.randomUUID(),
-            "localhost",
-            1,
-            false,
+            OriginDialer.tcp("localhost", 1, false, SocketFactory.getDefault()),
             dummyRequest(),
-            SocketFactory.getDefault(),
             null,
             installed::set);
 
