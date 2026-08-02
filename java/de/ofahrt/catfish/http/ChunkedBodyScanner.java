@@ -33,6 +33,7 @@ public final class ChunkedBodyScanner {
   private long currentChunkSize;
   private int chunkSizeDigits;
   private long chunkDataLeft;
+  private long decodedByteCount;
   private boolean done;
   private boolean error;
 
@@ -47,6 +48,14 @@ public final class ChunkedBodyScanner {
   }
 
   /**
+   * Returns the number of decoded (de-chunked) content bytes scanned so far, i.e. the running total
+   * of chunk-data bytes excluding framing. Used to enforce a decoded-body ceiling incrementally.
+   */
+  public long decodedByteCount() {
+    return decodedByteCount;
+  }
+
+  /**
    * Dry-run scan: saves state, scans {@code len} bytes, restores state, and returns the end
    * position (number of bytes consumed to reach end) or -1 if the end was not found.
    */
@@ -55,6 +64,7 @@ public final class ChunkedBodyScanner {
     long savedChunkSize = currentChunkSize;
     int savedChunkSizeDigits = chunkSizeDigits;
     long savedChunkDataLeft = chunkDataLeft;
+    long savedDecodedByteCount = decodedByteCount;
     boolean savedDone = done;
     boolean savedError = error;
 
@@ -65,6 +75,7 @@ public final class ChunkedBodyScanner {
     currentChunkSize = savedChunkSize;
     chunkSizeDigits = savedChunkSizeDigits;
     chunkDataLeft = savedChunkDataLeft;
+    decodedByteCount = savedDecodedByteCount;
     done = savedDone;
     error = savedError;
 
@@ -130,6 +141,7 @@ public final class ChunkedBodyScanner {
           long bulk = Math.min(chunkDataLeft, len - i);
           i += (int) bulk - 1; // loop will increment by 1
           chunkDataLeft -= bulk;
+          decodedByteCount += bulk;
           if (chunkDataLeft == 0) {
             state = State.DATA_CR;
           }
@@ -186,6 +198,7 @@ public final class ChunkedBodyScanner {
     currentChunkSize = 0;
     chunkSizeDigits = 0;
     chunkDataLeft = 0;
+    decodedByteCount = 0;
     done = false;
     error = false;
   }
