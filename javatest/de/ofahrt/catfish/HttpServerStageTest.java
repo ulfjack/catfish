@@ -772,6 +772,53 @@ public class HttpServerStageTest {
     assertTrue(response, response.contains("200"));
   }
 
+  @Test
+  public void requestPipelinedAfterChunkedBody_bothHandled() throws Exception {
+    // A keep-alive chunked POST immediately followed (in the same buffer) by a second request.
+    // The chunked body must not swallow the bytes of the pipelined request that follows it.
+    ByteBuffer input =
+        inputBuffer(
+            "POST /first HTTP/1.1\n"
+                + "Host: localhost\n"
+                + "Transfer-Encoding: chunked\n\n"
+                + "5\n"
+                + "hello\n"
+                + "0\n\n"
+                + "GET /second HTTP/1.1\n"
+                + "Host: localhost\n"
+                + "Connection: close\n\n");
+    ByteBuffer output = ByteBuffer.allocate(4096);
+    output.flip();
+    HttpServerStage stage = createStage(input, output);
+    stage.connect(new Connection(null, null, false));
+
+    ConnectionControl cc = stage.read();
+    while (cc == ConnectionControl.CONTINUE || cc == ConnectionControl.NEED_MORE_DATA) {
+      cc = stage.read();
+    }
+    // Drive write() to completion. Response generation spans several write() calls and, between the
+    // two pipelined responses, readAndResume installs the second response while write() returns
+    // PAUSE with no bytes (the real engine re-triggers write() via encourageWrites, a no-op in the
+    // stub). Pump until the connection signals close. The second request sends Connection: close,
+    // so this terminates; the iteration cap guards against an unexpected stall.
+    StringBuilder sb = new StringBuilder();
+    for (int iter = 0; iter < 100; iter++) {
+      ConnectionControl wc = stage.write();
+      byte[] data = new byte[output.remaining()];
+      output.get(data);
+      sb.append(new String(data, StandardCharsets.US_ASCII));
+      if (wc != ConnectionControl.CONTINUE && wc != ConnectionControl.PAUSE) {
+        break;
+      }
+    }
+    String response = sb.toString();
+    int count = 0;
+    for (int i = response.indexOf("200"); i >= 0; i = response.indexOf("200", i + 1)) {
+      count++;
+    }
+    assertTrue("expected two 200 responses, got: " + response, count == 2);
+  }
+
   private static void assertTrue(String message, boolean condition) {
     if (!condition) {
       throw new AssertionError(message);
