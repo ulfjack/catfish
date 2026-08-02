@@ -1,7 +1,7 @@
 ---
 id: 0006
 title: HTTP/2 response compression parity via a shared response-writer decorator
-status: ready
+status: implemented
 owner: Ulf Adams
 architecture_refs:
   - HTTP/1.1 response generation (LocalHttpRequestStage.ResponseWriterImpl)
@@ -206,12 +206,12 @@ None.
 
 ## Implementation Plan
 
-- [ ] PR 1: Add `CompressingResponseWriter` (+`Coding{IDENTITY,GZIP}`, `negotiate`) in `http`; add the
+- [x] PR 1: Add `CompressingResponseWriter` (+`Coding{IDENTITY,GZIP}`, `negotiate`) in `http`; add the
       `http → model/server` BUILD edge; simplify `CompressionPolicy.COMPRESS` to the worthiness gate
       and add `application/json`; rewire HTTP/1.1 to construct via the decorator and delete
       `ResponseWriterImpl`'s gzip code. Behaviour-identical for HTTP/1.1. Unit tests + existing
       `CompressionIntegrationTest` green.
-- [ ] PR 2: Wrap the HTTP/2 `Http2ResponseWriter` in `CompressingResponseWriter` at
+- [x] PR 2: Wrap the HTTP/2 `Http2ResponseWriter` in `CompressingResponseWriter` at
       `Http2ServerStage.doDispatch` — the bug fix. h2 integration tests for gzipped/non-gzipped
       responses; README compression note mentions h2 parity and the BREACH opt-in caveat.
 
