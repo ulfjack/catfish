@@ -965,10 +965,14 @@ public class HttpResponseValidator {
    * Returns true if {@code sts} is a valid Strict-Transport-Security header value per RFC 6797
    * §6.1: must contain exactly the directives {@code max-age=<digits>} (required), {@code
    * includeSubDomains} (optional, no value), and {@code preload} (optional, no value). Unknown
-   * directives are tolerated per the RFC.
+   * directives are tolerated per the RFC, but no directive may appear more than once.
    */
   private static boolean isValidSts(String sts) {
+    // RFC 6797 §6.1: a recognized directive must not appear more than once. Tracked with a flag per
+    // directive (not a hash set) so a crafted header value can't trigger a hash-collision blowup.
     boolean hasMaxAge = false;
+    boolean hasIncludeSubDomains = false;
+    boolean hasPreload = false;
     for (String directive : sts.split(";", -1)) {
       String trimmed = directive.trim();
       if (trimmed.isEmpty()) {
@@ -980,15 +984,22 @@ public class HttpResponseValidator {
       String value = eqIdx >= 0 ? trimmed.substring(eqIdx + 1).trim() : null;
       switch (name) {
         case "max-age" -> {
-          if (value == null || !isNonNegativeInteger(value)) {
+          if (hasMaxAge || value == null || !isNonNegativeInteger(value)) {
             return false;
           }
           hasMaxAge = true;
         }
-        case "includesubdomains", "preload" -> {
-          if (value != null) {
+        case "includesubdomains" -> {
+          if (hasIncludeSubDomains || value != null) {
             return false;
           }
+          hasIncludeSubDomains = true;
+        }
+        case "preload" -> {
+          if (hasPreload || value != null) {
+            return false;
+          }
+          hasPreload = true;
         }
         default -> {
           // Unknown directives MUST be ignored per RFC 6797 §6.1.
