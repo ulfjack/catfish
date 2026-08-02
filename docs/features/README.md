@@ -18,3 +18,4 @@ Status column below.
 | [0002](0002-chunked-gzip-uploads.md) | Uploads without Content-Length; chunked + gzipped request bodies | ready |
 | [0003](0003-http2-continuation-frames.md) | HTTP/2 CONTINUATION frame support | ready |
 | [0004](0004-reverse-proxy-unix-socket.md) | Reverse-proxy an upstream over a unix domain socket | implemented |
+| [0005](0005-http2-header-field-validation.md) | HTTP/2 request header field validation | ready |
