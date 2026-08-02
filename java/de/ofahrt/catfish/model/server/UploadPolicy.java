@@ -4,16 +4,17 @@ import de.ofahrt.catfish.model.HttpRequest;
 
 public interface UploadPolicy {
   /** Reject all uploads. */
-  UploadPolicy DENY = request -> false;
+  UploadPolicy DENY = request -> 0L;
 
-  /** Accept all uploads. */
-  UploadPolicy ALLOW = request -> true;
+  /** Accept uploads of any size. */
+  UploadPolicy ALLOW = request -> Long.MAX_VALUE;
 
   /**
-   * Returns true if the upload described by {@code request} should be accepted. Returning false
-   * causes a 413 PAYLOAD_TOO_LARGE response. When this method is called, the request has complete
-   * headers but no body yet. If a Content-Length header is present it contains a syntactically
-   * valid long.
+   * Returns the maximum number of decoded body bytes to accept for {@code request}; {@code 0}
+   * rejects any body. The ceiling is enforced incrementally as the body streams in (after
+   * de-chunking and decompression), and exceeding it yields a 413 PAYLOAD_TOO_LARGE response. When
+   * this method is called, the request has complete headers but no body yet. If a Content-Length
+   * header is present it contains a syntactically valid long.
    */
-  boolean isAllowed(HttpRequest request);
+  long maxDecodedBytes(HttpRequest request);
 }

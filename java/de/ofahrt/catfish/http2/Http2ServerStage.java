@@ -503,7 +503,13 @@ public final class Http2ServerStage implements Stage {
       if (endStream) {
         dispatchRequest(stream, builder, serve);
       } else {
-        if (!serve.uploadPolicy().isAllowed(partialRequest)) {
+        // A body is present (this is the non-END_STREAM path). A zero ceiling forbids it outright;
+        // a declared Content-Length already over the ceiling is rejected here. A body without
+        // Content-Length is bounded incrementally once DATA-frame streaming enforces the ceiling
+        // (spec 0002 PR 2).
+        long maxBody = serve.uploadPolicy().maxDecodedBytes(partialRequest);
+        String contentLength = partialRequest.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
+        if (maxBody == 0L || (contentLength != null && Long.parseLong(contentLength) > maxBody)) {
           sendErrorResponse(stream, StandardResponses.PAYLOAD_TOO_LARGE);
           return;
         }

@@ -94,7 +94,14 @@ final class LocalHttpRequestStage implements HttpRequestStage {
     String te = headers.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
     boolean hasBody =
         (cl != null && !"0".equals(cl)) || (te != null && "chunked".equalsIgnoreCase(te));
-    if (hasBody && !uploadPolicy.isAllowed(headers)) {
+    long maxBody = uploadPolicy.maxDecodedBytes(headers);
+    // A zero ceiling forbids any body outright. A declared Content-Length already over the ceiling
+    // is rejected here; a chunked/no-Content-Length body carries no size at header time and is
+    // bounded incrementally once body streaming enforces the ceiling (spec 0002 PR 2).
+    if (hasBody && maxBody == 0L) {
+      return StandardResponses.PAYLOAD_TOO_LARGE;
+    }
+    if (cl != null && Long.parseLong(cl) > maxBody) {
       return StandardResponses.PAYLOAD_TOO_LARGE;
     }
     String expectValue = headers.getHeaders().get(HttpHeaderName.EXPECT);
