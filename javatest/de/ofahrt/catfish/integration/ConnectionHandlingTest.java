@@ -299,7 +299,7 @@ public class ConnectionHandlingTest {
     startServerWithUploadPolicy(
         (connection, request, responseWriter) ->
             responseWriter.commitBuffered(StandardResponses.OK),
-        request -> true);
+        request -> Long.MAX_VALUE);
     try (RawHttpConnection connection = RawHttpConnection.connect(HTTP_SERVER_NAME, httpPort)) {
       // Send headers only, with Expect: 100-continue.
       String headers =
