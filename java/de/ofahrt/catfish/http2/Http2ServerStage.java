@@ -435,7 +435,9 @@ public final class Http2ServerStage implements Stage {
     // streams. Rejecting here, before the request is built, also keeps malformed field names/values
     // (e.g. CR/LF in a value) out of the HTTP/1.1 reverse-proxy / FastCGI forwarders, where they
     // would be an h2->h1 header-injection / request-smuggling vector.
-    if (!validateRequestHeaderBlock(headers) || !validateRequestPseudoHeaders(headers)) {
+    if (!validateRequestHeaderBlock(headers)
+        || !validateRequestPseudoHeaders(headers)
+        || !validateNoConnectionSpecificFields(headers)) {
       lastStreamId = Math.max(lastStreamId, streamId);
       queueRstStream(streamId, ErrorCode.PROTOCOL_ERROR);
       return;
@@ -857,8 +859,9 @@ public final class Http2ServerStage implements Stage {
    * Validates the field names and values of a decoded HTTP/2 request header block per RFC 9113
    * §8.2.1. Returns {@code true} if every field is well-formed, {@code false} if the request is
    * malformed (§8.1.1) and must be rejected as a stream error. Pseudo-header ordering/uniqueness
-   * (§8.3) is checked by {@link #validateRequestPseudoHeaders}; the connection-specific field rules
-   * (§8.2.2) are validated separately (spec 0005, PR 3); this pass covers field-name/value syntax.
+   * (§8.3) is checked by {@link #validateRequestPseudoHeaders} and the connection-specific field
+   * rules (§8.2.2) by {@link #validateNoConnectionSpecificFields}; this pass covers name/value
+   * syntax.
    */
   private static boolean validateRequestHeaderBlock(List<Header> headers) {
     for (Header header : headers) {
@@ -915,6 +918,35 @@ public final class Http2ServerStage implements Stage {
       default:
         return 0;
     }
+  }
+
+  /**
+   * Rejects requests carrying connection-specific header fields, forbidden in HTTP/2 (RFC 9113
+   * §8.2.2): {@code connection}, {@code keep-alive}, {@code proxy-connection}, {@code
+   * transfer-encoding}, {@code upgrade}, and {@code te} with any value other than {@code trailers}.
+   * Returns {@code false} if the request is malformed and must be rejected as a stream error. Field
+   * names are already known to be lowercase (otherwise {@link #validateRequestHeaderBlock} rejected
+   * them).
+   */
+  private static boolean validateNoConnectionSpecificFields(List<Header> headers) {
+    for (Header header : headers) {
+      switch (header.name()) {
+        case "connection":
+        case "keep-alive":
+        case "proxy-connection":
+        case "transfer-encoding":
+        case "upgrade":
+          return false;
+        case "te":
+          if (!header.value().equalsIgnoreCase("trailers")) {
+            return false;
+          }
+          break;
+        default:
+          break;
+      }
+    }
+    return true;
   }
 
   /**

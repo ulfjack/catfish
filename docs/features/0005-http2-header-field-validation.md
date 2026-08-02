@@ -140,6 +140,8 @@ sees a fully-valid `HttpRequest`.
   scope** for this spec, as PR 3. — *Rationale:* they share the reject-as-`RST_STREAM` mechanism and are
   the most smuggling-relevant fields, central to the stated security goal; deferring them would leave
   the primary risk open.
+- **Decision (§8.2.2: reject, not strip):** Requests carrying connection-specific fields are rejected
+  as malformed (stream error), not stripped. — *Rationale:* forbidden in HTTP/2 (RFC 9113 §8.2.2).
 - **Decision (resolves scope of #37):** Response-side #37 (reject 1xx/`101` `:status` over h2) is **in
   scope** as the final PR 4, not a separate spec. — *Rationale:* small, belongs to the same #37–#41
   cluster, but on a different code path, so it lands last and independently of the request-side PRs.
@@ -161,8 +163,8 @@ None.
 - [x] An h2 request with a field value having leading or trailing SP/HTAB is rejected as above. (#41)
 - [x] An h2 request with a pseudo-header after a regular field, a duplicate `:method`/`:path`/
       `:authority`/`:scheme`, or an unknown pseudo-header is rejected. (§8.3)
-- [ ] An h2 request carrying `Connection`/`Transfer-Encoding`/`Upgrade`/`Keep-Alive`/`Proxy-Connection`,
-      or `TE` with a value other than `trailers`, is rejected. (§8.2.2) — PR 3
+- [x] An h2 request carrying `Connection`/`Transfer-Encoding`/`Upgrade`/`Keep-Alive`/`Proxy-Connection`,
+      or `TE` with a value other than `trailers`, is rejected; `TE: trailers` is accepted. (§8.2.2)
 - [ ] A handler returning a `101` or 1xx status over h2 does not emit an illegal `:status`; the stream
       is failed instead. (#37) — PR 4
 - [x] HPACK continuity: after a rejected stream whose block updated the dynamic table, a later stream
@@ -182,7 +184,7 @@ None.
       `RST_STREAM(PROTOCOL_ERROR)`; `Http2ServerStageTest` for each rule + connection-survives +
       HPACK-continuity. (commit fe63446)
 - [x] PR 2: Pseudo-header ordering / uniqueness / unknown-pseudo rejection (§8.3), with tests.
-- [ ] PR 3: §8.2.2 connection-specific field rejection incl. `TE` ≠ `trailers`, with tests.
+- [x] PR 3: §8.2.2 connection-specific field rejection incl. `TE` ≠ `trailers`, with tests.
 - [ ] PR 4: Response-side #37 — disallow 1xx/`101` `:status` over h2, with tests.
 
 ## Notes
