@@ -1,7 +1,7 @@
 ---
 id: 0005
 title: HTTP/2 request header field validation
-status: ready
+status: in-progress
 owner: Ulf Adams
 architecture_refs:
   - HTTP/2 (Http2ServerStage, HpackDecoder)
@@ -154,31 +154,34 @@ None.
 
 ## Acceptance Criteria
 
-- [ ] An h2 request with an uppercase field name (e.g. `Foo: bar`) is `RST_STREAM(PROTOCOL_ERROR)`; the
+- [x] An h2 request with an uppercase field name (e.g. `Foo: bar`) is `RST_STREAM(PROTOCOL_ERROR)`; the
       connection stays open and a subsequent valid stream on it is served. (#38)
-- [ ] An h2 request with a field name containing an interior `:` is rejected as above. (#39)
-- [ ] An h2 request with `CR`, `LF`, or `NUL` in a field value is rejected as above. (#40)
-- [ ] An h2 request with a field value having leading or trailing SP/HTAB is rejected as above. (#41)
-- [ ] An h2 request with a pseudo-header after a regular field, a duplicate `:method`/`:path`/
+- [x] An h2 request with a field name containing an interior `:` is rejected as above. (#39)
+- [x] An h2 request with `CR`, `LF`, or `NUL` in a field value is rejected as above. (#40)
+- [x] An h2 request with a field value having leading or trailing SP/HTAB is rejected as above. (#41)
+- [x] An h2 request with a pseudo-header after a regular field, a duplicate `:method`/`:path`/
       `:authority`/`:scheme`, or an unknown pseudo-header is rejected. (§8.3)
 - [ ] An h2 request carrying `Connection`/`Transfer-Encoding`/`Upgrade`/`Keep-Alive`/`Proxy-Connection`,
-      or `TE` with a value other than `trailers`, is rejected. (§8.2.2)
+      or `TE` with a value other than `trailers`, is rejected. (§8.2.2) — PR 3
 - [ ] A handler returning a `101` or 1xx status over h2 does not emit an illegal `:status`; the stream
-      is failed instead. (#37)
-- [ ] HPACK continuity: after a rejected stream whose block updated the dynamic table, a later stream
+      is failed instead. (#37) — PR 4
+- [x] HPACK continuity: after a rejected stream whose block updated the dynamic table, a later stream
       that references those entries still decodes and is served correctly.
 - [ ] A flood of malformed-header streams is bounded by the existing Rapid-Reset defense (no slot leak).
-- [ ] All existing h2 tests pass unmodified; a valid request with lowercase names and clean values is
+      Holds by construction (rejected streams never charge a dispatch slot); an explicit test is a
+      remaining item.
+- [x] All existing h2 tests pass unmodified; a valid request with lowercase names and clean values is
       unaffected.
-- [ ] Conformance matrix Coverage column updated for #37–#41 and the §8.2.2/§8.3 rules.
+- [ ] Conformance matrix Coverage column updated for #37–#41 (done) and the §8.2.2/§8.3 rules (§8.3 is
+      not a numbered matrix rule; §8.2.2 lands with PR 3).
 - [ ] `bazel test //...` green and `bazel run //:format.check` passes.
 
 ## Implementation Plan
 
-- [ ] PR 1: `validateRequestHeaderBlock` for field-name (#38, #39) and field-value (#40, #41) rules →
+- [x] PR 1: `validateRequestHeaderBlock` for field-name (#38, #39) and field-value (#40, #41) rules →
       `RST_STREAM(PROTOCOL_ERROR)`; `Http2ServerStageTest` for each rule + connection-survives +
-      HPACK-continuity; `Http2IntegrationTest` end-to-end. Tag tests `Conformance test #38…#41`.
-- [ ] PR 2: Pseudo-header ordering / uniqueness / unknown-pseudo rejection (§8.3), with tests.
+      HPACK-continuity. (commit fe63446)
+- [x] PR 2: Pseudo-header ordering / uniqueness / unknown-pseudo rejection (§8.3), with tests.
 - [ ] PR 3: §8.2.2 connection-specific field rejection incl. `TE` ≠ `trailers`, with tests.
 - [ ] PR 4: Response-side #37 — disallow 1xx/`101` `:status` over h2, with tests.
 

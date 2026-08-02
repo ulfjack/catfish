@@ -435,7 +435,7 @@ public final class Http2ServerStage implements Stage {
     // streams. Rejecting here, before the request is built, also keeps malformed field names/values
     // (e.g. CR/LF in a value) out of the HTTP/1.1 reverse-proxy / FastCGI forwarders, where they
     // would be an h2->h1 header-injection / request-smuggling vector.
-    if (!validateRequestHeaderBlock(headers)) {
+    if (!validateRequestHeaderBlock(headers) || !validateRequestPseudoHeaders(headers)) {
       lastStreamId = Math.max(lastStreamId, streamId);
       queueRstStream(streamId, ErrorCode.PROTOCOL_ERROR);
       return;
@@ -857,8 +857,8 @@ public final class Http2ServerStage implements Stage {
    * Validates the field names and values of a decoded HTTP/2 request header block per RFC 9113
    * §8.2.1. Returns {@code true} if every field is well-formed, {@code false} if the request is
    * malformed (§8.1.1) and must be rejected as a stream error. Pseudo-header ordering/uniqueness
-   * (§8.3) and the connection-specific field rules (§8.2.2) are validated separately (spec 0005,
-   * PRs 2–3); this pass covers field-name and field-value syntax.
+   * (§8.3) is checked by {@link #validateRequestPseudoHeaders}; the connection-specific field rules
+   * (§8.2.2) are validated separately (spec 0005, PR 3); this pass covers field-name/value syntax.
    */
   private static boolean validateRequestHeaderBlock(List<Header> headers) {
     for (Header header : headers) {
@@ -867,6 +867,54 @@ public final class Http2ServerStage implements Stage {
       }
     }
     return true;
+  }
+
+  /**
+   * Validates the pseudo-header structure of a decoded HTTP/2 request header block per RFC 9113
+   * §8.3: every pseudo-header must precede all regular fields, each defined request pseudo-header
+   * ({@code :method}, {@code :path}, {@code :scheme}, {@code :authority}) may appear at most once,
+   * and any other pseudo-header (undefined, or a response pseudo-header such as {@code :status}) is
+   * malformed. Returns {@code false} if the request is malformed and must be rejected as a stream
+   * error. Presence of the mandatory pseudo-headers is enforced downstream when the request is
+   * built.
+   */
+  private static boolean validateRequestPseudoHeaders(List<Header> headers) {
+    boolean regularSeen = false;
+    int seenMask = 0;
+    for (Header header : headers) {
+      String name = header.name();
+      if (!name.isEmpty() && name.charAt(0) == ':') {
+        if (regularSeen) {
+          return false; // pseudo-header after a regular field
+        }
+        int bit = requestPseudoHeaderBit(name);
+        if (bit == 0) {
+          return false; // undefined or response-only pseudo-header in a request
+        }
+        if ((seenMask & bit) != 0) {
+          return false; // duplicate pseudo-header
+        }
+        seenMask |= bit;
+      } else {
+        regularSeen = true;
+      }
+    }
+    return true;
+  }
+
+  private static int requestPseudoHeaderBit(String name) {
+    switch (name) {
+      case ":method":
+        return 1;
+      case ":path":
+        return 2;
+      case ":scheme":
+        return 4;
+      case ":authority":
+        return 8;
+      default:
+        return 0;
+    }
   }
 
   /**
