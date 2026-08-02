@@ -1821,6 +1821,53 @@ public class Http2ServerStageTest {
     assertMalformedHeaderRejected(concat(validPseudoHeaders(), literalField(":status", "200")));
   }
 
+  // ---- Connection-specific fields (spec 0005, PR 3; RFC 9113 §8.2.2) ----
+
+  @Test
+  public void connectionHeaderInRequest_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(
+        concat(validPseudoHeaders(), literalField("connection", "keep-alive")));
+  }
+
+  @Test
+  public void keepAliveHeaderInRequest_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(
+        concat(validPseudoHeaders(), literalField("keep-alive", "timeout=5")));
+  }
+
+  @Test
+  public void proxyConnectionHeaderInRequest_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(
+        concat(validPseudoHeaders(), literalField("proxy-connection", "close")));
+  }
+
+  @Test
+  public void transferEncodingInRequest_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(
+        concat(validPseudoHeaders(), literalField("transfer-encoding", "chunked")));
+  }
+
+  @Test
+  public void upgradeHeaderInRequest_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(
+        concat(validPseudoHeaders(), literalField("upgrade", "websocket")));
+  }
+
+  @Test
+  public void teWithNonTrailersValue_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(concat(validPseudoHeaders(), literalField("te", "gzip")));
+  }
+
+  // TE is the one connection-specific field allowed in an h2 request, iff its value is "trailers".
+  @Test
+  public void teTrailers_isAccepted() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    feedAndRead(headersFrame(1, concat(validPseudoHeaders(), literalField("te", "trailers"))));
+    assertEquals(1, dispatchedRequests.size());
+    assertEquals("no RST_STREAM for TE: trailers", -1, rstStreamErrorCode(drainOutput(), 1));
+  }
+
   /**
    * Feeds the client preface + SETTINGS, then a HEADERS frame on stream 1 carrying {@code block},
    * and asserts the stage rejected it as a malformed request: no dispatch,
