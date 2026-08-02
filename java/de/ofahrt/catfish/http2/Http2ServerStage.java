@@ -949,6 +949,11 @@ public final class Http2ServerStage implements Stage {
     return true;
   }
 
+  /** Only 101 Switching Protocols is invalid as an HTTP/2 response status (RFC 9113 §8.1). */
+  private static boolean isInvalidHttp2Status(int statusCode) {
+    return statusCode == HttpStatusCode.SWITCHING_PROTOCOLS.getStatusCode();
+  }
+
   /**
    * A field name must be a non-empty lowercase RFC 7230 token — no uppercase, SP, control, or other
    * non-{@code tchar} character, and no interior {@code ':'}. A leading {@code ':'} marks a
@@ -1032,6 +1037,10 @@ public final class Http2ServerStage implements Stage {
       if (!committed.compareAndSet(false, true)) {
         throw new IllegalStateException("Response already committed");
       }
+      if (isInvalidHttp2Status(response.getStatusCode())) {
+        sendErrorResponse(stream, StandardResponses.INTERNAL_SERVER_ERROR);
+        return;
+      }
       byte[] body = response.getBody();
       boolean bodyAllowed = HttpStatusCode.mayHaveBody(response.getStatusCode());
       if (!bodyAllowed || body == null) {
@@ -1046,6 +1055,10 @@ public final class Http2ServerStage implements Stage {
     public OutputStream commitStreamed(HttpResponse response) throws IOException {
       if (!committed.compareAndSet(false, true)) {
         throw new IllegalStateException("Response already committed");
+      }
+      if (isInvalidHttp2Status(response.getStatusCode())) {
+        sendErrorResponse(stream, StandardResponses.INTERNAL_SERVER_ERROR);
+        return OutputStream.nullOutputStream();
       }
       byte[] headerBlock = encodeResponseHeaders(response, -1);
       Http2StreamBuffer buffer =

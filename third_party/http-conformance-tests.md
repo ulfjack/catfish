@@ -10,9 +10,9 @@ this suite wrongly concludes "no coverage." Tests carry a matching `Conformance 
 where practical; the count below is derived by auditing the tests, not just grepping tags (9 rules are
 covered by tests that predate the tagging convention and are marked †).
 
-Status counts: **71 covered** · **22 gaps** (7 hold by construction but are untested, 15 real holes) ·
-**13 n/a** (feature absent or the application handler's responsibility). Rules #38–#41 (HTTP/2 request
-field validation) were closed by spec 0005 PR 1.
+Status counts: **72 covered** · **21 gaps** (7 hold by construction but are untested, 14 real holes) ·
+**13 n/a** (feature absent or the application handler's responsibility). Rules #37–#41 (HTTP/2 field
+validation) were closed by spec 0005.
 
 Legend for the Coverage column:
 - `<TestAlias>#method` — a test asserts this rule (see aliases below). `†` = covered but was untagged.
@@ -92,7 +92,7 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 
 | # | Test | Level | Source | Coverage |
 |---|------|-------|--------|----------|
-| 37 | 101 Switching Protocols not allowed in HTTP/2 | REQUIREMENT | RFC 9113 §Upgrade | GAP — handler-returned `:status` passed through, `Http2ServerStage.java:804` |
+| 37 | 101 Switching Protocols not allowed in HTTP/2 | REQUIREMENT | RFC 9113 §Upgrade | H2SST#handlerReturns101_failsWith500 |
 | 38 | Field name must not contain non-visible ASCII, SP, or uppercase characters | REQUIREMENT | RFC 9113 §Field Validity | H2SST#uppercaseFieldName_rejectedAsMalformed |
 | 39 | Field name must not contain colon except for pseudo-header fields | REQUIREMENT | RFC 9113 §Field Validity | H2SST#fieldNameWithColon_rejectedAsMalformed |
 | 40 | Field value must not contain zero value, line feed, or carriage return | REQUIREMENT | RFC 9113 §Field Validity | H2SST#fieldValueWithLineFeed_rejectedAsMalformed (+CR/NUL) |

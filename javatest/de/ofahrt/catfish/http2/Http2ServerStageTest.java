@@ -12,6 +12,8 @@ import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.internal.network.Stage.ConnectionControl;
 import de.ofahrt.catfish.internal.network.Stage.InitialConnectionState;
 import de.ofahrt.catfish.model.HttpRequest;
+import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.SimpleHttpResponse;
 import de.ofahrt.catfish.model.StandardResponses;
 import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.ConnectHandler;
@@ -1868,6 +1870,76 @@ public class Http2ServerStageTest {
     assertEquals("no RST_STREAM for TE: trailers", -1, rstStreamErrorCode(drainOutput(), 1));
   }
 
+  // ---- Response status (spec 0005, PR 4) ----
+
+  // Conformance test #37: a handler returning 101 Switching Protocols over h2 is invalid
+  // (RFC 9113 §8.1); the stream is failed with 500 rather than emitting an illegal :status 101.
+  @Test
+  public void handlerReturns101_failsWith500() throws Exception {
+    HttpResponse switchingProtocols =
+        new SimpleHttpResponse.Builder().setStatusCode(101).setBody(new byte[0]).build();
+    rebuildStageWithHandler((c, r, w) -> w.commitBuffered(switchingProtocols));
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+    assertEquals("500", responseStatus(drainOutput()));
+  }
+
+  // Rapid-Reset "no slot leak": streams rejected at header time must not consume a dispatch slot,
+  // so with a single slot a later valid stream is still dispatched.
+  @Test
+  public void malformedHeaderStreams_doNotConsumeDispatchSlots() throws IOException {
+    AtomicInteger dispatched = new AtomicInteger();
+    ConnectHandler ch =
+        new ConnectHandler() {
+          @Override
+          public RequestAction applyLocal(HttpRequest request) {
+            return RequestAction.serveLocally(
+                (c, r, w) -> {
+                  dispatched.incrementAndGet();
+                  w.commitBuffered(StandardResponses.OK.withBody(new byte[0]));
+                });
+          }
+        };
+    pipeline = new TestPipeline();
+    inputBuffer = ByteBuffer.allocate(65536);
+    outputBuffer = ByteBuffer.allocate(65536);
+    inputBuffer.flip();
+    outputBuffer.flip();
+    stage =
+        new Http2ServerStage(
+            pipeline,
+            (h, c, r, w) -> {
+              try {
+                h.handle(c, r, w);
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
+            },
+            ch,
+            null,
+            inputBuffer,
+            outputBuffer,
+            /* maxConcurrentDispatches= */ 1);
+    stage.connect(
+        new Connection(
+            new InetSocketAddress("127.0.0.1", 8443),
+            new InetSocketAddress("127.0.0.1", 12345),
+            true));
+
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    // Three malformed streams — each rejected at header time; none may take the single slot.
+    feedAndRead(headersFrame(1, concat(validPseudoHeaders(), literalField("Bad", "v"))));
+    feedAndRead(headersFrame(3, concat(validPseudoHeaders(), literalField("Bad", "v"))));
+    feedAndRead(headersFrame(5, concat(validPseudoHeaders(), literalField("Bad", "v"))));
+    drainOutput();
+    assertEquals(0, dispatched.get());
+    // A valid stream is still dispatched — the slot was never leaked.
+    feedAndRead(buildGetHeadersFrame(7, "/ok"));
+    assertEquals(1, dispatched.get());
+  }
+
   /**
    * Feeds the client preface + SETTINGS, then a HEADERS frame on stream 1 carrying {@code block},
    * and asserts the stage rejected it as a malformed request: no dispatch,
@@ -1930,6 +2002,33 @@ public class Http2ServerStageTest {
     buf.put((byte) v.length); // value length, Huffman flag = 0
     buf.put(v);
     return buf.array();
+  }
+
+  /** Decodes the first response HEADERS frame in {@code output} and returns its {@code :status}. */
+  private static @Nullable String responseStatus(byte[] output) {
+    Http2FrameReader reader = new Http2FrameReader();
+    int offset = 0;
+    while (offset < output.length) {
+      offset += reader.parse(output, offset, output.length - offset);
+      if (reader.isComplete()) {
+        if (reader.getType() == FrameType.HEADERS) {
+          byte[] payload = reader.getPayload();
+          if (payload != null) {
+            try {
+              for (Header h : new HpackDecoder().decode(payload, 0, payload.length)) {
+                if (":status".equals(h.name())) {
+                  return h.value();
+                }
+              }
+            } catch (HpackDecoder.HpackDecodingException e) {
+              throw new RuntimeException(e);
+            }
+          }
+        }
+        reader.reset();
+      }
+    }
+    return null;
   }
 
   /** Scans {@code output} for an RST_STREAM on {@code streamId}; returns its error code, or -1. */

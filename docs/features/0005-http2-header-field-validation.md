@@ -1,7 +1,7 @@
 ---
 id: 0005
 title: HTTP/2 request header field validation
-status: in-progress
+status: implemented
 owner: Ulf Adams
 architecture_refs:
   - HTTP/2 (Http2ServerStage, HpackDecoder)
@@ -31,7 +31,7 @@ malformed-request rules.
 - Enforce the §8.3 pseudo-header rules (ordering before regular fields, at-most-once, no unknown
   pseudo-header) and the §8.2.2 connection-specific field rules (`Connection`, `Keep-Alive`,
   `Proxy-Connection`, `Transfer-Encoding`, `Upgrade` forbidden; `TE` only if its value is `trailers`).
-- Reject a handler-returned 1xx/`101` `:status` over HTTP/2 (**#37**).
+- Reject a handler-returned `101` `:status` over HTTP/2 (**#37**); other 1xx (100, 103) stay valid.
 - Keep the HPACK dynamic table correct after a rejected stream: a later stream on the same connection
   that depends on the rejected block's dynamic-table updates still decodes correctly.
 - Update the conformance matrix Coverage column (#37–#41 and the §8.2.2/§8.3 rules → tests) as each PR lands.
@@ -92,9 +92,9 @@ the caller must **not** open the stream or dispatch. Rules:
 Because a malformed request is a *stream* error, `processFrame` keeps running and the connection
 survives. The rejected stream is never handed to a handler; it is `RST_STREAM`-ed and dropped.
 
-**#37 (response side):** on the response-encoding path, a handler-supplied status of `101` or any 1xx
-over HTTP/2 is invalid (RFC 9113 §8.1). Treat it like the existing internal-error path (send the stream
-an error response / `RST_STREAM`) rather than encoding an illegal `:status`.
+**#37 (response side):** on the response-encoding path, a handler-supplied `101` status is invalid over
+HTTP/2 (RFC 9113 §8.1); fail the stream with 500 (like the existing abort path) rather than encoding an
+illegal `:status`. Other 1xx (100, 103) remain valid.
 
 No public API changes — everything is within `de.ofahrt.catfish.http2`; `HttpHandler` still only ever
 sees a fully-valid `HttpRequest`.
@@ -142,6 +142,8 @@ sees a fully-valid `HttpRequest`.
   the primary risk open.
 - **Decision (§8.2.2: reject, not strip):** Requests carrying connection-specific fields are rejected
   as malformed (stream error), not stripped. — *Rationale:* forbidden in HTTP/2 (RFC 9113 §8.2.2).
+- **Decision (#37 scope):** Only `101` is rejected on the response path; 100/103 stay valid over h2. —
+  *Rationale:* only 101 is prohibited (RFC 9113 §8.1).
 - **Decision (resolves scope of #37):** Response-side #37 (reject 1xx/`101` `:status` over h2) is **in
   scope** as the final PR 4, not a separate spec. — *Rationale:* small, belongs to the same #37–#41
   cluster, but on a different code path, so it lands last and independently of the request-side PRs.
@@ -165,18 +167,17 @@ None.
       `:authority`/`:scheme`, or an unknown pseudo-header is rejected. (§8.3)
 - [x] An h2 request carrying `Connection`/`Transfer-Encoding`/`Upgrade`/`Keep-Alive`/`Proxy-Connection`,
       or `TE` with a value other than `trailers`, is rejected; `TE: trailers` is accepted. (§8.2.2)
-- [ ] A handler returning a `101` or 1xx status over h2 does not emit an illegal `:status`; the stream
-      is failed instead. (#37) — PR 4
+- [x] A handler returning `101` over h2 does not emit an illegal `:status`; the stream is failed with
+      500 instead. (#37)
 - [x] HPACK continuity: after a rejected stream whose block updated the dynamic table, a later stream
       that references those entries still decodes and is served correctly.
-- [ ] A flood of malformed-header streams is bounded by the existing Rapid-Reset defense (no slot leak).
-      Holds by construction (rejected streams never charge a dispatch slot); an explicit test is a
-      remaining item.
+- [x] A flood of malformed-header streams is bounded by the existing Rapid-Reset defense (no slot
+      leak): rejected streams never charge a dispatch slot
+      (`malformedHeaderStreams_doNotConsumeDispatchSlots`).
 - [x] All existing h2 tests pass unmodified; a valid request with lowercase names and clean values is
       unaffected.
-- [ ] Conformance matrix Coverage column updated for #37–#41 (done) and the §8.2.2/§8.3 rules (§8.3 is
-      not a numbered matrix rule; §8.2.2 lands with PR 3).
-- [ ] `bazel test //...` green and `bazel run //:format.check` passes.
+- [x] Conformance matrix Coverage column updated for #37–#41 (§8.2.2/§8.3 are not numbered matrix rules).
+- [x] `bazel test //...` green and `bazel run //:format.check` passes.
 
 ## Implementation Plan
 
@@ -185,7 +186,7 @@ None.
       HPACK-continuity. (commit fe63446)
 - [x] PR 2: Pseudo-header ordering / uniqueness / unknown-pseudo rejection (§8.3), with tests.
 - [x] PR 3: §8.2.2 connection-specific field rejection incl. `TE` ≠ `trailers`, with tests.
-- [ ] PR 4: Response-side #37 — disallow 1xx/`101` `:status` over h2, with tests.
+- [x] PR 4: Response-side #37 — reject `101` `:status` over h2 (fail with 500), with tests.
 
 ## Notes
 
