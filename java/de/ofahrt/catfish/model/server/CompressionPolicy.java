@@ -1,11 +1,8 @@
 package de.ofahrt.catfish.model.server;
 
-import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
-import de.ofahrt.catfish.utils.HttpAcceptEncoding;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 public interface CompressionPolicy {
@@ -19,6 +16,7 @@ public interface CompressionPolicy {
         private static Set<String> buildWhitelist() {
           HashSet<String> result = new HashSet<>();
           result.add("application/javascript");
+          result.add("application/json");
           result.add("application/xhtml+xml");
           result.add("application/xml");
           result.add("application/xml-dtd");
@@ -35,14 +33,15 @@ public interface CompressionPolicy {
 
         @Override
         public boolean shouldCompress(HttpRequest request, String mimeType) {
-          if (!WHITELIST.contains(mimeType)) {
-            return false;
-          }
-          String acceptEncoding = request.getHeaders().get(HttpHeaderName.ACCEPT_ENCODING);
-          return acceptEncoding != null
-              && HttpAcceptEncoding.parse(acceptEncoding).recommend(List.of("gzip")).isPresent();
+          return WHITELIST.contains(mimeType);
         }
       };
 
+  /**
+   * Returns whether a response of the given {@code mimeType} is worth compressing. This is a
+   * content-type worthiness decision only; whether the client accepts a coding, and which one, is
+   * negotiated separately by the response writer. {@code request} is available for policies that
+   * gate on request attributes, though the built-in policies do not use it.
+   */
   boolean shouldCompress(HttpRequest request, String mimeType);
 }

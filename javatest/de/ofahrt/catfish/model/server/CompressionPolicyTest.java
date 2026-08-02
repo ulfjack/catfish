@@ -9,20 +9,14 @@ import de.ofahrt.catfish.model.MalformedRequestException;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import org.junit.Test;
 
+/**
+ * {@code CompressionPolicy} is a pure content-type worthiness gate: whether the client accepts a
+ * coding, and which one, is negotiated separately by the response writer (see {@code
+ * CompressingResponseWriterTest}), so these tests do not depend on {@code Accept-Encoding}.
+ */
 public class CompressionPolicyTest {
 
-  private static HttpRequest requestWith(String headerName, String headerValue)
-      throws MalformedRequestException {
-    return new SimpleHttpRequest.Builder()
-        .setVersion(HttpVersion.HTTP_1_1)
-        .setMethod("GET")
-        .setUri("/")
-        .addHeader("Host", "localhost")
-        .addHeader(headerName, headerValue)
-        .build();
-  }
-
-  private static HttpRequest requestWithoutAcceptEncoding() throws MalformedRequestException {
+  private static HttpRequest request() throws MalformedRequestException {
     return new SimpleHttpRequest.Builder()
         .setVersion(HttpVersion.HTTP_1_1)
         .setMethod("GET")
@@ -33,62 +27,26 @@ public class CompressionPolicyTest {
 
   @Test
   public void none_neverCompresses() throws MalformedRequestException {
-    assertFalse(
-        CompressionPolicy.NONE.shouldCompress(requestWith("Accept-Encoding", "gzip"), "text/html"));
+    assertFalse(CompressionPolicy.NONE.shouldCompress(request(), "text/html"));
   }
 
   @Test
-  public void compress_textHtmlWithGzip() throws MalformedRequestException {
-    assertTrue(
-        CompressionPolicy.COMPRESS.shouldCompress(
-            requestWith("Accept-Encoding", "gzip"), "text/html"));
+  public void compress_whitelistedTextHtml() throws MalformedRequestException {
+    assertTrue(CompressionPolicy.COMPRESS.shouldCompress(request(), "text/html"));
   }
 
   @Test
-  public void compress_applicationJavascriptWithGzip() throws MalformedRequestException {
-    assertTrue(
-        CompressionPolicy.COMPRESS.shouldCompress(
-            requestWith("Accept-Encoding", "gzip"), "application/javascript"));
+  public void compress_whitelistedApplicationJavascript() throws MalformedRequestException {
+    assertTrue(CompressionPolicy.COMPRESS.shouldCompress(request(), "application/javascript"));
   }
 
   @Test
-  public void compress_nonWhitelistedMime() throws MalformedRequestException {
-    assertFalse(
-        CompressionPolicy.COMPRESS.shouldCompress(
-            requestWith("Accept-Encoding", "gzip"), "image/png"));
+  public void compress_whitelistedApplicationJson() throws MalformedRequestException {
+    assertTrue(CompressionPolicy.COMPRESS.shouldCompress(request(), "application/json"));
   }
 
   @Test
-  public void compress_noAcceptEncoding() throws MalformedRequestException {
-    assertFalse(
-        CompressionPolicy.COMPRESS.shouldCompress(requestWithoutAcceptEncoding(), "text/html"));
-  }
-
-  @Test
-  public void compress_gzipNotInAcceptEncoding() throws MalformedRequestException {
-    assertFalse(
-        CompressionPolicy.COMPRESS.shouldCompress(
-            requestWith("Accept-Encoding", "deflate"), "text/html"));
-  }
-
-  @Test
-  public void compress_gzipAmongMultipleEncodings() throws MalformedRequestException {
-    assertTrue(
-        CompressionPolicy.COMPRESS.shouldCompress(
-            requestWith("Accept-Encoding", "deflate, gzip"), "text/html"));
-  }
-
-  @Test
-  public void compress_gzipQ0_doesNotCompress() throws MalformedRequestException {
-    assertFalse(
-        CompressionPolicy.COMPRESS.shouldCompress(
-            requestWith("Accept-Encoding", "gzip;q=0"), "text/html"));
-  }
-
-  @Test
-  public void compress_wildcardAcceptEncoding_compresses() throws MalformedRequestException {
-    assertTrue(
-        CompressionPolicy.COMPRESS.shouldCompress(
-            requestWith("Accept-Encoding", "*"), "text/html"));
+  public void compress_nonWhitelistedMimeNotCompressed() throws MalformedRequestException {
+    assertFalse(CompressionPolicy.COMPRESS.shouldCompress(request(), "image/png"));
   }
 }
