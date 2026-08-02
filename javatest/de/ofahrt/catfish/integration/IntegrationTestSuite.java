@@ -11,6 +11,7 @@ import org.junit.runners.Suite.SuiteClasses;
   UnixSocketIntegrationTest.class,
   MitmConnectIntegrationTest.class,
   ChunkedBodyIntegrationTest.class,
+  ChunkedUploadLimitIntegrationTest.class,
   ConnectionHandlingTest.class,
   MultiRunnerTest.class,
   CompressionIntegrationTest.class,

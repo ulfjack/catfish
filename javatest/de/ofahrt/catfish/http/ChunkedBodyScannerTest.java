@@ -260,4 +260,45 @@ public class ChunkedBodyScannerTest {
     assertTrue(scanner.isDone());
     assertEquals(5, consumed);
   }
+
+  @Test
+  public void decodedByteCount_sumsChunkDataAcrossChunks() {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    byte[] data = bytes("4\r\nWiki\r\n5\r\npedia\r\n0\r\n\r\n");
+    scanner.advance(data, 0, data.length);
+    assertTrue(scanner.isDone());
+    // Only the 9 content bytes ("Wikipedia") count; chunk-size lines, CRLFs, and the terminal
+    // chunk are framing and are excluded.
+    assertEquals(9L, scanner.decodedByteCount());
+  }
+
+  @Test
+  public void decodedByteCount_accumulatesAcrossIncrementalFeeds() {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    byte[] part1 = bytes("5\r\nhel");
+    byte[] part2 = bytes("lo\r\n0\r\n\r\n");
+    scanner.advance(part1, 0, part1.length);
+    assertEquals(3L, scanner.decodedByteCount());
+    scanner.advance(part2, 0, part2.length);
+    assertTrue(scanner.isDone());
+    assertEquals(5L, scanner.decodedByteCount());
+  }
+
+  @Test
+  public void findEnd_doesNotMutateDecodedByteCount() {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    byte[] data = bytes("5\r\nhello\r\n0\r\n\r\n");
+    scanner.findEnd(data, 0, data.length);
+    assertEquals(0L, scanner.decodedByteCount());
+  }
+
+  @Test
+  public void reset_clearsDecodedByteCount() {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    byte[] data = bytes("3\r\nabc\r\n0\r\n\r\n");
+    scanner.advance(data, 0, data.length);
+    assertEquals(3L, scanner.decodedByteCount());
+    scanner.reset();
+    assertEquals(0L, scanner.decodedByteCount());
+  }
 }

@@ -87,6 +87,10 @@ final class HttpServerStage implements Stage {
   private long contentLengthRemaining = -1;
   // For chunked bodies: scans raw chunked framing to detect completion without decoding.
   private @Nullable ChunkedBodyScanner chunkedScanner;
+  // Ceiling on decoded body bytes for a locally-served body, enforced incrementally while streaming
+  // a chunked body (Content-Length bodies are bounded at header time). -1 disables enforcement,
+  // used for proxy/forward handlers, which pass the body through raw (spec 0002 non-goal).
+  private long maxDecodedBodyBytes = -1;
   private UUID requestId = UUID.randomUUID();
   private @Nullable HttpRequest headersRequest;
   // Encapsulates the NIO↔executor handoff for the routing decision. See
@@ -202,7 +206,9 @@ final class HttpServerStage implements Stage {
    * handling. Shared between the normal post-header path and the post-routing-decision path for
    * absolute-URI forward-proxy requests that the {@link ConnectHandler} chose to serve locally.
    */
-  private ConnectionControl startBodyOrDispatch(HttpRequest headers, HttpRequestStage handler) {
+  private ConnectionControl startBodyOrDispatch(
+      HttpRequest headers, HttpRequestStage handler, long maxDecodedBodyBytes) {
+    this.maxDecodedBodyBytes = maxDecodedBodyBytes;
     // Check if there's a body to stream.
     String cl = headers.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
     String te = headers.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
@@ -344,7 +350,8 @@ final class HttpServerStage implements Stage {
               s.compressionPolicy(),
               conn,
               this::installResponseGenerator);
-      return startBodyOrDispatch(effective, currentHandler);
+      return startBodyOrDispatch(
+          effective, currentHandler, s.uploadPolicy().maxDecodedBytes(effective));
     } else if (action instanceof RequestAction.ForwardAndCapture fc) {
       Origin origin = parseOrigin(fc.request());
       if (origin == null) {
@@ -363,7 +370,7 @@ final class HttpServerStage implements Stage {
               fc.request(),
               fc.captureStream(),
               this::installResponseGenerator);
-      return startBodyOrDispatch(effective, currentHandler);
+      return startBodyOrDispatch(effective, currentHandler, -1);
     } else if (action instanceof RequestAction.Forward f) {
       Origin origin = parseOrigin(f.request());
       if (origin == null) {
@@ -382,7 +389,7 @@ final class HttpServerStage implements Stage {
               f.request(),
               null,
               this::installResponseGenerator);
-      return startBodyOrDispatch(effective, currentHandler);
+      return startBodyOrDispatch(effective, currentHandler, -1);
     } else if (action instanceof RequestAction.ForwardToUnixSocket fu) {
       Executor exec = Objects.requireNonNull(this.executor, "executor");
       currentHandler =
@@ -395,7 +402,7 @@ final class HttpServerStage implements Stage {
               fu.request(),
               null,
               this::installResponseGenerator);
-      return startBodyOrDispatch(effective, currentHandler);
+      return startBodyOrDispatch(effective, currentHandler, -1);
     } else {
       throw new IllegalStateException("Unknown RequestAction: " + action);
     }
@@ -463,6 +470,17 @@ final class HttpServerStage implements Stage {
         handler.close();
         currentHandler = null;
         startBuffered(headersRequest, StandardResponses.BAD_REQUEST);
+        headersRequest = null;
+        return ConnectionControl.CLOSE_INPUT;
+      }
+      // Enforce the decoded-body ceiling incrementally: the moment the de-chunked byte count
+      // exceeds
+      // the limit, reject with 413 rather than buffering the rest of the body (spec 0002 PR 2).
+      if (maxDecodedBodyBytes >= 0 && chunkedScanner.decodedByteCount() > maxDecodedBodyBytes) {
+        chunkedScanner = null;
+        handler.close();
+        currentHandler = null;
+        startBuffered(headersRequest, StandardResponses.PAYLOAD_TOO_LARGE);
         headersRequest = null;
         return ConnectionControl.CLOSE_INPUT;
       }

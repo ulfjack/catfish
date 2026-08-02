@@ -18,6 +18,7 @@ import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.KeepAlivePolicy;
 import de.ofahrt.catfish.model.server.RequestAction;
 import de.ofahrt.catfish.model.server.UploadPolicy;
+import de.ofahrt.catfish.upload.SimpleUploadPolicy;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -717,6 +718,57 @@ public class HttpServerStageTest {
       cc = stage.read();
     }
     String response = drainOutput(stage, output);
+    assertTrue(response, response.contains("200"));
+  }
+
+  // ---- Chunked body enforced against the upload ceiling ----
+
+  private static ConnectHandler localHandlerWithPolicy(UploadPolicy policy) {
+    return new ConnectHandler() {
+      @Override
+      public RequestAction applyLocal(HttpRequest request) {
+        return new RequestAction.ServeLocally(
+            OK_HANDLER, policy, KeepAlivePolicy.KEEP_ALIVE, CompressionPolicy.NONE);
+      }
+    };
+  }
+
+  private static String sendChunkedWikipedia(UploadPolicy policy) throws IOException {
+    // "Wikipedia" split into two chunks = 9 decoded bytes, carried with no Content-Length.
+    ByteBuffer input =
+        inputBuffer(
+            "POST / HTTP/1.1\n"
+                + "Host: localhost\n"
+                + "Transfer-Encoding: chunked\n"
+                + "Connection: close\n\n"
+                + "4\n"
+                + "Wiki\n"
+                + "5\n"
+                + "pedia\n"
+                + "0\n\n");
+    ByteBuffer output = ByteBuffer.allocate(4096);
+    output.flip();
+    HttpServerStage stage = createStage(input, output, localHandlerWithPolicy(policy));
+    stage.connect(new Connection(null, null, false));
+    ConnectionControl cc = stage.read();
+    while (cc == ConnectionControl.CONTINUE || cc == ConnectionControl.NEED_MORE_DATA) {
+      cc = stage.read();
+    }
+    return drainOutput(stage, output);
+  }
+
+  @Test
+  public void chunkedBodyOverUploadCeiling_returns413() throws Exception {
+    // 9 decoded bytes against a ceiling of 8 (n+1) is rejected incrementally, even though the
+    // chunked body carries no Content-Length (spec 0002 PR 2 — the previously unbounded case).
+    String response = sendChunkedWikipedia(new SimpleUploadPolicy(8));
+    assertTrue(response, response.contains("413"));
+  }
+
+  @Test
+  public void chunkedBodyAtUploadCeiling_returns200() throws Exception {
+    // 9 decoded bytes against a ceiling of exactly 9 is accepted; the ceiling rejects only n+1.
+    String response = sendChunkedWikipedia(new SimpleUploadPolicy(9));
     assertTrue(response, response.contains("200"));
   }
 
