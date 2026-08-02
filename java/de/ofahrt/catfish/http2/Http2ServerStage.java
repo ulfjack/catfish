@@ -1,12 +1,14 @@
 package de.ofahrt.catfish.http2;
 
 import de.ofahrt.catfish.http.CompressingResponseWriter;
+import de.ofahrt.catfish.http.GzipRequestBodyDecoder;
 import de.ofahrt.catfish.http.IncrementalHttpRequestParser;
 import de.ofahrt.catfish.http2.Hpack.Header;
 import de.ofahrt.catfish.http2.HpackDecoder.HpackDecodingException;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
 import de.ofahrt.catfish.internal.network.Stage;
 import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpHeaders;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.HttpStatusCode;
@@ -98,6 +100,10 @@ public final class Http2ServerStage implements Stage {
   // received and emitted once the accumulated count exceeds WINDOW_UPDATE_THRESHOLD, to avoid
   // amplifying small DATA frames into larger WINDOW_UPDATE replies.
   private static final int WINDOW_UPDATE_THRESHOLD = 64;
+
+  private static final String GZIP_ENCODING = "gzip";
+  private static final String X_GZIP_ENCODING = "x-gzip";
+  private static final String IDENTITY_ENCODING = "identity";
   private int pendingConnAckBytes;
 
   // Last stream ID we processed (for GOAWAY).
@@ -517,6 +523,20 @@ public final class Http2ServerStage implements Stage {
       RequestAction action,
       boolean endStream) {
     if (action instanceof RequestAction.ServeLocally serve) {
+      // Content-coding parity with the HTTP/1.1 path: accept gzip/x-gzip (decoded at dispatch) and
+      // identity; reject any other codec with 415 before accepting a body.
+      String contentEncoding = partialRequest.getHeaders().get(HttpHeaderName.CONTENT_ENCODING);
+      if (contentEncoding != null) {
+        String encoding = contentEncoding.trim();
+        if (encoding.equalsIgnoreCase(GZIP_ENCODING)
+            || encoding.equalsIgnoreCase(X_GZIP_ENCODING)) {
+          stream.setDecodeGzip();
+        } else if (!encoding.equalsIgnoreCase(IDENTITY_ENCODING)) {
+          stream.rejectBody();
+          sendErrorResponse(stream, StandardResponses.UNSUPPORTED_MEDIA_TYPE);
+          return;
+        }
+      }
       if (endStream) {
         dispatchRequest(stream, builder, serve);
       } else {
@@ -526,7 +546,12 @@ public final class Http2ServerStage implements Stage {
         // (spec 0002 PR 2).
         long maxBody = serve.uploadPolicy().maxDecodedBytes(partialRequest);
         String contentLength = partialRequest.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
-        if (maxBody == 0L || (contentLength != null && Long.parseLong(contentLength) > maxBody)) {
+        // For gzip the Content-Length is the compressed size, so the decoded ceiling is enforced
+        // during inflation at dispatch, not here.
+        if (maxBody == 0L
+            || (!stream.isDecodeGzip()
+                && contentLength != null
+                && Long.parseLong(contentLength) > maxBody)) {
           stream.rejectBody();
           sendErrorResponse(stream, StandardResponses.PAYLOAD_TOO_LARGE);
           return;
@@ -720,6 +745,19 @@ public final class Http2ServerStage implements Stage {
       Http2Stream stream, SimpleHttpRequest.Builder builder, RequestAction.ServeLocally serve) {
     HttpRequest request;
     byte[] bodyBytes = stream.getBodyBytes();
+    if (stream.isDecodeGzip() && bodyBytes.length > 0) {
+      // Content-decode (gunzip) the assembled body, bounded by the decoded ceiling enforced during
+      // inflation (parity with the HTTP/1.1 path, spec 0002 PR 3).
+      try {
+        bodyBytes = GzipRequestBodyDecoder.decode(bodyBytes, stream.getMaxBodyBytes());
+      } catch (GzipRequestBodyDecoder.BodyTooLargeException e) {
+        sendErrorResponse(stream, StandardResponses.PAYLOAD_TOO_LARGE);
+        return;
+      } catch (GzipRequestBodyDecoder.MalformedBodyException e) {
+        sendErrorResponse(stream, StandardResponses.BAD_REQUEST);
+        return;
+      }
+    }
     try {
       if (bodyBytes.length > 0) {
         builder.setBody(new HttpRequest.InMemoryBody(bodyBytes));
@@ -734,6 +772,16 @@ public final class Http2ServerStage implements Stage {
     } catch (MalformedRequestException e) {
       sendErrorResponse(stream, StandardResponses.BAD_REQUEST);
       return;
+    }
+    if (stream.isDecodeGzip()) {
+      // The handler sees decoded bytes: strip Content-Encoding and, when present, correct the
+      // Content-Length (which was the compressed size) to the decoded length.
+      request = request.withoutHeader(HttpHeaderName.CONTENT_ENCODING);
+      if (bodyBytes.length > 0) {
+        request =
+            request.withHeaderOverrides(
+                HttpHeaders.of(HttpHeaderName.CONTENT_LENGTH, Integer.toString(bodyBytes.length)));
+      }
     }
 
     inFlightRequests++;

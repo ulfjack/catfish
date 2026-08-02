@@ -196,6 +196,112 @@ public class Http2IntegrationTest {
     }
   }
 
+  private static byte[] gzip(byte[] data) throws Exception {
+    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+    try (java.util.zip.GZIPOutputStream gz = new java.util.zip.GZIPOutputStream(out)) {
+      gz.write(data);
+    }
+    return out.toByteArray();
+  }
+
+  private static HttpResponse<byte[]> sendGzip(byte[] gzipped, boolean withContentLength)
+      throws Exception {
+    try (HttpClient client =
+        HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_2)
+            .sslContext(trustAllContext())
+            .build()) {
+      // ofByteArray sets content-length; ofInputStream sends the body without one (parity with the
+      // h1 chunked+gzip git shape, which has no content-length).
+      HttpRequest.BodyPublisher publisher =
+          withContentLength
+              ? HttpRequest.BodyPublishers.ofByteArray(gzipped)
+              : HttpRequest.BodyPublishers.ofInputStream(
+                  () -> new java.io.ByteArrayInputStream(gzipped));
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create("https://localhost:" + PORT + "/"))
+              .header("Content-Encoding", "gzip")
+              .POST(publisher)
+              .build();
+      return client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+    }
+  }
+
+  @Test
+  public void gzipBody_isDecodedAndEchoed() throws Exception {
+    byte[] payload = "gzip over h2, decoded before dispatch".getBytes();
+    HttpResponse<byte[]> response = sendGzip(gzip(payload), /* withContentLength= */ true);
+    assertEquals(200, response.statusCode());
+    org.junit.Assert.assertArrayEquals(payload, response.body());
+  }
+
+  @Test
+  public void gzipBodyNoContentLength_isDecodedAndEchoed() throws Exception {
+    byte[] payload = "gzipped h2 body sent as DATA frames without content-length".getBytes();
+    HttpResponse<byte[]> response = sendGzip(gzip(payload), /* withContentLength= */ false);
+    assertEquals(200, response.statusCode());
+    org.junit.Assert.assertArrayEquals(payload, response.body());
+  }
+
+  @Test
+  public void xGzipBody_isDecodedAndEchoed() throws Exception {
+    byte[] payload = "x-gzip is an alias".getBytes();
+    try (HttpClient client =
+        HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_2)
+            .sslContext(trustAllContext())
+            .build()) {
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create("https://localhost:" + PORT + "/"))
+              .header("Content-Encoding", "x-gzip")
+              .POST(HttpRequest.BodyPublishers.ofByteArray(gzip(payload)))
+              .build();
+      HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+      assertEquals(200, response.statusCode());
+      org.junit.Assert.assertArrayEquals(payload, response.body());
+    }
+  }
+
+  @Test
+  public void unsupportedEncoding_returns415() throws Exception {
+    // No body (END_STREAM on HEADERS) so the 415 is a clean header-time reject.
+    try (HttpClient client =
+        HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_2)
+            .sslContext(trustAllContext())
+            .build()) {
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create("https://localhost:" + PORT + "/"))
+              .header("Content-Encoding", "deflate")
+              .POST(HttpRequest.BodyPublishers.noBody())
+              .build();
+      HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+      assertEquals(415, response.statusCode());
+    }
+  }
+
+  @Test
+  public void malformedGzip_returns400() throws Exception {
+    // A complete body of non-gzip bytes: the server receives END_STREAM, then fails to decode.
+    try (HttpClient client =
+        HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_2)
+            .sslContext(trustAllContext())
+            .build()) {
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create("https://localhost:" + PORT + "/"))
+              .header("Content-Encoding", "gzip")
+              .POST(HttpRequest.BodyPublishers.ofByteArray("this is not gzip".getBytes()))
+              .build();
+      HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+      assertEquals(400, response.statusCode());
+    }
+  }
+
   private static void assertPostEchoes(int size) throws Exception {
     byte[] payload = new byte[size];
     for (int i = 0; i < size; i++) {

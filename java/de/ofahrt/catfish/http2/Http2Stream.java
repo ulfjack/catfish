@@ -61,6 +61,8 @@ final class Http2Stream {
   // Set once the body is rejected (ceiling exceeded or upload denied): further DATA is discarded
   // and the request is not dispatched.
   private boolean bodyRejected;
+  // Set when Content-Encoding is gzip/x-gzip: the accumulated body is gunzipped before dispatch.
+  private boolean decodeGzip;
 
   // Response data, published by the response writer on the executor thread via a single volatile
   // write and read by the NIO write loop via a single volatile read. Null until publication.
@@ -160,6 +162,21 @@ final class Http2Stream {
   /** NIO thread only. Sets the decoded-body ceiling for this stream (spec 0002). */
   void setMaxBodyBytes(long maxBodyBytes) {
     this.maxBodyBytes = maxBodyBytes;
+  }
+
+  /** NIO thread only. The decoded-body ceiling; bounds gzip inflation at dispatch. */
+  long getMaxBodyBytes() {
+    return maxBodyBytes;
+  }
+
+  /** NIO thread only. Marks the body for gzip decoding before dispatch. */
+  void setDecodeGzip() {
+    this.decodeGzip = true;
+  }
+
+  /** NIO thread only. */
+  boolean isDecodeGzip() {
+    return decodeGzip;
   }
 
   /**
