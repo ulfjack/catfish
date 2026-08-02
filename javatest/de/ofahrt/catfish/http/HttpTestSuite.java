@@ -8,6 +8,7 @@ import org.junit.runners.Suite.SuiteClasses;
 @SuiteClasses({
   ChunkedBodyScannerTest.class,
   ChunkedDecodingOutputStreamTest.class,
+  CompressingResponseWriterTest.class,
   HttpResponseGeneratorBufferedTest.class,
   HttpResponseGeneratorStreamedTest.class,
   IncrementalHttpParserIncrementalTest.class,

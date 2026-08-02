@@ -8,6 +8,7 @@ java_test(
     deps = [
         "//java/de/ofahrt/catfish/http",
         "//java/de/ofahrt/catfish/model",
+        "//java/de/ofahrt/catfish/model/server",
         "//java/de/ofahrt/catfish/utils",
         "//javatest/de/ofahrt/catfish:test_helpers",
         "//javatest/de/ofahrt/catfish/utils:test_helper",

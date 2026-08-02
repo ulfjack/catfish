@@ -2,6 +2,7 @@ package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.HttpServerStage.RequestQueue;
 import de.ofahrt.catfish.http.ChunkedDecodingOutputStream;
+import de.ofahrt.catfish.http.CompressingResponseWriter;
 import de.ofahrt.catfish.http.HttpRequestStage;
 import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.http.HttpResponseGeneratorBuffered;
@@ -23,7 +24,6 @@ import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.model.server.KeepAlivePolicy;
 import de.ofahrt.catfish.model.server.UploadPolicy;
 import de.ofahrt.catfish.utils.HttpConnectionHeader;
-import de.ofahrt.catfish.utils.HttpContentType;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -34,7 +34,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.zip.GZIPOutputStream;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -44,7 +43,6 @@ import org.jspecify.annotations.Nullable;
 final class LocalHttpRequestStage implements HttpRequestStage {
 
   private static final byte[] EMPTY_BODY = new byte[0];
-  private static final String GZIP_ENCODING = "gzip";
   private static final HttpHeaders OPTIONS_STAR_HEADERS =
       HttpHeaders.of(HttpHeaderName.ALLOW, "GET, HEAD, POST, PUT, DELETE, OPTIONS, TRACE");
 
@@ -151,7 +149,8 @@ final class LocalHttpRequestStage implements HttpRequestStage {
       fullRequest = headers;
     }
     HttpResponseWriter writer =
-        new ResponseWriterImpl(fullRequest, keepAlivePolicy, compressionPolicy);
+        new CompressingResponseWriter(
+            new ResponseWriterImpl(fullRequest, keepAlivePolicy), fullRequest, compressionPolicy);
     requestHandler.queueRequest(handler, connection, fullRequest, writer);
   }
 
@@ -201,17 +200,14 @@ final class LocalHttpRequestStage implements HttpRequestStage {
 
     private final HttpRequest request;
     private final KeepAlivePolicy keepAlivePolicy;
-    private final CompressionPolicy compressionPolicy;
     private final AtomicBoolean committed = new AtomicBoolean();
     // Set when commitStreamed is called, so abort() can force-close if the stream
     // is already in flight.
     private volatile @Nullable HttpResponseGeneratorStreamed streamedGenerator;
 
-    ResponseWriterImpl(
-        HttpRequest request, KeepAlivePolicy keepAlivePolicy, CompressionPolicy compressionPolicy) {
+    ResponseWriterImpl(HttpRequest request, KeepAlivePolicy keepAlivePolicy) {
       this.request = request;
       this.keepAlivePolicy = keepAlivePolicy;
-      this.compressionPolicy = compressionPolicy;
     }
 
     @Override
@@ -248,15 +244,6 @@ final class LocalHttpRequestStage implements HttpRequestStage {
           HttpHeaderName.CONNECTION,
           shouldKeepAlive() ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
       overrides.put(HttpHeaderName.DATE, HttpDate.formatDate(Instant.now()));
-      if (shouldCompress(responseToWrite)) {
-        overrides.put(HttpHeaderName.CONTENT_ENCODING, GZIP_ENCODING);
-        overrides.put(HttpHeaderName.VARY, HttpHeaderName.ACCEPT_ENCODING);
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        try (GZIPOutputStream gzip = new GZIPOutputStream(buffer)) {
-          gzip.write(body);
-        }
-        body = buffer.toByteArray();
-      }
       if (bodyAllowed) {
         overrides.put(HttpHeaderName.CONTENT_LENGTH, Integer.toString(body.length));
       }
@@ -292,11 +279,6 @@ final class LocalHttpRequestStage implements HttpRequestStage {
           HttpHeaderName.CONNECTION,
           shouldKeepAlive() ? HttpConnectionHeader.KEEP_ALIVE : HttpConnectionHeader.CLOSE);
       overrides.put(HttpHeaderName.DATE, HttpDate.formatDate(Instant.now()));
-      boolean compress = shouldCompress(responseToWrite);
-      if (compress) {
-        overrides.put(HttpHeaderName.CONTENT_ENCODING, GZIP_ENCODING);
-        overrides.put(HttpHeaderName.VARY, HttpHeaderName.ACCEPT_ENCODING);
-      }
       responseToWrite = responseToWrite.withHeaderOverrides(HttpHeaders.of(overrides));
       boolean headRequest = HttpMethodName.HEAD.equals(request.getMethod());
       HttpResponseGeneratorStreamed gen =
@@ -308,7 +290,7 @@ final class LocalHttpRequestStage implements HttpRequestStage {
       streamedGenerator = gen;
       parent.queue(() -> installResponse(gen));
       serverListener.onResponseStreamed(requestId, null, 0, request, responseToWrite);
-      return compress ? new GZIPOutputStream(gen.getOutputStream()) : gen.getOutputStream();
+      return gen.getOutputStream();
     }
 
     @Override
@@ -348,22 +330,6 @@ final class LocalHttpRequestStage implements HttpRequestStage {
 
     private boolean shouldKeepAlive() {
       return HttpConnectionHeader.mayKeepAlive(request) && keepAlivePolicy.allowsKeepAlive();
-    }
-
-    private boolean shouldCompress(HttpResponse responseToWrite) {
-      if (responseToWrite.getHeaders().get(HttpHeaderName.CONTENT_ENCODING) != null) {
-        return false;
-      }
-      String contentType = responseToWrite.getHeaders().get(HttpHeaderName.CONTENT_TYPE);
-      if (contentType == null) {
-        return false;
-      }
-      try {
-        String mimeType = HttpContentType.getMimeTypeFromContentType(contentType);
-        return compressionPolicy.shouldCompress(request, mimeType);
-      } catch (IllegalArgumentException e) {
-        return false;
-      }
     }
   }
 }

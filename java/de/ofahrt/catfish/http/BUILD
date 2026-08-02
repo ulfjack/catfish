@@ -8,6 +8,7 @@ java_library(
     exports = ["//third_party/jspecify"],
     deps = [
         "//java/de/ofahrt/catfish/model",
+        "//java/de/ofahrt/catfish/model/server",
         "//java/de/ofahrt/catfish/utils",
         "//third_party/jspecify",
     ],
