@@ -9,6 +9,7 @@ import org.junit.runners.Suite.SuiteClasses;
   ChunkedBodyScannerTest.class,
   ChunkedDecodingOutputStreamTest.class,
   CompressingResponseWriterTest.class,
+  GzipRequestBodyDecoderTest.class,
   HttpResponseGeneratorBufferedTest.class,
   HttpResponseGeneratorStreamedTest.class,
   IncrementalHttpParserIncrementalTest.class,
