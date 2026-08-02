@@ -64,24 +64,38 @@ the limit. Relevant code: `model/server/UploadPolicy`, `upload/SimpleUploadPolic
 
 ## Design
 
-### 1. `UploadPolicy` gains a decoded-body byte limit
+### 1. `UploadPolicy` becomes a single decoded-body byte ceiling
 
-Add a limit the body machinery can enforce as bytes arrive, not just a header-time yes/no:
+Replace the header-time yes/no gate with one method returning a limit the body machinery enforces as
+bytes arrive:
 
 ```java
 public interface UploadPolicy {
-  boolean isAllowed(HttpRequest request);           // existing header-time gate
-
-  /** Maximum number of decoded body bytes to accept; excess -> 413. */
+  /**
+   * Maximum number of decoded body bytes to accept; 0 rejects any body. Enforced incrementally as
+   * the body streams in; excess -> 413.
+   */
   long maxDecodedBytes(HttpRequest request);
 }
 ```
 
+The old `boolean isAllowed(HttpRequest)` is **removed**, not kept alongside the new method:
+`isAllowed(req) == false` is exactly `maxDecodedBytes(req) == 0`, so keeping both would admit
+contradictory states (`isAllowed` true but limit 0, or false but a positive limit) that the body
+machinery would have to arbitrate. Collapsing to one concept — a ceiling — leaves no illegal states.
+
+Rejecting on non-size grounds (e.g. content-type / `Content-Encoding`) is **not** this interface's
+job and never was: the gzip/415 decision lives in `LocalHttpRequestStage.onHeaders`, orthogonal to
+`UploadPolicy`. So the collapse tightens the interface's single responsibility rather than losing
+expressiveness.
+
 `UploadPolicy.DENY`/`ALLOW` and `SimpleUploadPolicy` implement it (`DENY` -> 0; `ALLOW` ->
-`Long.MAX_VALUE`; `SimpleUploadPolicy` -> its `maxContentLength`, generalising that field from a
-header check to an enforced streaming ceiling). This is a **breaking interface change** for external
-`UploadPolicy` implementors — acceptable and desirable (see Decisions); the two built-ins and
-`SimpleUploadPolicy` are updated in-tree.
+`Long.MAX_VALUE`; `SimpleUploadPolicy` -> its `maxContentLength` returned **unconditionally**,
+generalising that field from a header check into an enforced streaming ceiling and dropping the
+`cl != null` guard that made a missing `Content-Length` — i.e. every chunked/gzip upload — an
+automatic rejection). This is a **breaking interface change** for external `UploadPolicy`
+implementors — acceptable and desirable (see Decisions); the two built-ins, `SimpleUploadPolicy`, and
+both in-tree call sites (`LocalHttpRequestStage`, `Http2ServerStage`) are updated here.
 
 ### 2. Enforce the limit incrementally while streaming
 
@@ -123,15 +137,25 @@ already separate framing from content.
 
 ## Decisions
 
-- **Decision:** The decoded-body limit is **policy-driven** via a new `UploadPolicy.maxDecodedBytes`,
-  not a constant. — *Rationale:* a low-level HTTP library must let the embedder set the ceiling; a
+- **Decision:** The decoded-body limit is **policy-driven** via `UploadPolicy.maxDecodedBytes`, not a
+  constant. — *Rationale:* a low-level HTTP library must let the embedder set the ceiling; a
   hardcoded constant is wrong. It also generalises `SimpleUploadPolicy.maxContentLength` from a
   header-only check into an enforced streaming limit, fixing the existing chunked hole.
-- **Decision:** Adding `maxDecodedBytes` as a non-defaulted method (breaking `UploadPolicy`) is
-  accepted. — *Rationale:* the interface has two built-in impls and one in-tree impl
+- **Decision:** `UploadPolicy` collapses to the **single** method `maxDecodedBytes`; the old
+  `isAllowed` boolean is removed, not retained alongside it. — *Rationale:* `isAllowed == false` is
+  exactly `maxDecodedBytes == 0`, so two methods encode one decision twice and admit contradictory
+  states the machinery would have to arbitrate. Non-size rejection (content-type / `Content-Encoding`)
+  already lives outside the policy (`LocalHttpRequestStage.onHeaders`), so nothing is lost.
+- **Decision:** Replacing `isAllowed` with a non-defaulted `maxDecodedBytes` (breaking `UploadPolicy`)
+  is accepted. — *Rationale:* the interface has two built-in impls and one in-tree impl
   (`SimpleUploadPolicy`), all updated here; a silent `default` that returned `Long.MAX_VALUE` would
   quietly re-open the unbounded-buffer hole for existing implementors, which is worse than a
   compile error that forces an explicit choice.
+- **Decision:** The ceiling counts **decoded** bytes only; there is no separate cap on wire bytes
+  received. — *Rationale:* a decoded ceiling checked *during* inflation aborts a gzip bomb before its
+  decompressed size is committed, so the small-on-the-wire attack is already defeated by the one
+  mechanism; a second wire-byte limit would add configuration surface without closing a distinct
+  hole.
 - **Decision:** The limit counts **decoded** bytes (post de-chunk, post gunzip) and is enforced
   incrementally. — *Rationale:* that is the memory the server actually commits and the number an
   embedder reasons about; enforcing it during streaming/inflation is what defeats bombs.
@@ -166,9 +190,12 @@ None.
 
 ## Implementation Plan
 
-- [ ] PR 1 (breaking): Add `UploadPolicy.maxDecodedBytes`; implement in `DENY`/`ALLOW` and
-      `SimpleUploadPolicy`; update all in-tree usages. No enforcement yet — pure interface + impls,
-      plus unit tests for the policy values.
+- [ ] PR 1 (breaking): Replace `UploadPolicy.isAllowed` with `long maxDecodedBytes`; implement in
+      `DENY` (0) / `ALLOW` (`Long.MAX_VALUE`) and `SimpleUploadPolicy` (return `maxContentLength`
+      unconditionally, dropping the `cl != null` guard); migrate both call sites
+      (`LocalHttpRequestStage:97`, `Http2ServerStage:506`) to a `maxDecodedBytes(req) == 0` header-time
+      reject. No incremental enforcement yet — pure interface + impls + call-site migration, plus unit
+      tests for the policy values (including that a chunked/no-`Content-Length` request is now allowed).
 - [ ] PR 2: Enforce `maxDecodedBytes` incrementally in the HTTP/1.1 body path
       (`HttpServerStage.readBody` + `LocalHttpRequestStage`), covering Content-Length and chunked;
       map excess -> 413. Closes the unbounded chunked-buffer hole. Integration tests.
