@@ -526,6 +526,15 @@ public final class Http2ServerStage implements Stage {
         long maxBody = serve.uploadPolicy().maxDecodedBytes(partialRequest);
         String contentLength = partialRequest.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
         if (maxBody == 0L || (contentLength != null && Long.parseLong(contentLength) > maxBody)) {
+          stream.rejectBody();
+          sendErrorResponse(stream, StandardResponses.PAYLOAD_TOO_LARGE);
+          return;
+        }
+        // Enforce the ceiling on every subsequent DATA frame, and catch any body that already
+        // streamed in (bounded by flow control) before this async routing decision completed.
+        stream.setMaxBodyBytes(maxBody);
+        if (!stream.isBodyWithinLimit()) {
+          stream.rejectBody();
           sendErrorResponse(stream, StandardResponses.PAYLOAD_TOO_LARGE);
           return;
         }
@@ -570,7 +579,11 @@ public final class Http2ServerStage implements Stage {
         dataLength -= 1 + padLength;
       }
       if (dataLength > 0) {
-        stream.appendBodyData(payload, dataOffset, dataLength);
+        // Enforce the decoded-body ceiling incrementally (spec 0002). On the first frame that
+        // exceeds it, respond 413 once; appendBodyData discards this and all later frames.
+        if (!stream.appendBodyData(payload, dataOffset, dataLength) && !stream.isResponseReady()) {
+          sendErrorResponse(stream, StandardResponses.PAYLOAD_TOO_LARGE);
+        }
       }
       // Accumulate pending WINDOW_UPDATE bytes (full frame payload, including padding).
       // Emit when above threshold to avoid amplifying small DATA frames into larger replies.
@@ -597,7 +610,8 @@ public final class Http2ServerStage implements Stage {
       stream.takePendingAckBytes();
       SimpleHttpRequest.Builder builder = stream.getRequestBuilder();
       RequestAction.ServeLocally serve = stream.getRoutingResult();
-      if (builder != null && serve != null) {
+      // A body that exceeded the ceiling was rejected with 413 already; do not dispatch it.
+      if (builder != null && serve != null && !stream.isBodyRejected()) {
         dispatchRequest(stream, builder, serve);
       }
     }

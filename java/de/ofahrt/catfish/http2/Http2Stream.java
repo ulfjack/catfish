@@ -54,6 +54,13 @@ final class Http2Stream {
 
   // Request body accumulator (DATA frames from client).
   private final ByteArrayOutputStream bodyBuffer = new ByteArrayOutputStream();
+  // Decoded-body ceiling (spec 0002), enforced incrementally as DATA frames arrive. Long.MAX_VALUE
+  // until routing resolves the upload policy for this stream.
+  private long maxBodyBytes = Long.MAX_VALUE;
+  private long bodyByteCount;
+  // Set once the body is rejected (ceiling exceeded or upload denied): further DATA is discarded
+  // and the request is not dispatched.
+  private boolean bodyRejected;
 
   // Response data, published by the response writer on the executor thread via a single volatile
   // write and read by the NIO write loop via a single volatile read. Null until publication.
@@ -150,9 +157,48 @@ final class Http2Stream {
 
   // ---- Request body ----
 
-  /** NIO thread only. */
-  void appendBodyData(byte[] data, int offset, int length) {
+  /** NIO thread only. Sets the decoded-body ceiling for this stream (spec 0002). */
+  void setMaxBodyBytes(long maxBodyBytes) {
+    this.maxBodyBytes = maxBodyBytes;
+  }
+
+  /**
+   * Appends decoded body bytes, enforcing the decoded-body ceiling incrementally. Returns {@code
+   * false} if the accumulated body now exceeds the ceiling, or the body was already rejected; in
+   * that case no bytes are buffered and the caller must respond 413 exactly once. NIO thread only.
+   */
+  boolean appendBodyData(byte[] data, int offset, int length) {
+    if (bodyRejected) {
+      return false;
+    }
+    bodyByteCount += length;
+    if (bodyByteCount > maxBodyBytes) {
+      bodyRejected = true;
+      return false;
+    }
     bodyBuffer.write(data, offset, length);
+    return true;
+  }
+
+  /**
+   * NIO thread only. Returns {@code false} if the body accumulated so far already exceeds the
+   * ceiling. Used after {@link #setMaxBodyBytes} to catch a body that streamed in (bounded by flow
+   * control) before the async routing decision resolved the ceiling.
+   */
+  boolean isBodyWithinLimit() {
+    return bodyByteCount <= maxBodyBytes;
+  }
+
+  /**
+   * NIO thread only. Marks the body rejected so further DATA is discarded and no dispatch occurs.
+   */
+  void rejectBody() {
+    this.bodyRejected = true;
+  }
+
+  /** NIO thread only. */
+  boolean isBodyRejected() {
+    return bodyRejected;
   }
 
   /** NIO thread only. */
