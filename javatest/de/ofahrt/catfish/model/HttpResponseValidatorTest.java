@@ -1120,6 +1120,32 @@ public class HttpResponseValidatorTest {
     assertThrows(MalformedResponseException.class, () -> validator.validate(response));
   }
 
+  // ── STS: a directive must not appear more than once (#15) ────────────────────
+
+  // Conformance test #15: a repeated STS directive is invalid (RFC 6797 §6.1).
+  @Test
+  public void stsDuplicateMaxAgeThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.STRICT_TRANSPORT_SECURITY, "max-age=1; max-age=2")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // Conformance test #15: duplication is case-insensitive and covers valueless directives.
+  @Test
+  public void stsDuplicateIncludeSubdomainsThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(
+                HttpHeaderName.STRICT_TRANSPORT_SECURITY,
+                "max-age=3600; includeSubDomains; IncludeSubDomains")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
   // ── Cache-Control full grammar (#44, #45, #86) ───────────────────────────────
 
   @Test

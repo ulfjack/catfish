@@ -10,7 +10,7 @@ this suite wrongly concludes "no coverage." Tests carry a matching `Conformance 
 where practical; the count below is derived by auditing the tests, not just grepping tags (9 rules are
 covered by tests that predate the tagging convention and are marked †).
 
-Status counts: **72 covered** · **21 gaps** (7 hold by construction but are untested, 14 real holes) ·
+Status counts: **73 covered** · **20 gaps** (7 hold by construction but are untested, 13 real holes) ·
 **13 n/a** (feature absent or the application handler's responsibility). Rules #37–#41 (HTTP/2 field
 validation) were closed by spec 0005.
 
@@ -55,7 +55,7 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 | 12 | No Transfer-Encoding header allowed for 2XX responses to CONNECT | REQUIREMENT | RFC 9112 §Transfer-Encoding | GAP·enforced — same constant `ConnectStage.java:53`; untested |
 | 13 | No overly detailed Server header fields | RECOMMENDATION | RFC 9110 §Server | n/a — Catfish emits no Server header |
 | 14 | A message with content should have a Content-Type header | RECOMMENDATION | RFC 9110 §Content-Type | GAP — validator checks CT format but never requires it for a body |
-| 15 | STS directives must not appear more than once | REQUIREMENT | RFC 6797 §6.1 | GAP — `isValidSts` (`HttpResponseValidator.java:970`) accepts repeats |
+| 15 | STS directives must not appear more than once | REQUIREMENT | RFC 6797 §6.1 | RVT#stsDuplicateMaxAgeThrows |
 | 16 | Only one STS header allowed | REQUIREMENT | RFC 6797 §7.1 | GAP·enforced — single-valued `HttpHeaders` map; untested |
 | 17 | No STS header field for HTTP request over non-secure transport | REQUIREMENT | RFC 6797 §7.2 | GAP — `validate()` never checks transport before allowing STS |
 | 18 | Date header field required for all status codes except 1xx and 5xx | REQUIREMENT | RFC 9110 §Date | BIT#dateHeaderPresentOnCoreResponse † |
