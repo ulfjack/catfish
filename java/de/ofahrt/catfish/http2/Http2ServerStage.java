@@ -1,5 +1,6 @@
 package de.ofahrt.catfish.http2;
 
+import de.ofahrt.catfish.http.IncrementalHttpRequestParser;
 import de.ofahrt.catfish.http2.Hpack.Header;
 import de.ofahrt.catfish.http2.HpackDecoder.HpackDecodingException;
 import de.ofahrt.catfish.internal.network.NetworkEngine.Pipeline;
@@ -427,6 +428,19 @@ public final class Http2ServerStage implements Stage {
       throw new IOException("h2 HPACK decoding failed", e);
     }
 
+    // Validate request header fields (RFC 9113 §8.2.1). A malformed request is a stream error
+    // (§8.1.1): reject with RST_STREAM(PROTOCOL_ERROR) so the connection and other streams survive.
+    // Validation runs after the full HPACK decode above, so the connection-global dynamic table is
+    // advanced over the whole block regardless of outcome and a rejected stream cannot desync later
+    // streams. Rejecting here, before the request is built, also keeps malformed field names/values
+    // (e.g. CR/LF in a value) out of the HTTP/1.1 reverse-proxy / FastCGI forwarders, where they
+    // would be an h2->h1 header-injection / request-smuggling vector.
+    if (!validateRequestHeaderBlock(headers)) {
+      lastStreamId = Math.max(lastStreamId, streamId);
+      queueRstStream(streamId, ErrorCode.PROTOCOL_ERROR);
+      return;
+    }
+
     // Extract pseudo-headers and build an HttpRequest.
     String method = null;
     String path = null;
@@ -837,6 +851,70 @@ public final class Http2ServerStage implements Stage {
   private void queueWindowUpdate(int streamId, int increment) {
     Http2FrameWriter.writeWindowUpdate(controlFrameScratch, streamId, increment);
     flushScratch();
+  }
+
+  /**
+   * Validates the field names and values of a decoded HTTP/2 request header block per RFC 9113
+   * §8.2.1. Returns {@code true} if every field is well-formed, {@code false} if the request is
+   * malformed (§8.1.1) and must be rejected as a stream error. Pseudo-header ordering/uniqueness
+   * (§8.3) and the connection-specific field rules (§8.2.2) are validated separately (spec 0005,
+   * PRs 2–3); this pass covers field-name and field-value syntax.
+   */
+  private static boolean validateRequestHeaderBlock(List<Header> headers) {
+    for (Header header : headers) {
+      if (!isValidRequestFieldName(header.name()) || !isValidRequestFieldValue(header.value())) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * A field name must be a non-empty lowercase RFC 7230 token — no uppercase, SP, control, or other
+   * non-{@code tchar} character, and no interior {@code ':'}. A leading {@code ':'} marks a
+   * pseudo-header and is allowed; the remainder is still validated as a token. Reuses the HTTP/1.1
+   * {@code tchar} definition so the two parsers cannot drift.
+   */
+  private static boolean isValidRequestFieldName(String name) {
+    if (name.isEmpty()) {
+      return false;
+    }
+    int start = name.charAt(0) == ':' ? 1 : 0;
+    if (start == name.length()) {
+      return false; // a bare ":" is not a valid pseudo-header name
+    }
+    for (int i = start; i < name.length(); i++) {
+      char c = name.charAt(i);
+      if (c > 0x7f || (c >= 'A' && c <= 'Z')) {
+        return false; // non-ASCII or uppercase
+      }
+      if (!IncrementalHttpRequestParser.isTokenCharacter(c)) {
+        return false; // SP, control, ':', and other non-tchar characters
+      }
+    }
+    return true;
+  }
+
+  /**
+   * A field value must contain no {@code NUL}, {@code CR}, or {@code LF} and must not start or end
+   * with a space or horizontal tab (RFC 9113 §8.2.1). Other octets, including non-ASCII, are
+   * permitted as opaque field content.
+   */
+  private static boolean isValidRequestFieldValue(String value) {
+    if (!value.isEmpty()) {
+      char first = value.charAt(0);
+      char last = value.charAt(value.length() - 1);
+      if (first == ' ' || first == '\t' || last == ' ' || last == '\t') {
+        return false;
+      }
+    }
+    for (int i = 0; i < value.length(); i++) {
+      char c = value.charAt(i);
+      if (c == '\0' || c == '\r' || c == '\n') {
+        return false;
+      }
+    }
+    return true;
   }
 
   private void queueRstStream(int streamId, int errorCode) {

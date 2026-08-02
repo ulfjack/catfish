@@ -1674,6 +1674,201 @@ public class Http2ServerStageTest {
     return result;
   }
 
+  // ---- HTTP/2 request header field validation (spec 0005, PR 1) ----
+  //
+  // Malformed request header fields (RFC 9113 §8.1.1) must be rejected as a *stream* error
+  // (RST_STREAM / PROTOCOL_ERROR), not built into an HttpRequest — otherwise uppercase names,
+  // embedded colons, and CR/LF/NUL in values reach handlers and the HTTP/1.1 reverse-proxy /
+  // FastCGI forwarders, where they become an h2->h1 header-injection / request-smuggling primitive.
+  // Malformed fields are hand-crafted as HPACK literal-never-indexed entries so the exact bytes
+  // (including uppercase / control characters the encoder would never emit) are under test control.
+
+  // Conformance test #38: an HTTP/2 field name containing uppercase is malformed (RFC 9113 §8.2.1).
+  @Test
+  public void uppercaseFieldName_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(concat(validPseudoHeaders(), literalField("Foo", "bar")));
+  }
+
+  // Conformance test #39: a field name containing ':' (not a leading pseudo-header) is malformed.
+  @Test
+  public void fieldNameWithColon_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(concat(validPseudoHeaders(), literalField("foo:bar", "x")));
+  }
+
+  // Conformance test #40: a field value containing LF is malformed (h2->h1 header-injection
+  // vector).
+  @Test
+  public void fieldValueWithLineFeed_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(concat(validPseudoHeaders(), literalField("foo", "a\nb")));
+  }
+
+  // Conformance test #40: a field value containing CR is malformed.
+  @Test
+  public void fieldValueWithCarriageReturn_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(concat(validPseudoHeaders(), literalField("foo", "a\rb")));
+  }
+
+  // Conformance test #40: a field value containing NUL is malformed.
+  @Test
+  public void fieldValueWithNul_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(concat(validPseudoHeaders(), literalField("foo", "a b")));
+  }
+
+  // Conformance test #41: a field value with leading whitespace is malformed (RFC 9113 §8.2.1).
+  @Test
+  public void fieldValueWithLeadingWhitespace_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(concat(validPseudoHeaders(), literalField("foo", " bar")));
+  }
+
+  // Conformance test #41: a field value with trailing whitespace (HTAB) is malformed.
+  @Test
+  public void fieldValueWithTrailingWhitespace_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(concat(validPseudoHeaders(), literalField("foo", "bar\t")));
+  }
+
+  // A malformed request is a stream error: the connection survives and later valid streams are
+  // served.
+  @Test
+  public void malformedHeader_isStreamError_connectionSurvives() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // Stream 1: malformed (uppercase name) → RST_STREAM(PROTOCOL_ERROR), not dispatched.
+    feedAndRead(headersFrame(1, concat(validPseudoHeaders(), literalField("Bad", "v"))));
+    assertEquals(ErrorCode.PROTOCOL_ERROR, rstStreamErrorCode(drainOutput(), 1));
+    assertEquals(0, dispatchedRequests.size());
+
+    // Stream 3: well-formed → served normally on the same connection.
+    feedAndRead(buildGetHeadersFrame(3, "/ok"));
+    assertEquals(1, dispatchedRequests.size());
+    assertEquals("/ok", dispatchedRequests.get(0).getUri());
+  }
+
+  // A well-formed request with a lowercase custom header and a clean value is unaffected.
+  @Test
+  public void wellFormedCustomHeader_isAccepted() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    feedAndRead(headersFrame(1, concat(validPseudoHeaders(), literalField("x-custom", "value"))));
+    assertEquals(1, dispatchedRequests.size());
+    assertEquals("value", dispatchedRequests.get(0).getHeaders().get("x-custom"));
+    assertEquals("no RST_STREAM for a valid request", -1, rstStreamErrorCode(drainOutput(), 1));
+  }
+
+  // HPACK dynamic-table stays in sync after a rejected stream: the whole block is decoded
+  // (advancing
+  // the table) before validation, so a later stream referencing an entry the rejected block added
+  // still decodes correctly.
+  @Test
+  public void rejectedStream_keepsHpackDynamicTableInSync() throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // Stream 1: adds "x-dyn: v" to the dynamic table (incremental indexing) but is malformed
+    // (uppercase "Up"), so the stream is rejected after the block is fully decoded.
+    byte[] block1 =
+        concat(validPseudoHeaders(), indexedField("x-dyn", "v"), literalField("Up", "1"));
+    feedAndRead(headersFrame(1, block1));
+    assertEquals(ErrorCode.PROTOCOL_ERROR, rstStreamErrorCode(drainOutput(), 1));
+    assertEquals(0, dispatchedRequests.size());
+
+    // Stream 3: references the dynamic entry the rejected block established (index 62 = 0xbe).
+    byte[] block3 = concat(validPseudoHeaders(), new byte[] {(byte) 0xbe});
+    feedAndRead(headersFrame(3, block3));
+    assertEquals(
+        "later stream must decode using the dynamic entry from the rejected block",
+        1,
+        dispatchedRequests.size());
+    assertEquals("v", dispatchedRequests.get(0).getHeaders().get("x-dyn"));
+  }
+
+  /**
+   * Feeds the client preface + SETTINGS, then a HEADERS frame on stream 1 carrying {@code block},
+   * and asserts the stage rejected it as a malformed request: no dispatch,
+   * RST_STREAM(PROTOCOL_ERROR).
+   */
+  private void assertMalformedHeaderRejected(byte[] block) throws IOException {
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    feedAndRead(headersFrame(1, block));
+    assertEquals(
+        "malformed request must not be dispatched to a handler", 0, dispatchedRequests.size());
+    assertEquals(
+        "malformed request must be answered with RST_STREAM(PROTOCOL_ERROR)",
+        ErrorCode.PROTOCOL_ERROR,
+        rstStreamErrorCode(drainOutput(), 1));
+  }
+
+  /** A HEADERS frame (END_STREAM + END_HEADERS) on {@code streamId} carrying a raw HPACK block. */
+  private static byte[] headersFrame(int streamId, byte[] block) {
+    return buildRawFrame(
+        FrameType.HEADERS,
+        FrameFlags.FLAG_END_STREAM | FrameFlags.FLAG_END_HEADERS,
+        streamId,
+        block);
+  }
+
+  /** The four required pseudo-headers, as HPACK literal-never-indexed entries (order-valid). */
+  private static byte[] validPseudoHeaders() {
+    return concat(
+        literalField(":method", "GET"),
+        literalField(":path", "/"),
+        literalField(":scheme", "https"),
+        literalField(":authority", "localhost"));
+  }
+
+  /**
+   * HPACK "literal header field never indexed", new name (RFC 7541 §6.2.3); name/value &lt; 128.
+   */
+  private static byte[] literalField(String name, String value) {
+    return encodeLiteral((byte) 0x10, name, value);
+  }
+
+  /**
+   * HPACK "literal header field with incremental indexing", new name (§6.2.1) — adds to the table.
+   */
+  private static byte[] indexedField(String name, String value) {
+    return encodeLiteral((byte) 0x40, name, value);
+  }
+
+  private static byte[] encodeLiteral(byte prefix, String name, String value) {
+    byte[] n = name.getBytes(StandardCharsets.ISO_8859_1);
+    byte[] v = value.getBytes(StandardCharsets.ISO_8859_1);
+    if (n.length > 127 || v.length > 127) {
+      throw new IllegalArgumentException("test literal too long for a single-byte length prefix");
+    }
+    ByteBuffer buf = ByteBuffer.allocate(1 + 1 + n.length + 1 + v.length);
+    buf.put(prefix); // literal opcode, name index 0 (name given as a literal string)
+    buf.put((byte) n.length); // name length, Huffman flag = 0
+    buf.put(n);
+    buf.put((byte) v.length); // value length, Huffman flag = 0
+    buf.put(v);
+    return buf.array();
+  }
+
+  /** Scans {@code output} for an RST_STREAM on {@code streamId}; returns its error code, or -1. */
+  private static int rstStreamErrorCode(byte[] output, int streamId) {
+    int i = 0;
+    while (i + 9 <= output.length) {
+      int len = ((output[i] & 0xff) << 16) | ((output[i + 1] & 0xff) << 8) | (output[i + 2] & 0xff);
+      int type = output[i + 3] & 0xff;
+      int sid =
+          ((output[i + 5] & 0x7f) << 24)
+              | ((output[i + 6] & 0xff) << 16)
+              | ((output[i + 7] & 0xff) << 8)
+              | (output[i + 8] & 0xff);
+      if (type == FrameType.RST_STREAM && sid == streamId && len == 4) {
+        return ((output[i + 9] & 0xff) << 24)
+            | ((output[i + 10] & 0xff) << 16)
+            | ((output[i + 11] & 0xff) << 8)
+            | (output[i + 12] & 0xff);
+      }
+      i += 9 + len;
+    }
+    return -1;
+  }
+
   /** Minimal Pipeline implementation for testing. */
   private static class TestPipeline implements Pipeline {
     boolean writesEncouraged;

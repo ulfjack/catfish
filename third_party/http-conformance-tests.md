@@ -10,8 +10,9 @@ this suite wrongly concludes "no coverage." Tests carry a matching `Conformance 
 where practical; the count below is derived by auditing the tests, not just grepping tags (9 rules are
 covered by tests that predate the tagging convention and are marked †).
 
-Status counts: **67 covered** · **26 gaps** (7 hold by construction but are untested, 19 real holes) ·
-**13 n/a** (feature absent or the application handler's responsibility).
+Status counts: **71 covered** · **22 gaps** (7 hold by construction but are untested, 15 real holes) ·
+**13 n/a** (feature absent or the application handler's responsibility). Rules #38–#41 (HTTP/2 request
+field validation) were closed by spec 0005 PR 1.
 
 Legend for the Coverage column:
 - `<TestAlias>#method` — a test asserts this rule (see aliases below). `†` = covered but was untagged.
@@ -28,7 +29,8 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 `CIT` = `integration/CompressionIntegrationTest.java` ·
 `OFT` = `OriginForwarderTest.java` ·
 `HDT` = `model/HttpDateTest.java` ·
-`CHST` = `CatfishHttpServerTest.java`
+`CHST` = `CatfishHttpServerTest.java` ·
+`H2SST` = `http2/Http2ServerStageTest.java`
 
 ## HTTP (General)
 
@@ -91,10 +93,10 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 | # | Test | Level | Source | Coverage |
 |---|------|-------|--------|----------|
 | 37 | 101 Switching Protocols not allowed in HTTP/2 | REQUIREMENT | RFC 9113 §Upgrade | GAP — handler-returned `:status` passed through, `Http2ServerStage.java:804` |
-| 38 | Field name must not contain non-visible ASCII, SP, or uppercase characters | REQUIREMENT | RFC 9113 §Field Validity | GAP — no h2 field-name char validation (`HpackDecoder`, `Http2ServerStage.java:447`) |
-| 39 | Field name must not contain colon except for pseudo-header fields | REQUIREMENT | RFC 9113 §Field Validity | GAP — embedded colon not rejected, `Http2ServerStage.java:438` |
-| 40 | Field value must not contain zero value, line feed, or carriage return | REQUIREMENT | RFC 9113 §Field Validity | GAP — no h2 field-value validation |
-| 41 | Field value must not start or end with whitespace | REQUIREMENT | RFC 9113 §Field Validity | GAP — no h2 field-value validation |
+| 38 | Field name must not contain non-visible ASCII, SP, or uppercase characters | REQUIREMENT | RFC 9113 §Field Validity | H2SST#uppercaseFieldName_rejectedAsMalformed |
+| 39 | Field name must not contain colon except for pseudo-header fields | REQUIREMENT | RFC 9113 §Field Validity | H2SST#fieldNameWithColon_rejectedAsMalformed |
+| 40 | Field value must not contain zero value, line feed, or carriage return | REQUIREMENT | RFC 9113 §Field Validity | H2SST#fieldValueWithLineFeed_rejectedAsMalformed (+CR/NUL) |
+| 41 | Field value must not start or end with whitespace | REQUIREMENT | RFC 9113 §Field Validity | H2SST#fieldValueWithLeadingWhitespace_rejectedAsMalformed (+trailing) |
 
 ## Cache-Control
 

@@ -6,6 +6,7 @@ java_library(
     name = "http2",
     srcs = glob(["*.java"]),
     deps = [
+        "//java/de/ofahrt/catfish/http",
         "//java/de/ofahrt/catfish/internal/network",
         "//java/de/ofahrt/catfish/model",
         "//java/de/ofahrt/catfish/model/network",
