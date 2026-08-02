@@ -12,6 +12,8 @@ import org.junit.runners.Suite.SuiteClasses;
   MitmConnectIntegrationTest.class,
   ChunkedBodyIntegrationTest.class,
   ChunkedUploadLimitIntegrationTest.class,
+  GzipUploadIntegrationTest.class,
+  GzipUploadLimitIntegrationTest.class,
   ConnectionHandlingTest.class,
   MultiRunnerTest.class,
   CompressionIntegrationTest.class,

@@ -79,14 +79,16 @@ public class BasicIntegrationTest {
   }
 
   @Test
-  public void contentEncodingInRequest() throws IOException {
+  public void unsupportedContentEncodingInRequest() throws IOException {
+    // gzip/x-gzip are now accepted and decoded (see GzipUploadIntegrationTest); any other codec is
+    // still rejected with 415.
     HttpRequest request =
         new SimpleHttpRequest.Builder()
             .setVersion(HttpVersion.HTTP_1_1)
             .setMethod(HttpMethodName.GET)
             .setUri("/")
             .addHeader(HttpHeaderName.HOST, "localhost")
-            .addHeader(HttpHeaderName.CONTENT_ENCODING, "gzip")
+            .addHeader(HttpHeaderName.CONTENT_ENCODING, "deflate")
             .build();
     HttpResponse response = localServer.send(HttpRequestHelper.toByteArray(request));
     assertEquals(HttpStatusCode.UNSUPPORTED_MEDIA_TYPE.getStatusCode(), response.getStatusCode());

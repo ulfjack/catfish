@@ -93,6 +93,36 @@ public interface HttpRequest {
     };
   }
 
+  default HttpRequest withoutHeader(String key) {
+    HttpHeaders updated = HttpRequest.this.getHeaders().without(key);
+    return new HttpRequest() {
+      @Override
+      public HttpVersion getVersion() {
+        return HttpRequest.this.getVersion();
+      }
+
+      @Override
+      public String getMethod() {
+        return HttpRequest.this.getMethod();
+      }
+
+      @Override
+      public String getUri() {
+        return HttpRequest.this.getUri();
+      }
+
+      @Override
+      public HttpHeaders getHeaders() {
+        return updated;
+      }
+
+      @Override
+      public @Nullable Body getBody() {
+        return HttpRequest.this.getBody();
+      }
+    };
+  }
+
   default HttpRequest withHeaderOverrides(HttpHeaders overrides) {
     HttpHeaders combined = HttpRequest.this.getHeaders().withOverrides(overrides);
     return new HttpRequest() {

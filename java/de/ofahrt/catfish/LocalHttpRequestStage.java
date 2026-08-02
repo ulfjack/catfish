@@ -3,6 +3,7 @@ package de.ofahrt.catfish;
 import de.ofahrt.catfish.HttpServerStage.RequestQueue;
 import de.ofahrt.catfish.http.ChunkedDecodingOutputStream;
 import de.ofahrt.catfish.http.CompressingResponseWriter;
+import de.ofahrt.catfish.http.GzipRequestBodyDecoder;
 import de.ofahrt.catfish.http.HttpRequestStage;
 import de.ofahrt.catfish.http.HttpResponseGenerator;
 import de.ofahrt.catfish.http.HttpResponseGeneratorBuffered;
@@ -43,6 +44,9 @@ import org.jspecify.annotations.Nullable;
 final class LocalHttpRequestStage implements HttpRequestStage {
 
   private static final byte[] EMPTY_BODY = new byte[0];
+  private static final String GZIP_ENCODING = "gzip";
+  private static final String X_GZIP_ENCODING = "x-gzip";
+  private static final String IDENTITY_ENCODING = "identity";
   private static final HttpHeaders OPTIONS_STAR_HEADERS =
       HttpHeaders.of(HttpHeaderName.ALLOW, "GET, HEAD, POST, PUT, DELETE, OPTIONS, TRACE");
 
@@ -59,6 +63,9 @@ final class LocalHttpRequestStage implements HttpRequestStage {
 
   private @Nullable HttpRequest headers;
   private final ByteArrayOutputStream bodyBuffer = new ByteArrayOutputStream();
+  // Set in onHeaders when Content-Encoding is gzip/x-gzip: the body is gunzipped in onBodyComplete
+  // before dispatch, and Content-Encoding is stripped from the handler-visible request.
+  private boolean decodeGzip;
 
   LocalHttpRequestStage(
       Pipeline parent,
@@ -87,27 +94,41 @@ final class LocalHttpRequestStage implements HttpRequestStage {
   public @Nullable HttpResponse onHeaders(HttpRequest headers) {
     this.headers = headers;
     parent.log("%s %s %s", headers.getMethod(), headers.getUri(), headers.getVersion());
+    // Content-coding: accept gzip/x-gzip (decoded below) and identity; reject anything else with
+    // 415. Parsed before the size checks because it decides whether Content-Length is the decoded
+    // size (see below).
+    String contentEncoding = headers.getHeaders().get(HttpHeaderName.CONTENT_ENCODING);
+    if (contentEncoding != null) {
+      String encoding = contentEncoding.trim();
+      if (encoding.equalsIgnoreCase(GZIP_ENCODING) || encoding.equalsIgnoreCase(X_GZIP_ENCODING)) {
+        decodeGzip = true;
+      } else if (!encoding.equalsIgnoreCase(IDENTITY_ENCODING)) {
+        // identity is equivalent to no encoding; any other codec (deflate, br, ...) is unsupported.
+        return StandardResponses.UNSUPPORTED_MEDIA_TYPE;
+      }
+    }
     // Check upload policy if the request has a body.
     String cl = headers.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
     String te = headers.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
     boolean hasBody =
         (cl != null && !"0".equals(cl)) || (te != null && "chunked".equalsIgnoreCase(te));
     long maxBody = uploadPolicy.maxDecodedBytes(headers);
-    // A zero ceiling forbids any body outright. A declared Content-Length already over the ceiling
-    // is rejected here; a chunked/no-Content-Length body carries no size at header time and is
-    // bounded incrementally once body streaming enforces the ceiling (spec 0002 PR 2).
+    // A zero ceiling forbids any body outright.
     if (hasBody && maxBody == 0L) {
       return StandardResponses.PAYLOAD_TOO_LARGE;
     }
-    if (cl != null && Long.parseLong(cl) > maxBody) {
+    // A declared Content-Length already over the ceiling is rejected here -- but only for an
+    // unencoded body, where Content-Length is the decoded size. For gzip the header is the
+    // compressed size, so the decoded ceiling is enforced during inflation instead
+    // (onBodyComplete).
+    // A chunked/no-Content-Length body carries no size at header time and is bounded incrementally
+    // as it streams (spec 0002).
+    if (!decodeGzip && cl != null && Long.parseLong(cl) > maxBody) {
       return StandardResponses.PAYLOAD_TOO_LARGE;
     }
     String expectValue = headers.getHeaders().get(HttpHeaderName.EXPECT);
     if (expectValue != null && !"100-continue".equalsIgnoreCase(expectValue)) {
       return StandardResponses.EXPECTATION_FAILED;
-    }
-    if (headers.getHeaders().get(HttpHeaderName.CONTENT_ENCODING) != null) {
-      return StandardResponses.UNSUPPORTED_MEDIA_TYPE;
     }
     if (HttpMethodName.TRACE.equals(headers.getMethod())) {
       return buildTraceResponse(headers);
@@ -133,7 +154,8 @@ final class LocalHttpRequestStage implements HttpRequestStage {
     HttpRequest fullRequest;
     if (bodyBuffer.size() > 0) {
       byte[] rawBody = bodyBuffer.toByteArray();
-      // If the request was chunked, decode the raw chunked bytes.
+      // Transfer-decode first (de-chunk), then content-decode (gunzip): the reverse of the order
+      // the encodings were applied on the wire.
       String te = headers.getHeaders().get(HttpHeaderName.TRANSFER_ENCODING);
       if (te != null && "chunked".equalsIgnoreCase(te)) {
         ByteArrayOutputStream decoded = new ByteArrayOutputStream();
@@ -144,7 +166,18 @@ final class LocalHttpRequestStage implements HttpRequestStage {
         }
         rawBody = decoded.toByteArray();
       }
-      fullRequest = headers.withBody(new HttpRequest.InMemoryBody(rawBody));
+      if (decodeGzip) {
+        try {
+          rawBody = GzipRequestBodyDecoder.decode(rawBody, uploadPolicy.maxDecodedBytes(headers));
+        } catch (GzipRequestBodyDecoder.BodyTooLargeException e) {
+          sendError(StandardResponses.PAYLOAD_TOO_LARGE);
+          return;
+        } catch (GzipRequestBodyDecoder.MalformedBodyException e) {
+          sendError(StandardResponses.BAD_REQUEST);
+          return;
+        }
+      }
+      fullRequest = buildDecodedRequest(headers, rawBody);
     } else {
       fullRequest = headers;
     }
@@ -152,6 +185,49 @@ final class LocalHttpRequestStage implements HttpRequestStage {
         new CompressingResponseWriter(
             new ResponseWriterImpl(fullRequest, keepAlivePolicy), fullRequest, compressionPolicy);
     requestHandler.queueRequest(handler, connection, fullRequest, writer);
+  }
+
+  /**
+   * Builds the handler-visible request carrying the fully decoded body. When the body was
+   * gzip-decoded, strips {@code Content-Encoding} (the handler sees plain bytes) and, if a {@code
+   * Content-Length} was present, corrects it to the decoded length so the request stays
+   * self-consistent.
+   */
+  private HttpRequest buildDecodedRequest(HttpRequest base, byte[] decodedBody) {
+    HttpRequest request = base;
+    if (decodeGzip) {
+      request = request.withoutHeader(HttpHeaderName.CONTENT_ENCODING);
+      if (request.getHeaders().get(HttpHeaderName.CONTENT_LENGTH) != null) {
+        request =
+            request.withHeaderOverrides(
+                HttpHeaders.of(
+                    HttpHeaderName.CONTENT_LENGTH, Integer.toString(decodedBody.length)));
+      }
+    }
+    return request.withBody(new HttpRequest.InMemoryBody(decodedBody));
+  }
+
+  /**
+   * Installs a buffered error response (e.g. 413/400 for a body that fails to decode) directly on
+   * the NIO thread and closes the connection, since a partially-consumed encoded body leaves no
+   * safe point to resume keep-alive.
+   */
+  @SuppressWarnings("NullAway") // headers is non-null after onHeaders
+  private void sendError(HttpResponse errorResponse) {
+    byte[] body = errorResponse.getBody();
+    if (body == null) {
+      body = EMPTY_BODY;
+    }
+    HttpResponse response =
+        errorResponse.withHeaderOverrides(
+            HttpHeaders.of(
+                HttpHeaderName.CONNECTION,
+                HttpConnectionHeader.CLOSE,
+                HttpHeaderName.CONTENT_LENGTH,
+                Integer.toString(body.length),
+                HttpHeaderName.DATE,
+                HttpDate.formatDate(Instant.now())));
+    installResponse(HttpResponseGeneratorBuffered.create(headers, response));
   }
 
   @Override
