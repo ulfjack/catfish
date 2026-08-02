@@ -1,5 +1,6 @@
 package de.ofahrt.catfish.http2;
 
+import de.ofahrt.catfish.http.CompressingResponseWriter;
 import de.ofahrt.catfish.http.IncrementalHttpRequestParser;
 import de.ofahrt.catfish.http2.Hpack.Header;
 import de.ofahrt.catfish.http2.HpackDecoder.HpackDecodingException;
@@ -744,8 +745,14 @@ public final class Http2ServerStage implements Stage {
           }
         };
     // Completion fires when commitBuffered returns, or when the commitStreamed OutputStream
-    // is closed — not when the handler returns, since the handler may keep writing async.
-    HttpResponseWriter writer = new NotifyingWriter(new Http2ResponseWriter(stream), notify);
+    // is closed — not when the handler returns, since the handler may keep writing async. The
+    // compressing writer sits inside NotifyingWriter so completion fires after the (gzipped)
+    // response is fully written, matching the HTTP/1.1 path (spec 0006).
+    HttpResponseWriter writer =
+        new NotifyingWriter(
+            new CompressingResponseWriter(
+                new Http2ResponseWriter(stream), request, serve.compressionPolicy()),
+            notify);
     requestHandler.queueRequest(serve.handler(), connection, request, writer);
   }
 

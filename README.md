@@ -229,11 +229,15 @@ inspect, modify, record, forward, or serve individual requests locally.
   is: TLS decryption → HTTP parsing → handler → HTTP response → TLS encryption.
 - **SNI-aware TLS** — the server inspects the ClientHello to pick the right certificate (and
   reject unknown hostnames with a TLS alert) before completing the handshake.
-- **Dual response modes** — `commitBuffered` for small responses (adds `Content-Length`,
-  optional gzip); `commitStreamed` for large or dynamic output (chunked encoding,
-  backpressure).
+- **Dual response modes** — `commitBuffered` for small responses (adds `Content-Length`);
+  `commitStreamed` for large or dynamic output (chunked encoding, backpressure).
+- **Response compression** — optional gzip for whitelisted content types, negotiated from the
+  client's `Accept-Encoding` and applied identically on HTTP/1.1 and HTTP/2. It is opt-in per
+  virtual host (`compressionPolicy`; the default is off): enabling it on TLS responses that mix a
+  secret (e.g. a CSRF token) with attacker-influenced reflected input has BREACH implications the
+  embedder should weigh.
 - **Virtual hosting** — each hostname has its own handler, TLS context, keep-alive policy,
-  and upload policy.
+  upload policy, and compression policy.
 
 ## Contributing / AI-assisted development
 
