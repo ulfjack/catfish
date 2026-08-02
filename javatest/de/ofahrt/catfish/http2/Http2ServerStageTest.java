@@ -1783,6 +1783,44 @@ public class Http2ServerStageTest {
     assertEquals("v", dispatchedRequests.get(0).getHeaders().get("x-dyn"));
   }
 
+  // ---- Pseudo-header structure (spec 0005, PR 2; RFC 9113 §8.3) ----
+
+  // §8.3: a pseudo-header appearing after a regular field is malformed.
+  @Test
+  public void pseudoHeaderAfterRegularField_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(
+        concat(
+            literalField(":method", "GET"),
+            literalField(":path", "/"),
+            literalField(":scheme", "https"),
+            literalField("x-foo", "bar"),
+            literalField(":authority", "localhost")));
+  }
+
+  // §8.3: a pseudo-header that appears more than once is malformed.
+  @Test
+  public void duplicatePseudoHeader_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(
+        concat(
+            literalField(":method", "GET"),
+            literalField(":path", "/"),
+            literalField(":path", "/again"),
+            literalField(":scheme", "https"),
+            literalField(":authority", "localhost")));
+  }
+
+  // §8.3: an undefined request pseudo-header (previously dropped silently) is malformed.
+  @Test
+  public void unknownPseudoHeader_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(concat(validPseudoHeaders(), literalField(":foo", "bar")));
+  }
+
+  // §8.3: a response pseudo-header (:status) in a request is undefined and malformed.
+  @Test
+  public void statusPseudoHeaderInRequest_rejectedAsMalformed() throws IOException {
+    assertMalformedHeaderRejected(concat(validPseudoHeaders(), literalField(":status", "200")));
+  }
+
   /**
    * Feeds the client preface + SETTINGS, then a HEADERS frame on stream 1 carrying {@code block},
    * and asserts the stage rejected it as a malformed request: no dispatch,
