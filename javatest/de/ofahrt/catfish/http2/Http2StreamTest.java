@@ -1,8 +1,11 @@
 package de.ofahrt.catfish.http2;
 
+import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.server.CompressionPolicy;
@@ -41,6 +44,48 @@ public class Http2StreamTest {
     assertEquals(30, s.getPendingAckBytes());
     assertEquals(30, s.takePendingAckBytes());
     assertEquals(0, s.getPendingAckBytes());
+  }
+
+  @Test
+  public void appendBodyData_withinCeiling_buffersAndReportsOk() {
+    Http2Stream s = new Http2Stream(1, Http2Stream.State.OPEN, 65535);
+    s.setMaxBodyBytes(9);
+    assertTrue(s.appendBodyData("Wiki".getBytes(US_ASCII), 0, 4));
+    assertTrue(s.appendBodyData("pedia".getBytes(US_ASCII), 0, 5));
+    assertTrue(s.isBodyWithinLimit());
+    assertFalse(s.isBodyRejected());
+    assertEquals("Wikipedia", new String(s.getBodyBytes(), US_ASCII));
+  }
+
+  @Test
+  public void appendBodyData_exceedingCeiling_rejectsAndStopsBuffering() {
+    Http2Stream s = new Http2Stream(1, Http2Stream.State.OPEN, 65535);
+    s.setMaxBodyBytes(8);
+    assertTrue(s.appendBodyData("Wiki".getBytes(US_ASCII), 0, 4));
+    // The frame that crosses the ceiling is rejected whole and not buffered.
+    assertFalse(s.appendBodyData("pedia".getBytes(US_ASCII), 0, 5));
+    assertTrue(s.isBodyRejected());
+    // A later frame is discarded too, without re-buffering.
+    assertFalse(s.appendBodyData("more".getBytes(US_ASCII), 0, 4));
+    assertEquals("Wiki", new String(s.getBodyBytes(), US_ASCII));
+  }
+
+  @Test
+  public void isBodyWithinLimit_catchesBodyBufferedBeforeCeilingSet() {
+    // Models DATA frames that stream in before the async routing decision sets the ceiling.
+    Http2Stream s = new Http2Stream(1, Http2Stream.State.OPEN, 65535);
+    assertTrue(s.appendBodyData("Wikipedia".getBytes(US_ASCII), 0, 9));
+    s.setMaxBodyBytes(8);
+    assertFalse(s.isBodyWithinLimit());
+  }
+
+  @Test
+  public void rejectBody_discardsSubsequentData() {
+    Http2Stream s = new Http2Stream(1, Http2Stream.State.OPEN, 65535);
+    s.rejectBody();
+    assertTrue(s.isBodyRejected());
+    assertFalse(s.appendBodyData("data".getBytes(US_ASCII), 0, 4));
+    assertEquals(0, s.getBodyBytes().length);
   }
 
   @Test
