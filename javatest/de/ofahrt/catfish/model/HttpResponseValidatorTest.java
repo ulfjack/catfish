@@ -1146,6 +1146,39 @@ public class HttpResponseValidatorTest {
     assertThrows(MalformedResponseException.class, () -> validator.validate(response));
   }
 
+  // ── STS must not be sent over a non-secure transport (#17) ───────────────────
+
+  // Conformance test #17: an STS header over a non-secure transport is invalid (RFC 6797 §7.2).
+  @Test
+  public void stsOverInsecureTransportThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.STRICT_TRANSPORT_SECURITY, "max-age=31536000")
+            .build();
+    assertThrows(
+        MalformedResponseException.class,
+        () -> validator.validate(null, response, /* secure= */ false));
+  }
+
+  // Over a secure transport the same STS header is accepted.
+  @Test
+  public void stsOverSecureTransportDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.STRICT_TRANSPORT_SECURITY, "max-age=31536000")
+            .build();
+    validator.validate(null, response, /* secure= */ true);
+  }
+
+  // A response without STS is unaffected by transport security.
+  @Test
+  public void nonStsResponseOverInsecureTransportDoesNotThrow() throws Exception {
+    HttpResponse response = new SimpleHttpResponse.Builder().setStatusCode(200).build();
+    validator.validate(null, response, /* secure= */ false);
+  }
+
   // ── Cache-Control full grammar (#44, #45, #86) ───────────────────────────────
 
   @Test

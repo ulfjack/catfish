@@ -41,23 +41,29 @@ public final class ValidatingHttpHandler implements HttpHandler {
   @Override
   public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter)
       throws IOException {
-    delegate.handle(connection, request, new ValidatingResponseWriter(request, responseWriter));
+    delegate.handle(
+        connection,
+        request,
+        new ValidatingResponseWriter(
+            request, connection != null && connection.isSsl(), responseWriter));
   }
 
   private final class ValidatingResponseWriter implements HttpResponseWriter {
 
     private final HttpRequest request;
+    private final boolean secure;
     private final HttpResponseWriter delegate;
 
-    ValidatingResponseWriter(HttpRequest request, HttpResponseWriter delegate) {
+    ValidatingResponseWriter(HttpRequest request, boolean secure, HttpResponseWriter delegate) {
       this.request = request;
+      this.secure = secure;
       this.delegate = delegate;
     }
 
     @Override
     public void commitBuffered(HttpResponse response) throws IOException {
       try {
-        validator.validate(request, response);
+        validator.validate(request, response, secure);
       } catch (MalformedResponseException e) {
         delegate.commitBuffered(StandardResponses.INTERNAL_SERVER_ERROR);
         return;
@@ -68,7 +74,7 @@ public final class ValidatingHttpHandler implements HttpHandler {
     @Override
     public OutputStream commitStreamed(HttpResponse response) throws IOException {
       try {
-        validator.validate(request, response);
+        validator.validate(request, response, secure);
       } catch (MalformedResponseException e) {
         delegate.commitBuffered(StandardResponses.INTERNAL_SERVER_ERROR);
         // Return a no-op OutputStream so the handler can close it without error.
