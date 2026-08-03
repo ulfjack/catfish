@@ -10,8 +10,9 @@ this suite wrongly concludes "no coverage." Tests carry a matching `Conformance 
 where practical; the count below is derived by auditing the tests, not just grepping tags (9 rules are
 covered by tests that predate the tagging convention and are marked †).
 
-Status counts: **74 covered** · **19 gaps** (7 hold by construction but are untested, 12 real holes) ·
-**13 n/a** (feature absent or the application handler's responsibility). Rules #37–#41 (HTTP/2 field
+Status counts: **74 covered** · **18 gaps** (7 hold by construction but are untested, 11 real holes) ·
+**14 n/a** (feature absent or the application handler's responsibility). Every REQUIREMENT-level rule
+is now covered, enforced-by-construction, or n/a; the remaining real holes are all RECOMMENDATION/ABNF. Rules #37–#41 (HTTP/2 field
 validation) were closed by spec 0005.
 
 Legend for the Coverage column:
@@ -60,7 +61,7 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 | 17 | No STS header field for HTTP request over non-secure transport | REQUIREMENT | RFC 6797 §7.2 | RVT#stsOverInsecureTransportThrows |
 | 18 | Date header field required for all status codes except 1xx and 5xx | REQUIREMENT | RFC 9110 §Date | BIT#dateHeaderPresentOnCoreResponse † |
 | 19 | No Transfer-Encoding header allowed with 1xx, 204 | REQUIREMENT | RFC 9112 §Transfer-Encoding | RVT#noContentWithContentLengthThrows |
-| 20 | Transfer-Encoding must not be sent unless request indicates HTTP/1.1 or later | REQUIREMENT | RFC 9112 §Transfer-Encoding | GAP — chunked emitted without gating on version, `HttpResponseGeneratorStreamed.java:383` |
+| 20 | Transfer-Encoding must not be sent unless request indicates HTTP/1.1 or later | REQUIREMENT | RFC 9112 §Transfer-Encoding | n/a — non-CONNECT HTTP/1.0 requests are rejected with 505 (`HttpServerStage.java:197`), so no body is ever sent to a <1.1 client |
 | 21 | max-age directive is required in STS header | REQUIREMENT | RFC 6797 §6.1.1 | RVT#stsWithMaxAgeDoesNotThrow |
 | 22 | Upgrade-Insecure-Requests: redirect if encountered | RECOMMENDATION | Upgrade Insecure Requests | n/a — feature unimplemented |
 | 23 | Upgrade-Insecure-Requests: include STS header in response | RECOMMENDATION | Upgrade Insecure Requests | n/a — feature unimplemented |
