@@ -10,7 +10,7 @@ this suite wrongly concludes "no coverage." Tests carry a matching `Conformance 
 where practical; the count below is derived by auditing the tests, not just grepping tags (9 rules are
 covered by tests that predate the tagging convention and are marked †).
 
-Status counts: **78 covered** · **11 gaps** (7 hold by construction but are untested, 4 real holes) ·
+Status counts: **80 covered** · **9 gaps** (5 hold by construction but are untested, 4 real holes) ·
 **17 n/a** (feature absent or the application handler's responsibility). Every REQUIREMENT-level rule
 is now covered, enforced-by-construction, or n/a; the remaining real holes are all RECOMMENDATION/ABNF. Rules #37–#41 (HTTP/2 field
 validation) were closed by spec 0005.
@@ -31,7 +31,8 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 `OFT` = `OriginForwarderTest.java` ·
 `HDT` = `model/HttpDateTest.java` ·
 `CHST` = `CatfishHttpServerTest.java` ·
-`H2SST` = `http2/Http2ServerStageTest.java`
+`H2SST` = `http2/Http2ServerStageTest.java` ·
+`CTIT` = `integration/ConnectTunnelIntegrationTest.java`
 
 ## HTTP (General)
 
@@ -52,8 +53,8 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 | # | Test | Level | Source | Coverage |
 |---|------|-------|--------|----------|
 | 10 | Reply with 400 to requests with bad hosts (missing, duplicate, or invalid Host header) | REQUIREMENT | RFC 9112 §Request-Target | HPT#duplicateHostReturns400 |
-| 11 | No Content-Length header allowed for 2XX responses to CONNECT | REQUIREMENT | RFC 9110 §Content-Length | GAP·enforced — fixed 200 constant, `ConnectStage.java:53`; untested |
-| 12 | No Transfer-Encoding header allowed for 2XX responses to CONNECT | REQUIREMENT | RFC 9112 §Transfer-Encoding | GAP·enforced — same constant `ConnectStage.java:53`; untested |
+| 11 | No Content-Length header allowed for 2XX responses to CONNECT | REQUIREMENT | RFC 9110 §Content-Length | CTIT#connectTunnel |
+| 12 | No Transfer-Encoding header allowed for 2XX responses to CONNECT | REQUIREMENT | RFC 9112 §Transfer-Encoding | CTIT#connectTunnel |
 | 13 | No overly detailed Server header fields | RECOMMENDATION | RFC 9110 §Server | n/a — Catfish emits no Server header |
 | 14 | A message with content should have a Content-Type header | RECOMMENDATION | RFC 9110 §Content-Type | n/a — omitting Content-Type is RFC-permitted and often correct; enforcing would 500 legitimate body-without-CT responses. Handler's choice (nosniff is the real browser defense) |
 | 15 | STS directives must not appear more than once | REQUIREMENT | RFC 6797 §6.1 | RVT#stsDuplicateMaxAgeThrows |
