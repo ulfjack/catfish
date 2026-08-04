@@ -10,8 +10,9 @@ this suite wrongly concludes "no coverage." Tests carry a matching `Conformance 
 where practical; the count below is derived by auditing the tests, not just grepping tags (9 rules are
 covered by tests that predate the tagging convention and are marked †).
 
-Status counts: **83 covered** · **6 gaps** (4 hold by construction but are untested, 2 real holes) ·
-**17 n/a** (feature absent or the application handler's responsibility). Every REQUIREMENT-level rule
+Status counts: **84 covered** · **5 gaps** (4 hold by construction but are untested, 1 real hole) ·
+**17 n/a** (feature absent or the application handler's responsibility). The last real hole is #46
+(Set-Cookie grammar), which a Cookie builder would close by construction. Every REQUIREMENT-level rule
 is now covered, enforced-by-construction, or n/a; the remaining real holes are all RECOMMENDATION/ABNF. Rules #37–#41 (HTTP/2 field
 validation) were closed by spec 0005.
 
@@ -164,7 +165,7 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 | 84 | Access-Control-Allow-Headers follows ACAH ABNF | ABNF | Fetch spec | RVT#accessControlAllowHeadersWildcardDoesNotThrow |
 | 85 | Age is a non-negative integer | ABNF | RFC 9111 §Age | RVT#ageZeroDoesNotThrow |
 | 86 | Cache-Control follows grammar | ABNF | RFC 9111 §Cache-Control | RVT#cacheControlNoCacheDoesNotThrow |
-| 87 | Server header follows grammar | ABNF | RFC 9110 §Server | GAP — no `isValidServer`; Catfish emits none, handler value unvalidated |
+| 87 | Server header follows grammar | ABNF | RFC 9110 §Server | RVT#serverInvalidThrows (validates a handler-set value; core emits none) |
 | 88 | Retry-After is HTTP-date or non-negative integer | ABNF | RFC 9110 §Retry-After | RVT#retryAfterIntegerDoesNotThrow |
 | 89 | Proxy-Authorization follows grammar | ABNF | RFC 9110 §Proxy-Authorization | n/a — request header; Catfish never emits it |
 | 90 | Location is a valid URI-reference | ABNF | RFC 9110 §Location | RVT#locationValidUriDoesNotThrow |

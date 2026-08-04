@@ -1019,6 +1019,34 @@ public class HttpResponseValidatorTest {
     assertThrows(MalformedResponseException.class, () -> validator.validate(response));
   }
 
+  // ── Server product/comment grammar (#87) ─────────────────────────────────────
+
+  @Test
+  public void serverValidDoesNotThrow() throws Exception {
+    validator.validate(
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.SERVER, "Catfish/1.0")
+            .build());
+    validator.validate(
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.SERVER, "Catfish/1.0 (Unix; x86_64) libfoo/2")
+            .build());
+  }
+
+  // Conformance test #87: a product with a trailing "/" and no version is rejected (RFC 9110
+  // §10.2.4).
+  @Test
+  public void serverInvalidThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.SERVER, "Catfish/")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
   // ── Transfer-Encoding comma-separated tokens (#105) ──────────────────────────
 
   @Test
