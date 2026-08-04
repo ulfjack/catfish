@@ -10,7 +10,7 @@ this suite wrongly concludes "no coverage." Tests carry a matching `Conformance 
 where practical; the count below is derived by auditing the tests, not just grepping tags (9 rules are
 covered by tests that predate the tagging convention and are marked †).
 
-Status counts: **80 covered** · **9 gaps** (5 hold by construction but are untested, 4 real holes) ·
+Status counts: **81 covered** · **8 gaps** (4 hold by construction but are untested, 4 real holes) ·
 **17 n/a** (feature absent or the application handler's responsibility). Every REQUIREMENT-level rule
 is now covered, enforced-by-construction, or n/a; the remaining real holes are all RECOMMENDATION/ABNF. Rules #37–#41 (HTTP/2 field
 validation) were closed by spec 0005.
@@ -85,7 +85,7 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 | # | Test | Level | Source | Coverage |
 |---|------|-------|--------|----------|
 | 32 | One CRLF in front of the request line should be allowed | RECOMMENDATION | RFC 9112 §Message Parsing | HPT#leadingCrlfIgnored |
-| 33 | Reject messages with whitespace between start-line and first header field | REQUIREMENT | RFC 9112 §Message Parsing | GAP·enforced — 400 via `IncrementalHttpRequestParser.java:285`; no direct test |
+| 33 | Reject messages with whitespace between start-line and first header field | REQUIREMENT | RFC 9112 §Message Parsing | HPT#whitespaceBeforeFirstHeaderReturns400 |
 | 34 | Reject (400) any message with whitespace between header field name and colon | REQUIREMENT | RFC 9112 §Field Line Parsing | HPT#badHeader † |
 | 35 | Server should send "close" connection option in final response when client sends Connection: close | RECOMMENDATION | RFC 9112 §Tear-Down | CHT#connectionCloseRespectsHeader |
 | 36 | Server must not generate bare CR (outside of content) | REQUIREMENT | RFC 9112 §Message Parsing | RGBT#responsesUseCrlfLineTerminators |

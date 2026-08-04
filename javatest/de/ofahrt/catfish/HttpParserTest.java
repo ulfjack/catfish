@@ -297,4 +297,12 @@ public abstract class HttpParserTest {
                 .getBytes(Charset.forName("ISO-8859-1")));
     assertEquals("GET", request.getMethod());
   }
+
+  // Conformance test #33: whitespace before the first header field is rejected — obs-fold is only
+  // valid after a field line, so there is nothing to fold into here (RFC 9112 §2.2 / §5.2).
+  @Test
+  public void whitespaceBeforeFirstHeaderReturns400() throws Exception {
+    checkError(
+        "400 Illegal character in header field name", "GET / HTTP/1.1\n Host: localhost\n\n");
+  }
 }
