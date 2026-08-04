@@ -2,7 +2,11 @@
 
 Catfish is a Java library for embedding an HTTP/1.1 server into any JVM application. It provides
 low-level control over the HTTP protocol without imposing a framework: no annotation scanning, no
-dependency injection, no servlet container (though an optional servlet bridge is available).
+dependency injection, no servlet container.
+
+> **Note:** the optional servlet bridge (`java/de/ofahrt/catfish/bridge/`) is **incomplete and not
+> recommended** for new code — it has no active users and may be removed. Build against the
+> `HttpHandler` API directly.
 
 Key capabilities: non-blocking I/O, TLS with SNI-based virtual hosting, HTTP/1.1 and HTTP/2,
 streaming responses, and keep-alive / compression policies per virtual host.
