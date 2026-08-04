@@ -57,8 +57,25 @@ public final class StandardResponses {
       new PreconstructedResponse(HttpStatusCode.PAYLOAD_TOO_LARGE); // 413
   public static final HttpResponse URI_TOO_LONG =
       new PreconstructedResponse(HttpStatusCode.URI_TOO_LONG); // 414
+
+  /**
+   * @deprecated a bare 415 omits the {@code Accept-Encoding} hint RFC 9110 §15.5.16 recommends; use
+   *     {@link #unsupportedMediaType(String...)}.
+   */
+  @Deprecated
   public static final HttpResponse UNSUPPORTED_MEDIA_TYPE =
       new PreconstructedResponse(HttpStatusCode.UNSUPPORTED_MEDIA_TYPE); // 415
+
+  /**
+   * A 415 (Unsupported Media Type) response advertising, via an {@code Accept-Encoding} header, the
+   * content codings the server accepts for the request body (RFC 9110 §15.5.16). Named for the
+   * status code; the parameter is the accepted content codings.
+   */
+  public static HttpResponse unsupportedMediaType(String... acceptedContentCodings) {
+    return new PreconstructedResponse(
+        HttpStatusCode.UNSUPPORTED_MEDIA_TYPE,
+        HttpHeaders.of(HttpHeaderName.ACCEPT_ENCODING, String.join(", ", acceptedContentCodings)));
+  }
 
   /**
    * @deprecated a bare 416 omits the {@code Content-Range} header RFC 9110 §15.5.17 recommends; use

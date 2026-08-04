@@ -104,7 +104,8 @@ final class LocalHttpRequestStage implements HttpRequestStage {
         decodeGzip = true;
       } else if (!encoding.equalsIgnoreCase(IDENTITY_ENCODING)) {
         // identity is equivalent to no encoding; any other codec (deflate, br, ...) is unsupported.
-        return StandardResponses.UNSUPPORTED_MEDIA_TYPE;
+        // Advertise what we accept: gzip (decoded) and identity.
+        return StandardResponses.unsupportedMediaType("gzip", "identity");
       }
     }
     // Check upload policy if the request has a body.
