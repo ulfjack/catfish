@@ -10,8 +10,8 @@ this suite wrongly concludes "no coverage." Tests carry a matching `Conformance 
 where practical; the count below is derived by auditing the tests, not just grepping tags (9 rules are
 covered by tests that predate the tagging convention and are marked †).
 
-Status counts: **76 covered** · **14 gaps** (7 hold by construction but are untested, 7 real holes) ·
-**16 n/a** (feature absent or the application handler's responsibility). Every REQUIREMENT-level rule
+Status counts: **78 covered** · **11 gaps** (7 hold by construction but are untested, 4 real holes) ·
+**17 n/a** (feature absent or the application handler's responsibility). Every REQUIREMENT-level rule
 is now covered, enforced-by-construction, or n/a; the remaining real holes are all RECOMMENDATION/ABNF. Rules #37–#41 (HTTP/2 field
 validation) were closed by spec 0005.
 
@@ -55,7 +55,7 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 | 11 | No Content-Length header allowed for 2XX responses to CONNECT | REQUIREMENT | RFC 9110 §Content-Length | GAP·enforced — fixed 200 constant, `ConnectStage.java:53`; untested |
 | 12 | No Transfer-Encoding header allowed for 2XX responses to CONNECT | REQUIREMENT | RFC 9112 §Transfer-Encoding | GAP·enforced — same constant `ConnectStage.java:53`; untested |
 | 13 | No overly detailed Server header fields | RECOMMENDATION | RFC 9110 §Server | n/a — Catfish emits no Server header |
-| 14 | A message with content should have a Content-Type header | RECOMMENDATION | RFC 9110 §Content-Type | GAP — validator checks CT format but never requires it for a body |
+| 14 | A message with content should have a Content-Type header | RECOMMENDATION | RFC 9110 §Content-Type | n/a — omitting Content-Type is RFC-permitted and often correct; enforcing would 500 legitimate body-without-CT responses. Handler's choice (nosniff is the real browser defense) |
 | 15 | STS directives must not appear more than once | REQUIREMENT | RFC 6797 §6.1 | RVT#stsDuplicateMaxAgeThrows |
 | 16 | Only one STS header allowed | REQUIREMENT | RFC 6797 §7.1 | GAP·enforced — single-valued `HttpHeaders` map; untested |
 | 17 | No STS header field for HTTP request over non-secure transport | REQUIREMENT | RFC 6797 §7.2 | RVT#stsOverInsecureTransportThrows |
@@ -113,7 +113,7 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 | # | Test | Level | Source | Coverage |
 |---|------|-------|--------|----------|
 | 46 | Cookies should follow the cookie grammar | ABNF | RFC 6265 §4.1.1 | GAP — session cookie unvalidated, `bridge/RequestImpl.java:546` |
-| 47 | Servers should not produce two attributes with same name in same Set-Cookie string | RECOMMENDATION | RFC 6265 §4.1.1 | GAP — no Set-Cookie attribute-dedup check |
+| 47 | Servers should not produce two attributes with same name in same Set-Cookie string | RECOMMENDATION | RFC 6265 §4.1.1 | RVT#setCookieDuplicateAttributeThrows |
 | 48 | Should not include more than one Set-Cookie with same cookie-name in same response | RECOMMENDATION | RFC 6265 §4.1.1 | GAP·enforced — `bridge/ResponseImpl.java:78` single-valued map; untested |
 | 49 | Cookies should use IMF-fixdate (four-digit year) | RECOMMENDATION | RFC 6265 §4.1.1 | n/a — session cookie carries no Expires/date attribute |
 
@@ -122,7 +122,7 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 | # | Test | Level | Source | Coverage |
 |---|------|-------|--------|----------|
 | 50 | 300 Multiple Choices: should have a Location header field | RECOMMENDATION | RFC 9110 §300 | RVT#multipleChoicesWithoutLocationThrows |
-| 51 | 300 Multiple Choices: response should not be empty | RECOMMENDATION | RFC 9110 §300 | GAP — non-empty-body for 300 not enforced |
+| 51 | 300 Multiple Choices: response should not be empty | RECOMMENDATION | RFC 9110 §300 | RVT#multipleChoicesEmptyBodyThrows |
 | 52 | 301 Moved Permanently: should have a Location header field | RECOMMENDATION | RFC 9110 §301 | RVT#movedPermanentlyWithoutLocationThrows |
 | 53 | 302 Found: should have a Location header field | RECOMMENDATION | RFC 9110 §302 | RVT#foundWithoutLocationThrows † |
 | 54 | 303 See Other: should have a Location header field | RECOMMENDATION | RFC 9110 §303 | RVT#seeOtherWithoutLocationThrows † |
