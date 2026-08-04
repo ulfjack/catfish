@@ -93,6 +93,15 @@ public class HttpResponseValidator {
           status + " response must contain a Location header field");
     }
 
+    // 300 Multiple Choices should carry a representation (non-empty body).
+    // Conformance test #51 (RFC 9110 §15.4.1).
+    if (status == 300) {
+      byte[] body = response.getBody();
+      if (body == null || body.length == 0) {
+        throw new MalformedResponseException("300 Multiple Choices response should not be empty");
+      }
+    }
+
     // 401 Unauthorized must include a WWW-Authenticate header field.
     // Conformance test #67 (RFC 9110 §15.5.2).
     if (status == HttpStatusCode.UNAUTHORIZED.getStatusCode()
@@ -332,6 +341,13 @@ public class HttpResponseValidator {
     String cacheControl = headers.get(HttpHeaderName.CACHE_CONTROL);
     if (cacheControl != null && !isValidCacheControl(cacheControl)) {
       throw new MalformedResponseException("Cache-Control is invalid, got: " + cacheControl);
+    }
+
+    // Set-Cookie must not repeat an attribute name. Conformance test #47 (RFC 6265 §4.1.1).
+    String setCookie = headers.get(HttpHeaderName.SET_COOKIE);
+    if (setCookie != null && !isValidSetCookie(setCookie)) {
+      throw new MalformedResponseException(
+          "Set-Cookie must not contain a duplicate attribute, got: " + setCookie);
     }
 
     // Content-Type must follow the RFC 9110 §8.3 media-type grammar.
@@ -584,6 +600,35 @@ public class HttpResponseValidator {
    * <p>Empty list items are silently ignored per RFC 9110 §5.6.1. The directives {@code max-age}
    * and {@code s-maxage} must not use a quoted-string value.
    */
+  /**
+   * Returns true if {@code setCookie} has no repeated attribute name (RFC 6265 §4.1.1). The first
+   * {@code ;}-separated segment is the cookie-pair; the rest are attributes ({@code Path}, {@code
+   * Domain}, {@code Secure}, …), each of which must appear at most once (case-insensitive).
+   */
+  private static boolean isValidSetCookie(String setCookie) {
+    String[] parts = setCookie.split(";");
+    // O(n^2) over the attribute names, but a cookie carries only a handful; no hash set (which
+    // would be exposed to a hash-collision DoS on the header value).
+    for (int i = 1; i < parts.length; i++) {
+      String name = cookieAttributeName(parts[i]);
+      if (name.isEmpty()) {
+        continue;
+      }
+      for (int j = 1; j < i; j++) {
+        if (name.equals(cookieAttributeName(parts[j]))) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  private static String cookieAttributeName(String attribute) {
+    String trimmed = attribute.trim();
+    int eq = trimmed.indexOf('=');
+    return (eq >= 0 ? trimmed.substring(0, eq) : trimmed).trim().toLowerCase(Locale.US);
+  }
+
   public static boolean isValidCacheControl(String value) {
     for (String item : value.split(",", -1)) {
       String directive = item.trim();

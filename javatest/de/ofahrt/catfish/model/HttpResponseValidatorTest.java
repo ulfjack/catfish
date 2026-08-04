@@ -1179,6 +1179,54 @@ public class HttpResponseValidatorTest {
     validator.validate(null, response, /* secure= */ false);
   }
 
+  // ── 300 Multiple Choices should not be empty (#51) ───────────────────────────
+
+  // Conformance test #51: a 300 Multiple Choices response should not be empty (RFC 9110 §15.4.1).
+  @Test
+  public void multipleChoicesEmptyBodyThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(300)
+            .addHeader(HttpHeaderName.LOCATION, "/preferred")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void multipleChoicesWithBodyDoesNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(300)
+            .addHeader(HttpHeaderName.LOCATION, "/preferred")
+            .setBody(new byte[] {(byte) 'x'})
+            .build();
+    validator.validate(response);
+  }
+
+  // ── Set-Cookie must not repeat an attribute (#47) ────────────────────────────
+
+  // Conformance test #47: a Set-Cookie with a duplicate attribute name is rejected (RFC 6265
+  // §4.1.1).
+  @Test
+  public void setCookieDuplicateAttributeThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.SET_COOKIE, "id=abc; Path=/; Path=/admin")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  @Test
+  public void setCookieDistinctAttributesDoNotThrow() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.SET_COOKIE, "id=abc; Path=/; HttpOnly; Secure; SameSite=Lax")
+            .build();
+    validator.validate(response);
+  }
+
   // ── Cache-Control full grammar (#44, #45, #86) ───────────────────────────────
 
   @Test
