@@ -14,6 +14,7 @@ public final class HttpHeaderName {
   public static final String ACCEPT_CHARSET = "Accept-Charset";
   public static final String ACCEPT_ENCODING = "Accept-Encoding";
   public static final String ACCEPT_LANGUAGE = "Accept-Language";
+  public static final String ACCEPT_PATCH = "Accept-Patch";
   public static final String ACCEPT_RANGES = "Accept-Ranges";
   public static final String ACCESS_CONTROL_ALLOW_CREDENTIALS = "Access-Control-Allow-Credentials";
   public static final String ACCESS_CONTROL_ALLOW_HEADERS = "Access-Control-Allow-Headers";

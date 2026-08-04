@@ -10,7 +10,7 @@ this suite wrongly concludes "no coverage." Tests carry a matching `Conformance 
 where practical; the count below is derived by auditing the tests, not just grepping tags (9 rules are
 covered by tests that predate the tagging convention and are marked †).
 
-Status counts: **81 covered** · **8 gaps** (4 hold by construction but are untested, 4 real holes) ·
+Status counts: **83 covered** · **6 gaps** (4 hold by construction but are untested, 2 real holes) ·
 **17 n/a** (feature absent or the application handler's responsibility). Every REQUIREMENT-level rule
 is now covered, enforced-by-construction, or n/a; the remaining real holes are all RECOMMENDATION/ABNF. Rules #37–#41 (HTTP/2 field
 validation) were closed by spec 0005.
@@ -179,8 +179,8 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 | 99 | Content-Encoding follows content-coding grammar | ABNF | RFC 9110 §Content-Encoding | CIT#withGzipAcceptEncoding_correctHeadersAndDecompressibleBody † |
 | 100 | Connection follows token list grammar | ABNF | RFC 9110 §Connection | OFT#keepAliveFalse_setsConnectionClose † |
 | 101 | Allow follows method list grammar | ABNF | RFC 9110 §Allow | RVT#allowValidMethodsDoesNotThrow |
-| 102 | Accept-Ranges follows grammar | ABNF | RFC 9110 §Accept-Ranges | GAP — no `isValidAcceptRanges` (Catfish emits none) |
+| 102 | Accept-Ranges follows grammar | ABNF | RFC 9110 §Accept-Ranges | RVT#acceptRangesInvalidThrows (validates a handler-set value; core emits none) |
 | 103 | Accept-Encoding follows grammar | ABNF | RFC 9110 §Accept-Encoding | n/a — request header; Catfish never emits it |
-| 104 | Accept-Patch follows media-type list grammar | ABNF | RFC 5789 §3.1 | GAP — no `isValidAcceptPatch` (Catfish emits none) |
+| 104 | Accept-Patch follows media-type list grammar | ABNF | RFC 5789 §3.1 | RVT#acceptPatchInvalidThrows (validates a handler-set value; core emits none) |
 | 105 | Transfer-Encoding follows grammar | ABNF | RFC 9112 §Transfer-Encoding | RVT#transferEncodingChunkedDoesNotThrow |
 | 106 | Vary follows grammar | ABNF | RFC 9110 §Vary | RVT#varyStarDoesNotThrow |
