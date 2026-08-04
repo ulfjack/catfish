@@ -610,6 +610,12 @@ public class HttpResponseValidator {
             return false;
           }
         } else {
+          // no-cache and private take a quoted-string field-name list, never a token value
+          // (RFC 9111 §5.2.2.4, §5.2.2.7). Conformance tests #42, #43.
+          String nameLower = name.toLowerCase(Locale.US);
+          if ("no-cache".equals(nameLower) || "private".equals(nameLower)) {
+            return false;
+          }
           if (!isToken(val)) {
             return false;
           }

@@ -1231,6 +1231,44 @@ public class HttpResponseValidatorTest {
     assertThrows(MalformedResponseException.class, () -> validator.validate(response));
   }
 
+  // Conformance test #42: a no-cache value must be a quoted-string, not a token (RFC 9111
+  // §5.2.2.4).
+  @Test
+  public void cacheControlNoCacheTokenValueThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CACHE_CONTROL, "no-cache=set-cookie")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // Conformance test #43: a private value must be a quoted-string, not a token (RFC 9111 §5.2.2.7).
+  @Test
+  public void cacheControlPrivateTokenValueThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CACHE_CONTROL, "private=set-cookie")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // The quoted-string form and the valueless form of no-cache/private remain valid.
+  @Test
+  public void cacheControlNoCacheQuotedAndValuelessDoNotThrow() throws Exception {
+    validator.validate(
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CACHE_CONTROL, "no-cache=\"Set-Cookie\"")
+            .build());
+    validator.validate(
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CACHE_CONTROL, "private")
+            .build());
+  }
+
   @Test
   public void cacheControlSMaxAgeIntegerDoesNotThrow() throws Exception {
     HttpResponse response =
@@ -1698,7 +1736,8 @@ public class HttpResponseValidatorTest {
 
   @Test
   public void isValidCacheControlTokenValueReturnsTrue() {
-    assertTrue(HttpResponseValidator.isValidCacheControl("private=set-cookie"));
+    // no-cache/private require a quoted-string value (#42/#43); use a directive that takes a token.
+    assertTrue(HttpResponseValidator.isValidCacheControl("max-stale=60"));
   }
 
   @Test
