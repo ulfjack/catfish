@@ -322,6 +322,13 @@ public class HttpResponseValidator {
           "Accept-Patch must be a comma-separated list of media-types, got: " + acceptPatch);
     }
 
+    // Server, if present, must follow the product/comment grammar.
+    // Conformance test #87 (RFC 9110 §10.2.4).
+    String server = headers.get(HttpHeaderName.SERVER);
+    if (server != null && !isValidServer(server)) {
+      throw new MalformedResponseException("Server is invalid, got: " + server);
+    }
+
     // Transfer-Encoding must be comma-separated coding tokens with no empty tokens.
     // Conformance test #105 (RFC 9112 §6.1).
     String transferEncoding = headers.get(HttpHeaderName.TRANSFER_ENCODING);
@@ -557,6 +564,92 @@ public class HttpResponseValidator {
       }
     }
     return true;
+  }
+
+  /**
+   * Returns true if {@code value} is a valid {@code Server} field value (RFC 9110 §10.2.4):
+   *
+   * <pre>
+   * Server  = product *( RWS ( product / comment ) )
+   * product = token [ "/" token ]
+   * comment = "(" *( ctext / quoted-pair / comment ) ")"
+   * </pre>
+   */
+  public static boolean isValidServer(String value) {
+    String s = value.trim();
+    int n = s.length();
+    int i = consumeProduct(s, 0);
+    if (i < 0) {
+      return false; // must start with a product
+    }
+    while (i < n) {
+      int afterWs = i;
+      while (afterWs < n && (s.charAt(afterWs) == ' ' || s.charAt(afterWs) == '\t')) {
+        afterWs++;
+      }
+      if (afterWs == i || afterWs >= n) {
+        return false; // RWS is required before each following product/comment
+      }
+      i = s.charAt(afterWs) == '(' ? consumeComment(s, afterWs) : consumeProduct(s, afterWs);
+      if (i < 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Consumes a {@code product} (token [ "/" token ]) at {@code i}; returns the next index or -1.
+   */
+  private static int consumeProduct(String s, int i) {
+    int n = s.length();
+    int start = i;
+    while (i < n && isTokenChar(s.charAt(i))) {
+      i++;
+    }
+    if (i == start) {
+      return -1; // no token
+    }
+    if (i < n && s.charAt(i) == '/') {
+      i++;
+      int versionStart = i;
+      while (i < n && isTokenChar(s.charAt(i))) {
+        i++;
+      }
+      if (i == versionStart) {
+        return -1; // "/" with no version token
+      }
+    }
+    return i;
+  }
+
+  /**
+   * Consumes a {@code comment} ("(" … ")", nesting and quoted-pair) at {@code i}; next index or -1.
+   */
+  private static int consumeComment(String s, int i) {
+    int n = s.length();
+    int depth = 0;
+    while (i < n) {
+      char c = s.charAt(i);
+      if (c == '\\') {
+        i += 2; // quoted-pair: backslash escapes the next character
+        if (i > n) {
+          return -1; // dangling backslash
+        }
+      } else if (c == '(') {
+        depth++;
+        i++;
+      } else if (c == ')') {
+        depth--;
+        i++;
+        if (depth == 0) {
+          return i;
+        }
+      } else {
+        i++;
+      }
+    }
+    return -1; // unterminated comment
   }
 
   /** Returns true if {@code value} is a valid {@code Content-Length} value. */
