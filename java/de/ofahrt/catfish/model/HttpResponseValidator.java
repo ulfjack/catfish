@@ -370,8 +370,7 @@ public class HttpResponseValidator {
     // Set-Cookie must not repeat an attribute name. Conformance test #47 (RFC 6265 §4.1.1).
     String setCookie = headers.get(HttpHeaderName.SET_COOKIE);
     if (setCookie != null && !isValidSetCookie(setCookie)) {
-      throw new MalformedResponseException(
-          "Set-Cookie must not contain a duplicate attribute, got: " + setCookie);
+      throw new MalformedResponseException("Set-Cookie is invalid (RFC 6265), got: " + setCookie);
     }
 
     // Content-Type must follow the RFC 9110 §8.3 media-type grammar.
@@ -732,23 +731,67 @@ public class HttpResponseValidator {
    * and {@code s-maxage} must not use a quoted-string value.
    */
   /**
-   * Returns true if {@code setCookie} has no repeated attribute name (RFC 6265 §4.1.1). The first
-   * {@code ;}-separated segment is the cookie-pair; the rest are attributes ({@code Path}, {@code
-   * Domain}, {@code Secure}, …), each of which must appear at most once (case-insensitive).
+   * Returns true if {@code setCookie} is a valid {@code Set-Cookie} value (RFC 6265 §4.1.1): a
+   * cookie-pair ({@code cookie-name "=" cookie-value}) followed by {@code "; "}-separated
+   * attributes, with no attribute name repeated (#46, #47). cookie-name is a token; cookie-value is
+   * cookie-octets, optionally DQUOTE-wrapped; attribute values are checked at the extension-av
+   * level (printable ASCII, no controls). Shared by the response validator and the cookie builder's
+   * tests.
    */
-  private static boolean isValidSetCookie(String setCookie) {
-    String[] parts = setCookie.split(";");
-    // O(n^2) over the attribute names, but a cookie carries only a handful; no hash set (which
-    // would be exposed to a hash-collision DoS on the header value).
+  public static boolean isValidSetCookie(String setCookie) {
+    // cookie-value and every attribute exclude ';', so splitting on ';' is safe.
+    String[] parts = setCookie.split(";", -1);
+    int eq = parts[0].indexOf('=');
+    if (eq < 0
+        || !isToken(parts[0].substring(0, eq))
+        || !isValidCookieValue(parts[0].substring(eq + 1))) {
+      return false; // cookie-pair = cookie-name "=" cookie-value
+    }
+    // Attributes: each a non-empty, printable-ASCII cookie-av with no repeated name. O(n^2) over
+    // the
+    // handful of attribute names, avoiding a hash set (hash-collision DoS on the header value).
     for (int i = 1; i < parts.length; i++) {
-      String name = cookieAttributeName(parts[i]);
-      if (name.isEmpty()) {
-        continue;
+      String av = parts[i].trim();
+      if (av.isEmpty() || !isValidAttributeChars(av)) {
+        return false;
       }
+      String name = cookieAttributeName(parts[i]);
       for (int j = 1; j < i; j++) {
         if (name.equals(cookieAttributeName(parts[j]))) {
           return false;
         }
+      }
+    }
+    return true;
+  }
+
+  /** cookie-value = *cookie-octet / ( DQUOTE *cookie-octet DQUOTE ) (RFC 6265 §4.1.1). */
+  private static boolean isValidCookieValue(String value) {
+    int start = 0;
+    int end = value.length();
+    if (end >= 2 && value.charAt(0) == '"' && value.charAt(end - 1) == '"') {
+      start = 1;
+      end--;
+    }
+    for (int i = start; i < end; i++) {
+      char c = value.charAt(i);
+      // cookie-octet: printable ASCII excluding DQUOTE, comma, semicolon, and backslash.
+      if (c < 0x21 || c > 0x7e || c == '"' || c == ',' || c == ';' || c == '\\') {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * extension-av chars: any CHAR except CTLs and ';' — here, printable ASCII (';' already split
+   * out).
+   */
+  private static boolean isValidAttributeChars(String s) {
+    for (int i = 0; i < s.length(); i++) {
+      char c = s.charAt(i);
+      if (c < 0x20 || c > 0x7e) {
+        return false;
       }
     }
     return true;

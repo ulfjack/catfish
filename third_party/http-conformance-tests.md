@@ -10,9 +10,9 @@ this suite wrongly concludes "no coverage." Tests carry a matching `Conformance 
 where practical; the count below is derived by auditing the tests, not just grepping tags (9 rules are
 covered by tests that predate the tagging convention and are marked †).
 
-Status counts: **84 covered** · **5 gaps** (4 hold by construction but are untested, 1 real hole) ·
-**17 n/a** (feature absent or the application handler's responsibility). The last real hole is #46
-(Set-Cookie grammar), which a Cookie builder would close by construction. Every REQUIREMENT-level rule
+Status counts: **85 covered** · **4 gaps** (all hold by construction but are untested, 0 real holes) ·
+**17 n/a** (feature absent or the application handler's responsibility). The 4 remaining gaps
+(#16/#25/#26/#48) are unrepresentable in the single-valued header model, so there is nothing to test. Every REQUIREMENT-level rule
 is now covered, enforced-by-construction, or n/a; the remaining real holes are all RECOMMENDATION/ABNF. Rules #37–#41 (HTTP/2 field
 validation) were closed by spec 0005.
 
@@ -114,7 +114,7 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 
 | # | Test | Level | Source | Coverage |
 |---|------|-------|--------|----------|
-| 46 | Cookies should follow the cookie grammar | ABNF | RFC 6265 §4.1.1 | GAP — session cookie unvalidated, `bridge/RequestImpl.java:546` |
+| 46 | Cookies should follow the cookie grammar | ABNF | RFC 6265 §4.1.1 | RVT#setCookieMissingEqualsThrows (`isValidSetCookie`; shared with the cookie builder) |
 | 47 | Servers should not produce two attributes with same name in same Set-Cookie string | RECOMMENDATION | RFC 6265 §4.1.1 | RVT#setCookieDuplicateAttributeThrows |
 | 48 | Should not include more than one Set-Cookie with same cookie-name in same response | RECOMMENDATION | RFC 6265 §4.1.1 | GAP·enforced — `bridge/ResponseImpl.java:78` single-valued map; untested |
 | 49 | Cookies should use IMF-fixdate (four-digit year) | RECOMMENDATION | RFC 6265 §4.1.1 | n/a — session cookie carries no Expires/date attribute |
