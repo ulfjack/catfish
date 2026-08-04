@@ -305,6 +305,23 @@ public class HttpResponseValidator {
           "Allow must be a comma-separated list of HTTP method tokens, got: " + allow);
     }
 
+    // Accept-Ranges must be a comma-separated list of range-unit tokens.
+    // Conformance test #102 (RFC 9110 §14.3).
+    String acceptRanges = headers.get(HttpHeaderName.ACCEPT_RANGES);
+    if (acceptRanges != null && !isValidAcceptRanges(acceptRanges)) {
+      throw new MalformedResponseException(
+          "Accept-Ranges must be a comma-separated list of range-unit tokens, got: "
+              + acceptRanges);
+    }
+
+    // Accept-Patch must be a comma-separated list of media-types.
+    // Conformance test #104 (RFC 5789 §3.1).
+    String acceptPatch = headers.get(HttpHeaderName.ACCEPT_PATCH);
+    if (acceptPatch != null && !isValidAcceptPatch(acceptPatch)) {
+      throw new MalformedResponseException(
+          "Accept-Patch must be a comma-separated list of media-types, got: " + acceptPatch);
+    }
+
     // Transfer-Encoding must be comma-separated coding tokens with no empty tokens.
     // Conformance test #105 (RFC 9112 §6.1).
     String transferEncoding = headers.get(HttpHeaderName.TRANSFER_ENCODING);
@@ -519,6 +536,27 @@ public class HttpResponseValidator {
   /** Returns true if {@code value} is a valid {@code Allow} value. */
   public static boolean isValidAllow(String value) {
     return isValidTokenList(value.trim());
+  }
+
+  /**
+   * Returns true if {@code value} is a valid {@code Accept-Ranges} value: 1#range-unit (tokens).
+   */
+  public static boolean isValidAcceptRanges(String value) {
+    return isValidTokenList(value.trim());
+  }
+
+  /**
+   * Returns true if {@code value} is a valid {@code Accept-Patch} value: a non-empty
+   * comma-separated list of media-types (RFC 5789 §3.1). Split naively on commas, consistent with
+   * the other comma-list validators; a media-type parameter with a quoted comma is not handled.
+   */
+  public static boolean isValidAcceptPatch(String value) {
+    for (String part : value.split(",", -1)) {
+      if (!isValidContentType(part)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /** Returns true if {@code value} is a valid {@code Content-Length} value. */
