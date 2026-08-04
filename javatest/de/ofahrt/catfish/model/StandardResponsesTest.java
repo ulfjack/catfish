@@ -35,4 +35,11 @@ public class StandardResponsesTest {
   public void permanentRedirectTo_returns308() {
     assertEquals(308, StandardResponses.permanentRedirectTo("/new").getStatusCode());
   }
+
+  @Test
+  public void rangeNotSatisfiable_returns416WithContentRange() {
+    HttpResponse response = StandardResponses.rangeNotSatisfiable(1234);
+    assertEquals(416, response.getStatusCode());
+    assertEquals("bytes */1234", response.getHeaders().get(HttpHeaderName.CONTENT_RANGE));
+  }
 }
