@@ -1280,6 +1280,44 @@ public class HttpResponseValidatorTest {
     validator.validate(response);
   }
 
+  // ── Set-Cookie cookie grammar (#46) ──────────────────────────────────────────
+
+  @Test
+  public void setCookieValidGrammarDoesNotThrow() throws Exception {
+    validator.validate(
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.SET_COOKIE, "sid=abc123; Path=/; Secure; HttpOnly")
+            .build());
+    validator.validate(
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.SET_COOKIE, "sid=\"opaque\"")
+            .build());
+  }
+
+  // Conformance test #46: a cookie-pair without '=' is invalid (RFC 6265 §4.1.1).
+  @Test
+  public void setCookieMissingEqualsThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.SET_COOKIE, "justname")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // Conformance test #46: a cookie-value with a non-cookie-octet (comma) is invalid.
+  @Test
+  public void setCookieIllegalValueCharThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.SET_COOKIE, "sid=a,b")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
   // ── Set-Cookie must not repeat an attribute (#47) ────────────────────────────
 
   // Conformance test #47: a Set-Cookie with a duplicate attribute name is rejected (RFC 6265
