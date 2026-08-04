@@ -10,7 +10,7 @@ this suite wrongly concludes "no coverage." Tests carry a matching `Conformance 
 where practical; the count below is derived by auditing the tests, not just grepping tags (9 rules are
 covered by tests that predate the tagging convention and are marked †).
 
-Status counts: **74 covered** · **18 gaps** (7 hold by construction but are untested, 11 real holes) ·
+Status counts: **76 covered** · **16 gaps** (7 hold by construction but are untested, 9 real holes) ·
 **14 n/a** (feature absent or the application handler's responsibility). Every REQUIREMENT-level rule
 is now covered, enforced-by-construction, or n/a; the remaining real holes are all RECOMMENDATION/ABNF. Rules #37–#41 (HTTP/2 field
 validation) were closed by spec 0005.
@@ -103,8 +103,8 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 
 | # | Test | Level | Source | Coverage |
 |---|------|-------|--------|----------|
-| 42 | No token form in no-cache directive (must use quoted-string) | RECOMMENDATION | RFC 9111 §no-cache | GAP — `isValidCacheControl` accepts token form for no-cache |
-| 43 | No token form in private directive (must use quoted-string) | RECOMMENDATION | RFC 9111 §private | GAP — `isValidCacheControl` accepts token form for private |
+| 42 | No token form in no-cache directive (must use quoted-string) | RECOMMENDATION | RFC 9111 §no-cache | RVT#cacheControlNoCacheTokenValueThrows |
+| 43 | No token form in private directive (must use quoted-string) | RECOMMENDATION | RFC 9111 §private | RVT#cacheControlPrivateTokenValueThrows |
 | 44 | No quoted string in max-age directive (must use token) | REQUIREMENT | RFC 9111 §max-age | RVT#cacheControlNoCacheDoesNotThrow |
 | 45 | No quoted string in s-maxage directive (must use token) | REQUIREMENT | RFC 9111 §s-maxage | RVT#cacheControlNoCacheDoesNotThrow |
 
