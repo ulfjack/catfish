@@ -533,7 +533,8 @@ public final class Http2ServerStage implements Stage {
           stream.setDecodeGzip();
         } else if (!encoding.equalsIgnoreCase(IDENTITY_ENCODING)) {
           stream.rejectBody();
-          sendErrorResponse(stream, StandardResponses.UNSUPPORTED_MEDIA_TYPE);
+          // Advertise what we accept: gzip (decoded) and identity.
+          sendErrorResponse(stream, StandardResponses.unsupportedMediaType("gzip", "identity"));
           return;
         }
       }
