@@ -59,8 +59,25 @@ public final class StandardResponses {
       new PreconstructedResponse(HttpStatusCode.URI_TOO_LONG); // 414
   public static final HttpResponse UNSUPPORTED_MEDIA_TYPE =
       new PreconstructedResponse(HttpStatusCode.UNSUPPORTED_MEDIA_TYPE); // 415
+
+  /**
+   * @deprecated a bare 416 omits the {@code Content-Range} header RFC 9110 §15.5.17 recommends; use
+   *     {@link #rangeNotSatisfiable(long)}.
+   */
+  @Deprecated
   public static final HttpResponse RANGE_NOT_SATISFIABLE =
       new PreconstructedResponse(HttpStatusCode.RANGE_NOT_SATISFIABLE); // 416
+
+  /**
+   * A 416 (Range Not Satisfiable) response with an unsatisfied-range {@code Content-Range} header
+   * for a selected representation of {@code completeLength} bytes (RFC 9110 §15.5.17).
+   */
+  public static HttpResponse rangeNotSatisfiable(long completeLength) {
+    return new PreconstructedResponse(
+        HttpStatusCode.RANGE_NOT_SATISFIABLE,
+        HttpHeaders.of(HttpHeaderName.CONTENT_RANGE, "bytes */" + completeLength));
+  }
+
   public static final HttpResponse EXPECTATION_FAILED =
       new PreconstructedResponse(HttpStatusCode.EXPECTATION_FAILED); // 417
   public static final HttpResponse MISDIRECTED_REQUEST =
