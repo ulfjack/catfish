@@ -42,4 +42,11 @@ public class StandardResponsesTest {
     assertEquals(416, response.getStatusCode());
     assertEquals("bytes */1234", response.getHeaders().get(HttpHeaderName.CONTENT_RANGE));
   }
+
+  @Test
+  public void unsupportedMediaType_returns415WithAcceptEncoding() {
+    HttpResponse response = StandardResponses.unsupportedMediaType("identity");
+    assertEquals(415, response.getStatusCode());
+    assertEquals("identity", response.getHeaders().get(HttpHeaderName.ACCEPT_ENCODING));
+  }
 }
