@@ -14,6 +14,10 @@ package de.ofahrt.catfish.http;
 public final class ChunkedBodyScanner {
 
   private final ChunkedBodyState state = new ChunkedBodyState();
+  // Total raw chunked bytes advanced so far (framing + data). ChunkedBodyState tracks only the
+  // decoded content; we accumulate the raw total here to bound framing (chunk extensions, size
+  // lines, CRLFs) that is forwarded to the handler but never counted as decoded.
+  private long rawByteCount;
 
   /** Returns true once the terminal zero-length chunk and trailers have been fully scanned. */
   public boolean isDone() {
@@ -34,6 +38,36 @@ public final class ChunkedBodyScanner {
   }
 
   /**
+   * Returns the total number of raw chunked bytes advanced so far — framing (size lines,
+   * extensions, CRLFs, trailers) plus data. Used to bound total buffering, since framing bytes are
+   * forwarded to the handler but not counted as decoded.
+   */
+  public long rawByteCount() {
+    return rawByteCount;
+  }
+
+  /**
+   * Returns true once the body scanned so far exceeds the given decoded-body ceiling, enforcing two
+   * bounds at once: the decoded (de-chunked) content directly, and a derived raw-byte ceiling on
+   * total framing. Chunk framing (extensions, trailers, size lines) is forwarded to the handler but
+   * not counted as decoded, so without a raw bound an endless chunk extension could buffer past the
+   * ceiling (OOM DoS). The raw bound is {@code 2 * maxDecodedBytes + 8 KiB} — finite and
+   * proportional, so it never false-positives on legitimate many-chunk bodies — and is disabled for
+   * an unlimited policy ({@code maxDecodedBytes < 0}, or a ceiling so large the raw bound saturates
+   * to {@link Long#MAX_VALUE}), matching the decoded ceiling.
+   */
+  public boolean exceedsCeiling(long maxDecodedBytes) {
+    if (maxDecodedBytes < 0) {
+      return false;
+    }
+    long rawLimit =
+        maxDecodedBytes <= (Long.MAX_VALUE - 8192) / 2
+            ? maxDecodedBytes * 2 + 8192
+            : Long.MAX_VALUE;
+    return decodedByteCount() > maxDecodedBytes || rawByteCount > rawLimit;
+  }
+
+  /**
    * Dry-run scan: probes {@code len} bytes on an independent copy without mutating this scanner,
    * and returns the end position (number of bytes consumed to reach the end) or -1 if the end was
    * not found within the range.
@@ -50,11 +84,14 @@ public final class ChunkedBodyScanner {
    * {@code len} (or, on a framing error, the number of bytes consumed before the offending byte).
    */
   public int advance(byte[] arr, int off, int len) {
-    return state.advance(arr, off, len, ChunkedBodyState.NO_OP);
+    int consumed = state.advance(arr, off, len, ChunkedBodyState.NO_OP);
+    rawByteCount += consumed;
+    return consumed;
   }
 
   /** Resets the scanner for reuse on the next request. */
   public void reset() {
     state.reset();
+    rawByteCount = 0;
   }
 }
