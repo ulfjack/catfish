@@ -970,6 +970,55 @@ public class HttpResponseValidatorTest {
     assertThrows(MalformedResponseException.class, () -> validator.validate(response));
   }
 
+  // ── Accept-Ranges range-unit token list (#102) ───────────────────────────────
+
+  @Test
+  public void acceptRangesValidDoesNotThrow() throws Exception {
+    validator.validate(
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCEPT_RANGES, "bytes")
+            .build());
+    validator.validate(
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCEPT_RANGES, "none")
+            .build());
+  }
+
+  // Conformance test #102: a non-token range-unit is rejected (RFC 9110 §14.3).
+  @Test
+  public void acceptRangesInvalidThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCEPT_RANGES, "bytes/other")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
+  // ── Accept-Patch media-type list (#104) ──────────────────────────────────────
+
+  @Test
+  public void acceptPatchValidDoesNotThrow() throws Exception {
+    validator.validate(
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCEPT_PATCH, "application/json, text/plain")
+            .build());
+  }
+
+  // Conformance test #104: a value that is not a media-type list is rejected (RFC 5789 §3.1).
+  @Test
+  public void acceptPatchInvalidThrows() throws Exception {
+    HttpResponse response =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.ACCEPT_PATCH, "notamediatype")
+            .build();
+    assertThrows(MalformedResponseException.class, () -> validator.validate(response));
+  }
+
   // ── Transfer-Encoding comma-separated tokens (#105) ──────────────────────────
 
   @Test
