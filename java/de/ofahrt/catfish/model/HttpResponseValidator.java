@@ -22,12 +22,27 @@ public class HttpResponseValidator {
   }
 
   /**
-   * Validates a response, optionally using request context for method-dependent checks.
+   * Validates a response, optionally using request context for method-dependent checks. Assumes a
+   * secure transport; use {@link #validate(HttpRequest, HttpResponse, boolean)} to enforce the
+   * transport-dependent Strict-Transport-Security rule.
    *
    * @param request may be {@code null} if no request context is available; method-dependent checks
    *     are skipped when {@code null}
    */
   public void validate(@Nullable HttpRequest request, HttpResponse response)
+      throws MalformedResponseException {
+    validate(request, response, true);
+  }
+
+  /**
+   * Validates a response.
+   *
+   * @param request may be {@code null} if no request context is available; method-dependent checks
+   *     are skipped when {@code null}
+   * @param secure whether the response is sent over a secure (TLS) transport; a
+   *     Strict-Transport-Security header over a non-secure transport is rejected (RFC 6797 §7.2)
+   */
+  public void validate(@Nullable HttpRequest request, HttpResponse response, boolean secure)
       throws MalformedResponseException {
     int status = response.getStatusCode();
     HttpHeaders headers = response.getHeaders();
@@ -302,6 +317,10 @@ public class HttpResponseValidator {
     // preload must have no value; unknown directives are tolerated (RFC 6797 §6.1).
     // Conformance tests #21, #76.
     String sts = headers.get(HttpHeaderName.STRICT_TRANSPORT_SECURITY);
+    if (sts != null && !secure) {
+      throw new MalformedResponseException(
+          "Strict-Transport-Security must not be sent over a non-secure transport (RFC 6797 §7.2)");
+    }
     if (sts != null && !isValidStrictTransportSecurity(sts)) {
       throw new MalformedResponseException(
           "Strict-Transport-Security is invalid (must contain max-age=<digits>), got: " + sts);
