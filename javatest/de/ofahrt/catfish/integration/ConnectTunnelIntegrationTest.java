@@ -1,5 +1,6 @@
 package de.ofahrt.catfish.integration;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.CatfishHttpServer;
@@ -87,6 +88,16 @@ public class ConnectTunnelIntegrationTest {
       assertTrue(
           "Expected 200 response, got: " + responseHeaders,
           responseHeaders.toString().startsWith("HTTP/1.1 200"));
+
+      // Conformance tests #11, #12: a 2xx response to CONNECT must not carry a Content-Length or
+      // Transfer-Encoding header (RFC 9110 §6.4.1 / RFC 9112 §6.3).
+      String responseHeadersLower = responseHeaders.toString().toLowerCase(java.util.Locale.ROOT);
+      assertFalse(
+          "CONNECT 200 must not have Content-Length, got: " + responseHeaders,
+          responseHeadersLower.contains("content-length"));
+      assertFalse(
+          "CONNECT 200 must not have Transfer-Encoding, got: " + responseHeaders,
+          responseHeadersLower.contains("transfer-encoding"));
 
       // Send an HTTP request through the tunnel.
       String httpRequest = "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
