@@ -10,8 +10,8 @@ this suite wrongly concludes "no coverage." Tests carry a matching `Conformance 
 where practical; the count below is derived by auditing the tests, not just grepping tags (9 rules are
 covered by tests that predate the tagging convention and are marked †).
 
-Status counts: **76 covered** · **16 gaps** (7 hold by construction but are untested, 9 real holes) ·
-**14 n/a** (feature absent or the application handler's responsibility). Every REQUIREMENT-level rule
+Status counts: **76 covered** · **14 gaps** (7 hold by construction but are untested, 7 real holes) ·
+**16 n/a** (feature absent or the application handler's responsibility). Every REQUIREMENT-level rule
 is now covered, enforced-by-construction, or n/a; the remaining real holes are all RECOMMENDATION/ABNF. Rules #37–#41 (HTTP/2 field
 validation) were closed by spec 0005.
 
@@ -129,8 +129,8 @@ Test path aliases (all under `javatest/de/ofahrt/catfish/`):
 | 55 | 307 Temporary Redirect: should have a Location header field | RECOMMENDATION | RFC 9110 §307 | RVT#temporaryRedirectWithoutLocationThrows † |
 | 56 | 308 Permanent Redirect: should have a Location header field | RECOMMENDATION | RFC 9110 §308 | RVT#permanentRedirectWithoutLocationThrows |
 | 57 | 413 Content Too Large: should send Retry-After if temporary | RECOMMENDATION | RFC 9110 §413 | n/a — "if temporary" is handler knowledge; 413 is a static response |
-| 58 | 415 Unsupported Media Type: should have Accept-Encoding or Accept header | RECOMMENDATION | RFC 9110 §415 | GAP — `StandardResponses.java:60` omits Accept/Accept-Encoding |
-| 59 | 416 Range Not Satisfiable: should have Content-Range header | RECOMMENDATION | RFC 9110 §416 | GAP — `StandardResponses.java:62` omits Content-Range |
+| 58 | 415 Unsupported Media Type: should have Accept-Encoding or Accept header | RECOMMENDATION | RFC 9110 §415 | n/a — the accepted-types list is resource-specific; the handler emitting a concrete 415 must supply it (cf. #64/#66). A `StandardResponses` factory could build a conformant one |
+| 59 | 416 Range Not Satisfiable: should have Content-Range header | RECOMMENDATION | RFC 9110 §416 | n/a — `Content-Range: bytes */<len>` is range-specific; only the handler generating the 416 can supply it |
 | 60 | 204 No Content: must not have content after header section | REQUIREMENT | RFC 9110 §204 | RVT#noContentWithBodyThrows |
 | 61 | 205 Reset Content: no content allowed | REQUIREMENT | RFC 9110 §205 | CHST#resetContentContainsNoBody; RVT#noContentWithBodyThrows |
 | 62 | 206 Partial Content: must have Content-Range or multipart/byteranges Content-Type | REQUIREMENT | RFC 9110 §206 | RVT#partialContentWithoutContentRangeOrMultipartThrows |
