@@ -16,6 +16,8 @@ import org.jspecify.annotations.Nullable;
  * #getRequest()} to get the headers-only request.
  */
 public final class IncrementalHttpRequestParser {
+  private static final int MAX_METHOD_LENGTH = 128;
+  private static final int MAX_VERSION_DIGITS = 7;
   private static final int MAX_URI_LENGTH = 10_000;
   private static final int MAX_HEADER_NAME_LENGTH = 1000;
   private static final int MAX_HEADER_VALUE_LENGTH = 10_000;
@@ -156,6 +158,9 @@ public final class IncrementalHttpRequestParser {
               expectLineFeed = true;
             }
           } else if (isTokenCharacter(c)) {
+            if (elementBuffer.length() >= MAX_METHOD_LENGTH) {
+              return setBadRequest("Request method is too long");
+            }
             elementBuffer.append(c);
           } else {
             return setBadRequest("Illegal character in request method");
@@ -215,6 +220,9 @@ public final class IncrementalHttpRequestParser {
             if ((elementBuffer.length() == 1) && (elementBuffer.charAt(0) == '0')) {
               elementBuffer.setLength(0);
             }
+            if (elementBuffer.length() >= MAX_VERSION_DIGITS) {
+              return setBadRequest("Http major version is too long");
+            }
             elementBuffer.append(c);
           } else if (c == '.') {
             if (elementBuffer.length() == 0) {
@@ -240,6 +248,9 @@ public final class IncrementalHttpRequestParser {
             // Leading zeros MUST be ignored by recipients.
             if ((elementBuffer.length() == 1) && (elementBuffer.charAt(0) == '0')) {
               elementBuffer.setLength(0);
+            }
+            if (elementBuffer.length() >= MAX_VERSION_DIGITS) {
+              return setBadRequest("Http minor version is too long");
             }
             elementBuffer.append(c);
           } else if (c == '\r') {
