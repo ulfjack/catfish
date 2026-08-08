@@ -10,6 +10,8 @@ import org.jspecify.annotations.Nullable;
 public final class IncrementalHttpResponseParser {
   private static final int MAX_HEADER_NAME_LENGTH = 1024;
   private static final int MAX_HEADER_VALUE_LENGTH = 4096;
+  // Bounds the number of response header fields a malicious/compromised origin can make us buffer.
+  private static final int MAX_HEADER_FIELD_COUNT = 1000;
 
   private enum State {
     RESPONSE_VERSION_HTTP,
@@ -33,6 +35,7 @@ public final class IncrementalHttpResponseParser {
   private StringBuilder elementBuffer;
   private State state;
   private int counter;
+  private int headerFieldCount;
   private boolean expectLineFeed;
   private boolean noBody;
 
@@ -113,6 +116,7 @@ public final class IncrementalHttpResponseParser {
     elementBuffer = new StringBuilder();
     state = State.RESPONSE_VERSION_HTTP;
     counter = 0;
+    headerFieldCount = 0;
     expectLineFeed = false;
     noBody = false;
     messageHeaderName = null;
@@ -300,6 +304,10 @@ public final class IncrementalHttpResponseParser {
           } else if (c == '\r') {
             expectLineFeed = true;
           } else {
+            if (headerFieldCount >= MAX_HEADER_FIELD_COUNT) {
+              throw new MalformedResponseException("Too many response header fields");
+            }
+            headerFieldCount++;
             response.addHeader(messageHeaderName, messageHeaderValue);
             messageHeaderName = null;
             messageHeaderValue = null;

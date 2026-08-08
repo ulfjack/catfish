@@ -2,9 +2,11 @@ package de.ofahrt.catfish.client;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import de.ofahrt.catfish.model.HttpResponse;
+import de.ofahrt.catfish.model.MalformedResponseException;
 import java.nio.charset.Charset;
 import org.junit.Test;
 
@@ -133,6 +135,20 @@ public class IncrementalHttpResponseParserTest extends HttpResponseParserTest {
   }
 
   // ---- parse return value tests ----
+
+  @Test
+  public void tooManyHeaderFields_throws() {
+    // A malicious/compromised origin flooding header fields is rejected once the count cap is hit,
+    // bounding the headers we buffer.
+    StringBuilder sb = new StringBuilder("HTTP/1.1 200 OK\r\n");
+    for (int i = 0; i < 1001; i++) {
+      sb.append("X-H").append(i).append(": v\r\n");
+    }
+    sb.append("\r\n");
+    byte[] data = sb.toString().getBytes(Charset.forName("ISO-8859-1"));
+    assertThrows(
+        MalformedResponseException.class, () -> new IncrementalHttpResponseParser().parse(data));
+  }
 
   @Test
   public void ignoreTrailingData() throws Exception {
