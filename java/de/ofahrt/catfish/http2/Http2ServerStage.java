@@ -610,6 +610,16 @@ public final class Http2ServerStage implements Stage {
       return;
     }
 
+    // RFC 9113 §5.1: DATA received after the client half-closed the stream with END_STREAM is a
+    // STREAM_CLOSED stream error. Streams in the map are OPEN or half-closed(remote), so a non-OPEN
+    // stream here means DATA arrived after END_STREAM. Rejecting it prevents the bytes from being
+    // appended to the already-completed request's body buffer (unbounded growth — a GET's ceiling
+    // is still Long.MAX_VALUE) and a second END_STREAM from re-dispatching the request.
+    if (stream.getState() != Http2Stream.State.OPEN) {
+      resetStream(streamId, stream, ErrorCode.STREAM_CLOSED);
+      return;
+    }
+
     if (payload.length > 0) {
       int dataOffset = 0;
       int dataLength = payload.length;
@@ -708,10 +718,7 @@ public final class Http2ServerStage implements Stage {
       Http2Stream stream = streams.get(streamId);
       if (stream != null && !stream.adjustSendWindow(increment)) {
         // RFC 9113 §6.9.1: stream-level flow control overflow is a stream error.
-        streams.remove(streamId);
-        stream.setState(Http2Stream.State.CLOSED);
-        queueRstStream(streamId, ErrorCode.FLOW_CONTROL_ERROR);
-        parent.encourageWrites();
+        resetStream(streamId, stream, ErrorCode.FLOW_CONTROL_ERROR);
         return;
       }
     }
@@ -723,17 +730,37 @@ public final class Http2ServerStage implements Stage {
 
   private void handleRstStream() {
     int streamId = frameReader.getStreamId();
-    Http2Stream stream = streams.remove(streamId);
+    Http2Stream stream = streams.get(streamId);
     if (stream != null) {
-      stream.setState(Http2Stream.State.CLOSED);
-      Http2StreamBuffer buf = stream.getStreamingBuffer();
-      if (buf != null) {
-        buf.cancelStream();
-      }
+      // The peer already reset the stream, so we only clean up — no RST_STREAM is sent back.
+      discardStream(streamId, stream);
     }
-    // Drop any held request for this stream. A dispatched handler keeps running — its slot
-    // is only freed when the handler completes, not by RST_STREAM (Rapid Reset defense).
+  }
+
+  /**
+   * Removes a stream and releases its resources: drops it from the stream map, closes it, cancels
+   * any streaming response buffer, and drops a queued (held) request for it. Does not send
+   * RST_STREAM. A dispatched handler keeps running — its slot is only freed when the handler
+   * completes, not here (Rapid Reset defense). NIO thread only.
+   */
+  private void discardStream(int streamId, Http2Stream stream) {
+    streams.remove(streamId);
+    stream.setState(Http2Stream.State.CLOSED);
+    Http2StreamBuffer buf = stream.getStreamingBuffer();
+    if (buf != null) {
+      buf.cancelStream();
+    }
     heldRequests.removeIf(h -> h.stream().getStreamId() == streamId);
+  }
+
+  /**
+   * Aborts a stream with a locally-initiated stream error: cleans up its state (see {@link
+   * #discardStream}) and queues an RST_STREAM frame carrying {@code errorCode}. NIO thread only.
+   */
+  private void resetStream(int streamId, Http2Stream stream, int errorCode) {
+    discardStream(streamId, stream);
+    queueRstStream(streamId, errorCode);
+    parent.encourageWrites();
   }
 
   // ---- GOAWAY ----
