@@ -1,7 +1,7 @@
 ---
 id: 0007
 title: Consolidate chunked transfer-coding onto one strict state machine
-status: ready
+status: implemented
 owner: Ulf Adams
 architecture_refs:
   - HTTP/1.1 request body framing (HttpServerStage, ChunkedBodyScanner)
@@ -177,6 +177,16 @@ The three existing classes stay (same public API and call sites) but become thin
 - **Decision:** The trailer section is explicitly bounded. — *Rationale:* today's scanner has no
   trailer bound; an unbounded trailer stream can hold a connection in the trailer state. A bound
   makes the terminal deterministic.
+- **Decision:** Consolidate as a single "fold-don't-add" change: introducing the core immediately
+  empties one existing class into an adapter, so the number of independent grammar implementations
+  only ever *decreases* (3 → 3 → 2 → 1), never temporarily grows to 4. — *Rationale:* an initial
+  draft added the core as a standalone fourth implementation with the call-site rewiring deferred to
+  later PRs; that transiently *increases* duplication, the opposite of the goal. Landing the core
+  and all three adapters together keeps the count monotonically shrinking.
+- **Decision:** On a framing error, {@code advance} consumes the offending byte too (returns the
+  index past it), guaranteeing every working call makes at least one byte of progress. —
+  *Rationale:* an incremental caller that re-invokes on the same buffer must not stall on a
+  zero-progress return; the in-tree incremental parser test asserts this invariant.
 
 ## Open Questions
 
@@ -203,16 +213,20 @@ None.
 
 ## Implementation Plan
 
-- [ ] PR 1: Add `http/ChunkedBodyState` (the strict core) with `Sink`, `advance`, `copy`,
-      `decodedByteCount`, `isDone`/`hasError`, `reset`. Unit tests covering the full grammar and every
-      rejection case (bare LF in each state, non-hex size, oversize, junk-around-data, trailer bound,
-      pipelined-boundary reporting). No call sites changed yet.
-- [ ] PR 2: Reimplement `ChunkedBodyScanner` (no-op sink; `findEnd` via `copy()`) and
-      `ChunkedDecodingOutputStream` (stream sink; throw on `hasError`) over the core. Keep their
-      public APIs. Update/confirm `HttpServerStage`, `LocalHttpRequestStage`, `OriginForwarder`
-      behaviour and their tests; add the pipelined-boundary and malformed-framing integration tests.
-- [ ] PR 3: Reimplement `upload/ChunkedBodyParser` over the core; add the `upload → http` Bazel dep;
-      flip the four bare-LF test expectations. (PR 2 and PR 3 may land together if review prefers.)
+Landed as a single fold-don't-add change (see Decisions), so the number of independent grammar
+implementations only decreased:
+
+- [x] Add `http/ChunkedBodyState` (the strict core) with `Sink`/`NO_OP`, `advance`, `copy`,
+      `decodedByteCount`, `isDone`/`hasError`, `reset`. Unit tests (`ChunkedBodyStateTest`) cover the
+      full grammar and every rejection case (bare LF in each state, non-hex size, oversize,
+      junk-around-data, trailer bound, pipelined-boundary reporting, error progress).
+- [x] Fold `ChunkedBodyScanner` into a discarding-sink adapter (`findEnd` via `copy()`), preserving
+      its public API and the existing `ChunkedBodyScannerTest` and `HttpServerStage`/`OriginForwarder`
+      call sites.
+- [x] Fold `ChunkedDecodingOutputStream` into a stream-sink adapter that throws `IOException` on a
+      framing error.
+- [x] Fold `upload/ChunkedBodyParser` into a buffer-sink adapter; add the `upload → http` Bazel dep;
+      flip the four bare-LF test expectations in `ChunkedBodyParserTest`.
 
 ## Notes
 

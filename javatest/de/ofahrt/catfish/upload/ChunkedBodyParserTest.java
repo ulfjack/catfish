@@ -83,10 +83,10 @@ public class ChunkedBodyParserTest {
     parseBody("80000000\r\nhello\r\n0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
   }
 
-  @Test
+  @Test(expected = IOException.class)
   public void chunkSizeBareLf() throws IOException {
-    // Bare LF (no preceding CR) is accepted as a line terminator in the chunk-size line.
-    assertArrayEquals(new byte[0], parseBody("0\n\n".getBytes(StandardCharsets.ISO_8859_1)));
+    // Strict CRLF (spec 0007): a bare LF (no preceding CR) in the chunk-size line is rejected.
+    parseBody("0\n\n".getBytes(StandardCharsets.ISO_8859_1));
   }
 
   @Test(expected = IOException.class)
@@ -95,12 +95,10 @@ public class ChunkedBodyParserTest {
     parseBody("5!\r\nhello\r\n0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
   }
 
-  @Test
+  @Test(expected = IOException.class)
   public void chunkExtBareLf() throws IOException {
-    // Bare LF (no CR) in the chunk-extension also terminates the chunk-size line.
-    assertArrayEquals(
-        "hello".getBytes(StandardCharsets.ISO_8859_1),
-        parseBody("5;ext\nhello\r\n0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1)));
+    // Strict CRLF (spec 0007): a bare LF terminating the chunk-ext line is rejected.
+    parseBody("5;ext\nhello\r\n0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
   }
 
   @Test(expected = IOException.class)
@@ -109,12 +107,10 @@ public class ChunkedBodyParserTest {
     parseBody("5\rX\r\nhello\r\n0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
   }
 
-  @Test
+  @Test(expected = IOException.class)
   public void bareLineFeedAfterChunkData() throws IOException {
-    // Bare LF (no preceding CR) after chunk-data is accepted.
-    assertArrayEquals(
-        "hello".getBytes(StandardCharsets.ISO_8859_1),
-        parseBody("5\r\nhello\n0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1)));
+    // Strict CRLF (spec 0007): chunk-data must be followed by CRLF; a bare LF is rejected.
+    parseBody("5\r\nhello\n0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
   }
 
   @Test(expected = IOException.class)
@@ -123,10 +119,10 @@ public class ChunkedBodyParserTest {
     parseBody("5\r\nhello\rX0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
   }
 
-  @Test
+  @Test(expected = IOException.class)
   public void terminalBareLineFeed() throws IOException {
-    // Bare LF (no preceding CR) as the terminal empty line is accepted.
-    assertArrayEquals(new byte[0], parseBody("0\r\n\n".getBytes(StandardCharsets.ISO_8859_1)));
+    // Strict CRLF (spec 0007): a bare LF as the terminal empty line is rejected.
+    parseBody("0\r\n\n".getBytes(StandardCharsets.ISO_8859_1));
   }
 
   @Test(expected = IOException.class)
