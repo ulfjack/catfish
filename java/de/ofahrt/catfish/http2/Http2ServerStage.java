@@ -435,6 +435,19 @@ public final class Http2ServerStage implements Stage {
       throw new IOException("h2 HPACK decoding failed", e);
     }
 
+    // RFC 9113 §5.1.2: streams in the open or half-closed states count toward the advertised
+    // SETTINGS_MAX_CONCURRENT_STREAMS, and the streams map holds exactly those. Refuse a HEADERS
+    // frame that would exceed the limit with REFUSED_STREAM (retryable) rather than opening the
+    // stream, so a peer that ignores the advertised limit can't grow the map — or heldRequests,
+    // whose live entries are a subset of open streams — without bound. HPACK is decoded first so
+    // the connection-global dynamic table stays in sync whether or not the stream is refused.
+    if (streams.size() >= DEFAULT_MAX_CONCURRENT_STREAMS) {
+      lastStreamId = Math.max(lastStreamId, streamId);
+      queueRstStream(streamId, ErrorCode.REFUSED_STREAM);
+      parent.encourageWrites();
+      return;
+    }
+
     // Validate request header fields (RFC 9113 §8.2.1). A malformed request is a stream error
     // (§8.1.1): reject with RST_STREAM(PROTOCOL_ERROR) so the connection and other streams survive.
     // Validation runs after the full HPACK decode above, so the connection-global dynamic table is
