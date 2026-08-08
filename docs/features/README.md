@@ -20,3 +20,4 @@ Status column below.
 | [0004](0004-reverse-proxy-unix-socket.md) | Reverse-proxy an upstream over a unix domain socket | implemented |
 | [0005](0005-http2-header-field-validation.md) | HTTP/2 request header field validation | implemented |
 | [0006](0006-http2-response-compression.md) | HTTP/2 response compression parity via a shared response-writer decorator | implemented |
+| [0007](0007-chunked-parser-consolidation.md) | Consolidate chunked transfer-coding onto one strict state machine | ready |
