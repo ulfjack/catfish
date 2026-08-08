@@ -1493,6 +1493,29 @@ public class Http2ServerStageTest {
   }
 
   @Test
+  public void dataOnClosedStream_creditsConnectionWindow() throws IOException {
+    // A well-behaved client may keep uploading after we've responded and closed the stream (e.g. we
+    // answered before reading the whole body). Those DATA frames are dropped, but their bytes MUST
+    // still be credited to the shared connection flow-control window (RFC 9113 §6.9.1) — otherwise
+    // the window drains and every stream on the connection stalls.
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    // GET on stream 1, then drain: the response is written and the stream removed from the map.
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+    drainOutput();
+
+    // The client keeps sending body DATA on the now-removed stream. The payload exceeds the 64-byte
+    // WINDOW_UPDATE threshold, so a connection WINDOW_UPDATE crediting those bytes is emitted.
+    byte[] body = new byte[200];
+    feedAndRead(dataFrame(1, body, /* endStream= */ false));
+    assertEquals(
+        "dropped DATA on a closed stream must credit the connection window",
+        body.length,
+        windowUpdateIncrement(drainOutput(), 0));
+  }
+
+  @Test
   public void pingAck_isIgnored() throws IOException {
     feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
     drainOutput();
@@ -2100,6 +2123,28 @@ public class Http2ServerStageTest {
       }
     }
     return null;
+  }
+
+  /** Scans {@code output} for a WINDOW_UPDATE on {@code streamId}; returns its increment, or -1. */
+  private static int windowUpdateIncrement(byte[] output, int streamId) {
+    int i = 0;
+    while (i + 9 <= output.length) {
+      int len = ((output[i] & 0xff) << 16) | ((output[i + 1] & 0xff) << 8) | (output[i + 2] & 0xff);
+      int type = output[i + 3] & 0xff;
+      int sid =
+          ((output[i + 5] & 0x7f) << 24)
+              | ((output[i + 6] & 0xff) << 16)
+              | ((output[i + 7] & 0xff) << 8)
+              | (output[i + 8] & 0xff);
+      if (type == FrameType.WINDOW_UPDATE && sid == streamId && len == 4) {
+        return ((output[i + 9] & 0x7f) << 24)
+            | ((output[i + 10] & 0xff) << 16)
+            | ((output[i + 11] & 0xff) << 8)
+            | (output[i + 12] & 0xff);
+      }
+      i += 9 + len;
+    }
+    return -1;
   }
 
   /** Scans {@code output} for an RST_STREAM on {@code streamId}; returns its error code, or -1. */
