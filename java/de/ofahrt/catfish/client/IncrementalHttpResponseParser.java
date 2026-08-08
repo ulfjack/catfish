@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.client;
 
 import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpLimits;
 import de.ofahrt.catfish.model.HttpResponse;
 import de.ofahrt.catfish.model.MalformedResponseException;
 import de.ofahrt.catfish.model.SimpleHttpResponse;
@@ -8,10 +9,6 @@ import java.util.Arrays;
 import org.jspecify.annotations.Nullable;
 
 public final class IncrementalHttpResponseParser {
-  private static final int MAX_HEADER_NAME_LENGTH = 1024;
-  private static final int MAX_HEADER_VALUE_LENGTH = 4096;
-  // Bounds the number of response header fields a malicious/compromised origin can make us buffer.
-  private static final int MAX_HEADER_FIELD_COUNT = 1000;
 
   private enum State {
     RESPONSE_VERSION_HTTP,
@@ -35,7 +32,9 @@ public final class IncrementalHttpResponseParser {
   private StringBuilder elementBuffer;
   private State state;
   private int counter;
-  private int headerFieldCount;
+  // Running total of committed header field name+value sizes, bounded (together with the field in
+  // progress) by HttpLimits.MAX_HEADER_LIST_SIZE.
+  private int headerListSize;
   private boolean expectLineFeed;
   private boolean noBody;
 
@@ -116,7 +115,7 @@ public final class IncrementalHttpResponseParser {
     elementBuffer = new StringBuilder();
     state = State.RESPONSE_VERSION_HTTP;
     counter = 0;
-    headerFieldCount = 0;
+    headerListSize = 0;
     expectLineFeed = false;
     noBody = false;
     messageHeaderName = null;
@@ -266,8 +265,8 @@ public final class IncrementalHttpResponseParser {
             done = true;
             return i + 1;
           } else if (isTokenCharacter(c)) {
-            if (elementBuffer.length() >= MAX_HEADER_NAME_LENGTH) {
-              throw new MalformedResponseException("Header name is too long");
+            if (headerListSize + elementBuffer.length() >= HttpLimits.MAX_HEADER_LIST_SIZE) {
+              throw new MalformedResponseException("Header block is too large");
             }
             elementBuffer.append(c);
           } else {
@@ -290,8 +289,9 @@ public final class IncrementalHttpResponseParser {
           } else if (isSpace(c)) {
             trimAndAppendSpace();
           } else {
-            if (elementBuffer.length() > MAX_HEADER_VALUE_LENGTH) {
-              throw new MalformedResponseException("Header value is too long");
+            if (headerListSize + messageHeaderName.length() + elementBuffer.length()
+                >= HttpLimits.MAX_HEADER_LIST_SIZE) {
+              throw new MalformedResponseException("Header block is too large");
             }
             elementBuffer.append(c);
           }
@@ -304,10 +304,9 @@ public final class IncrementalHttpResponseParser {
           } else if (c == '\r') {
             expectLineFeed = true;
           } else {
-            if (headerFieldCount >= MAX_HEADER_FIELD_COUNT) {
-              throw new MalformedResponseException("Too many response header fields");
-            }
-            headerFieldCount++;
+            // One budget bounds the whole header section: the running total of committed field
+            // name+value sizes plus the field in progress (checked at the append sites above).
+            headerListSize += messageHeaderName.length() + messageHeaderValue.length();
             response.addHeader(messageHeaderName, messageHeaderValue);
             messageHeaderName = null;
             messageHeaderValue = null;

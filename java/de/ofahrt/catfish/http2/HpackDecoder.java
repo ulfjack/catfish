@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.http2;
 
 import de.ofahrt.catfish.http2.Hpack.Header;
+import de.ofahrt.catfish.model.HttpLimits;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,9 +19,10 @@ final class HpackDecoder {
    * §6.5.2 (name length + value length + 32 per field). This bounds HPACK decompression
    * amplification: without it, a single ~16 KB HEADERS frame full of indexed references to a large
    * dynamic-table entry could inflate into tens of MB of decoded headers (a compression-based OOM
-   * DoS, same family as the CONTINUATION flood, CVE-2024-27316).
+   * DoS, same family as the CONTINUATION flood, CVE-2024-27316). Shares the one header-block size
+   * limit ({@link HttpLimits#MAX_HEADER_LIST_SIZE}) with the HTTP/1 parsers.
    */
-  static final int DEFAULT_MAX_HEADER_LIST_SIZE = 32768;
+  static final int DEFAULT_MAX_HEADER_LIST_SIZE = HttpLimits.MAX_HEADER_LIST_SIZE;
 
   private final List<Header> dynamicTable = new ArrayList<>();
   private int dynamicTableSize;

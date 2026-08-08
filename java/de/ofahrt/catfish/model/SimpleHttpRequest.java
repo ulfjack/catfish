@@ -49,14 +49,6 @@ public final class SimpleHttpRequest implements HttpRequest {
   }
 
   public static class Builder {
-    /**
-     * Hard cap on the total length of a single (possibly merged) header value. Repeated list-valued
-     * headers are folded into one value; without a bound an attacker can repeat a header so it
-     * inflates to tens of MB (a header-amplification DoS). 8 KB is generous for legitimate list
-     * headers (Accept, Cookie, etc.). Oversized headers are rejected with 400.
-     */
-    private static final int MAX_MERGED_VALUE_LENGTH = 8192;
-
     private HttpVersion version = HttpVersion.HTTP_0_9;
     private String method = "UNKNOWN";
     private @Nullable String unparsedUri;
@@ -168,14 +160,14 @@ public final class SimpleHttpRequest implements HttpRequest {
       key = HttpHeaderName.canonicalize(key);
       // Repeated list-valued headers are joined via a StringBuilder accumulator (O(value) per
       // append) rather than rebuilding a growing String each time (O(current length) per append →
-      // O(n^2) overall). A hard length cap bounds the merged size. The separator is ", " for all
-      // fields except Cookie, which uses "; " per RFC 9113 §8.2.3 (cookie-pairs are recombined
-      // with a semicolon when a request carries multiple Cookie fields).
+      // O(n^2) overall). The overall size is bounded by the parser's header-section limit
+      // (HttpLimits.MAX_HEADER_LIST_SIZE), not here. The separator is ", " for all fields except
+      // Cookie, which uses "; " per RFC 9113 §8.2.3 (cookie-pairs are recombined with a semicolon
+      // when a request carries multiple Cookie fields).
       String separator = HttpHeaderName.COOKIE.equals(key) ? "; " : ", ";
       StringBuilder acc = mergedValues.get(key);
       if (acc != null) {
         // Already accumulating this multi-occurrence header.
-        checkMergedLength(acc.length() + separator.length() + value.length());
         acc.append(separator).append(value);
         return this;
       }
@@ -187,9 +179,7 @@ public final class SimpleHttpRequest implements HttpRequest {
               "Illegal message headers: multiple occurence for non-list field");
         }
         // Second occurrence: switch this key over to a StringBuilder accumulator.
-        checkMergedLength(existing.length() + separator.length() + value.length());
-        acc = new StringBuilder(existing).append(separator).append(value);
-        mergedValues.put(key, acc);
+        mergedValues.put(key, new StringBuilder(existing).append(separator).append(value));
         return this;
       }
       if (HttpHeaderName.HOST.equals(key)) {
@@ -199,14 +189,6 @@ public final class SimpleHttpRequest implements HttpRequest {
       }
       headers.put(key, value);
       return this;
-    }
-
-    private void checkMergedLength(int length) throws MalformedRequestException {
-      if (length > MAX_MERGED_VALUE_LENGTH) {
-        throw MalformedRequestException.of(
-            HttpStatusCode.BAD_REQUEST,
-            "Header value too large (exceeds " + MAX_MERGED_VALUE_LENGTH + " bytes)");
-      }
     }
 
     public @Nullable String getHeader(String key) {

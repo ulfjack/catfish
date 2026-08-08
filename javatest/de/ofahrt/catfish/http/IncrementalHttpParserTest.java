@@ -71,40 +71,45 @@ public class IncrementalHttpParserTest {
     assertEquals("414 URI Too Long", e.getMessage());
   }
 
+  // The header section is bounded by one total-size limit (HttpLimits.MAX_HEADER_LIST_SIZE, 32 KiB)
+  // rather than separate per-name/value/count caps, so a block that exceeds it — via one huge name,
+  // one huge value, or many small fields — is rejected the same way.
+
   @Test
   public void disallowTooLongHeaderName() {
     IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
     byte[] data =
-        ("GET / HTTP/1.1\r\nHost: foo\r\n" + repeat("x", 1001) + ": unknown\r\n\r\n").getBytes();
+        ("GET / HTTP/1.1\r\nHost: foo\r\n" + repeat("x", 33000) + ": v\r\n\r\n").getBytes();
     var e = assertThrows(MalformedRequestException.class, () -> parser.parse(data));
     assertEquals(
         HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE.getStatusCode(),
         e.getErrorResponse().getStatusCode());
-    assertEquals("431 Header name is too long", e.getMessage());
+    assertEquals("431 Header block is too large", e.getMessage());
   }
 
   @Test
   public void disallowTooLongHeaderValue() {
     IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
     byte[] data =
-        ("GET / HTTP/1.1\r\nHost: foo\r\nHeader: " + repeat("x", 10001) + "\r\n\r\n").getBytes();
+        ("GET / HTTP/1.1\r\nHost: foo\r\nHeader: " + repeat("x", 33000) + "\r\n\r\n").getBytes();
     var e = assertThrows(MalformedRequestException.class, () -> parser.parse(data));
     assertEquals(
         HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE.getStatusCode(),
         e.getErrorResponse().getStatusCode());
-    assertEquals("431 Header value is too long", e.getMessage());
+    assertEquals("431 Header block is too large", e.getMessage());
   }
 
   @Test
-  public void disallowTooManyHeaderFields() {
+  public void disallowTooLargeHeaderBlockFromManyFields() {
     IncrementalHttpRequestParser parser = new IncrementalHttpRequestParser();
+    // No single field is oversized, but the aggregate exceeds the total header-section limit.
     byte[] data =
-        ("GET / HTTP/1.1\r\nHost: foo\r\n" + repeat("field: xyz\r\n", 1000) + "\r\n").getBytes();
+        ("GET / HTTP/1.1\r\nHost: foo\r\n" + repeat("field: xyz\r\n", 5000) + "\r\n").getBytes();
     var e = assertThrows(MalformedRequestException.class, () -> parser.parse(data));
     assertEquals(
         HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE.getStatusCode(),
         e.getErrorResponse().getStatusCode());
-    assertEquals("431 Too many header fields", e.getMessage());
+    assertEquals("431 Header block is too large", e.getMessage());
   }
 
   @Test

@@ -211,7 +211,7 @@ public abstract class HttpResponseParserTest {
   @Test(expected = Exception.class)
   public void badHeaderName_tooLong() throws Exception {
     StringBuilder sb = new StringBuilder("HTTP/1.1 200 OK\n");
-    for (int i = 0; i < 1025; i++) {
+    for (int i = 0; i < 33000; i++) {
       sb.append('X');
     }
     sb.append(": value\n\n");
@@ -228,7 +228,7 @@ public abstract class HttpResponseParserTest {
   @Test(expected = Exception.class)
   public void badHeaderValue_tooLong() throws Exception {
     StringBuilder sb = new StringBuilder("HTTP/1.1 200 OK\nX: ");
-    for (int i = 0; i < 4098; i++) {
+    for (int i = 0; i < 33000; i++) {
       sb.append('X');
     }
     sb.append("\n\n");
