@@ -63,6 +63,21 @@ public final class IncrementalHttpRequestParser {
     return (CHAR_FLAGS[c] & SPACE) != 0;
   }
 
+  /**
+   * True iff {@code value} is one or more ASCII digits — the RFC 9110 §8.6 Content-Length grammar.
+   */
+  private static boolean isContentLengthValue(String value) {
+    if (value.isEmpty()) {
+      return false;
+    }
+    for (int i = 0; i < value.length(); i++) {
+      if (!isDigit(value.charAt(i))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   private enum State {
     // Request-Line   = Method SP Request-URI SP HTTP-Version CRLF
     REQUEST_METHOD,
@@ -374,16 +389,21 @@ public final class IncrementalHttpRequestParser {
       return setBadRequest("Must not set both Content-Length and Transfer-Encoding");
     }
     if (contentLengthValue != null) {
+      // RFC 9110 §8.6: Content-Length = 1*DIGIT. Enforce that grammar directly rather than relying
+      // on Long.parseLong, which also accepts a leading '+' (and '-'). A value like "+5" that a
+      // peer
+      // frames differently than Catfish is a request-smuggling vector, so reject anything that is
+      // not one-or-more ASCII digits.
+      if (!isContentLengthValue(contentLengthValue)) {
+        return setBadRequest("Illegal content length value");
+      }
       try {
-        long cl = Long.parseLong(contentLengthValue);
-        if (cl < 0) {
-          return setBadRequest("Illegal content length value");
-        }
-        if (cl > Integer.MAX_VALUE) {
+        if (Long.parseLong(contentLengthValue) > Integer.MAX_VALUE) {
           return setError(HttpStatusCode.PAYLOAD_TOO_LARGE);
         }
       } catch (NumberFormatException e) {
-        return setBadRequest("Illegal content length value");
+        // All digits, but too many to fit in a long: an absurdly large declared length.
+        return setError(HttpStatusCode.PAYLOAD_TOO_LARGE);
       }
     }
     if (transferEncodingValue != null && !"chunked".equalsIgnoreCase(transferEncodingValue)) {

@@ -268,6 +268,32 @@ public abstract class HttpParserTest {
         "GET / HTTP/1.1\nHost: localhost\nContent-Length: -1\n\n");
     checkError(
         "413 Payload Too Large", "GET / HTTP/1.1\nHost: localhost\nContent-Length: 2147483648\n\n");
+    // RFC 9110 §8.6: Content-Length = 1*DIGIT. A leading '+' (which Long.parseLong would accept as
+    // 5) is rejected, since a peer might frame it differently — a request-smuggling vector.
+    checkError(
+        "400 Illegal content length value",
+        "GET / HTTP/1.1\nHost: localhost\nContent-Length: +5\n\n");
+    // An embedded space (two numbers, or CL with trailing junk) is rejected.
+    checkError(
+        "400 Illegal content length value",
+        "GET / HTTP/1.1\nHost: localhost\nContent-Length: 5 5\n\n");
+    // Empty value is rejected.
+    checkError(
+        "400 Illegal content length value", "GET / HTTP/1.1\nHost: localhost\nContent-Length:\n\n");
+    // All digits, but far too many to fit in a long -> treated as too large, not malformed.
+    checkError(
+        "413 Payload Too Large",
+        "GET / HTTP/1.1\nHost: localhost\nContent-Length: 99999999999999999999\n\n");
+  }
+
+  @Test
+  public void contentLengthLeadingZerosAccepted() throws Exception {
+    // 1*DIGIT permits leading zeros; they are unambiguous decimal (parsed base 10, not octal).
+    // Body is 7 bytes to match Content-Length: 0007 (the integration harness does a real
+    // round-trip).
+    HttpRequest request =
+        parse("POST / HTTP/1.1\nHost: localhost\nContent-Length: 0007\n\n1234567");
+    assertEquals("0007", request.getHeaders().get("Content-Length"));
   }
 
   @Test
