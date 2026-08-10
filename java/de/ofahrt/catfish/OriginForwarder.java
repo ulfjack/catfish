@@ -203,6 +203,21 @@ final class OriginForwarder {
               || statusCode == 304;
       String responseCl =
           noBody ? null : originResponse.getHeaders().get(HttpHeaderName.CONTENT_LENGTH);
+      // Validate the origin's Content-Length against RFC 9110 §8.6 (1*DIGIT) before we frame the
+      // body by it. A malformed or overlong length is a bad gateway, not something to guess at:
+      // parsing it leniently (e.g. accepting "+5") or silently treating it as zero would let a
+      // broken/hostile origin desync the response stream to the client.
+      long responseContentLength = -1;
+      if (responseCl != null) {
+        if (!HttpHeaderName.isValidContentLength(responseCl)) {
+          throw new IOException("Malformed Content-Length in origin response: " + responseCl);
+        }
+        try {
+          responseContentLength = Long.parseLong(responseCl);
+        } catch (NumberFormatException e) {
+          throw new IOException("Content-Length in origin response too large: " + responseCl);
+        }
+      }
       boolean chunkedResponse =
           !noBody
               && "chunked"
@@ -246,7 +261,7 @@ final class OriginForwarder {
               captureStream != null ? new TeeOutputStream(responseOut, captureStream) : responseOut;
           if (responseCl != null) {
             streamContentLengthBody(
-                originIn, bodyOut, readBuf, leftoverStart, leftoverLen, responseCl);
+                originIn, bodyOut, readBuf, leftoverStart, leftoverLen, responseContentLength);
           } else {
             streamUntilEof(originIn, bodyOut, readBuf, leftoverStart, leftoverLen);
           }
@@ -305,14 +320,9 @@ final class OriginForwarder {
       byte[] readBuf,
       int leftoverStart,
       int leftoverLen,
-      String contentLength)
+      long contentLength)
       throws IOException {
-    long remaining;
-    try {
-      remaining = Long.parseLong(contentLength);
-    } catch (NumberFormatException e) {
-      remaining = 0;
-    }
+    long remaining = contentLength;
     if (leftoverLen > 0) {
       bodyOut.write(readBuf, leftoverStart, leftoverLen);
       remaining -= leftoverLen;

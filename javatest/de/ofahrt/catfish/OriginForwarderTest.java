@@ -259,6 +259,17 @@ public class OriginForwarderTest {
     }
   }
 
+  @Test
+  public void malformedContentLength_returns502() throws Exception {
+    // The origin sends a Content-Length that Long.parseLong would accept as 5 but that is not the
+    // RFC 9110 §8.6 grammar. Framing the response by it (or forwarding it verbatim) would let the
+    // origin desync the client, so it is a bad gateway.
+    try (MockServer mock = new MockServer(ascii("HTTP/1.1 200 OK\nContent-Length: +5\n\nhello"))) {
+      ForwarderResult r = runForwarder(mock.port(), get("/"));
+      assertEquals(502, r.response.getStatusCode());
+    }
+  }
+
   // ---- Chunked body ----
 
   @Test
