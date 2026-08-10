@@ -148,27 +148,36 @@ public class FcgiHandlerTest {
     }
     parseParams(paramsBuffer.toByteArray(), captured.params);
 
-    // Send the CGI response in 4KB FCGI_STDOUT chunks (exercises the streaming path).
-    Record stdout = new Record().setRequestId(requestId).setType(FastCgiConstants.FCGI_STDOUT);
-    int offset = 0;
-    while (offset < cgiResponse.length) {
-      int chunkLen = Math.min(4096, cgiResponse.length - offset);
-      byte[] chunk = new byte[chunkLen];
-      System.arraycopy(cgiResponse, offset, chunk, 0, chunkLen);
-      stdout.setContent(chunk);
+    // Send the CGI response in 4KB FCGI_STDOUT chunks (exercises the streaming path). The client
+    // (the handler under test) may close the connection before we finish writing — e.g. after
+    // rejecting a malformed response with 502 — which surfaces here as a broken pipe. The request
+    // has already been fully captured above (which is what the tests assert on), so tolerate an
+    // early close rather than failing the mock backend's future with a spurious IOException.
+    try {
+      Record stdout = new Record().setRequestId(requestId).setType(FastCgiConstants.FCGI_STDOUT);
+      int offset = 0;
+      while (offset < cgiResponse.length) {
+        int chunkLen = Math.min(4096, cgiResponse.length - offset);
+        byte[] chunk = new byte[chunkLen];
+        System.arraycopy(cgiResponse, offset, chunk, 0, chunkLen);
+        stdout.setContent(chunk);
+        stdout.writeTo(out);
+        offset += chunkLen;
+      }
+      // Empty FCGI_STDOUT marks end-of-stream.
+      stdout.setContent(new byte[0]);
       stdout.writeTo(out);
-      offset += chunkLen;
-    }
-    // Empty FCGI_STDOUT marks end-of-stream.
-    stdout.setContent(new byte[0]);
-    stdout.writeTo(out);
 
-    // FCGI_END_REQUEST: protocolStatus=0 (FCGI_REQUEST_COMPLETE), appStatus=0
-    Record end = new Record();
-    end.setRequestId(requestId).setType(FastCgiConstants.FCGI_END_REQUEST);
-    end.setContent(new byte[] {0, 0, 0, 0, 0, 0, 0, 0});
-    end.writeTo(out);
-    out.flush();
+      // FCGI_END_REQUEST: protocolStatus=0 (FCGI_REQUEST_COMPLETE), appStatus=0
+      Record end = new Record();
+      end.setRequestId(requestId).setType(FastCgiConstants.FCGI_END_REQUEST);
+      end.setContent(new byte[] {0, 0, 0, 0, 0, 0, 0, 0});
+      end.writeTo(out);
+      out.flush();
+    } catch (IOException e) {
+      // Client closed the connection early (e.g. rejected a malformed response). The request was
+      // already captured; there is nothing more the backend needs to do.
+    }
     return captured;
   }
 
