@@ -212,6 +212,23 @@ public abstract class HttpParserTest {
     checkError("400 Expected '/' of request version string", "GET / HTTP\n\n");
   }
 
+  // Security (2026 review, finding #2): the request method and HTTP-version digits must be
+  // length-bounded — otherwise an endless token / digit run buffers without limit (OOM DoS).
+  @Test
+  public void methodTooLongReturns400() throws Exception {
+    checkError("400 Request method is too long", "A".repeat(200) + " / HTTP/1.1\nHost: x\n\n");
+  }
+
+  @Test
+  public void versionMajorTooLongReturns400() throws Exception {
+    checkError("400 Http major version is too long", "GET / HTTP/11111111.1\nHost: x\n\n");
+  }
+
+  @Test
+  public void versionMinorTooLongReturns400() throws Exception {
+    checkError("400 Http minor version is too long", "GET / HTTP/1.11111111\nHost: x\n\n");
+  }
+
   @Test
   public void badUriSyntax() throws Exception {
     checkError("400 Malformed URI", "GET 12:/path HTTP/1.1\n\n");
