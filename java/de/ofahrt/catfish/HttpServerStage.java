@@ -85,7 +85,8 @@ final class HttpServerStage implements Stage {
   private @Nullable HttpRequestStage currentHandler;
   // For Content-Length bodies: remaining bytes to stream to the handler. -1 means not active.
   private long contentLengthRemaining = -1;
-  // For chunked bodies: scans raw chunked framing to detect completion without decoding.
+  // For chunked bodies: scans raw chunked framing to detect completion without decoding, and tracks
+  // both decoded and total raw byte counts for the incremental ceilings below.
   private @Nullable ChunkedBodyScanner chunkedScanner;
   // Ceiling on decoded body bytes for a locally-served body, enforced incrementally while streaming
   // a chunked body (Content-Length bodies are bounded at header time). -1 disables enforcement,
@@ -480,10 +481,10 @@ final class HttpServerStage implements Stage {
         headersRequest = null;
         return ConnectionControl.CLOSE_INPUT;
       }
-      // Enforce the decoded-body ceiling incrementally: the moment the de-chunked byte count
-      // exceeds
-      // the limit, reject with 413 rather than buffering the rest of the body (spec 0002 PR 2).
-      if (maxDecodedBodyBytes >= 0 && chunkedScanner.decodedByteCount() > maxDecodedBodyBytes) {
+      // Enforce the decoded-body ceiling incrementally. The scanner also applies a derived raw-byte
+      // ceiling so chunk framing (extensions, trailers, size lines) can't buffer past the ceiling
+      // without being counted as decoded (OOM DoS, security review #3).
+      if (chunkedScanner.exceedsCeiling(maxDecodedBodyBytes)) {
         chunkedScanner = null;
         handler.close();
         currentHandler = null;

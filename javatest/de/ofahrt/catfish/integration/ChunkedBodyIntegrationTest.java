@@ -86,6 +86,25 @@ public class ChunkedBodyIntegrationTest {
   }
 
   @Test
+  public void chunkedFramingBytesBoundedBy413() throws Exception {
+    // Security review #3: chunk framing (here a ~20 KB extension with no data and no CRLF) is
+    // forwarded to the handler but not counted as decoded, so only the raw ceiling can stop it.
+    // With maxDecodedBytes=8 the raw ceiling is 2*8 + 8192 = 8208, so a 20 KB extension is
+    // rejected with 413 rather than buffered without limit.
+    LocalCatfishServer server = new LocalCatfishServer().setUploadPolicy(request -> 8L);
+    server.start();
+    try {
+      String req =
+          "POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n1;"
+              + "A".repeat(20000);
+      HttpResponse response = server.send(req.getBytes());
+      assertEquals(HttpStatusCode.PAYLOAD_TOO_LARGE.getStatusCode(), response.getStatusCode());
+    } finally {
+      server.shutdown();
+    }
+  }
+
+  @Test
   public void unknownTransferEncodingStillReturns501() throws IOException {
     HttpResponse response =
         localServer.send(

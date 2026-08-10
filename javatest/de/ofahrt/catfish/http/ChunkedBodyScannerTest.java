@@ -86,6 +86,71 @@ public class ChunkedBodyScannerTest {
     assertTrue(scanner.isDone());
   }
 
+  // Security review #3: a non-hex byte in the chunk-size line is malformed framing and must set the
+  // error flag, not be silently consumed (which let junk size-line bytes buffer without limit).
+  @Test
+  public void invalidCharInSizeLine_setsError() {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    byte[] data = bytes("1x\r\n");
+    scanner.advance(data, 0, data.length);
+    assertTrue(scanner.hasError());
+  }
+
+  // rawByteCount tracks framing + data (used to bound total buffering); a fully scanned body counts
+  // every byte, whereas decodedByteCount counts only the chunk data.
+  @Test
+  public void rawByteCount_countsFramingAndData() {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    byte[] data = bytes("5;ext=val\r\nhello\r\n0\r\n\r\n");
+    scanner.advance(data, 0, data.length);
+    assertEquals(data.length, scanner.rawByteCount());
+    assertEquals(5, scanner.decodedByteCount());
+  }
+
+  // exceedsCeiling enforces the decoded ceiling directly; a body under both bounds does not exceed.
+  @Test
+  public void exceedsCeiling_falseWhenUnderBothBounds() {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    byte[] data = bytes("5\r\nhello\r\n0\r\n\r\n");
+    scanner.advance(data, 0, data.length);
+    assertFalse(scanner.exceedsCeiling(100));
+  }
+
+  @Test
+  public void exceedsCeiling_trueWhenDecodedOverCeiling() {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    byte[] data = bytes("5\r\nhello\r\n0\r\n\r\n"); // 5 decoded bytes
+    scanner.advance(data, 0, data.length);
+    assertTrue(scanner.exceedsCeiling(4));
+  }
+
+  // Security review #3: framing (a huge chunk-size extension) carries no decoded bytes, so only the
+  // derived raw ceiling (2 * maxDecodedBytes + 8 KiB) can catch it. With maxDecodedBytes=8 the raw
+  // bound is 8208, which a ~9 KB extension blows past.
+  @Test
+  public void exceedsCeiling_trueWhenFramingBlowsRawBound() {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    StringBuilder sb = new StringBuilder("1;");
+    for (int i = 0; i < 9000; i++) {
+      sb.append('a');
+    }
+    byte[] data = bytes(sb.toString());
+    scanner.advance(data, 0, data.length);
+    assertEquals(0L, scanner.decodedByteCount());
+    assertTrue(scanner.exceedsCeiling(8));
+  }
+
+  // A negative ceiling means "no limit"; Long.MAX_VALUE (the ALLOW policy) saturates the raw bound
+  // so neither branch can fire.
+  @Test
+  public void exceedsCeiling_disabledForUnlimitedPolicy() {
+    ChunkedBodyScanner scanner = new ChunkedBodyScanner();
+    byte[] data = bytes("5\r\nhello\r\n0\r\n\r\n");
+    scanner.advance(data, 0, data.length);
+    assertFalse(scanner.exceedsCeiling(-1));
+    assertFalse(scanner.exceedsCeiling(Long.MAX_VALUE));
+  }
+
   @Test
   public void trailers() {
     ChunkedBodyScanner scanner = new ChunkedBodyScanner();
