@@ -21,6 +21,46 @@ public class SimpleHttpResponseBuilderTest {
   }
 
   @Test
+  public void addHeaderMergesManyRepeatsInOrder() throws Exception {
+    // Repeated list-valued headers accumulate via a StringBuilder (O(n) total, not O(n^2)); the
+    // merged value must still read back in original order.
+    SimpleHttpResponse.Builder builder = new SimpleHttpResponse.Builder().setStatusCode(200);
+    StringBuilder expected = new StringBuilder();
+    for (int i = 0; i < 50; i++) {
+      builder.addHeader(HttpHeaderName.CONTENT_TYPE, "v" + i);
+      expected.append(i == 0 ? "" : ", ").append("v").append(i);
+    }
+    assertEquals(
+        expected.toString(), builder.build().getHeaders().get(HttpHeaderName.CONTENT_TYPE));
+  }
+
+  @Test
+  public void getHeaderReturnsMergedValueBeforeBuild() {
+    // The origin-response parser reads Content-Length/Transfer-Encoding via getHeader mid-parse, so
+    // the accumulator must be visible before build()/materialize().
+    SimpleHttpResponse.Builder builder =
+        new SimpleHttpResponse.Builder()
+            .setStatusCode(200)
+            .addHeader(HttpHeaderName.CONTENT_TYPE, "a")
+            .addHeader(HttpHeaderName.CONTENT_TYPE, "b");
+    assertEquals("a, b", builder.getHeader(HttpHeaderName.CONTENT_TYPE));
+  }
+
+  @Test
+  public void addHeaderRejectsOversizedMergedValue() {
+    // A malicious origin repeating a header to inflate one value past the 8 KB cap is rejected.
+    SimpleHttpResponse.Builder builder = new SimpleHttpResponse.Builder().setStatusCode(200);
+    String chunk = "a".repeat(1000);
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> {
+          for (int i = 0; i < 100; i++) {
+            builder.addHeader(HttpHeaderName.CONTENT_TYPE, chunk);
+          }
+        });
+  }
+
+  @Test
   public void addHeaderThrowsOnDuplicateHost() throws Exception {
     // Host is in the non-list blacklist; adding it twice must throw.
     SimpleHttpResponse.Builder builder =
