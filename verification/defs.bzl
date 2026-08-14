@@ -176,8 +176,6 @@ def _java_obligations_impl(ctx):
     if ctx.files.proofs:
         args.append("--proofs=" + ctx.files.proofs[0].dirname)
         inputs.extend(ctx.files.proofs)
-    if ctx.attr.specs:
-        args.append("--specs=" + ",".join(ctx.attr.specs))
 
     # Extract the one class from the jar, then run the generator on it.
     script = "\n".join([
@@ -209,9 +207,6 @@ _java_obligations = rule(
         "class_name": attr.string(mandatory = True),
         "source": attr.label(allow_single_file = [".java"], mandatory = True),
         "proofs": attr.label_list(allow_files = [".lean"]),
-        # Domain specs the obligations reference, as "Module=Namespace" entries;
-        # the generator emits `import Module` and opens `Namespace`.
-        "specs": attr.string_list(),
         "_generator": attr.label(
             default = "//verification:generator",
             executable = True,
@@ -250,7 +245,7 @@ _golden_diff_test = rule(
     },
 )
 
-def java_verification_test(name, lib, method, source, proofs, golden, specs = [], deps = [], class_name = None, **kwargs):
+def java_verification_test(name, lib, method, source, proofs, golden, deps = [], class_name = None, **kwargs):
     """Verify one method of a java_library by proving its bytecode in Lean.
 
     `lean_test` checks the checked-in `golden` obligations file (so the file you
@@ -260,8 +255,9 @@ def java_verification_test(name, lib, method, source, proofs, golden, specs = []
     obligation closes *and* the golden matches the current sources.
 
     `golden` is the checked-in `Generated/<Class>_<method>.lean`; regenerate it
-    from the `_<name>_obligations` output when it drifts. `specs` lists domain
-    specs as "Module=Namespace"; include the matching lean_library in `deps`.
+    from the `_<name>_obligations` output when it drifts. Domain modules the
+    obligations reference come from @ImportLeanPackage on the class; include the
+    matching lean_library in `deps`.
     """
     if class_name == None:
         base = source.rsplit("/", 1)[-1]
@@ -274,7 +270,6 @@ def java_verification_test(name, lib, method, source, proofs, golden, specs = []
         class_name = class_name,
         source = source,
         proofs = proofs,
-        specs = specs,
     )
     lean_test(name = name, src = golden, deps = deps, **kwargs)
     _golden_diff_test(name = name + "_golden", golden = golden, generated = ":" + gen)

@@ -33,11 +33,9 @@ public final class Main {
 
     Emit e = new Emit(v, cf, method, javaFile);
     if (opt.containsKey("proofs")) e.proofDir = Path.of(opt.get("proofs"));
-    // --specs=Module=Namespace[,Module2=Namespace2]: domain specs to import and
-    // open, so the generator carries no knowledge of any particular domain.
-    String specs = opt.get("specs");
-    if (specs != null && !specs.isBlank())
-      for (String entry : specs.split(",")) e.specs.add(entry.split("=", 2));
+    // Domain modules to import/open come from @ImportLeanPackage on the class, so
+    // the generator carries no knowledge of any particular domain.
+    e.leanImports.addAll(cf.leanImports);
     Files.createDirectories(out.getParent());
     Files.writeString(out, e.lean());
     Files.writeString(Path.of(out + ".map.json"), e.sourceMap());
@@ -91,7 +89,7 @@ public final class Main {
     System.err.println(
         """
         usage: jvmlean --class=Foo.class --method=bar --out=lean/Generated/Foo_bar.lean
-                       [--source=Foo.java] [--proofs=dir] [--specs=Module=Namespace,...]
+                       [--source=Foo.java] [--proofs=dir]
         """);
   }
 }

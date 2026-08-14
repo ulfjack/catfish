@@ -10,10 +10,10 @@ lean_library(
 )
 
 # Domain spec for RFC 9112 chunk-size parsing (digitVal, valOf, hexValF...).
-# Referenced by the Verify.* strings in Chunk.java; not part of the trust base.
+# Named by @ImportLeanPackage("ChunkedEncoding") in Chunk.java; not trust base.
 lean_library(
-    name = "chunked_encoding_spec",
-    src = "ChunkedEncodingSpec.lean",
+    name = "chunked_encoding",
+    src = "ChunkedEncoding.lean",
 )
 
 # Smoke test: executes `iconst_1; iconst_1; iadd; ireturn` through the
@@ -37,6 +37,7 @@ java_library(
     name = "chunk_java",
     srcs = [
         "java/Chunk.java",
+        "java/ImportLeanPackage.java",
         "java/Returns.java",
         "java/Verify.java",
     ],
@@ -54,10 +55,9 @@ java_verification_test(
     # Checked-in obligations: the file lean_test proves and humans review.
     # `:chunk_golden` fails if it drifts from what the generator emits.
     golden = "Generated/Chunk_parseHexSize.lean",
-    specs = ["ChunkedEncodingSpec=ChunkedEncoding"],
     deps = [
         ":semantics",
-        ":chunked_encoding_spec",
+        ":chunked_encoding",
     ],
 )
 
@@ -71,9 +71,8 @@ java_verification_test(
     source = "java/Chunk.java",
     proofs = glob(["proofs/Chunk_hexVal/*.lean"]),
     golden = "Generated/Chunk_hexVal.lean",
-    specs = ["ChunkedEncodingSpec=ChunkedEncoding"],
     deps = [
         ":semantics",
-        ":chunked_encoding_spec",
+        ":chunked_encoding",
     ],
 )

@@ -36,6 +36,11 @@ final class ClassFile {
   final String thisClass;
   final List<Method> methods = new ArrayList<>();
 
+  /**
+   * @ImportLeanPackage values: Lean modules/namespaces the spec strings depend on.
+   */
+  final List<String> leanImports = new ArrayList<>();
+
   static final class Method {
     String name, desc;
     byte[] code;
@@ -106,7 +111,14 @@ final class ClassFile {
     skipFields();
     int mcount = in.readUnsignedShort();
     for (int i = 0; i < mcount; i++) methods.add(readMethod());
-    // class attributes: ignore
+    int cattr = in.readUnsignedShort();
+    for (int i = 0; i < cattr; i++) {
+      String an = utf8(in.readUnsignedShort());
+      int len = in.readInt();
+      if (an.equals("RuntimeInvisibleAnnotations") || an.equals("RuntimeVisibleAnnotations"))
+        forEachAnnotation(readAttr(len), "LImportLeanPackage;", leanImports::addAll);
+      else in.skipNBytes(len);
+    }
   }
 
   String utf8(int idx) {
@@ -162,33 +174,56 @@ final class ClassFile {
       int len = in.readInt();
       if (an.equals("Code")) readCode(m);
       else if (an.equals("RuntimeInvisibleAnnotations") || an.equals("RuntimeVisibleAnnotations"))
-        readReturnsAnnotation(m, len);
+        forEachAnnotation(
+            readAttr(len),
+            "LReturns;",
+            vals -> vals.stream().findFirst().ifPresent(v -> m.returnsSpec = v));
       else in.skipNBytes(len);
     }
     return m;
   }
 
-  /**
-   * Extract @Returns("...") from a method annotations attribute. Handles only string-valued
-   * elements, which is all @Returns needs; bails on any other element_value tag.
-   */
-  private void readReturnsAnnotation(Method m, int len) throws IOException {
+  private byte[] readAttr(int len) throws IOException {
     byte[] buf = new byte[len];
     in.readFully(buf);
+    return buf;
+  }
+
+  /**
+   * Parse an annotations attribute and hand the string values of any annotation of `descriptor` to
+   * `sink`. Handles string and (nested) array-of-string element values, which is all our
+   * annotations use; bails on any other tag rather than misparse.
+   */
+  private void forEachAnnotation(
+      byte[] buf, String descriptor, java.util.function.Consumer<List<String>> sink)
+      throws IOException {
     DataInputStream a = new DataInputStream(new ByteArrayInputStream(buf));
     int num = a.readUnsignedShort();
     for (int i = 0; i < num; i++) {
       String type = utf8(a.readUnsignedShort());
       int pairs = a.readUnsignedShort();
-      String value = null;
+      List<String> vals = new ArrayList<>();
       for (int j = 0; j < pairs; j++) {
-        a.readUnsignedShort(); // element_name_index (only "value" for @Returns)
-        int tag = a.readUnsignedByte();
-        if (tag != 's') return; // non-string element: not @Returns as we model it
-        value = utf8(a.readUnsignedShort());
+        a.readUnsignedShort(); // element_name_index (we assume the sole "value" element)
+        if (!readElementValue(a, vals)) return; // unsupported tag: give up on this attribute
       }
-      if (type.equals("LReturns;") && value != null) m.returnsSpec = value;
+      if (type.equals(descriptor)) sink.accept(vals);
     }
+  }
+
+  /** Collect string leaves of an element_value; false on an unsupported tag. */
+  private boolean readElementValue(DataInputStream a, List<String> out) throws IOException {
+    int tag = a.readUnsignedByte();
+    if (tag == 's') {
+      out.add(utf8(a.readUnsignedShort()));
+      return true;
+    }
+    if (tag == '[') {
+      int n = a.readUnsignedShort();
+      for (int i = 0; i < n; i++) if (!readElementValue(a, out)) return false;
+      return true;
+    }
+    return false;
   }
 
   private void readCode(Method m) throws IOException {
