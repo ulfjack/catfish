@@ -1,10 +1,12 @@
+import Jvm.Semantics
+
 /-
   Domain specification for RFC 9112 §7.1 chunk-size parsing.  Referenced by name
-  from the Verify.* strings in Chunk.java and from the hand-written proofs.
+  from the Verify.* / @Returns strings in Chunk.java and from the hand-written
+  proofs.
 
   This is NOT part of the JVM trust base: a bug here is a wrong specification of
-  what a chunk size *is*, not a wrong model of the machine.  Pure arithmetic over
-  `Int`/`Option`; it does not depend on the JVM semantics.
+  what a chunk size *is*, not a wrong model of the machine.
 -/
 
 namespace ChunkedEncoding
@@ -38,5 +40,85 @@ def valOf (arr : Nat → Int) (off : Nat) : Nat → Option Int
   | n + 1 => match valOf arr off n, digitVal (arr (off + n)) with
              | some v, some d => some (v * 16 + d)
              | _, _ => none
+
+/-- A parsed hex value is non-negative. -/
+theorem valOf_nonneg {arr : Nat → Int} {off : Nat} :
+    ∀ {n : Nat} {v : Int}, valOf arr off n = some v → 0 ≤ v := by
+  intro n
+  induction n with
+  | zero => intro v h; simp only [valOf, Option.some.injEq] at h; omega
+  | succ k ih =>
+    intro v h
+    simp only [valOf] at h
+    cases hw : valOf arr off k with
+    | none => rw [hw] at h; simp at h
+    | some w =>
+      cases hd : digitVal (arr (off + k)) with
+      | none => rw [hw, hd] at h; simp at h
+      | some d =>
+        rw [hw, hd] at h
+        simp only [Option.some.injEq] at h
+        have := ih hw
+        have := (digitVal_range hd).1
+        omega
+
+/-- Once `valOf` is `none` at one length it is `none` at every greater length. -/
+theorem valOf_none_le {arr : Nat → Int} {off n : Nat}
+    (h : valOf arr off n = none) : ∀ {m : Nat}, n ≤ m → valOf arr off m = none := by
+  intro m hnm
+  induction hnm with
+  | refl => exact h
+  | step _ ih => simp [valOf, ih]
+
+/-- Once the value reaches `w`, every longer prefix is `none` or at least `w`. -/
+theorem valOf_ge {arr : Nat → Int} {off k : Nat} {w : Int} (hk : valOf arr off k = some w) :
+    ∀ {m : Nat}, k ≤ m → valOf arr off m = none ∨ ∃ u, valOf arr off m = some u ∧ w ≤ u := by
+  intro m hkm
+  induction hkm with
+  | refl => exact Or.inr ⟨w, hk, by omega⟩
+  | @step j _ ih =>
+    rcases ih with hnone | ⟨u, hu, hwu⟩
+    · exact Or.inl (by simp [valOf, hnone])
+    · cases hd : digitVal (arr (off + j)) with
+      | none => exact Or.inl (by simp [valOf, hu, hd])
+      | some d =>
+        refine Or.inr ⟨u * 16 + d, by simp [valOf, hu, hd], ?_⟩
+        have := (digitVal_range hd).1
+        have := valOf_nonneg hu
+        omega
+
+/--
+  The parse result: the hex value of the whole field when it is a non-empty run of
+  HEXDIG that fits in a 32-bit int, otherwise -1 (empty, non-hex byte, or overflow).
+  RFC 9112 requires 1*HEXDIG, so the empty field is rejected.
+-/
+def parseSpec (arr : Nat → Int) (off n : Nat) : Int :=
+  if n = 0 then -1
+  else match valOf arr off n with
+       | some v => if v ≤ Jvm.MAXI then v else -1
+       | none   => -1
+
+/-- A non-hex byte anywhere in `[k, m)` (via `valOf … k = none`) forces -1. -/
+theorem parseSpec_none {arr : Nat → Int} {off k m : Nat}
+    (hkm : k ≤ m) (hk : valOf arr off k = none) : parseSpec arr off m = -1 := by
+  have hm : valOf arr off m = none := valOf_none_le hk hkm
+  unfold parseSpec
+  simp only [hm]
+  split <;> rfl
+
+/-- A prefix value exceeding MAXI forces -1. -/
+theorem parseSpec_overflow {arr : Nat → Int} {off k m : Nat} {w : Int}
+    (hkm : k ≤ m) (hk : valOf arr off k = some w) (hover : Jvm.MAXI < w) :
+    parseSpec arr off m = -1 := by
+  have hk0 : k ≠ 0 := by
+    rintro rfl
+    simp only [valOf, Option.some.injEq] at hk
+    unfold Jvm.MAXI at hover; omega
+  have hm0 : m ≠ 0 := by omega
+  unfold parseSpec
+  rw [if_neg hm0]
+  rcases valOf_ge hk hkm with hnone | ⟨u, hu, hwu⟩
+  · simp only [hnone]
+  · simp only [hu]; rw [if_neg (by omega : ¬ u ≤ Jvm.MAXI)]
 
 end ChunkedEncoding

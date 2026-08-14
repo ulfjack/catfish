@@ -14,6 +14,7 @@ lean_library(
 lean_library(
     name = "chunked_encoding",
     src = "ChunkedEncoding.lean",
+    deps = [":semantics"],
 )
 
 # Smoke test: executes `iconst_1; iconst_1; iadd; ireturn` through the
