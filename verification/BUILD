@@ -38,6 +38,7 @@ java_library(
     srcs = [
         "java/Chunk.java",
         "java/ImportLeanPackage.java",
+        "java/Precondition.java",
         "java/Returns.java",
         "java/Verify.java",
     ],

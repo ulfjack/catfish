@@ -49,8 +49,22 @@ final class Vcg {
     this.javaFile = javaFile;
     decode();
     markCutPoints();
+    synthPreconditionCutPoint();
     synthReturnCutPoints();
     checkBackEdges();
+  }
+
+  /**
+   * The entry (requires) cut point. If the method opens with Verify.requires, keep it; otherwise
+   * make the first instruction a requires cut point carrying the @Precondition, defaulting to True.
+   */
+  private void synthPreconditionCutPoint() {
+    if (ins.isEmpty()) return;
+    Ins first = ins.get(0);
+    if (first.isMarkerLdc && "requires".equals(first.markerKind)) return;
+    first.isMarkerLdc = true;
+    first.markerKind = "requires";
+    first.specString = m.precondition != null ? m.precondition : "True";
   }
 
   /**
@@ -340,7 +354,7 @@ final class Vcg {
   /** Every back edge must land on a cut point, or the loop has no invariant. */
   private void checkBackEdges() {
     if (ins.isEmpty() || !ins.get(0).isMarkerLdc || !"requires".equals(ins.get(0).markerKind)) {
-      errors.add("method must begin with Verify.requires(\"...\") as its first statement");
+      errors.add("method must have an entry precondition (@Precondition or Verify.requires)");
     }
     for (Ins i : ins) {
       if (i.target >= 0 && i.target <= i.off) {

@@ -49,6 +49,9 @@ final class ClassFile {
     /** The @Returns spec string, or null. Drives the postcondition and call-site contract. */
     String returnsSpec;
 
+    /** The @Precondition spec string, or null (treated as True). */
+    String precondition;
+
     /** LocalVariableTable entries, with scopes: javac reuses slots. */
     List<LocalVar> locals = new ArrayList<>();
 
@@ -116,7 +119,11 @@ final class ClassFile {
       String an = utf8(in.readUnsignedShort());
       int len = in.readInt();
       if (an.equals("RuntimeInvisibleAnnotations") || an.equals("RuntimeVisibleAnnotations"))
-        forEachAnnotation(readAttr(len), "LImportLeanPackage;", leanImports::addAll);
+        eachAnnotation(
+            readAttr(len),
+            (type, vals) -> {
+              if (type.equals("LImportLeanPackage;")) leanImports.addAll(vals);
+            });
       else in.skipNBytes(len);
     }
   }
@@ -174,13 +181,19 @@ final class ClassFile {
       int len = in.readInt();
       if (an.equals("Code")) readCode(m);
       else if (an.equals("RuntimeInvisibleAnnotations") || an.equals("RuntimeVisibleAnnotations"))
-        forEachAnnotation(
+        eachAnnotation(
             readAttr(len),
-            "LReturns;",
-            vals -> vals.stream().findFirst().ifPresent(v -> m.returnsSpec = v));
+            (type, vals) -> {
+              if (type.equals("LReturns;")) first(vals, v -> m.returnsSpec = v);
+              else if (type.equals("LPrecondition;")) first(vals, v -> m.precondition = v);
+            });
       else in.skipNBytes(len);
     }
     return m;
+  }
+
+  private static void first(List<String> vals, java.util.function.Consumer<String> f) {
+    vals.stream().findFirst().ifPresent(f);
   }
 
   private byte[] readAttr(int len) throws IOException {
@@ -190,12 +203,11 @@ final class ClassFile {
   }
 
   /**
-   * Parse an annotations attribute and hand the string values of any annotation of `descriptor` to
-   * `sink`. Handles string and (nested) array-of-string element values, which is all our
+   * Parse an annotations attribute, handing each annotation's type descriptor and its string values
+   * to `sink`. Handles string and (nested) array-of-string element values, which is all our
    * annotations use; bails on any other tag rather than misparse.
    */
-  private void forEachAnnotation(
-      byte[] buf, String descriptor, java.util.function.Consumer<List<String>> sink)
+  private void eachAnnotation(byte[] buf, java.util.function.BiConsumer<String, List<String>> sink)
       throws IOException {
     DataInputStream a = new DataInputStream(new ByteArrayInputStream(buf));
     int num = a.readUnsignedShort();
@@ -207,7 +219,7 @@ final class ClassFile {
         a.readUnsignedShort(); // element_name_index (we assume the sole "value" element)
         if (!readElementValue(a, vals)) return; // unsupported tag: give up on this attribute
       }
-      if (type.equals(descriptor)) sink.accept(vals);
+      sink.accept(type, vals);
     }
   }
 

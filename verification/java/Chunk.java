@@ -2,11 +2,8 @@
 @ImportLeanPackage("ChunkedEncoding")
 public final class Chunk {
 
+  @Precondition("0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ alen ∧ alen ≤ MAXI")
   public static int parseHexSize(byte[] b, int off, int len) {
-    Verify.requires(
-        """
-        0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ alen ∧ alen ≤ MAXI
-        """);
     int acc = 0;
     int i = 0;
     for (; ; ) {
@@ -45,7 +42,6 @@ public final class Chunk {
    */
   @Returns("hexValF c")
   public static int hexVal(byte c) {
-    Verify.requires("True");
     if (c >= 48 && c <= 57) {
       int r = c - 48;
       return r;

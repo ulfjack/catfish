@@ -11,267 +11,265 @@ set_option linter.unusedVariables false
 /-- Transcription of the bytecode.  Index = position in the instruction
     stream; the comment gives the real bytecode offset. -/
 def P : Nat → Option Instr
-  | 0    => some (.pushRef)   -- @0  <-- cut point (requires)
-  | 1    => some (.mark)   -- @2
-  | 2    => some (.iload 0)   -- @5
-  | 3    => some (.push (48))   -- @6
-  | 4    => some (.ifcmp pLt 14)   -- @8
-  | 5    => some (.iload 0)   -- @11
-  | 6    => some (.push (57))   -- @12
-  | 7    => some (.ifcmp pGt 14)   -- @14
-  | 8    => some (.iload 0)   -- @17
-  | 9    => some (.push (48))   -- @18
-  | 10   => some (.isub)   -- @20
-  | 11   => some (.istore 1)   -- @21
-  | 12   => some (.iload 1)   -- @22  <-- cut point (ensure)
-  | 13   => some (.ireturn)   -- @23
-  | 14   => some (.iload 0)   -- @24
-  | 15   => some (.push (97))   -- @25
-  | 16   => some (.ifcmp pLt 26)   -- @27
-  | 17   => some (.iload 0)   -- @30
-  | 18   => some (.push (102))   -- @31
-  | 19   => some (.ifcmp pGt 26)   -- @33
-  | 20   => some (.iload 0)   -- @36
-  | 21   => some (.push (87))   -- @37
-  | 22   => some (.isub)   -- @39
-  | 23   => some (.istore 1)   -- @40
-  | 24   => some (.iload 1)   -- @41  <-- cut point (ensure)
-  | 25   => some (.ireturn)   -- @42
-  | 26   => some (.iload 0)   -- @43
-  | 27   => some (.push (65))   -- @44
-  | 28   => some (.ifcmp pLt 38)   -- @46
-  | 29   => some (.iload 0)   -- @49
-  | 30   => some (.push (70))   -- @50
-  | 31   => some (.ifcmp pGt 38)   -- @52
-  | 32   => some (.iload 0)   -- @55
-  | 33   => some (.push (55))   -- @56
-  | 34   => some (.isub)   -- @58
-  | 35   => some (.istore 1)   -- @59
-  | 36   => some (.iload 1)   -- @60  <-- cut point (ensure)
-  | 37   => some (.ireturn)   -- @61
-  | 38   => some (.push (-1))   -- @62
-  | 39   => some (.istore 1)   -- @63
-  | 40   => some (.iload 1)   -- @64  <-- cut point (ensure)
-  | 41   => some (.ireturn)   -- @65
+  | 0    => some (.iload 0)   -- @0  <-- cut point (requires)
+  | 1    => some (.push (48))   -- @1
+  | 2    => some (.ifcmp pLt 12)   -- @3
+  | 3    => some (.iload 0)   -- @6
+  | 4    => some (.push (57))   -- @7
+  | 5    => some (.ifcmp pGt 12)   -- @9
+  | 6    => some (.iload 0)   -- @12
+  | 7    => some (.push (48))   -- @13
+  | 8    => some (.isub)   -- @15
+  | 9    => some (.istore 1)   -- @16
+  | 10   => some (.iload 1)   -- @17  <-- cut point (ensure)
+  | 11   => some (.ireturn)   -- @18
+  | 12   => some (.iload 0)   -- @19
+  | 13   => some (.push (97))   -- @20
+  | 14   => some (.ifcmp pLt 24)   -- @22
+  | 15   => some (.iload 0)   -- @25
+  | 16   => some (.push (102))   -- @26
+  | 17   => some (.ifcmp pGt 24)   -- @28
+  | 18   => some (.iload 0)   -- @31
+  | 19   => some (.push (87))   -- @32
+  | 20   => some (.isub)   -- @34
+  | 21   => some (.istore 1)   -- @35
+  | 22   => some (.iload 1)   -- @36  <-- cut point (ensure)
+  | 23   => some (.ireturn)   -- @37
+  | 24   => some (.iload 0)   -- @38
+  | 25   => some (.push (65))   -- @39
+  | 26   => some (.ifcmp pLt 36)   -- @41
+  | 27   => some (.iload 0)   -- @44
+  | 28   => some (.push (70))   -- @45
+  | 29   => some (.ifcmp pGt 36)   -- @47
+  | 30   => some (.iload 0)   -- @50
+  | 31   => some (.push (55))   -- @51
+  | 32   => some (.isub)   -- @53
+  | 33   => some (.istore 1)   -- @54
+  | 34   => some (.iload 1)   -- @55  <-- cut point (ensure)
+  | 35   => some (.ireturn)   -- @56
+  | 36   => some (.push (-1))   -- @57
+  | 37   => some (.istore 1)   -- @58
+  | 38   => some (.iload 1)   -- @59  <-- cut point (ensure)
+  | 39   => some (.ireturn)   -- @60
   | _    => none
 
 
-/-- requires at bytecode offset 0, verification/java/Chunk.java:48 -/
+/-- requires at bytecode offset 0, verification/java/Chunk.java:45 -/
 def inv_0 (s : State) : Prop :=
   let alen : Int := (s.alen : Int)
   let c : Int := s.loc 0
   (True)
 
-/-- ensure at bytecode offset 22, verification/java/Chunk.java:51 -/
-def inv_22 (s : State) : Prop :=
+/-- ensure at bytecode offset 17, verification/java/Chunk.java:47 -/
+def inv_17 (s : State) : Prop :=
   let alen : Int := (s.alen : Int)
   let r : Int := s.loc 1
   let c : Int := s.loc 0
   let ret : Int := s.loc 1
   (ret = hexValF c)
 
-/-- ensure at bytecode offset 41, verification/java/Chunk.java:55 -/
-def inv_41 (s : State) : Prop :=
+/-- ensure at bytecode offset 36, verification/java/Chunk.java:51 -/
+def inv_36 (s : State) : Prop :=
   let alen : Int := (s.alen : Int)
   let r : Int := s.loc 1
   let c : Int := s.loc 0
   let ret : Int := s.loc 1
   (ret = hexValF c)
 
-/-- ensure at bytecode offset 60, verification/java/Chunk.java:59 -/
-def inv_60 (s : State) : Prop :=
+/-- ensure at bytecode offset 55, verification/java/Chunk.java:55 -/
+def inv_55 (s : State) : Prop :=
   let alen : Int := (s.alen : Int)
   let r : Int := s.loc 1
   let c : Int := s.loc 0
   let ret : Int := s.loc 1
   (ret = hexValF c)
 
-/-- ensure at bytecode offset 64, verification/java/Chunk.java:62 -/
-def inv_64 (s : State) : Prop :=
+/-- ensure at bytecode offset 59, verification/java/Chunk.java:58 -/
+def inv_59 (s : State) : Prop :=
   let alen : Int := (s.alen : Int)
   let c : Int := s.loc 0
   let r : Int := s.loc 1
   let ret : Int := s.loc 1
   (ret = hexValF c)
 
-/-- verification/java/Chunk.java:48 -> verification/java/Chunk.java:62   (bytecode 0 -> 64, 13 steps) -/
-theorem obl_0_64_0 (s s' : State)
+/-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 11 steps) -/
+theorem obl_0_59_0 (s s' : State)
     (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : (s.loc 0) < (48 : Int))
     (c1 : (s.loc 0) < (97 : Int))
     (c2 : (s.loc 0) < (65 : Int))
-    (hrun : run P 13 s = some s') :
-    inv_64 s' := by
-    simp only [inv_22, inv_41, inv_60, inv_64]
+    (hrun : run P 11 s = some s') :
+    inv_59 s' := by
+    simp only [inv_17, inv_36, inv_55, inv_59]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [hexValF_neg (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)])]
 
-/-- verification/java/Chunk.java:48 -> verification/java/Chunk.java:62   (bytecode 0 -> 64, 16 steps) -/
-theorem obl_0_64_1 (s s' : State)
+/-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 14 steps) -/
+theorem obl_0_59_1 (s s' : State)
     (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : (s.loc 0) < (48 : Int))
     (c1 : (s.loc 0) < (97 : Int))
     (c2 : ¬ ((s.loc 0) < (65 : Int)))
     (c3 : (s.loc 0) > (70 : Int))
-    (hrun : run P 16 s = some s') :
-    inv_64 s' := by
-    simp only [inv_22, inv_41, inv_60, inv_64]
+    (hrun : run P 14 s = some s') :
+    inv_59 s' := by
+    simp only [inv_17, inv_36, inv_55, inv_59]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [hexValF_neg (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)])]
 
-/-- verification/java/Chunk.java:48 -> verification/java/Chunk.java:59   (bytecode 0 -> 60, 18 steps) -/
+/-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:55   (bytecode 0 -> 55, 16 steps) -/
 --   side condition: no wrap: (s.loc 0) - (55 : Int)
-theorem obl_0_60_0 (s s' : State)
+theorem obl_0_55_0 (s s' : State)
     (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : (s.loc 0) < (48 : Int))
     (c1 : (s.loc 0) < (97 : Int))
     (c2 : ¬ ((s.loc 0) < (65 : Int)))
     (c3 : ¬ ((s.loc 0) > (70 : Int)))
-    (hrun : run P 18 s = some s') :
-    inv_60 s' := by
-    simp only [inv_22, inv_41, inv_60, inv_64]
+    (hrun : run P 16 s = some s') :
+    inv_55 s' := by
+    simp only [inv_17, inv_36, inv_55, inv_59]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [wrap_id' (by omega) (by omega)]
     rw [hexValF_of (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega),  if_pos (And.intro (by omega) (by omega))])]
 
-/-- verification/java/Chunk.java:48 -> verification/java/Chunk.java:62   (bytecode 0 -> 64, 16 steps) -/
-theorem obl_0_64_2 (s s' : State)
+/-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 14 steps) -/
+theorem obl_0_59_2 (s s' : State)
     (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : (s.loc 0) < (48 : Int))
     (c1 : ¬ ((s.loc 0) < (97 : Int)))
     (c2 : (s.loc 0) > (102 : Int))
     (c3 : (s.loc 0) < (65 : Int))
-    (hrun : run P 16 s = some s') :
-    inv_64 s' := by
-    simp only [inv_22, inv_41, inv_60, inv_64]
+    (hrun : run P 14 s = some s') :
+    inv_59 s' := by
+    simp only [inv_17, inv_36, inv_55, inv_59]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [hexValF_neg (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)])]
 
-/-- verification/java/Chunk.java:48 -> verification/java/Chunk.java:62   (bytecode 0 -> 64, 19 steps) -/
-theorem obl_0_64_3 (s s' : State)
+/-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 17 steps) -/
+theorem obl_0_59_3 (s s' : State)
     (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : (s.loc 0) < (48 : Int))
     (c1 : ¬ ((s.loc 0) < (97 : Int)))
     (c2 : (s.loc 0) > (102 : Int))
     (c3 : ¬ ((s.loc 0) < (65 : Int)))
     (c4 : (s.loc 0) > (70 : Int))
-    (hrun : run P 19 s = some s') :
-    inv_64 s' := by
-    simp only [inv_22, inv_41, inv_60, inv_64]
+    (hrun : run P 17 s = some s') :
+    inv_59 s' := by
+    simp only [inv_17, inv_36, inv_55, inv_59]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [hexValF_neg (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)])]
 
-/-- verification/java/Chunk.java:48 -> verification/java/Chunk.java:59   (bytecode 0 -> 60, 21 steps) -/
+/-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:55   (bytecode 0 -> 55, 19 steps) -/
 --   side condition: no wrap: (s.loc 0) - (55 : Int)
-theorem obl_0_60_1 (s s' : State)
+theorem obl_0_55_1 (s s' : State)
     (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : (s.loc 0) < (48 : Int))
     (c1 : ¬ ((s.loc 0) < (97 : Int)))
     (c2 : (s.loc 0) > (102 : Int))
     (c3 : ¬ ((s.loc 0) < (65 : Int)))
     (c4 : ¬ ((s.loc 0) > (70 : Int)))
-    (hrun : run P 21 s = some s') :
-    inv_60 s' := by
-    simp only [inv_22, inv_41, inv_60, inv_64]
+    (hrun : run P 19 s = some s') :
+    inv_55 s' := by
+    simp only [inv_17, inv_36, inv_55, inv_59]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [wrap_id' (by omega) (by omega)]
     rw [hexValF_of (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega),  if_pos (And.intro (by omega) (by omega))])]
 
-/-- verification/java/Chunk.java:48 -> verification/java/Chunk.java:55   (bytecode 0 -> 41, 15 steps) -/
+/-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:51   (bytecode 0 -> 36, 13 steps) -/
 --   side condition: no wrap: (s.loc 0) - (87 : Int)
-theorem obl_0_41_0 (s s' : State)
+theorem obl_0_36_0 (s s' : State)
     (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : (s.loc 0) < (48 : Int))
     (c1 : ¬ ((s.loc 0) < (97 : Int)))
     (c2 : ¬ ((s.loc 0) > (102 : Int)))
-    (hrun : run P 15 s = some s') :
-    inv_41 s' := by
-    simp only [inv_22, inv_41, inv_60, inv_64]
+    (hrun : run P 13 s = some s') :
+    inv_36 s' := by
+    simp only [inv_17, inv_36, inv_55, inv_59]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [wrap_id' (by omega) (by omega)]
     rw [hexValF_of (by unfold digitVal; rw [if_neg (by omega),  if_pos (And.intro (by omega) (by omega))])]
 
-/-- verification/java/Chunk.java:48 -> verification/java/Chunk.java:62   (bytecode 0 -> 64, 16 steps) -/
-theorem obl_0_64_4 (s s' : State)
+/-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 14 steps) -/
+theorem obl_0_59_4 (s s' : State)
     (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : (s.loc 0) > (57 : Int))
     (c2 : (s.loc 0) < (97 : Int))
     (c3 : (s.loc 0) < (65 : Int))
-    (hrun : run P 16 s = some s') :
-    inv_64 s' := by
-    simp only [inv_22, inv_41, inv_60, inv_64]
+    (hrun : run P 14 s = some s') :
+    inv_59 s' := by
+    simp only [inv_17, inv_36, inv_55, inv_59]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [hexValF_neg (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)])]
 
-/-- verification/java/Chunk.java:48 -> verification/java/Chunk.java:62   (bytecode 0 -> 64, 19 steps) -/
-theorem obl_0_64_5 (s s' : State)
+/-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 17 steps) -/
+theorem obl_0_59_5 (s s' : State)
     (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : (s.loc 0) > (57 : Int))
     (c2 : (s.loc 0) < (97 : Int))
     (c3 : ¬ ((s.loc 0) < (65 : Int)))
     (c4 : (s.loc 0) > (70 : Int))
-    (hrun : run P 19 s = some s') :
-    inv_64 s' := by
-    simp only [inv_22, inv_41, inv_60, inv_64]
+    (hrun : run P 17 s = some s') :
+    inv_59 s' := by
+    simp only [inv_17, inv_36, inv_55, inv_59]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [hexValF_neg (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)])]
 
-/-- verification/java/Chunk.java:48 -> verification/java/Chunk.java:59   (bytecode 0 -> 60, 21 steps) -/
+/-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:55   (bytecode 0 -> 55, 19 steps) -/
 --   side condition: no wrap: (s.loc 0) - (55 : Int)
-theorem obl_0_60_2 (s s' : State)
+theorem obl_0_55_2 (s s' : State)
     (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : (s.loc 0) > (57 : Int))
     (c2 : (s.loc 0) < (97 : Int))
     (c3 : ¬ ((s.loc 0) < (65 : Int)))
     (c4 : ¬ ((s.loc 0) > (70 : Int)))
-    (hrun : run P 21 s = some s') :
-    inv_60 s' := by
-    simp only [inv_22, inv_41, inv_60, inv_64]
+    (hrun : run P 19 s = some s') :
+    inv_55 s' := by
+    simp only [inv_17, inv_36, inv_55, inv_59]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [wrap_id' (by omega) (by omega)]
     rw [hexValF_of (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega),  if_pos (And.intro (by omega) (by omega))])]
 
-/-- verification/java/Chunk.java:48 -> verification/java/Chunk.java:62   (bytecode 0 -> 64, 19 steps) -/
-theorem obl_0_64_6 (s s' : State)
+/-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 17 steps) -/
+theorem obl_0_59_6 (s s' : State)
     (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : (s.loc 0) > (57 : Int))
     (c2 : ¬ ((s.loc 0) < (97 : Int)))
     (c3 : (s.loc 0) > (102 : Int))
     (c4 : (s.loc 0) < (65 : Int))
-    (hrun : run P 19 s = some s') :
-    inv_64 s' := by
-    simp only [inv_22, inv_41, inv_60, inv_64]
+    (hrun : run P 17 s = some s') :
+    inv_59 s' := by
+    simp only [inv_17, inv_36, inv_55, inv_59]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [hexValF_neg (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)])]
 
-/-- verification/java/Chunk.java:48 -> verification/java/Chunk.java:62   (bytecode 0 -> 64, 22 steps) -/
-theorem obl_0_64_7 (s s' : State)
+/-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 20 steps) -/
+theorem obl_0_59_7 (s s' : State)
     (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : (s.loc 0) > (57 : Int))
@@ -279,17 +277,17 @@ theorem obl_0_64_7 (s s' : State)
     (c3 : (s.loc 0) > (102 : Int))
     (c4 : ¬ ((s.loc 0) < (65 : Int)))
     (c5 : (s.loc 0) > (70 : Int))
-    (hrun : run P 22 s = some s') :
-    inv_64 s' := by
-    simp only [inv_22, inv_41, inv_60, inv_64]
+    (hrun : run P 20 s = some s') :
+    inv_59 s' := by
+    simp only [inv_17, inv_36, inv_55, inv_59]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [hexValF_neg (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)])]
 
-/-- verification/java/Chunk.java:48 -> verification/java/Chunk.java:59   (bytecode 0 -> 60, 24 steps) -/
+/-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:55   (bytecode 0 -> 55, 22 steps) -/
 --   side condition: no wrap: (s.loc 0) - (55 : Int)
-theorem obl_0_60_3 (s s' : State)
+theorem obl_0_55_3 (s s' : State)
     (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : (s.loc 0) > (57 : Int))
@@ -297,41 +295,41 @@ theorem obl_0_60_3 (s s' : State)
     (c3 : (s.loc 0) > (102 : Int))
     (c4 : ¬ ((s.loc 0) < (65 : Int)))
     (c5 : ¬ ((s.loc 0) > (70 : Int)))
-    (hrun : run P 24 s = some s') :
-    inv_60 s' := by
-    simp only [inv_22, inv_41, inv_60, inv_64]
+    (hrun : run P 22 s = some s') :
+    inv_55 s' := by
+    simp only [inv_17, inv_36, inv_55, inv_59]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [wrap_id' (by omega) (by omega)]
     rw [hexValF_of (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega),  if_pos (And.intro (by omega) (by omega))])]
 
-/-- verification/java/Chunk.java:48 -> verification/java/Chunk.java:55   (bytecode 0 -> 41, 18 steps) -/
+/-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:51   (bytecode 0 -> 36, 16 steps) -/
 --   side condition: no wrap: (s.loc 0) - (87 : Int)
-theorem obl_0_41_1 (s s' : State)
+theorem obl_0_36_1 (s s' : State)
     (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : (s.loc 0) > (57 : Int))
     (c2 : ¬ ((s.loc 0) < (97 : Int)))
     (c3 : ¬ ((s.loc 0) > (102 : Int)))
-    (hrun : run P 18 s = some s') :
-    inv_41 s' := by
-    simp only [inv_22, inv_41, inv_60, inv_64]
+    (hrun : run P 16 s = some s') :
+    inv_36 s' := by
+    simp only [inv_17, inv_36, inv_55, inv_59]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [wrap_id' (by omega) (by omega)]
     rw [hexValF_of (by unfold digitVal; rw [if_neg (by omega),  if_pos (And.intro (by omega) (by omega))])]
 
-/-- verification/java/Chunk.java:48 -> verification/java/Chunk.java:51   (bytecode 0 -> 22, 12 steps) -/
+/-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:47   (bytecode 0 -> 17, 10 steps) -/
 --   side condition: no wrap: (s.loc 0) - (48 : Int)
-theorem obl_0_22_0 (s s' : State)
+theorem obl_0_17_0 (s s' : State)
     (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : ¬ ((s.loc 0) > (57 : Int)))
-    (hrun : run P 12 s = some s') :
-    inv_22 s' := by
-    simp only [inv_22, inv_41, inv_60, inv_64]
+    (hrun : run P 10 s = some s') :
+    inv_17 s' := by
+    simp only [inv_17, inv_36, inv_55, inv_59]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
@@ -340,20 +338,20 @@ theorem obl_0_22_0 (s s' : State)
 
 /- Audit: every obligation must rest only on propext/Classical.choice/Quot.sound.
    A `sorryAx` here means something was left open, including via a spec string. -/
-#print axioms obl_0_64_0
-#print axioms obl_0_64_1
-#print axioms obl_0_60_0
-#print axioms obl_0_64_2
-#print axioms obl_0_64_3
-#print axioms obl_0_60_1
-#print axioms obl_0_41_0
-#print axioms obl_0_64_4
-#print axioms obl_0_64_5
-#print axioms obl_0_60_2
-#print axioms obl_0_64_6
-#print axioms obl_0_64_7
-#print axioms obl_0_60_3
-#print axioms obl_0_41_1
-#print axioms obl_0_22_0
+#print axioms obl_0_59_0
+#print axioms obl_0_59_1
+#print axioms obl_0_55_0
+#print axioms obl_0_59_2
+#print axioms obl_0_59_3
+#print axioms obl_0_55_1
+#print axioms obl_0_36_0
+#print axioms obl_0_59_4
+#print axioms obl_0_59_5
+#print axioms obl_0_55_2
+#print axioms obl_0_59_6
+#print axioms obl_0_59_7
+#print axioms obl_0_55_3
+#print axioms obl_0_36_1
+#print axioms obl_0_17_0
 
 end Generated.Chunk.hexVal

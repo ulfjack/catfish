@@ -1,6 +1,6 @@
 simp only [inv_0] at hinv
 obtain ⟨hoff, hlen, hfits, harr⟩ := hinv
-simp only [inv_10]
+simp only [inv_5]
 simp [run, step, P, hpc, hstk, State.set] at hrun
 subst hrun
 refine ⟨hoff, hlen, hfits, harr, ?_, ?_, ?_, ?_, ?_⟩
