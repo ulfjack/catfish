@@ -39,28 +39,25 @@ public final class Chunk {
   }
 
   /**
-   * Value of a HEXDIG byte (RFC 9112), -1 otherwise. Its contract is `hexValF`; proving it here
-   * discharges the `calls.map` assumption used by parseHexSize.
+   * Value of a HEXDIG byte (RFC 9112), -1 otherwise. The @Returns contract is proved for every
+   * return, and is what parseHexSize substitutes for the call (replacing calls.map).
    */
+  @Returns("hexValF c")
   public static int hexVal(byte c) {
     Verify.requires("True");
     if (c >= 48 && c <= 57) {
       int r = c - 48;
-      Verify.ensure("ret = hexValF c");
       return r;
     }
     if (c >= 97 && c <= 102) {
       int r = c - 87;
-      Verify.ensure("ret = hexValF c");
       return r;
     }
     if (c >= 65 && c <= 70) {
       int r = c - 55;
-      Verify.ensure("ret = hexValF c");
       return r;
     }
     int r = -1;
-    Verify.ensure("ret = hexValF c");
     return r;
   }
 }

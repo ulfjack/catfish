@@ -41,6 +41,9 @@ final class ClassFile {
     byte[] code;
     int maxLocals;
 
+    /** The @Returns spec string, or null. Drives the postcondition and call-site contract. */
+    String returnsSpec;
+
     /** LocalVariableTable entries, with scopes: javac reuses slots. */
     List<LocalVar> locals = new ArrayList<>();
 
@@ -158,9 +161,34 @@ final class ClassFile {
       String an = utf8(in.readUnsignedShort());
       int len = in.readInt();
       if (an.equals("Code")) readCode(m);
+      else if (an.equals("RuntimeInvisibleAnnotations") || an.equals("RuntimeVisibleAnnotations"))
+        readReturnsAnnotation(m, len);
       else in.skipNBytes(len);
     }
     return m;
+  }
+
+  /**
+   * Extract @Returns("...") from a method annotations attribute. Handles only string-valued
+   * elements, which is all @Returns needs; bails on any other element_value tag.
+   */
+  private void readReturnsAnnotation(Method m, int len) throws IOException {
+    byte[] buf = new byte[len];
+    in.readFully(buf);
+    DataInputStream a = new DataInputStream(new ByteArrayInputStream(buf));
+    int num = a.readUnsignedShort();
+    for (int i = 0; i < num; i++) {
+      String type = utf8(a.readUnsignedShort());
+      int pairs = a.readUnsignedShort();
+      String value = null;
+      for (int j = 0; j < pairs; j++) {
+        a.readUnsignedShort(); // element_name_index (only "value" for @Returns)
+        int tag = a.readUnsignedByte();
+        if (tag != 's') return; // non-string element: not @Returns as we model it
+        value = utf8(a.readUnsignedShort());
+      }
+      if (type.equals("LReturns;") && value != null) m.returnsSpec = value;
+    }
   }
 
   private void readCode(Method m) throws IOException {

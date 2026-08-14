@@ -173,9 +173,6 @@ def _java_obligations_impl(ctx):
         "--source=" + ctx.file.source.path,
     ]
     inputs = [class_jar, ctx.file.source]
-    if ctx.file.calls:
-        args.append("--calls=" + ctx.file.calls.path)
-        inputs.append(ctx.file.calls)
     if ctx.files.proofs:
         args.append("--proofs=" + ctx.files.proofs[0].dirname)
         inputs.extend(ctx.files.proofs)
@@ -211,7 +208,6 @@ _java_obligations = rule(
         "method": attr.string(mandatory = True),
         "class_name": attr.string(mandatory = True),
         "source": attr.label(allow_single_file = [".java"], mandatory = True),
-        "calls": attr.label(allow_single_file = True),
         "proofs": attr.label_list(allow_files = [".lean"]),
         # Domain specs the obligations reference, as "Module=Namespace" entries;
         # the generator emits `import Module` and opens `Namespace`.
@@ -254,7 +250,7 @@ _golden_diff_test = rule(
     },
 )
 
-def java_verification_test(name, lib, method, source, proofs, golden, calls = None, specs = [], deps = [], class_name = None, **kwargs):
+def java_verification_test(name, lib, method, source, proofs, golden, specs = [], deps = [], class_name = None, **kwargs):
     """Verify one method of a java_library by proving its bytecode in Lean.
 
     `lean_test` checks the checked-in `golden` obligations file (so the file you
@@ -277,7 +273,6 @@ def java_verification_test(name, lib, method, source, proofs, golden, calls = No
         method = method,
         class_name = class_name,
         source = source,
-        calls = calls,
         proofs = proofs,
         specs = specs,
     )

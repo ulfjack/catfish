@@ -1,4 +1,0 @@
-# invokestatic target = Lean function of type Int -> Int
-# hexValF is not merely assumed: //verification:chunk_hexval proves the bytecode
-# of Chunk.hexVal computes it, discharging this substitution.
-Chunk.hexVal:(B)I = hexValF

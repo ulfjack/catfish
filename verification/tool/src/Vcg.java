@@ -49,7 +49,26 @@ final class Vcg {
     this.javaFile = javaFile;
     decode();
     markCutPoints();
+    synthReturnCutPoints();
     checkBackEdges();
+  }
+
+  /**
+   * With @Returns("expr"), every `return <local>;` carries the postcondition `ret = expr` without
+   * an explicit Verify.ensure. Turn each `iload r; ireturn` into an ensure cut point, exactly as a
+   * hand-written Verify.ensure("ret = expr") would have produced.
+   */
+  private void synthReturnCutPoints() {
+    if (m.returnsSpec == null) return;
+    for (int k = 0; k + 1 < ins.size(); k++) {
+      Ins a = ins.get(k), b = ins.get(k + 1);
+      if (a.kind.equals("iload") && b.isReturn) {
+        a.isMarkerLdc = true; // isMarkerLdc == "is a cut point" downstream
+        a.markerKind = "ensure";
+        a.retSlot = a.slot;
+        a.specString = "ret = " + m.returnsSpec;
+      }
+    }
   }
 
   // ---------- decoding ----------

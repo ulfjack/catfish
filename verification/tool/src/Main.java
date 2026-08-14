@@ -18,9 +18,9 @@ public final class Main {
     String method = req(opt, "method");
     Path out = Path.of(req(opt, "out"));
     String javaFile = opt.getOrDefault("source", cls.getFileName().toString());
-    Map<String, String> callMap = readCallMap(opt.get("calls"));
 
     ClassFile cf = new ClassFile(cls);
+    Map<String, String> callMap = buildCallMap(cf);
     Vcg v = new Vcg(cf, method, callMap, javaFile);
     if (v.errors.isEmpty()) v.explore(); // structural errors first: an
     // uninstrumented loop makes the
@@ -56,23 +56,42 @@ public final class Main {
     return s;
   }
 
-  private static Map<String, String> readCallMap(String p) throws Exception {
+  /**
+   * The call map, built from @Returns annotations: each annotated static method becomes a contract
+   * substituted at its call sites. `@Returns("hexValF c")` on `int hexVal(byte c)` yields
+   * `Chunk.hexVal:(B)I -> hexValF` (eta-reduced from `fun c => hexValF c`).
+   */
+  private static Map<String, String> buildCallMap(ClassFile cf) {
     Map<String, String> m = new LinkedHashMap<>();
-    if (p == null) return m;
-    for (String line : Files.readAllLines(Path.of(p))) {
-      line = line.trim();
-      if (line.isEmpty() || line.startsWith("#")) continue;
-      int i = line.indexOf('=');
-      m.put(line.substring(0, i).trim(), line.substring(i + 1).trim());
+    for (ClassFile.Method mm : cf.methods) {
+      if (mm.returnsSpec == null) continue;
+      String param = paramName(mm);
+      m.put(cf.thisClass + "." + mm.name + ":" + mm.desc, contractFn(mm.returnsSpec, param));
     }
     return m;
+  }
+
+  /** Name of the single value parameter (slot 0 for a static method). */
+  private static String paramName(ClassFile.Method mm) {
+    for (ClassFile.LocalVar lv : mm.locals) if (lv.slot == 0) return lv.name;
+    return "x";
+  }
+
+  /** `fun param => expr`, eta-reduced to `f` when expr is exactly `f param`. */
+  private static String contractFn(String expr, String param) {
+    String suffix = " " + param;
+    if (expr.endsWith(suffix)) {
+      String head = expr.substring(0, expr.length() - suffix.length()).trim();
+      if (!head.isEmpty() && !head.contains(" ")) return head;
+    }
+    return "(fun " + param + " => " + expr + ")";
   }
 
   private static void usage() {
     System.err.println(
         """
         usage: jvmlean --class=Foo.class --method=bar --out=lean/Generated/Foo_bar.lean
-                       [--calls=calls.map] [--source=Foo.java]
+                       [--source=Foo.java] [--proofs=dir] [--specs=Module=Namespace,...]
         """);
   }
 }

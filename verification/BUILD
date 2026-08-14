@@ -37,6 +37,7 @@ java_library(
     name = "chunk_java",
     srcs = [
         "java/Chunk.java",
+        "java/Returns.java",
         "java/Verify.java",
     ],
 )
@@ -49,7 +50,6 @@ java_verification_test(
     lib = ":chunk_java",
     method = "parseHexSize",
     source = "java/Chunk.java",
-    calls = "java/calls.map",
     proofs = glob(["proofs/Chunk_parseHexSize/*.lean"]),
     # Checked-in obligations: the file lean_test proves and humans review.
     # `:chunk_golden` fails if it drifts from what the generator emits.
@@ -61,15 +61,14 @@ java_verification_test(
     ],
 )
 
-# Discharges the calls.map assumption used above: proves the bytecode of
-# Chunk.hexVal actually computes hexValF. Branch-only (no loop); the short-circuit
-# && expands to 15 paths, hence 15 obligations.
+# Proves Chunk.hexVal satisfies its @Returns("hexValF c") contract -- the same
+# contract parseHexSize substitutes at the call site. Branch-only (no loop); the
+# short-circuit && expands to 15 paths, hence 15 obligations.
 java_verification_test(
     name = "chunk_hexval",
     lib = ":chunk_java",
     method = "hexVal",
     source = "java/Chunk.java",
-    calls = "java/calls.map",
     proofs = glob(["proofs/Chunk_hexVal/*.lean"]),
     golden = "Generated/Chunk_hexVal.lean",
     specs = ["ChunkedEncodingSpec=ChunkedEncoding"],
