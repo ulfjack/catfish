@@ -1422,6 +1422,33 @@ public class Http2ServerStageTest {
   }
 
   @Test
+  public void exceedingMaxConcurrentStreams_refusedWithRefusedStream() throws IOException {
+    // The stage advertises SETTINGS_MAX_CONCURRENT_STREAMS = 100. The default echo handler commits
+    // synchronously, but we never drainOutput(), so every opened stream stays in the map (its
+    // response is ready but not yet written and removed). Opening one more than the limit must be
+    // refused with RST_STREAM(REFUSED_STREAM), not opened — otherwise a peer that ignores the
+    // advertised limit could grow the streams map (and heldRequests) without bound.
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput(); // clear server SETTINGS + ACK; leave stream responses buffered in the map
+
+    int maxConcurrent = 100; // matches DEFAULT_MAX_CONCURRENT_STREAMS
+    for (int i = 0; i < maxConcurrent; i++) {
+      feedAndRead(buildGetHeadersFrame(2 * i + 1, "/"));
+    }
+    assertEquals(
+        "every stream up to the limit is accepted", maxConcurrent, dispatchedRequests.size());
+
+    int overLimitStreamId = 2 * maxConcurrent + 1;
+    feedAndRead(buildGetHeadersFrame(overLimitStreamId, "/"));
+    assertEquals(
+        "stream over the limit must not be dispatched", maxConcurrent, dispatchedRequests.size());
+    assertEquals(
+        "stream over the limit must be refused with REFUSED_STREAM",
+        ErrorCode.REFUSED_STREAM,
+        rstStreamErrorCode(drainOutput(), overLimitStreamId));
+  }
+
+  @Test
   public void pingAck_isIgnored() throws IOException {
     feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
     drainOutput();
