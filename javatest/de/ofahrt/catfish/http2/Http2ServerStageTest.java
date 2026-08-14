@@ -1449,6 +1449,50 @@ public class Http2ServerStageTest {
   }
 
   @Test
+  public void dataAfterEndStream_rejectedWithStreamClosed() throws IOException {
+    // GET with END_STREAM at header time: stream 1 is half-closed(remote), its response is buffered
+    // but not yet written (we never drainOutput), so the stream is still in the map. A DATA frame
+    // now is illegal (RFC 9113 §5.1) and must be answered with RST_STREAM(STREAM_CLOSED), without
+    // appending the bytes to the completed request or re-dispatching it.
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+    feedAndRead(buildGetHeadersFrame(1, "/"));
+    assertEquals(1, dispatchedRequests.size());
+
+    feedAndRead(dataFrame(1, "late".getBytes(StandardCharsets.UTF_8), /* endStream= */ false));
+    assertEquals("stray DATA must not re-dispatch", 1, dispatchedRequests.size());
+    assertEquals(
+        "DATA after END_STREAM must be answered with RST_STREAM(STREAM_CLOSED)",
+        ErrorCode.STREAM_CLOSED,
+        rstStreamErrorCode(drainOutput(), 1));
+  }
+
+  @Test
+  public void secondEndStreamOnBodyStream_notReDispatched() throws IOException {
+    // Regression: after a POST body completes (HEADERS without END_STREAM + DATA with END_STREAM),
+    // the stream's builder/routingResult stay set. A second DATA(END_STREAM) on the now
+    // half-closed stream must not run the dispatch block again — it is a STREAM_CLOSED error.
+    List<HttpRequest> received = new ArrayList<>();
+    rebuildStage(
+        uploadAllowed(
+            (c, r, w) -> {
+              received.add(r);
+              w.commitBuffered(StandardResponses.OK.withBody(new byte[0]));
+            }),
+        null);
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
+    drainOutput();
+
+    feedAndRead(postHeadersFrame(1, "/submit", /* endStream= */ false, /* contentLength= */ -1));
+    feedAndRead(dataFrame(1, "hello".getBytes(StandardCharsets.UTF_8), /* endStream= */ true));
+    assertEquals("body request dispatched once", 1, received.size());
+
+    feedAndRead(dataFrame(1, "again".getBytes(StandardCharsets.UTF_8), /* endStream= */ true));
+    assertEquals("stream must not be dispatched twice", 1, received.size());
+    assertEquals(ErrorCode.STREAM_CLOSED, rstStreamErrorCode(drainOutput(), 1));
+  }
+
+  @Test
   public void pingAck_isIgnored() throws IOException {
     feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings()));
     drainOutput();
