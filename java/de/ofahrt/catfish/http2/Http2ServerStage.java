@@ -604,9 +604,18 @@ public final class Http2ServerStage implements Stage {
     boolean endStream = frameReader.hasFlag(FrameFlags.FLAG_END_STREAM);
     byte[] payload = frameReader.getPayload();
 
+    // RFC 9113 §6.9.1: every DATA frame counts against the connection-level flow-control window,
+    // even one we drop (unknown/closed stream) or reject (§5.1 STREAM_CLOSED). This credit is the
+    // connection window's only replenishment, so it MUST run for every frame, before any early
+    // return. Otherwise a well-behaved client that keeps uploading after we closed a stream — e.g.
+    // we responded 401/413/redirect before reading the whole body — never gets those bytes credited
+    // back; the window (shared by all streams) drains to zero and every stream on the connection
+    // stalls. The full frame payload, including padding, is flow-controlled.
+    creditConnectionWindow(payload.length);
+
     Http2Stream stream = streams.get(streamId);
     if (stream == null) {
-      // Stream may have been reset or doesn't exist.
+      // Unknown or already-closed stream: drop the DATA. The connection window was credited above.
       return;
     }
 
@@ -635,21 +644,12 @@ public final class Http2ServerStage implements Stage {
           sendErrorResponse(stream, StandardResponses.PAYLOAD_TOO_LARGE);
         }
       }
-      // Accumulate pending WINDOW_UPDATE bytes (full frame payload, including padding).
-      // Emit when above threshold to avoid amplifying small DATA frames into larger replies.
+      // Stream-level flow control (full frame payload, including padding). Emit past the threshold
+      // to avoid amplifying small DATA frames into larger replies. The connection-level window is
+      // already credited above.
       stream.addPendingAckBytes(payload.length);
-      pendingConnAckBytes += payload.length;
-      boolean emitted = false;
       if (stream.getPendingAckBytes() >= WINDOW_UPDATE_THRESHOLD) {
         queueWindowUpdate(streamId, stream.takePendingAckBytes());
-        emitted = true;
-      }
-      if (pendingConnAckBytes >= WINDOW_UPDATE_THRESHOLD) {
-        queueWindowUpdate(0, pendingConnAckBytes);
-        pendingConnAckBytes = 0;
-        emitted = true;
-      }
-      if (emitted) {
         parent.encourageWrites();
       }
     }
@@ -664,6 +664,22 @@ public final class Http2ServerStage implements Stage {
       if (builder != null && serve != null && !stream.isBodyRejected()) {
         dispatchRequest(stream, builder, serve);
       }
+    }
+  }
+
+  /**
+   * Credits the connection-level flow-control window for a received DATA frame of {@code
+   * frameLength} bytes (the full payload, including padding), emitting a connection WINDOW_UPDATE
+   * once the accumulated credit passes the threshold. Must be called for every DATA frame received
+   * — including frames we drop or reject — so the window (shared by all streams) is never drained
+   * by bytes we chose not to consume (RFC 9113 §6.9.1). NIO thread only.
+   */
+  private void creditConnectionWindow(int frameLength) {
+    pendingConnAckBytes += frameLength;
+    if (pendingConnAckBytes >= WINDOW_UPDATE_THRESHOLD) {
+      queueWindowUpdate(0, pendingConnAckBytes);
+      pendingConnAckBytes = 0;
+      parent.encourageWrites();
     }
   }
 
