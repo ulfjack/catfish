@@ -70,7 +70,7 @@ def P : Nat → Option Instr
 
 
 /-- requires at bytecode offset 0, verification/java/Chunk.java:7 -/
-def inv_0 (s : State) : Prop :=
+def inv_pre (s : State) : Prop :=
   let alen : Int := (s.alen : Int)
   let b : Nat → Int := s.arr
   let off : Int := s.loc 1
@@ -78,7 +78,7 @@ def inv_0 (s : State) : Prop :=
   (0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ alen ∧ alen ≤ MAXI)
 
 /-- invariant at bytecode offset 5, verification/java/Chunk.java:10 -/
-def inv_5 (s : State) : Prop :=
+def inv_loop0 (s : State) : Prop :=
   let alen : Int := (s.alen : Int)
   let b : Nat → Int := s.arr
   let off : Int := s.loc 1
@@ -90,7 +90,7 @@ def inv_5 (s : State) : Prop :=
    valOf b off.toNat i.toNat = some acc)
 
 /-- ensure at bytecode offset 38, verification/java/Chunk.java:20 -/
-def inv_38 (s : State) : Prop :=
+def inv_ret0 (s : State) : Prop :=
   let alen : Int := (s.alen : Int)
   let r : Int := s.loc 6
   let d : Int := s.loc 5
@@ -103,7 +103,7 @@ def inv_38 (s : State) : Prop :=
   (ret = -1)
 
 /-- ensure at bytecode offset 61, verification/java/Chunk.java:25 -/
-def inv_61 (s : State) : Prop :=
+def inv_ret1 (s : State) : Prop :=
   let alen : Int := (s.alen : Int)
   let r : Int := s.loc 6
   let d : Int := s.loc 5
@@ -116,7 +116,7 @@ def inv_61 (s : State) : Prop :=
   (ret = -1)
 
 /-- ensure at bytecode offset 89, verification/java/Chunk.java:32 -/
-def inv_89 (s : State) : Prop :=
+def inv_ret2 (s : State) : Prop :=
   let alen : Int := (s.alen : Int)
   let b : Nat → Int := s.arr
   let off : Int := s.loc 1
@@ -128,13 +128,13 @@ def inv_89 (s : State) : Prop :=
   (valOf b off.toNat len.toNat = some ret)
 
 /-- verification/java/Chunk.java:7 -> verification/java/Chunk.java:10   (bytecode 0 -> 5, 4 steps) -/
-theorem obl_0_5_0 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_loop0_0 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (hrun : run P 4 s = some s') :
-    inv_5 s' := by
-  simp only [inv_0] at hinv
+    inv_loop0 s' := by
+  simp only [inv_pre] at hinv
   obtain ⟨hoff, hlen, hfits, harr⟩ := hinv
-  simp only [inv_5]
+  simp only [inv_loop0]
   simp [run, step, P, hpc, hstk, State.set] at hrun
   subst hrun
   refine ⟨hoff, hlen, hfits, harr, ?_, ?_, ?_, ?_, ?_⟩
@@ -152,14 +152,14 @@ theorem obl_0_5_0 (s s' : State)
 --   side condition: no wrap: (s.loc 3) * (16 : Int)
 --   side condition: no wrap: (wrap ((s.loc 3) * (16 : Int))) + (hexValF (s.arr ((wrap ((s.loc 1) + (s.loc 4)))).toNat))
 --   side condition: no wrap: (s.loc 4) + (1 : Int)
-theorem obl_5_5_0 (s s' : State)
-    (hinv : inv_5 s) (hpc : s.pc = 4) (hstk : s.stk = [])
+theorem obl_loop0_loop0_0 (s s' : State)
+    (hinv : inv_loop0 s) (hpc : s.pc = 4) (hstk : s.stk = [])
     (c0 : (s.loc 4) < (s.loc 2))
     (c1 : (hexValF (s.arr ((wrap ((s.loc 1) + (s.loc 4)))).toNat)) ≥ (0 : Int))
     (c2 : (s.loc 3) ≤ (wrap (Int.div (wrap ((2147483647 : Int) - (hexValF (s.arr ((wrap ((s.loc 1) + (s.loc 4)))).toNat)))) (16 : Int))))
     (hrun : run P 32 s = some s') :
-    inv_5 s' := by
-  simp only [inv_5] at hinv
+    inv_loop0 s' := by
+  simp only [inv_loop0] at hinv
   obtain ⟨hoff, hlen, hfits, harr, hi0, hile, hacc0, haccm, haccv⟩ := hinv
   unfold MAXI at harr haccm
   have hidx : wrap (s.loc 1 + s.loc 4) = s.loc 1 + s.loc 4 := by
@@ -192,7 +192,7 @@ theorem obl_5_5_0 (s s' : State)
     have hbnd : 0 ≤ s.loc 1 + s.loc 4 ∧ s.loc 1 + s.loc 4 < (s.alen : Int) := by omega
     have htn1 : (s.loc 4 + 1).toNat = (s.loc 4).toNat + 1 := by
       rw [Int.toNat_add hi0 (by omega)]; rfl
-    simp only [inv_5]
+    simp only [inv_loop0]
     simp [run, step, P, hpc, hstk, State.set, hidx, htn, hexValF_of hdv, hsub, hdv16,
           hmul, hadd, hinc, hbnd, c0, hd0, c2, pLt, pLe, zGe] at hrun
     subst hrun
@@ -208,20 +208,20 @@ theorem obl_5_5_0 (s s' : State)
 --   side condition: in bounds: 0 ≤ (wrap ((s.loc 1) + (s.loc 4))) ∧ (wrap ((s.loc 1) + (s.loc 4))) < (s.alen : Int)
 --   side condition: no wrap: (2147483647 : Int) - (hexValF (s.arr ((wrap ((s.loc 1) + (s.loc 4)))).toNat))
 --   side condition: nonzero divisor: (16 : Int)
-theorem obl_5_61_0 (s s' : State)
-    (hinv : inv_5 s) (hpc : s.pc = 4) (hstk : s.stk = [])
+theorem obl_loop0_ret1_0 (s s' : State)
+    (hinv : inv_loop0 s) (hpc : s.pc = 4) (hstk : s.stk = [])
     (c0 : (s.loc 4) < (s.loc 2))
     (c1 : (hexValF (s.arr ((wrap ((s.loc 1) + (s.loc 4)))).toNat)) ≥ (0 : Int))
     (c2 : ¬ ((s.loc 3) ≤ (wrap (Int.div (wrap ((2147483647 : Int) - (hexValF (s.arr ((wrap ((s.loc 1) + (s.loc 4)))).toNat)))) (16 : Int)))))
     (hrun : run P 23 s = some s') :
-    inv_61 s' := by
-  simp only [inv_5] at hinv
+    inv_ret1 s' := by
+  simp only [inv_loop0] at hinv
   obtain ⟨hoff, hlen, hfits, harr, hi0, hile, hacc0, haccm, haccv⟩ := hinv
   unfold MAXI at harr haccm
   have hidx : wrap (s.loc 1 + s.loc 4) = s.loc 1 + s.loc 4 := by apply wrap_id' <;> omega
   rw [hidx] at c1 c2
   have hbnd : 0 ≤ s.loc 1 + s.loc 4 ∧ s.loc 1 + s.loc 4 < (s.alen : Int) := by omega
-  simp only [inv_61]
+  simp only [inv_ret1]
   simp [run, step, P, hpc, hstk, State.set, hidx, hbnd, c0, c1, c2, pLt, pLe, zGe] at hrun
   subst hrun
   simp [State.set]
@@ -229,33 +229,33 @@ theorem obl_5_61_0 (s s' : State)
 /-- verification/java/Chunk.java:10 -> verification/java/Chunk.java:20   (bytecode 5 -> 38, 16 steps) -/
 --   side condition: no wrap: (s.loc 1) + (s.loc 4)
 --   side condition: in bounds: 0 ≤ (wrap ((s.loc 1) + (s.loc 4))) ∧ (wrap ((s.loc 1) + (s.loc 4))) < (s.alen : Int)
-theorem obl_5_38_0 (s s' : State)
-    (hinv : inv_5 s) (hpc : s.pc = 4) (hstk : s.stk = [])
+theorem obl_loop0_ret0_0 (s s' : State)
+    (hinv : inv_loop0 s) (hpc : s.pc = 4) (hstk : s.stk = [])
     (c0 : (s.loc 4) < (s.loc 2))
     (c1 : ¬ ((hexValF (s.arr ((wrap ((s.loc 1) + (s.loc 4)))).toNat)) ≥ (0 : Int)))
     (hrun : run P 16 s = some s') :
-    inv_38 s' := by
-  simp only [inv_5] at hinv
+    inv_ret0 s' := by
+  simp only [inv_loop0] at hinv
   obtain ⟨hoff, hlen, hfits, harr, hi0, hile, hacc0, haccm, haccv⟩ := hinv
   unfold MAXI at harr haccm
   have hidx : wrap (s.loc 1 + s.loc 4) = s.loc 1 + s.loc 4 := by apply wrap_id' <;> omega
   rw [hidx] at c1
   have hbnd : 0 ≤ s.loc 1 + s.loc 4 ∧ s.loc 1 + s.loc 4 < (s.alen : Int) := by omega
-  simp only [inv_38]
+  simp only [inv_ret0]
   simp [run, step, P, hpc, hstk, State.set, hidx, hbnd, c0, c1, pLt, zGe] at hrun
   subst hrun
   simp [State.set]
 
 /-- verification/java/Chunk.java:10 -> verification/java/Chunk.java:32   (bytecode 5 -> 89, 8 steps) -/
-theorem obl_5_89_0 (s s' : State)
-    (hinv : inv_5 s) (hpc : s.pc = 4) (hstk : s.stk = [])
+theorem obl_loop0_ret2_0 (s s' : State)
+    (hinv : inv_loop0 s) (hpc : s.pc = 4) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 4) < (s.loc 2)))
     (hrun : run P 8 s = some s') :
-    inv_89 s' := by
-  simp only [inv_5] at hinv
+    inv_ret2 s' := by
+  simp only [inv_loop0] at hinv
   obtain ⟨hoff, hlen, hfits, harr, hi0, hile, hacc0, haccm, haccv⟩ := hinv
   have hieq : s.loc 2 = s.loc 4 := by omega
-  simp only [inv_89]
+  simp only [inv_ret2]
   simp [run, step, P, hpc, hstk, State.set, c0, pLt] at hrun
   subst hrun
   simp only [State.set, hieq]
@@ -263,10 +263,10 @@ theorem obl_5_89_0 (s s' : State)
 
 /- Audit: every obligation must rest only on propext/Classical.choice/Quot.sound.
    A `sorryAx` here means something was left open, including via a spec string. -/
-#print axioms obl_0_5_0
-#print axioms obl_5_5_0
-#print axioms obl_5_61_0
-#print axioms obl_5_38_0
-#print axioms obl_5_89_0
+#print axioms obl_pre_loop0_0
+#print axioms obl_loop0_loop0_0
+#print axioms obl_loop0_ret1_0
+#print axioms obl_loop0_ret0_0
+#print axioms obl_loop0_ret2_0
 
 end Generated.Chunk.parseHexSize

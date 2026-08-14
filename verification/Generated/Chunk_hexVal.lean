@@ -55,13 +55,13 @@ def P : Nat → Option Instr
 
 
 /-- requires at bytecode offset 0, verification/java/Chunk.java:45 -/
-def inv_0 (s : State) : Prop :=
+def inv_pre (s : State) : Prop :=
   let alen : Int := (s.alen : Int)
   let c : Int := s.loc 0
   (True)
 
 /-- ensure at bytecode offset 17, verification/java/Chunk.java:47 -/
-def inv_17 (s : State) : Prop :=
+def inv_ret0 (s : State) : Prop :=
   let alen : Int := (s.alen : Int)
   let r : Int := s.loc 1
   let c : Int := s.loc 0
@@ -69,7 +69,7 @@ def inv_17 (s : State) : Prop :=
   (ret = hexValF c)
 
 /-- ensure at bytecode offset 36, verification/java/Chunk.java:51 -/
-def inv_36 (s : State) : Prop :=
+def inv_ret1 (s : State) : Prop :=
   let alen : Int := (s.alen : Int)
   let r : Int := s.loc 1
   let c : Int := s.loc 0
@@ -77,7 +77,7 @@ def inv_36 (s : State) : Prop :=
   (ret = hexValF c)
 
 /-- ensure at bytecode offset 55, verification/java/Chunk.java:55 -/
-def inv_55 (s : State) : Prop :=
+def inv_ret2 (s : State) : Prop :=
   let alen : Int := (s.alen : Int)
   let r : Int := s.loc 1
   let c : Int := s.loc 0
@@ -85,7 +85,7 @@ def inv_55 (s : State) : Prop :=
   (ret = hexValF c)
 
 /-- ensure at bytecode offset 59, verification/java/Chunk.java:58 -/
-def inv_59 (s : State) : Prop :=
+def inv_ret3 (s : State) : Prop :=
   let alen : Int := (s.alen : Int)
   let c : Int := s.loc 0
   let r : Int := s.loc 1
@@ -93,29 +93,29 @@ def inv_59 (s : State) : Prop :=
   (ret = hexValF c)
 
 /-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 11 steps) -/
-theorem obl_0_59_0 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_ret3_0 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : (s.loc 0) < (48 : Int))
     (c1 : (s.loc 0) < (97 : Int))
     (c2 : (s.loc 0) < (65 : Int))
     (hrun : run P 11 s = some s') :
-    inv_59 s' := by
-    simp only [inv_17, inv_36, inv_55, inv_59]
+    inv_ret3 s' := by
+    simp only [inv_ret0, inv_ret1, inv_ret2, inv_ret3]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [hexValF_neg (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)])]
 
 /-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 14 steps) -/
-theorem obl_0_59_1 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_ret3_1 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : (s.loc 0) < (48 : Int))
     (c1 : (s.loc 0) < (97 : Int))
     (c2 : ¬ ((s.loc 0) < (65 : Int)))
     (c3 : (s.loc 0) > (70 : Int))
     (hrun : run P 14 s = some s') :
-    inv_59 s' := by
-    simp only [inv_17, inv_36, inv_55, inv_59]
+    inv_ret3 s' := by
+    simp only [inv_ret0, inv_ret1, inv_ret2, inv_ret3]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
@@ -123,15 +123,15 @@ theorem obl_0_59_1 (s s' : State)
 
 /-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:55   (bytecode 0 -> 55, 16 steps) -/
 --   side condition: no wrap: (s.loc 0) - (55 : Int)
-theorem obl_0_55_0 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_ret2_0 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : (s.loc 0) < (48 : Int))
     (c1 : (s.loc 0) < (97 : Int))
     (c2 : ¬ ((s.loc 0) < (65 : Int)))
     (c3 : ¬ ((s.loc 0) > (70 : Int)))
     (hrun : run P 16 s = some s') :
-    inv_55 s' := by
-    simp only [inv_17, inv_36, inv_55, inv_59]
+    inv_ret2 s' := by
+    simp only [inv_ret0, inv_ret1, inv_ret2, inv_ret3]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
@@ -139,31 +139,31 @@ theorem obl_0_55_0 (s s' : State)
     rw [hexValF_of (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega),  if_pos (And.intro (by omega) (by omega))])]
 
 /-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 14 steps) -/
-theorem obl_0_59_2 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_ret3_2 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : (s.loc 0) < (48 : Int))
     (c1 : ¬ ((s.loc 0) < (97 : Int)))
     (c2 : (s.loc 0) > (102 : Int))
     (c3 : (s.loc 0) < (65 : Int))
     (hrun : run P 14 s = some s') :
-    inv_59 s' := by
-    simp only [inv_17, inv_36, inv_55, inv_59]
+    inv_ret3 s' := by
+    simp only [inv_ret0, inv_ret1, inv_ret2, inv_ret3]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [hexValF_neg (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)])]
 
 /-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 17 steps) -/
-theorem obl_0_59_3 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_ret3_3 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : (s.loc 0) < (48 : Int))
     (c1 : ¬ ((s.loc 0) < (97 : Int)))
     (c2 : (s.loc 0) > (102 : Int))
     (c3 : ¬ ((s.loc 0) < (65 : Int)))
     (c4 : (s.loc 0) > (70 : Int))
     (hrun : run P 17 s = some s') :
-    inv_59 s' := by
-    simp only [inv_17, inv_36, inv_55, inv_59]
+    inv_ret3 s' := by
+    simp only [inv_ret0, inv_ret1, inv_ret2, inv_ret3]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
@@ -171,16 +171,16 @@ theorem obl_0_59_3 (s s' : State)
 
 /-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:55   (bytecode 0 -> 55, 19 steps) -/
 --   side condition: no wrap: (s.loc 0) - (55 : Int)
-theorem obl_0_55_1 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_ret2_1 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : (s.loc 0) < (48 : Int))
     (c1 : ¬ ((s.loc 0) < (97 : Int)))
     (c2 : (s.loc 0) > (102 : Int))
     (c3 : ¬ ((s.loc 0) < (65 : Int)))
     (c4 : ¬ ((s.loc 0) > (70 : Int)))
     (hrun : run P 19 s = some s') :
-    inv_55 s' := by
-    simp only [inv_17, inv_36, inv_55, inv_59]
+    inv_ret2 s' := by
+    simp only [inv_ret0, inv_ret1, inv_ret2, inv_ret3]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
@@ -189,14 +189,14 @@ theorem obl_0_55_1 (s s' : State)
 
 /-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:51   (bytecode 0 -> 36, 13 steps) -/
 --   side condition: no wrap: (s.loc 0) - (87 : Int)
-theorem obl_0_36_0 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_ret1_0 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : (s.loc 0) < (48 : Int))
     (c1 : ¬ ((s.loc 0) < (97 : Int)))
     (c2 : ¬ ((s.loc 0) > (102 : Int)))
     (hrun : run P 13 s = some s') :
-    inv_36 s' := by
-    simp only [inv_17, inv_36, inv_55, inv_59]
+    inv_ret1 s' := by
+    simp only [inv_ret0, inv_ret1, inv_ret2, inv_ret3]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
@@ -204,31 +204,31 @@ theorem obl_0_36_0 (s s' : State)
     rw [hexValF_of (by unfold digitVal; rw [if_neg (by omega),  if_pos (And.intro (by omega) (by omega))])]
 
 /-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 14 steps) -/
-theorem obl_0_59_4 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_ret3_4 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : (s.loc 0) > (57 : Int))
     (c2 : (s.loc 0) < (97 : Int))
     (c3 : (s.loc 0) < (65 : Int))
     (hrun : run P 14 s = some s') :
-    inv_59 s' := by
-    simp only [inv_17, inv_36, inv_55, inv_59]
+    inv_ret3 s' := by
+    simp only [inv_ret0, inv_ret1, inv_ret2, inv_ret3]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [hexValF_neg (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)])]
 
 /-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 17 steps) -/
-theorem obl_0_59_5 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_ret3_5 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : (s.loc 0) > (57 : Int))
     (c2 : (s.loc 0) < (97 : Int))
     (c3 : ¬ ((s.loc 0) < (65 : Int)))
     (c4 : (s.loc 0) > (70 : Int))
     (hrun : run P 17 s = some s') :
-    inv_59 s' := by
-    simp only [inv_17, inv_36, inv_55, inv_59]
+    inv_ret3 s' := by
+    simp only [inv_ret0, inv_ret1, inv_ret2, inv_ret3]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
@@ -236,16 +236,16 @@ theorem obl_0_59_5 (s s' : State)
 
 /-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:55   (bytecode 0 -> 55, 19 steps) -/
 --   side condition: no wrap: (s.loc 0) - (55 : Int)
-theorem obl_0_55_2 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_ret2_2 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : (s.loc 0) > (57 : Int))
     (c2 : (s.loc 0) < (97 : Int))
     (c3 : ¬ ((s.loc 0) < (65 : Int)))
     (c4 : ¬ ((s.loc 0) > (70 : Int)))
     (hrun : run P 19 s = some s') :
-    inv_55 s' := by
-    simp only [inv_17, inv_36, inv_55, inv_59]
+    inv_ret2 s' := by
+    simp only [inv_ret0, inv_ret1, inv_ret2, inv_ret3]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
@@ -253,24 +253,24 @@ theorem obl_0_55_2 (s s' : State)
     rw [hexValF_of (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega),  if_pos (And.intro (by omega) (by omega))])]
 
 /-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 17 steps) -/
-theorem obl_0_59_6 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_ret3_6 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : (s.loc 0) > (57 : Int))
     (c2 : ¬ ((s.loc 0) < (97 : Int)))
     (c3 : (s.loc 0) > (102 : Int))
     (c4 : (s.loc 0) < (65 : Int))
     (hrun : run P 17 s = some s') :
-    inv_59 s' := by
-    simp only [inv_17, inv_36, inv_55, inv_59]
+    inv_ret3 s' := by
+    simp only [inv_ret0, inv_ret1, inv_ret2, inv_ret3]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
     rw [hexValF_neg (by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)])]
 
 /-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:58   (bytecode 0 -> 59, 20 steps) -/
-theorem obl_0_59_7 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_ret3_7 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : (s.loc 0) > (57 : Int))
     (c2 : ¬ ((s.loc 0) < (97 : Int)))
@@ -278,8 +278,8 @@ theorem obl_0_59_7 (s s' : State)
     (c4 : ¬ ((s.loc 0) < (65 : Int)))
     (c5 : (s.loc 0) > (70 : Int))
     (hrun : run P 20 s = some s') :
-    inv_59 s' := by
-    simp only [inv_17, inv_36, inv_55, inv_59]
+    inv_ret3 s' := by
+    simp only [inv_ret0, inv_ret1, inv_ret2, inv_ret3]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
@@ -287,8 +287,8 @@ theorem obl_0_59_7 (s s' : State)
 
 /-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:55   (bytecode 0 -> 55, 22 steps) -/
 --   side condition: no wrap: (s.loc 0) - (55 : Int)
-theorem obl_0_55_3 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_ret2_3 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : (s.loc 0) > (57 : Int))
     (c2 : ¬ ((s.loc 0) < (97 : Int)))
@@ -296,8 +296,8 @@ theorem obl_0_55_3 (s s' : State)
     (c4 : ¬ ((s.loc 0) < (65 : Int)))
     (c5 : ¬ ((s.loc 0) > (70 : Int)))
     (hrun : run P 22 s = some s') :
-    inv_55 s' := by
-    simp only [inv_17, inv_36, inv_55, inv_59]
+    inv_ret2 s' := by
+    simp only [inv_ret0, inv_ret1, inv_ret2, inv_ret3]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
@@ -306,15 +306,15 @@ theorem obl_0_55_3 (s s' : State)
 
 /-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:51   (bytecode 0 -> 36, 16 steps) -/
 --   side condition: no wrap: (s.loc 0) - (87 : Int)
-theorem obl_0_36_1 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_ret1_1 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : (s.loc 0) > (57 : Int))
     (c2 : ¬ ((s.loc 0) < (97 : Int)))
     (c3 : ¬ ((s.loc 0) > (102 : Int)))
     (hrun : run P 16 s = some s') :
-    inv_36 s' := by
-    simp only [inv_17, inv_36, inv_55, inv_59]
+    inv_ret1 s' := by
+    simp only [inv_ret0, inv_ret1, inv_ret2, inv_ret3]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
@@ -323,13 +323,13 @@ theorem obl_0_36_1 (s s' : State)
 
 /-- verification/java/Chunk.java:45 -> verification/java/Chunk.java:47   (bytecode 0 -> 17, 10 steps) -/
 --   side condition: no wrap: (s.loc 0) - (48 : Int)
-theorem obl_0_17_0 (s s' : State)
-    (hinv : inv_0 s) (hpc : s.pc = 0) (hstk : s.stk = [])
+theorem obl_pre_ret0_0 (s s' : State)
+    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 0) < (48 : Int)))
     (c1 : ¬ ((s.loc 0) > (57 : Int)))
     (hrun : run P 10 s = some s') :
-    inv_17 s' := by
-    simp only [inv_17, inv_36, inv_55, inv_59]
+    inv_ret0 s' := by
+    simp only [inv_ret0, inv_ret1, inv_ret2, inv_ret3]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
     subst hrun
     simp only [State.set, Nat.reduceEqDiff, reduceIte]
@@ -338,20 +338,20 @@ theorem obl_0_17_0 (s s' : State)
 
 /- Audit: every obligation must rest only on propext/Classical.choice/Quot.sound.
    A `sorryAx` here means something was left open, including via a spec string. -/
-#print axioms obl_0_59_0
-#print axioms obl_0_59_1
-#print axioms obl_0_55_0
-#print axioms obl_0_59_2
-#print axioms obl_0_59_3
-#print axioms obl_0_55_1
-#print axioms obl_0_36_0
-#print axioms obl_0_59_4
-#print axioms obl_0_59_5
-#print axioms obl_0_55_2
-#print axioms obl_0_59_6
-#print axioms obl_0_59_7
-#print axioms obl_0_55_3
-#print axioms obl_0_36_1
-#print axioms obl_0_17_0
+#print axioms obl_pre_ret3_0
+#print axioms obl_pre_ret3_1
+#print axioms obl_pre_ret2_0
+#print axioms obl_pre_ret3_2
+#print axioms obl_pre_ret3_3
+#print axioms obl_pre_ret2_1
+#print axioms obl_pre_ret1_0
+#print axioms obl_pre_ret3_4
+#print axioms obl_pre_ret3_5
+#print axioms obl_pre_ret2_2
+#print axioms obl_pre_ret3_6
+#print axioms obl_pre_ret3_7
+#print axioms obl_pre_ret2_3
+#print axioms obl_pre_ret1_1
+#print axioms obl_pre_ret0_0
 
 end Generated.Chunk.hexVal

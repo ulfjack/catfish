@@ -1,4 +1,4 @@
-simp only [inv_5] at hinv
+simp only [inv_loop0] at hinv
 obtain ⟨hoff, hlen, hfits, harr, hi0, hile, hacc0, haccm, haccv⟩ := hinv
 unfold MAXI at harr haccm
 have hidx : wrap (s.loc 1 + s.loc 4) = s.loc 1 + s.loc 4 := by
@@ -31,7 +31,7 @@ cases hdv : digitVal (s.arr ((s.loc 1).toNat + (s.loc 4).toNat)) with
   have hbnd : 0 ≤ s.loc 1 + s.loc 4 ∧ s.loc 1 + s.loc 4 < (s.alen : Int) := by omega
   have htn1 : (s.loc 4 + 1).toNat = (s.loc 4).toNat + 1 := by
     rw [Int.toNat_add hi0 (by omega)]; rfl
-  simp only [inv_5]
+  simp only [inv_loop0]
   simp [run, step, P, hpc, hstk, State.set, hidx, htn, hexValF_of hdv, hsub, hdv16,
         hmul, hadd, hinc, hbnd, c0, hd0, c2, pLt, pLe, zGe] at hrun
   subst hrun

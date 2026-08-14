@@ -59,9 +59,9 @@ final class Emit {
       if (!p.endsInReturn)
         out(
             "#print axioms obl_"
-                + v.ins.get(p.fromIdx).off
+                + v.ins.get(p.fromIdx).cutName
                 + "_"
-                + v.ins.get(p.toIdx).off
+                + v.ins.get(p.toIdx).cutName
                 + "_"
                 + tag(p));
     out("");
@@ -124,7 +124,7 @@ final class Emit {
             + ":"
             + jl
             + " -/");
-    out("def inv_" + i.off + " (s : State) : Prop :=");
+    out("def inv_" + i.cutName + " (s : State) : Prop :=");
     prelude(i.off, i.retSlot);
     map.add(new int[] {line, jl, i.off});
     // spliced verbatim; each source line of the spec string gets its own Lean line
@@ -151,13 +151,13 @@ final class Emit {
             + p.sym.steps
             + " steps) -/");
     for (String s : dedup(p.sym.side)) out("--   side condition: " + s);
-    out("theorem obl_" + a.off + "_" + b.off + "_" + tag(p) + " (s s' : State)");
-    out("    (hinv : inv_" + a.off + " s) (hpc : s.pc = " + a.idx + ") (hstk : s.stk = [])");
+    out("theorem obl_" + a.cutName + "_" + b.cutName + "_" + tag(p) + " (s s' : State)");
+    out("    (hinv : inv_" + a.cutName + " s) (hpc : s.pc = " + a.idx + ") (hstk : s.stk = [])");
     int n = 0;
     for (String c : p.sym.conds) out("    (c" + (n++) + " : " + c + ")");
     out("    (hrun : run P " + p.sym.steps + " s = some s') :");
-    out("    inv_" + b.off + " s' := by");
-    String name = "obl_" + a.off + "_" + b.off + "_" + tag(p);
+    out("    inv_" + b.cutName + " s' := by");
+    String name = "obl_" + a.cutName + "_" + b.cutName + "_" + tag(p);
     String body = null;
     if (proofDir != null) {
       java.nio.file.Path f = proofDir.resolve(name + ".lean");

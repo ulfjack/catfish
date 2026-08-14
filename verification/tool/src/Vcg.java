@@ -25,6 +25,7 @@ final class Vcg {
     boolean isMarkerLdc = false; // the ldc that feeds it
     String specString; // on the ldc of a marker
     String markerKind; // requires | invariant | ensure | assume
+    String cutName; // stable obligation name for a cut point: pre | loop<n> | ret<n>
     int retSlot = -1; // on an `ensure` cut point: slot holding the return value
     // symbolic effect, applied by the explorer
     String kind; // opcode class for the explorer
@@ -51,7 +52,28 @@ final class Vcg {
     markCutPoints();
     synthPreconditionCutPoint();
     synthReturnCutPoints();
+    nameCutPoints();
     checkBackEdges();
+  }
+
+  /**
+   * Give every cut point a stable name, independent of bytecode offsets: the precondition is `pre`,
+   * loop invariants are `loop0`, `loop1`, ... and postconditions `ret0`, `ret1`, ... in source
+   * order. Obligations are then named by cut point (`obl_<from>_<to>_<tag>`), so an edit that
+   * shifts offsets no longer renames every obligation.
+   */
+  private void nameCutPoints() {
+    int loop = 0, ret = 0;
+    for (Ins i : ins) {
+      if (!i.isMarkerLdc) continue;
+      i.cutName =
+          switch (i.markerKind) {
+            case "requires" -> "pre";
+            case "invariant" -> "loop" + (loop++);
+            case "ensure" -> "ret" + (ret++);
+            default -> "cp";
+          };
+    }
   }
 
   /**
