@@ -1,11 +1,13 @@
-import Jvm.Semantics
-
 /-
-  Specification-level definitions.  These are referenced by name from the
-  Verify.* strings in the Java source.  Nothing here is generated.
+  Domain specification for RFC 9112 §7.1 chunk-size parsing.  Referenced by name
+  from the Verify.* strings in Chunk.java and from the hand-written proofs.
+
+  This is NOT part of the JVM trust base: a bug here is a wrong specification of
+  what a chunk size *is*, not a wrong model of the machine.  Pure arithmetic over
+  `Int`/`Option`; it does not depend on the JVM semantics.
 -/
 
-namespace Jvm
+namespace ChunkedEncoding
 
 /-- RFC 9112 HEXDIG, case-insensitive, as a partial function on byte values. -/
 def digitVal (c : Int) : Option Int :=
@@ -37,4 +39,4 @@ def valOf (arr : Nat → Int) (off : Nat) : Nat → Option Int
              | some v, some d => some (v * 16 + d)
              | _, _ => none
 
-end Jvm
+end ChunkedEncoding

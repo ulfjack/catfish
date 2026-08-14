@@ -177,6 +177,8 @@ def _java_obligations_impl(ctx):
     if ctx.files.proofs:
         args.append("--proofs=" + ctx.files.proofs[0].dirname)
         inputs.extend(ctx.files.proofs)
+    if ctx.attr.specs:
+        args.append("--specs=" + ",".join(ctx.attr.specs))
 
     # Extract the one class from the jar, then run the generator on it.
     script = "\n".join([
@@ -209,6 +211,9 @@ _java_obligations = rule(
         "source": attr.label(allow_single_file = [".java"], mandatory = True),
         "calls": attr.label(allow_single_file = True),
         "proofs": attr.label_list(allow_files = [".lean"]),
+        # Domain specs the obligations reference, as "Module=Namespace" entries;
+        # the generator emits `import Module` and opens `Namespace`.
+        "specs": attr.string_list(),
         "_generator": attr.label(
             default = "//verification:generator",
             executable = True,
@@ -217,12 +222,16 @@ _java_obligations = rule(
     },
 )
 
-def java_verification_test(name, lib, method, source, proofs, calls = None, deps = [], class_name = None, **kwargs):
+def java_verification_test(name, lib, method, source, proofs, calls = None, specs = [], deps = [], class_name = None, **kwargs):
     """Verify one method of a java_library by proving its bytecode in Lean.
 
     Runs the generator over `lib`'s compiled class to emit Lean obligations
     (with the tactic blocks from `proofs` spliced in), then checks + axiom-audits
     them via lean_test. `bazel test :name` is green iff every obligation closes.
+
+    `specs` lists domain specifications as "Module=Namespace" (e.g.
+    "ChunkedEncodingSpec=ChunkedEncoding"); include the matching lean_library in
+    `deps`.
     """
     if class_name == None:
         base = source.rsplit("/", 1)[-1]
@@ -236,5 +245,6 @@ def java_verification_test(name, lib, method, source, proofs, calls = None, deps
         source = source,
         calls = calls,
         proofs = proofs,
+        specs = specs,
     )
     lean_test(name = name, src = ":" + gen, deps = deps, **kwargs)

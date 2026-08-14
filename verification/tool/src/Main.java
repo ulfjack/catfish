@@ -33,6 +33,11 @@ public final class Main {
 
     Emit e = new Emit(v, cf, method, javaFile);
     if (opt.containsKey("proofs")) e.proofDir = Path.of(opt.get("proofs"));
+    // --specs=Module=Namespace[,Module2=Namespace2]: domain specs to import and
+    // open, so the generator carries no knowledge of any particular domain.
+    String specs = opt.get("specs");
+    if (specs != null && !specs.isBlank())
+      for (String entry : specs.split(",")) e.specs.add(entry.split("=", 2));
     Files.createDirectories(out.getParent());
     Files.writeString(out, e.lean());
     Files.writeString(Path.of(out + ".map.json"), e.sourceMap());

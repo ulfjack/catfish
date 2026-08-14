@@ -9,11 +9,11 @@ lean_library(
     src = "Jvm/Semantics.lean",
 )
 
-# Spec-level definitions referenced by the Verify.* strings (digitVal, valOf...).
+# Domain spec for RFC 9112 chunk-size parsing (digitVal, valOf, hexValF...).
+# Referenced by the Verify.* strings in Chunk.java; not part of the trust base.
 lean_library(
-    name = "spec",
-    src = "Jvm/Spec.lean",
-    deps = [":semantics"],
+    name = "chunked_encoding_spec",
+    src = "ChunkedEncodingSpec.lean",
 )
 
 # Smoke test: executes `iconst_1; iconst_1; iadd; ireturn` through the
@@ -51,8 +51,9 @@ java_verification_test(
     source = "java/Chunk.java",
     calls = "java/calls.map",
     proofs = glob(["proofs/Chunk_parseHexSize/*.lean"]),
+    specs = ["ChunkedEncodingSpec=ChunkedEncoding"],
     deps = [
         ":semantics",
-        ":spec",
+        ":chunked_encoding_spec",
     ],
 )
