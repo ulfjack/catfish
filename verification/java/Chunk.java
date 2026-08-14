@@ -40,19 +40,16 @@ public final class Chunk {
    */
   @Returns("hexValF c")
   public static int hexVal(byte c) {
+    int r;
     if (c >= 48 && c <= 57) {
-      int r = c - 48;
-      return r;
+      r = c - 48;
+    } else if (c >= 97 && c <= 102) {
+      r = c - 87;
+    } else if (c >= 65 && c <= 70) {
+      r = c - 55;
+    } else {
+      r = -1;
     }
-    if (c >= 97 && c <= 102) {
-      int r = c - 87;
-      return r;
-    }
-    if (c >= 65 && c <= 70) {
-      int r = c - 55;
-      return r;
-    }
-    int r = -1;
     return r;
   }
 }
