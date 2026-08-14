@@ -84,4 +84,21 @@ public class HttpHeaderNameTest {
     assertFalse(HttpHeaderName.mayOccurMultipleTimes("Host"));
     assertTrue(HttpHeaderName.mayOccurMultipleTimes("Accept"));
   }
+
+  @Test
+  public void validContentLength() {
+    assertTrue(HttpHeaderName.isValidContentLength("0"));
+    assertTrue(HttpHeaderName.isValidContentLength("5"));
+    assertTrue(HttpHeaderName.isValidContentLength("1234567890"));
+    assertTrue(HttpHeaderName.isValidContentLength("007")); // leading zeros are valid 1*DIGIT
+
+    assertFalse(HttpHeaderName.isValidContentLength("")); // 1*DIGIT requires at least one digit
+    assertFalse(HttpHeaderName.isValidContentLength("+5")); // Long.parseLong would accept this
+    assertFalse(HttpHeaderName.isValidContentLength("-5"));
+    assertFalse(HttpHeaderName.isValidContentLength("5 "));
+    assertFalse(HttpHeaderName.isValidContentLength(" 5"));
+    assertFalse(HttpHeaderName.isValidContentLength("5 5"));
+    assertFalse(HttpHeaderName.isValidContentLength("0x5"));
+    assertFalse(HttpHeaderName.isValidContentLength("5.0"));
+  }
 }

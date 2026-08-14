@@ -161,6 +161,25 @@ public final class HttpHeaderName {
     return HOST_PORT_PATTERN.matcher(text).matches();
   }
 
+  /**
+   * True iff {@code value} matches the RFC 9110 §8.6 Content-Length grammar {@code 1*DIGIT} — one
+   * or more ASCII digits. This is stricter than {@link Long#parseLong}, which also accepts a
+   * leading '+' (or '-'): a value like {@code +5} that a peer frames differently than Catfish is a
+   * request/response smuggling vector, so it must be rejected rather than silently accepted.
+   */
+  public static boolean isValidContentLength(String value) {
+    if (value.isEmpty()) {
+      return false;
+    }
+    for (int i = 0; i < value.length(); i++) {
+      char c = value.charAt(i);
+      if (c < '0' || c > '9') {
+        return false;
+      }
+    }
+    return true;
+  }
+
   private HttpHeaderName() {
     // Not instantiable.
   }
