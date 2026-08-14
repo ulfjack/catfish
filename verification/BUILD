@@ -51,6 +51,9 @@ java_verification_test(
     source = "java/Chunk.java",
     calls = "java/calls.map",
     proofs = glob(["proofs/Chunk_parseHexSize/*.lean"]),
+    # Checked-in obligations: the file lean_test proves and humans review.
+    # `:chunk_golden` fails if it drifts from what the generator emits.
+    golden = "Generated/Chunk_parseHexSize.lean",
     specs = ["ChunkedEncodingSpec=ChunkedEncoding"],
     deps = [
         ":semantics",

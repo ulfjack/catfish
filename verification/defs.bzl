@@ -161,7 +161,9 @@ def _java_obligations_impl(ctx):
     class_jar = outs[0].class_jar
     entry = ctx.attr.class_name.replace(".", "/") + ".class"
 
-    stem = "Generated/%s_%s" % (ctx.attr.class_name.replace(".", "_"), ctx.attr.method)
+    # Build-only path, distinct from the checked-in golden (which lives under
+    # Generated/) so both can coexist in a diff test's runfiles.
+    stem = "_generated/%s_%s" % (ctx.attr.class_name.replace(".", "_"), ctx.attr.method)
     lean_out = ctx.actions.declare_file(stem + ".lean")
     map_out = ctx.actions.declare_file(stem + ".lean.map.json")
 
@@ -222,16 +224,48 @@ _java_obligations = rule(
     },
 )
 
-def java_verification_test(name, lib, method, source, proofs, calls = None, specs = [], deps = [], class_name = None, **kwargs):
+def _golden_diff_test_impl(ctx):
+    exe = ctx.actions.declare_file(ctx.label.name + ".sh")
+    ctx.actions.write(
+        output = exe,
+        is_executable = True,
+        content = """#!/bin/sh
+if diff -u '{golden}' '{gen}'; then
+  exit 0
+fi
+echo
+echo '>>> Checked-in obligations ({golden}) are stale:'
+echo '>>> they differ from what the generator produces from the current sources.'
+echo '>>> Regenerate the golden and commit it, then re-run.'
+exit 1
+""".format(golden = ctx.file.golden.short_path, gen = ctx.file.generated.short_path),
+    )
+    return [DefaultInfo(
+        executable = exe,
+        runfiles = ctx.runfiles(files = [ctx.file.golden, ctx.file.generated]),
+    )]
+
+_golden_diff_test = rule(
+    implementation = _golden_diff_test_impl,
+    test = True,
+    attrs = {
+        "golden": attr.label(allow_single_file = [".lean"], mandatory = True),
+        "generated": attr.label(allow_single_file = [".lean"], mandatory = True),
+    },
+)
+
+def java_verification_test(name, lib, method, source, proofs, golden, calls = None, specs = [], deps = [], class_name = None, **kwargs):
     """Verify one method of a java_library by proving its bytecode in Lean.
 
-    Runs the generator over `lib`'s compiled class to emit Lean obligations
-    (with the tactic blocks from `proofs` spliced in), then checks + axiom-audits
-    them via lean_test. `bazel test :name` is green iff every obligation closes.
+    `lean_test` checks the checked-in `golden` obligations file (so the file you
+    read in the tree is the file that is proved), and `<name>_golden` diff-tests
+    it against a fresh generator run over `lib`'s compiled class, failing if the
+    golden is stale. `bazel test :name :name_golden` is green iff every
+    obligation closes *and* the golden matches the current sources.
 
-    `specs` lists domain specifications as "Module=Namespace" (e.g.
-    "ChunkedEncodingSpec=ChunkedEncoding"); include the matching lean_library in
-    `deps`.
+    `golden` is the checked-in `Generated/<Class>_<method>.lean`; regenerate it
+    from the `_<name>_obligations` output when it drifts. `specs` lists domain
+    specs as "Module=Namespace"; include the matching lean_library in `deps`.
     """
     if class_name == None:
         base = source.rsplit("/", 1)[-1]
@@ -247,4 +281,5 @@ def java_verification_test(name, lib, method, source, proofs, calls = None, spec
         proofs = proofs,
         specs = specs,
     )
-    lean_test(name = name, src = ":" + gen, deps = deps, **kwargs)
+    lean_test(name = name, src = golden, deps = deps, **kwargs)
+    _golden_diff_test(name = name + "_golden", golden = golden, generated = ":" + gen)
