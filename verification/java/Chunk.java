@@ -38,11 +38,29 @@ public final class Chunk {
     return r;
   }
 
-  /** Verified separately against `digitVal`. */
+  /**
+   * Value of a HEXDIG byte (RFC 9112), -1 otherwise. Its contract is `hexValF`; proving it here
+   * discharges the `calls.map` assumption used by parseHexSize.
+   */
   public static int hexVal(byte c) {
-    if (c >= 48 && c <= 57) return c - 48;
-    if (c >= 97 && c <= 102) return c - 87;
-    if (c >= 65 && c <= 70) return c - 55;
-    return -1;
+    Verify.requires("True");
+    if (c >= 48 && c <= 57) {
+      int r = c - 48;
+      Verify.ensure("ret = hexValF c");
+      return r;
+    }
+    if (c >= 97 && c <= 102) {
+      int r = c - 87;
+      Verify.ensure("ret = hexValF c");
+      return r;
+    }
+    if (c >= 65 && c <= 70) {
+      int r = c - 55;
+      Verify.ensure("ret = hexValF c");
+      return r;
+    }
+    int r = -1;
+    Verify.ensure("ret = hexValF c");
+    return r;
   }
 }

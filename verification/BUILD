@@ -60,3 +60,21 @@ java_verification_test(
         ":chunked_encoding_spec",
     ],
 )
+
+# Discharges the calls.map assumption used above: proves the bytecode of
+# Chunk.hexVal actually computes hexValF. Branch-only (no loop); the short-circuit
+# && expands to 15 paths, hence 15 obligations.
+java_verification_test(
+    name = "chunk_hexval",
+    lib = ":chunk_java",
+    method = "hexVal",
+    source = "java/Chunk.java",
+    calls = "java/calls.map",
+    proofs = glob(["proofs/Chunk_hexVal/*.lean"]),
+    golden = "Generated/Chunk_hexVal.lean",
+    specs = ["ChunkedEncodingSpec=ChunkedEncoding"],
+    deps = [
+        ":semantics",
+        ":chunked_encoding_spec",
+    ],
+)
