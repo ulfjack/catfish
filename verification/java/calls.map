@@ -1,0 +1,2 @@
+# invokestatic target = Lean function of type Int -> Int
+Chunk.hexVal:(B)I = hexValF

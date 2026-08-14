@@ -17,6 +17,8 @@ resolve the realpath at action time and set `--root` to the real package dir;
 otherwise `lean` rejects the input as "not contained in root".
 """
 
+load("@rules_java//java/common:java_info.bzl", "JavaInfo")
+
 LeanInfo = provider(
     doc = "A compiled Lean module and how to put it on a dependent's LEAN_PATH.",
     fields = {
@@ -150,3 +152,89 @@ lean_test = rule(
         "deps": attr.label_list(providers = [LeanInfo]),
     }),
 )
+
+# --- Java bytecode -> Lean obligations ------------------------------------
+
+def _java_obligations_impl(ctx):
+    # The full class jar (real bytecode + LocalVariableTable), not the header jar.
+    outs = ctx.attr.lib[JavaInfo].java_outputs
+    class_jar = outs[0].class_jar
+    entry = ctx.attr.class_name.replace(".", "/") + ".class"
+
+    stem = "Generated/%s_%s" % (ctx.attr.class_name.replace(".", "_"), ctx.attr.method)
+    lean_out = ctx.actions.declare_file(stem + ".lean")
+    map_out = ctx.actions.declare_file(stem + ".lean.map.json")
+
+    args = [
+        "--method=" + ctx.attr.method,
+        "--out=" + lean_out.path,
+        "--source=" + ctx.file.source.path,
+    ]
+    inputs = [class_jar, ctx.file.source]
+    if ctx.file.calls:
+        args.append("--calls=" + ctx.file.calls.path)
+        inputs.append(ctx.file.calls)
+    if ctx.files.proofs:
+        args.append("--proofs=" + ctx.files.proofs[0].dirname)
+        inputs.extend(ctx.files.proofs)
+
+    # Extract the one class from the jar, then run the generator on it.
+    script = "\n".join([
+        "set -e",
+        "work=\"$(mktemp -d)\"",
+        "unzip -oq '%s' '%s' -d \"$work\"" % (class_jar.path, entry),
+        "'%s' --class=\"$work/%s\" %s" % (
+            ctx.executable._generator.path, entry, " ".join(args),
+        ),
+    ])
+    ctx.actions.run_shell(
+        inputs = depset(inputs),
+        outputs = [lean_out, map_out],
+        command = script,
+        tools = [ctx.attr._generator[DefaultInfo].files_to_run],
+        use_default_shell_env = True,
+        mnemonic = "JavaObligations",
+        progress_message = "Generating Lean obligations for %s.%s" % (
+            ctx.attr.class_name, ctx.attr.method,
+        ),
+    )
+    return [DefaultInfo(files = depset([lean_out]))]
+
+_java_obligations = rule(
+    implementation = _java_obligations_impl,
+    attrs = {
+        "lib": attr.label(providers = [JavaInfo], mandatory = True),
+        "method": attr.string(mandatory = True),
+        "class_name": attr.string(mandatory = True),
+        "source": attr.label(allow_single_file = [".java"], mandatory = True),
+        "calls": attr.label(allow_single_file = True),
+        "proofs": attr.label_list(allow_files = [".lean"]),
+        "_generator": attr.label(
+            default = "//verification:generator",
+            executable = True,
+            cfg = "exec",
+        ),
+    },
+)
+
+def java_verification_test(name, lib, method, source, proofs, calls = None, deps = [], class_name = None, **kwargs):
+    """Verify one method of a java_library by proving its bytecode in Lean.
+
+    Runs the generator over `lib`'s compiled class to emit Lean obligations
+    (with the tactic blocks from `proofs` spliced in), then checks + axiom-audits
+    them via lean_test. `bazel test :name` is green iff every obligation closes.
+    """
+    if class_name == None:
+        base = source.rsplit("/", 1)[-1]
+        class_name = base[:-len(".java")] if base.endswith(".java") else base
+    gen = "_%s_obligations" % name
+    _java_obligations(
+        name = gen,
+        lib = lib,
+        method = method,
+        class_name = class_name,
+        source = source,
+        calls = calls,
+        proofs = proofs,
+    )
+    lean_test(name = name, src = ":" + gen, deps = deps, **kwargs)
