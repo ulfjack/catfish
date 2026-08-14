@@ -47,20 +47,6 @@ public class SimpleHttpResponseBuilderTest {
   }
 
   @Test
-  public void addHeaderRejectsOversizedMergedValue() {
-    // A malicious origin repeating a header to inflate one value past the 8 KB cap is rejected.
-    SimpleHttpResponse.Builder builder = new SimpleHttpResponse.Builder().setStatusCode(200);
-    String chunk = "a".repeat(1000);
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> {
-          for (int i = 0; i < 100; i++) {
-            builder.addHeader(HttpHeaderName.CONTENT_TYPE, chunk);
-          }
-        });
-  }
-
-  @Test
   public void addHeaderThrowsOnDuplicateHost() throws Exception {
     // Host is in the non-list blacklist; adding it twice must throw.
     SimpleHttpResponse.Builder builder =

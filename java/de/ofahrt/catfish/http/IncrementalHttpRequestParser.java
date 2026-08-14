@@ -1,6 +1,7 @@
 package de.ofahrt.catfish.http;
 
 import de.ofahrt.catfish.model.HttpHeaderName;
+import de.ofahrt.catfish.model.HttpLimits;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.HttpStatusCode;
 import de.ofahrt.catfish.model.HttpVersion;
@@ -19,9 +20,6 @@ public final class IncrementalHttpRequestParser {
   private static final int MAX_METHOD_LENGTH = 128;
   private static final int MAX_VERSION_DIGITS = 7;
   private static final int MAX_URI_LENGTH = 10_000;
-  private static final int MAX_HEADER_NAME_LENGTH = 1000;
-  private static final int MAX_HEADER_VALUE_LENGTH = 10_000;
-  private static final int MAX_HEADER_FIELD_COUNT = 1000;
 
   private static final int TOKEN = 1;
   private static final int DIGIT = 2;
@@ -82,7 +80,9 @@ public final class IncrementalHttpRequestParser {
   private StringBuilder elementBuffer = new StringBuilder();
   private int counter;
   private boolean expectLineFeed;
-  private int headerFieldCount;
+  // Running total of committed header field name+value sizes, bounded (together with the field in
+  // progress) by HttpLimits.MAX_HEADER_LIST_SIZE.
+  private int headerListSize;
 
   private boolean done;
 
@@ -101,7 +101,7 @@ public final class IncrementalHttpRequestParser {
     elementBuffer = new StringBuilder();
     counter = 0;
     expectLineFeed = false;
-    headerFieldCount = 0;
+    headerListSize = 0;
 
     done = false;
     builder.reset();
@@ -288,9 +288,9 @@ public final class IncrementalHttpRequestParser {
             }
             return validateAndFinish(i);
           } else if (isTokenCharacter(c)) {
-            if (elementBuffer.length() >= MAX_HEADER_NAME_LENGTH) {
+            if (headerListSize + elementBuffer.length() >= HttpLimits.MAX_HEADER_LIST_SIZE) {
               return setError(
-                  HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Header name is too long");
+                  HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Header block is too large");
             }
             elementBuffer.append(c);
           } else {
@@ -315,9 +315,10 @@ public final class IncrementalHttpRequestParser {
           } else if (isControl(c)) {
             return setBadRequest("Illegal character in header field value");
           } else {
-            if (elementBuffer.length() >= MAX_HEADER_VALUE_LENGTH) {
+            if (headerListSize + messageHeaderName.length() + elementBuffer.length()
+                >= HttpLimits.MAX_HEADER_LIST_SIZE) {
               return setError(
-                  HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Header value is too long");
+                  HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Header block is too large");
             }
             elementBuffer.append(c);
           }
@@ -328,11 +329,9 @@ public final class IncrementalHttpRequestParser {
           }
 
           if (c != '\r') {
-            if (headerFieldCount >= MAX_HEADER_FIELD_COUNT) {
-              return setError(
-                  HttpStatusCode.REQUEST_HEADER_FIELDS_TOO_LARGE, "Too many header fields");
-            }
-            headerFieldCount++;
+            // One budget bounds the whole header section: the running total of committed field
+            // name+value sizes plus the field in progress (checked at the append sites above).
+            headerListSize += messageHeaderName.length() + messageHeaderValue.length();
             builder.addHeader(messageHeaderName, messageHeaderValue);
             messageHeaderName = null;
             messageHeaderValue = null;

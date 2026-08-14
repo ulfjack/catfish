@@ -137,17 +137,15 @@ public class IncrementalHttpResponseParserTest extends HttpResponseParserTest {
   // ---- parse return value tests ----
 
   @Test
-  public void tooManyHeaderFields_throws() {
-    // A malicious/compromised origin flooding header fields is rejected once the count cap is hit,
-    // bounding the headers we buffer.
-    StringBuilder sb = new StringBuilder("HTTP/1.1 200 OK\r\n");
-    for (int i = 0; i < 1001; i++) {
-      sb.append("X-H").append(i).append(": v\r\n");
-    }
-    sb.append("\r\n");
-    byte[] data = sb.toString().getBytes(Charset.forName("ISO-8859-1"));
+  public void tooLargeHeaderBlock_throws() {
+    // A malicious/compromised origin whose header block exceeds the total size limit
+    // (HttpLimits.MAX_HEADER_LIST_SIZE = 32 KiB) is rejected, bounding the headers we buffer.
+    String data = "HTTP/1.1 200 OK\r\nX: " + "v".repeat(33000) + "\r\n\r\n";
     assertThrows(
-        MalformedResponseException.class, () -> new IncrementalHttpResponseParser().parse(data));
+        MalformedResponseException.class,
+        () ->
+            new IncrementalHttpResponseParser()
+                .parse(data.getBytes(Charset.forName("ISO-8859-1"))));
   }
 
   @Test

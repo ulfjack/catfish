@@ -3,8 +3,6 @@ package de.ofahrt.catfish.model;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import org.junit.Test;
 
@@ -81,25 +79,6 @@ public class HttpRequestTest {
             .addHeader(HttpHeaderName.COOKIE, "c=3")
             .build();
     assertEquals("a=1; b=2; c=3", req.getHeaders().get("Cookie"));
-  }
-
-  @Test
-  public void addHeader_repeatedListValue_exceedsCap_rejected() {
-    SimpleHttpRequest.Builder builder =
-        new SimpleHttpRequest.Builder()
-            .setVersion(HttpVersion.HTTP_1_1)
-            .setMethod(HttpMethodName.GET)
-            .setUri("/");
-    // Each value is 1000 chars; merging ~10 of them blows past the 8 KB cap.
-    String chunk = "x".repeat(1000);
-    try {
-      for (int i = 0; i < 20; i++) {
-        builder.addHeader(HttpHeaderName.ACCEPT, chunk);
-      }
-      fail("expected MalformedRequestException");
-    } catch (MalformedRequestException e) {
-      assertTrue(String.valueOf(e.getMessage()).contains("Header value too large"));
-    }
   }
 
   @Test

@@ -49,14 +49,6 @@ public final class SimpleHttpResponse implements HttpResponse {
   }
 
   public static final class Builder {
-    /**
-     * Hard cap on the total length of a single (possibly merged) header value. Repeated list-valued
-     * headers are folded into one value; without a bound a malicious origin can repeat a header so
-     * it inflates to megabytes (a header-amplification DoS). 8 KB is generous for legitimate list
-     * headers. Oversized headers fail the response.
-     */
-    private static final int MAX_MERGED_VALUE_LENGTH = 8192;
-
     private int majorVersion = 1;
     private int minorVersion = 1;
     private int statusCode;
@@ -65,7 +57,8 @@ public final class SimpleHttpResponse implements HttpResponse {
     // Repeated list-valued headers are accumulated here in a StringBuilder so appending is O(value)
     // rather than O(current length) — the naive "get(key) + sep + value" rebuild is O(n^2) over the
     // repeats. Single-occurrence headers live in `headers`; multi-occurrence keys live here until
-    // materialize() folds them back.
+    // materialize() folds them back. Received responses are size-bounded by the parser
+    // (HttpLimits.MAX_HEADER_LIST_SIZE); generated responses are not bounded here.
     private final Map<String, StringBuilder> mergedValues = new HashMap<>();
     private byte[] content = new byte[0];
 
@@ -124,7 +117,6 @@ public final class SimpleHttpResponse implements HttpResponse {
       StringBuilder acc = mergedValues.get(key);
       if (acc != null) {
         // Already accumulating this multi-occurrence header.
-        checkMergedLength(acc.length() + 2 + value.length());
         acc.append(", ").append(value);
         return this;
       }
@@ -136,7 +128,6 @@ public final class SimpleHttpResponse implements HttpResponse {
               "Illegal message headers: multiple occurence for non-list field");
         }
         // Second occurrence: switch this key over to a StringBuilder accumulator.
-        checkMergedLength(existing.length() + 2 + value.length());
         mergedValues.put(key, new StringBuilder(existing).append(", ").append(value));
         return this;
       }
@@ -148,14 +139,6 @@ public final class SimpleHttpResponse implements HttpResponse {
       }
       headers.put(key, value);
       return this;
-    }
-
-    private void checkMergedLength(int length) {
-      if (length > MAX_MERGED_VALUE_LENGTH) {
-        String message = "Header value too large (exceeds " + MAX_MERGED_VALUE_LENGTH + " bytes)";
-        setBadResponse(message);
-        throw new IllegalArgumentException(message);
-      }
     }
 
     public @Nullable String getHeader(String name) {
