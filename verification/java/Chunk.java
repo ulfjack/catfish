@@ -3,9 +3,11 @@
 public final class Chunk {
 
   @Precondition("0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ alen ∧ alen ≤ MAXI")
+  @Returns("parseSpec b off.toNat len.toNat")
   public static int parseHexSize(byte[] b, int off, int len) {
     int acc = 0;
     int i = 0;
+    int result;
     for (; ; ) {
       Verify.invariant(
           """
@@ -13,27 +15,23 @@ public final class Chunk {
           0 ≤ i ∧ i ≤ len ∧ 0 ≤ acc ∧ acc ≤ MAXI ∧
           valOf b off.toNat i.toNat = some acc
           """);
-      if (i >= len) break;
+      if (i >= len) {
+        result = (len == 0) ? -1 : acc; // RFC 1*HEXDIG: an empty field is invalid
+        break;
+      }
       int d = hexVal(b[off + i]);
       if (d < 0) {
-        int r = -1;
-        Verify.ensure("ret = -1");
-        return r;
+        result = -1;
+        break;
       }
       if (acc > (2147483647 - d) / 16) {
-        int r = -1;
-        Verify.ensure("ret = -1");
-        return r;
+        result = -1;
+        break;
       }
       acc = acc * 16 + d;
       i = i + 1;
     }
-    int r = acc;
-    Verify.ensure(
-        """
-        valOf b off.toNat len.toNat = some ret
-        """);
-    return r;
+    return result;
   }
 
   /**
