@@ -122,7 +122,8 @@ final class ClassFile {
         eachAnnotation(
             readAttr(len),
             (type, vals) -> {
-              if (type.equals("LImportLeanPackage;")) leanImports.addAll(vals);
+              if (type.equals("Lde/ofahrt/catfish/verify/ImportLeanPackage;"))
+                leanImports.addAll(vals);
             });
       else in.skipNBytes(len);
     }
@@ -184,8 +185,10 @@ final class ClassFile {
         eachAnnotation(
             readAttr(len),
             (type, vals) -> {
-              if (type.equals("LReturns;")) first(vals, v -> m.returnsSpec = v);
-              else if (type.equals("LPrecondition;")) first(vals, v -> m.precondition = v);
+              if (type.equals("Lde/ofahrt/catfish/verify/Returns;"))
+                first(vals, v -> m.returnsSpec = v);
+              else if (type.equals("Lde/ofahrt/catfish/verify/Precondition;"))
+                first(vals, v -> m.precondition = v);
             });
       else in.skipNBytes(len);
     }

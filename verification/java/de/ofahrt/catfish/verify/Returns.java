@@ -1,3 +1,5 @@
+package de.ofahrt.catfish.verify;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;

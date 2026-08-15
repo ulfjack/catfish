@@ -1,3 +1,8 @@
+import de.ofahrt.catfish.verify.ImportLeanPackage;
+import de.ofahrt.catfish.verify.Precondition;
+import de.ofahrt.catfish.verify.Returns;
+import de.ofahrt.catfish.verify.Verify;
+
 /** RFC 9112 section 7.1 chunk-size line: 1*HEXDIG, rejecting overflow. */
 @ImportLeanPackage("ChunkedEncoding")
 public final class Chunk {

@@ -13,6 +13,9 @@ import java.util.*;
  */
 final class Vcg {
 
+  /** Owner of the cut-point marker methods (requires/invariant/ensure/assume). */
+  static final String VERIFY_CLASS = "de.ofahrt.catfish.verify.Verify";
+
   // ---------- decoded instruction ----------
   static final class Ins {
     int off; // bytecode offset
@@ -302,13 +305,17 @@ final class Vcg {
         case 0xb8 -> { // invokestatic
           int cpi = u2(p + 1);
           len = 3;
-          String ref = cf.methodRef(cpi);
+          String ref = cf.methodRef(cpi); // owner.name:desc, owner dotted
           i.callee = ref;
-          if (ref.startsWith("Verify.")) {
+          int colon = ref.indexOf(':');
+          int dot = ref.lastIndexOf('.', colon);
+          String owner = ref.substring(0, dot);
+          String mname = ref.substring(dot + 1, colon);
+          if (owner.equals(VERIFY_CLASS)) {
             i.kind = "marker";
             i.isMarker = true;
             i.lean = ".mark";
-            i.markerKind = ref.substring("Verify.".length(), ref.indexOf(':'));
+            i.markerKind = mname;
           } else if (callMap.containsKey(ref)) {
             i.kind = "call";
             i.lean = ".call " + callMap.get(ref);

@@ -65,14 +65,14 @@ def P : Nat → Option Instr
   | _    => none
 
 
-/-- requires at bytecode offset 0, verification/java/Chunk.java:8 -/
+/-- requires at bytecode offset 0, verification/java/Chunk.java:13 -/
 def inv_pre (s : State) : Prop :=
   let b : Jvm.Arr := s.arr
   let off : Int := s.loc 1
   let len : Int := s.loc 2
   (0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ b.length)
 
-/-- invariant at bytecode offset 5, verification/java/Chunk.java:12 -/
+/-- invariant at bytecode offset 5, verification/java/Chunk.java:17 -/
 def inv_loop0 (s : State) : Prop :=
   let b : Jvm.Arr := s.arr
   let off : Int := s.loc 1
@@ -83,7 +83,7 @@ def inv_loop0 (s : State) : Prop :=
    0 ≤ i ∧ i ≤ len ∧ 0 ≤ acc ∧ acc ≤ MAXI ∧
    valOf b off.toNat i.toNat = some acc)
 
-/-- ensure at bytecode offset 87, verification/java/Chunk.java:34 -/
+/-- ensure at bytecode offset 87, verification/java/Chunk.java:39 -/
 def inv_ret0 (s : State) : Prop :=
   let b : Jvm.Arr := s.arr
   let off : Int := s.loc 1
@@ -94,7 +94,7 @@ def inv_ret0 (s : State) : Prop :=
   let ret : Int := s.loc 5
   (ret = parseSpec b off.toNat len.toNat)
 
-/-- verification/java/Chunk.java:8 -> verification/java/Chunk.java:12   (bytecode 0 -> 5, 4 steps) -/
+/-- verification/java/Chunk.java:13 -> verification/java/Chunk.java:17   (bytecode 0 -> 5, 4 steps) -/
 theorem obl_pre_loop0_0 (s s' : State)
     (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
     (hrun : run P 4 s = some s') :
@@ -111,7 +111,7 @@ theorem obl_pre_loop0_0 (s s' : State)
   · simp [State.set] <;> (unfold MAXI; omega)
   · simp [State.set, valOf]
 
-/-- verification/java/Chunk.java:12 -> verification/java/Chunk.java:12   (bytecode 5 -> 5, 32 steps) -/
+/-- verification/java/Chunk.java:17 -> verification/java/Chunk.java:17   (bytecode 5 -> 5, 32 steps) -/
 --   side condition: no wrap: (s.loc 1) + (s.loc 4)
 --   side condition: in bounds: 0 ≤ (wrap ((s.loc 1) + (s.loc 4))) ∧ (wrap ((s.loc 1) + (s.loc 4))) < (s.arr.len : Int)
 --   side condition: no wrap: (2147483647 : Int) - (hexValF (s.arr ((wrap ((s.loc 1) + (s.loc 4)))).toNat))
@@ -172,7 +172,7 @@ theorem obl_loop0_loop0_0 (s s' : State)
     · simp only [State.set]; unfold MAXI; omega
     · simp [State.set, htn1, valOf, haccv, hdv]
 
-/-- verification/java/Chunk.java:12 -> verification/java/Chunk.java:34   (bytecode 5 -> 87, 24 steps) -/
+/-- verification/java/Chunk.java:17 -> verification/java/Chunk.java:39   (bytecode 5 -> 87, 24 steps) -/
 --   side condition: no wrap: (s.loc 1) + (s.loc 4)
 --   side condition: in bounds: 0 ≤ (wrap ((s.loc 1) + (s.loc 4))) ∧ (wrap ((s.loc 1) + (s.loc 4))) < (s.arr.len : Int)
 --   side condition: no wrap: (2147483647 : Int) - (hexValF (s.arr ((wrap ((s.loc 1) + (s.loc 4)))).toNat))
@@ -213,7 +213,7 @@ theorem obl_loop0_ret0_0 (s s' : State)
         rw [Int.div_eq_ediv (by omega) (by omega)] at c2; unfold MAXI; omega
       rw [parseSpec_overflow hbound hstep hover]
 
-/-- verification/java/Chunk.java:12 -> verification/java/Chunk.java:34   (bytecode 5 -> 87, 17 steps) -/
+/-- verification/java/Chunk.java:17 -> verification/java/Chunk.java:39   (bytecode 5 -> 87, 17 steps) -/
 --   side condition: no wrap: (s.loc 1) + (s.loc 4)
 --   side condition: in bounds: 0 ≤ (wrap ((s.loc 1) + (s.loc 4))) ∧ (wrap ((s.loc 1) + (s.loc 4))) < (s.arr.len : Int)
 theorem obl_loop0_ret0_1 (s s' : State)
@@ -244,7 +244,7 @@ theorem obl_loop0_ret0_1 (s s' : State)
     have hstep : valOf s.arr (s.loc 1).toNat ((s.loc 4).toNat + 1) = none := by simp [valOf, haccv, hd]
     rw [parseSpec_none hbound hstep]
 
-/-- verification/java/Chunk.java:12 -> verification/java/Chunk.java:34   (bytecode 5 -> 87, 10 steps) -/
+/-- verification/java/Chunk.java:17 -> verification/java/Chunk.java:39   (bytecode 5 -> 87, 10 steps) -/
 theorem obl_loop0_ret0_2 (s s' : State)
     (hinv : inv_loop0 s) (hpc : s.pc = 4) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 4) < (s.loc 2)))
@@ -264,7 +264,7 @@ theorem obl_loop0_ret0_2 (s s' : State)
     simp only [parseSpec, hln, if_false, haccv]
     rw [if_pos (show s.loc 3 ≤ Jvm.MAXI by unfold Jvm.MAXI; omega)]
 
-/-- verification/java/Chunk.java:12 -> verification/java/Chunk.java:34   (bytecode 5 -> 87, 11 steps) -/
+/-- verification/java/Chunk.java:17 -> verification/java/Chunk.java:39   (bytecode 5 -> 87, 11 steps) -/
 theorem obl_loop0_ret0_3 (s s' : State)
     (hinv : inv_loop0 s) (hpc : s.pc = 4) (hstk : s.stk = [])
     (c0 : ¬ ((s.loc 4) < (s.loc 2)))
