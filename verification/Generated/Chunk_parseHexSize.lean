@@ -70,7 +70,7 @@ def inv_pre (s : State) : Prop :=
   let b : Jvm.Arr := s.arr
   let off : Int := s.loc 1
   let len : Int := s.loc 2
-  (0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ b.length ∧ b.length ≤ MAXI)
+  (0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ b.length)
 
 /-- invariant at bytecode offset 5, verification/java/Chunk.java:12 -/
 def inv_loop0 (s : State) : Prop :=
@@ -79,7 +79,7 @@ def inv_loop0 (s : State) : Prop :=
   let len : Int := s.loc 2
   let acc : Int := s.loc 3
   let i : Int := s.loc 4
-  (0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ b.length ∧ b.length ≤ MAXI ∧
+  (0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ b.length ∧
    0 ≤ i ∧ i ≤ len ∧ 0 ≤ acc ∧ acc ≤ MAXI ∧
    valOf b off.toNat i.toNat = some acc)
 
@@ -100,11 +100,11 @@ theorem obl_pre_loop0_0 (s s' : State)
     (hrun : run P 4 s = some s') :
     inv_loop0 s' := by
   simp only [inv_pre] at hinv
-  obtain ⟨hoff, hlen, hfits, harr⟩ := hinv
+  obtain ⟨hoff, hlen, hfits⟩ := hinv
   simp only [inv_loop0]
   simp [run, step, P, hpc, hstk, State.set] at hrun
   subst hrun
-  refine ⟨hoff, hlen, hfits, harr, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨hoff, hlen, hfits, ?_, ?_, ?_, ?_, ?_⟩
   · simp [State.set] <;> omega
   · simp [State.set] <;> omega
   · simp [State.set] <;> omega
@@ -127,7 +127,8 @@ theorem obl_loop0_loop0_0 (s s' : State)
     (hrun : run P 32 s = some s') :
     inv_loop0 s' := by
   simp only [inv_loop0] at hinv
-  obtain ⟨hoff, hlen, hfits, harr, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+  obtain ⟨hoff, hlen, hfits, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+  have harr : s.arr.length ≤ MAXI := s.arr.length_le
   simp only [Jvm.Arr.length] at hfits harr
   unfold MAXI at harr haccm
   have hidx : wrap (s.loc 1 + s.loc 4) = s.loc 1 + s.loc 4 := by
@@ -164,7 +165,7 @@ theorem obl_loop0_loop0_0 (s s' : State)
     simp [run, step, P, hpc, hstk, State.set, hidx, htn, hexValF_of hdv, hsub, hdv16,
           hmul, hadd, hinc, hbnd, c0, hd0, c2, pLt, pLe, zGe] at hrun
     subst hrun
-    refine ⟨hoff, hlen, hfits, harr, ?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨hoff, hlen, hfits, ?_, ?_, ?_, ?_, ?_⟩
     · simp only [State.set]; omega
     · simp only [State.set]; omega
     · simp only [State.set]; omega
@@ -184,7 +185,8 @@ theorem obl_loop0_ret0_0 (s s' : State)
     (hrun : run P 24 s = some s') :
     inv_ret0 s' := by
     simp only [inv_loop0] at hinv
-    obtain ⟨hoff, hlen, hfits, hamax, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+    obtain ⟨hoff, hlen, hfits, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+    have hamax : s.arr.length ≤ MAXI := s.arr.length_le
     simp only [Jvm.Arr.length] at hfits hamax
     unfold MAXI at hamax haccm
     have hidx : wrap (s.loc 1 + s.loc 4) = s.loc 1 + s.loc 4 := by apply wrap_id' <;> omega
@@ -221,7 +223,8 @@ theorem obl_loop0_ret0_1 (s s' : State)
     (hrun : run P 17 s = some s') :
     inv_ret0 s' := by
     simp only [inv_loop0] at hinv
-    obtain ⟨hoff, hlen, hfits, hamax, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+    obtain ⟨hoff, hlen, hfits, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+    have hamax : s.arr.length ≤ MAXI := s.arr.length_le
     simp only [Jvm.Arr.length] at hfits hamax
     unfold MAXI at hamax haccm
     have hidx : wrap (s.loc 1 + s.loc 4) = s.loc 1 + s.loc 4 := by apply wrap_id' <;> omega
@@ -249,8 +252,8 @@ theorem obl_loop0_ret0_2 (s s' : State)
     (hrun : run P 10 s = some s') :
     inv_ret0 s' := by
     simp only [inv_loop0] at hinv
-    obtain ⟨hoff, hlen, hfits, hamax, hi0, hile, hacc0, haccm, haccv⟩ := hinv
-    unfold MAXI at hamax haccm
+    obtain ⟨hoff, hlen, hfits, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+    unfold MAXI at haccm
     have hieq : s.loc 4 = s.loc 2 := by omega
     have e2 : ((s.loc 2).toNat : Int) = s.loc 2 := Int.toNat_of_nonneg (by omega)
     have hln : (s.loc 2).toNat ≠ 0 := by omega
@@ -269,7 +272,7 @@ theorem obl_loop0_ret0_3 (s s' : State)
     (hrun : run P 11 s = some s') :
     inv_ret0 s' := by
     simp only [inv_loop0] at hinv
-    obtain ⟨hoff, hlen, hfits, hamax, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+    obtain ⟨hoff, hlen, hfits, hi0, hile, hacc0, haccm, haccv⟩ := hinv
     simp only [inv_ret0]
     simp [run, step, P, hpc, hstk, State.set, pLt, pGe, pLe, zNe, zGe, c0, c1, *] at hrun
     subst hrun

@@ -25,16 +25,24 @@ theorem wrap_id' {x : Int} (h1 : -2147483648 ≤ x) (h2 : x ≤ 2147483647) : wr
 
 /-- A byte array: its elements as an index function, bundled with its length.
     `CoeFun` lets `a i` mean `a.get i`, so indexing reads naturally.  `get` holds
-    already-sign-extended byte values, which is what `baload` delivers. -/
+    already-sign-extended byte values, which is what `baload` delivers.  A JVM
+    array length is a non-negative int, so it never exceeds MAXI; carrying that
+    proof makes `b.length ≤ MAXI` a fact about every array rather than a
+    precondition callers must supply. -/
 structure Arr where
   get : Nat → Int
   len : Nat
+  len_le : len ≤ 2147483647
 
 instance : CoeFun Arr (fun _ => Nat → Int) := ⟨Arr.get⟩
 
 /-- Length as an `Int`, for specs that compare it against index arithmetic.
     An `abbrev` so it stays transparent to `omega`. -/
 abbrev Arr.length (a : Arr) : Int := (a.len : Int)
+
+/-- Length bound in the `Int` form the proofs use. -/
+theorem Arr.length_le (a : Arr) : a.length ≤ MAXI := by
+  unfold Arr.length MAXI; exact_mod_cast a.len_le
 
 /--
   Machine state.

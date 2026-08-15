@@ -1,5 +1,6 @@
   simp only [inv_loop0] at hinv
-  obtain ⟨hoff, hlen, hfits, hamax, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+  obtain ⟨hoff, hlen, hfits, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+  have hamax : s.arr.length ≤ MAXI := s.arr.length_le
   simp only [Jvm.Arr.length] at hfits hamax
   unfold MAXI at hamax haccm
   have hidx : wrap (s.loc 1 + s.loc 4) = s.loc 1 + s.loc 4 := by apply wrap_id' <;> omega

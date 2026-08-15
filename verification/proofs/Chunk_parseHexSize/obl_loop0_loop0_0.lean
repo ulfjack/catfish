@@ -1,5 +1,6 @@
 simp only [inv_loop0] at hinv
-obtain ⟨hoff, hlen, hfits, harr, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+obtain ⟨hoff, hlen, hfits, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+have harr : s.arr.length ≤ MAXI := s.arr.length_le
 simp only [Jvm.Arr.length] at hfits harr
 unfold MAXI at harr haccm
 have hidx : wrap (s.loc 1 + s.loc 4) = s.loc 1 + s.loc 4 := by
@@ -36,7 +37,7 @@ cases hdv : digitVal (s.arr ((s.loc 1).toNat + (s.loc 4).toNat)) with
   simp [run, step, P, hpc, hstk, State.set, hidx, htn, hexValF_of hdv, hsub, hdv16,
         hmul, hadd, hinc, hbnd, c0, hd0, c2, pLt, pLe, zGe] at hrun
   subst hrun
-  refine ⟨hoff, hlen, hfits, harr, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨hoff, hlen, hfits, ?_, ?_, ?_, ?_, ?_⟩
   · simp only [State.set]; omega
   · simp only [State.set]; omega
   · simp only [State.set]; omega
