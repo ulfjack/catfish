@@ -91,3 +91,19 @@ java_verification_test(
         ":chunked_encoding",
     ],
 )
+
+# Its sibling helper: isHexDigit returns 0/1 for HEXDIG membership. Total (no
+# precondition); postcondition ret = isHexDigitF c ties the boolean to digitVal.
+java_verification_test(
+    name = "chunkedbodystate_ishexdigit",
+    lib = "//java/de/ofahrt/catfish/http",
+    method = "isHexDigit",
+    class_name = "de.ofahrt.catfish.http.ChunkedBodyState",
+    source = "//java/de/ofahrt/catfish/http:ChunkedBodyState.java",
+    proofs = glob(["proofs/ChunkedBodyState_isHexDigit/*.lean"]),
+    golden = "Generated/ChunkedBodyState_isHexDigit.lean",
+    deps = [
+        ":semantics",
+        ":chunked_encoding",
+    ],
+)

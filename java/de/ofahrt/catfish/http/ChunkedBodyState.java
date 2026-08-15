@@ -245,6 +245,7 @@ public final class ChunkedBodyState {
     return index + 1; // consume the offending byte too, so an incremental caller makes progress
   }
 
+  @Returns("isHexDigitF c")
   private static boolean isHexDigit(char c) {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
   }

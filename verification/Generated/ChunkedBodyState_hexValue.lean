@@ -42,27 +42,27 @@ def P : Nat → Option Instr
   | _    => none
 
 
-/-- requires at bytecode offset 0, java/de/ofahrt/catfish/http/ChunkedBodyState.java:255 -/
+/-- requires at bytecode offset 0, java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -/
 def inv_pre (s : State) : Prop :=
   let c : Int := s.loc 0
   (digitVal c ≠ none)
 
-/-- ensure at bytecode offset 16, java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -/
+/-- ensure at bytecode offset 16, java/de/ofahrt/catfish/http/ChunkedBodyState.java:257 -/
 def inv_ret0 (s : State) : Prop :=
   let c : Int := s.loc 0
   (s.stk = [hexValF c])
 
-/-- ensure at bytecode offset 36, java/de/ofahrt/catfish/http/ChunkedBodyState.java:259 -/
+/-- ensure at bytecode offset 36, java/de/ofahrt/catfish/http/ChunkedBodyState.java:260 -/
 def inv_ret1 (s : State) : Prop :=
   let c : Int := s.loc 0
   (s.stk = [hexValF c])
 
-/-- ensure at bytecode offset 44, java/de/ofahrt/catfish/http/ChunkedBodyState.java:261 -/
+/-- ensure at bytecode offset 44, java/de/ofahrt/catfish/http/ChunkedBodyState.java:262 -/
 def inv_ret2 (s : State) : Prop :=
   let c : Int := s.loc 0
   (s.stk = [hexValF c])
 
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:255 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:261   (bytecode 0 -> 44, 11 steps) -/
+/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:262   (bytecode 0 -> 44, 11 steps) -/
 --   side condition: no wrap: (s.loc 0) - (65 : Int)
 --   side condition: no wrap: (wrap ((s.loc 0) - (65 : Int))) + (10 : Int)
 theorem obl_pre_ret2_0 (s s' : State)
@@ -87,7 +87,7 @@ theorem obl_pre_ret2_0 (s s' : State)
     rw [hexValF_of (show digitVal (s.loc 0) = some (s.loc 0 - 55) by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_pos ⟨by omega, by omega⟩])]
     omega
 
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:255 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:261   (bytecode 0 -> 44, 14 steps) -/
+/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:262   (bytecode 0 -> 44, 14 steps) -/
 --   side condition: no wrap: (s.loc 0) - (65 : Int)
 --   side condition: no wrap: (wrap ((s.loc 0) - (65 : Int))) + (10 : Int)
 theorem obl_pre_ret2_1 (s s' : State)
@@ -113,7 +113,7 @@ theorem obl_pre_ret2_1 (s s' : State)
     rw [hexValF_of (show digitVal (s.loc 0) = some (s.loc 0 - 55) by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_pos ⟨by omega, by omega⟩])]
     omega
 
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:255 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:259   (bytecode 0 -> 36, 14 steps) -/
+/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:260   (bytecode 0 -> 36, 14 steps) -/
 --   side condition: no wrap: (s.loc 0) - (97 : Int)
 --   side condition: no wrap: (wrap ((s.loc 0) - (97 : Int))) + (10 : Int)
 theorem obl_pre_ret1_0 (s s' : State)
@@ -132,7 +132,7 @@ theorem obl_pre_ret1_0 (s s' : State)
     rw [hexValF_of (show digitVal (s.loc 0) = some (s.loc 0 - 87) by unfold digitVal; rw [if_neg (by omega), if_pos ⟨by omega, by omega⟩])]
     omega
 
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:255 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:261   (bytecode 0 -> 44, 14 steps) -/
+/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:262   (bytecode 0 -> 44, 14 steps) -/
 --   side condition: no wrap: (s.loc 0) - (65 : Int)
 --   side condition: no wrap: (wrap ((s.loc 0) - (65 : Int))) + (10 : Int)
 theorem obl_pre_ret2_2 (s s' : State)
@@ -158,7 +158,7 @@ theorem obl_pre_ret2_2 (s s' : State)
     rw [hexValF_of (show digitVal (s.loc 0) = some (s.loc 0 - 55) by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_pos ⟨by omega, by omega⟩])]
     omega
 
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:255 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:261   (bytecode 0 -> 44, 17 steps) -/
+/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:262   (bytecode 0 -> 44, 17 steps) -/
 --   side condition: no wrap: (s.loc 0) - (65 : Int)
 --   side condition: no wrap: (wrap ((s.loc 0) - (65 : Int))) + (10 : Int)
 theorem obl_pre_ret2_3 (s s' : State)
@@ -185,7 +185,7 @@ theorem obl_pre_ret2_3 (s s' : State)
     rw [hexValF_of (show digitVal (s.loc 0) = some (s.loc 0 - 55) by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_pos ⟨by omega, by omega⟩])]
     omega
 
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:255 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:259   (bytecode 0 -> 36, 17 steps) -/
+/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:260   (bytecode 0 -> 36, 17 steps) -/
 --   side condition: no wrap: (s.loc 0) - (97 : Int)
 --   side condition: no wrap: (wrap ((s.loc 0) - (97 : Int))) + (10 : Int)
 theorem obl_pre_ret1_1 (s s' : State)
@@ -205,7 +205,7 @@ theorem obl_pre_ret1_1 (s s' : State)
     rw [hexValF_of (show digitVal (s.loc 0) = some (s.loc 0 - 87) by unfold digitVal; rw [if_neg (by omega), if_pos ⟨by omega, by omega⟩])]
     omega
 
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:255 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:256   (bytecode 0 -> 16, 9 steps) -/
+/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:257   (bytecode 0 -> 16, 9 steps) -/
 --   side condition: no wrap: (s.loc 0) - (48 : Int)
 theorem obl_pre_ret0_0 (s s' : State)
     (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])

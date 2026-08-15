@@ -24,6 +24,18 @@ theorem digitVal_range {c d : Int} (h : digitVal c = some d) : 0 ≤ d ∧ d ≤
   all_goals simp_all
   all_goals omega
 
+/-- HEXDIG membership as the 0/1 an `isHexDigit`-style boolean method returns. -/
+def isHexDigitF (c : Int) : Int := if digitVal c = none then 0 else 1
+
+/-- `isHexDigitF` in range-union form: the shape the branch conditions match. -/
+theorem isHexDigitF_eq (c : Int) :
+    isHexDigitF c =
+      if (48 ≤ c ∧ c ≤ 57) ∨ (97 ≤ c ∧ c ≤ 102) ∨ (65 ≤ c ∧ c ≤ 70) then 1 else 0 := by
+  unfold isHexDigitF digitVal
+  repeat' split
+  all_goals simp_all
+  all_goals omega
+
 /-- Contract for the separately verified `Chunk.hexVal`. -/
 def hexValF (c : Int) : Int :=
   match digitVal c with | some d => d | none => -1
