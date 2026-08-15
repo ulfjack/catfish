@@ -2,7 +2,7 @@
 @ImportLeanPackage("ChunkedEncoding")
 public final class Chunk {
 
-  @Precondition("0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ alen ∧ alen ≤ MAXI")
+  @Precondition("0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ b.length ∧ b.length ≤ MAXI")
   @Returns("parseSpec b off.toNat len.toNat")
   public static int parseHexSize(byte[] b, int off, int len) {
     int acc = 0;
@@ -11,7 +11,7 @@ public final class Chunk {
     for (; ; ) {
       Verify.invariant(
           """
-          0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ alen ∧ alen ≤ MAXI ∧
+          0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ b.length ∧ b.length ≤ MAXI ∧
           0 ≤ i ∧ i ≤ len ∧ 0 ≤ acc ∧ acc ≤ MAXI ∧
           valOf b off.toNat i.toNat = some acc
           """);

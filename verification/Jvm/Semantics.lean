@@ -23,20 +23,31 @@ theorem wrap_id {x : Int} (h1 : MINI ≤ x) (h2 : x ≤ MAXI) : wrap x = x := by
 theorem wrap_id' {x : Int} (h1 : -2147483648 ≤ x) (h2 : x ≤ 2147483647) : wrap x = x :=
   wrap_id (by unfold MINI; omega) (by unfold MAXI; omega)
 
+/-- A byte array: its elements as an index function, bundled with its length.
+    `CoeFun` lets `a i` mean `a.get i`, so indexing reads naturally.  `get` holds
+    already-sign-extended byte values, which is what `baload` delivers. -/
+structure Arr where
+  get : Nat → Int
+  len : Nat
+
+instance : CoeFun Arr (fun _ => Nat → Int) := ⟨Arr.get⟩
+
+/-- Length as an `Int`, for specs that compare it against index arithmetic.
+    An `abbrev` so it stays transparent to `omega`. -/
+abbrev Arr.length (a : Arr) : Int := (a.len : Int)
+
 /--
   Machine state.
 
   ASSUMPTION (documented in TRUST.md): this subset admits exactly one array,
-  passed as a parameter, so the heap is modelled as (arr, alen) rather than a
-  general reference map.  `arr` holds already-sign-extended byte values, which
-  is what `baload` delivers.
+  passed as a parameter, so the heap is modelled as a single `Arr` rather than a
+  general reference map.
 -/
 structure State where
   pc   : Nat
   stk  : List Int
   loc  : Nat → Int
-  arr  : Nat → Int
-  alen : Nat
+  arr  : Arr
 
 def State.set (s : State) (n : Nat) (v : Int) : Nat → Int :=
   fun m => if m = n then v else s.loc m
@@ -84,10 +95,10 @@ def step (prog : Nat → Option Instr) (s : State) : Option State :=
     | .iinc n k,   st           =>
         some { s with pc := s.pc + 1, stk := st, loc := s.set n (wrap (s.loc n + k)) }
     | .baload,     j :: _ :: st =>
-        if 0 ≤ j ∧ j < (s.alen : Int)
+        if 0 ≤ j ∧ j < (s.arr.len : Int)
         then some { s with pc := s.pc + 1, stk := s.arr j.toNat :: st }
         else none                                    -- ArrayIndexOutOfBoundsException
-    | .alen,       _ :: st      => some { s with pc := s.pc + 1, stk := (s.alen : Int) :: st }
+    | .alen,       _ :: st      => some { s with pc := s.pc + 1, stk := (s.arr.len : Int) :: st }
     | .iadd,       b :: a :: st => some { s with pc := s.pc + 1, stk := wrap (a + b) :: st }
     | .isub,       b :: a :: st => some { s with pc := s.pc + 1, stk := wrap (a - b) :: st }
     | .imul,       b :: a :: st => some { s with pc := s.pc + 1, stk := wrap (a * b) :: st }

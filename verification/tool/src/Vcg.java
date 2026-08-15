@@ -496,14 +496,14 @@ final class Vcg {
       }
       case "alen" -> {
         st.stack.pop();
-        st.stack.push("(s.alen : Int)");
+        st.stack.push("(s.arr.len : Int)");
         st.steps++;
         walk(from, at + 1, st, depth + 1);
       }
       case "baload" -> {
         String j = st.stack.pop();
         st.stack.pop();
-        st.side.add("in bounds: 0 ≤ " + j + " ∧ " + j + " < (s.alen : Int)");
+        st.side.add("in bounds: 0 ≤ " + j + " ∧ " + j + " < (s.arr.len : Int)");
         st.stack.push("(s.arr (" + j + ").toNat)");
         st.steps++;
         walk(from, at + 1, st, depth + 1);

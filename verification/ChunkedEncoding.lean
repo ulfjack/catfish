@@ -34,26 +34,26 @@ theorem hexValF_of {c d : Int} (h : digitVal c = some d) : hexValF c = d := by
 theorem hexValF_neg {c : Int} (h : digitVal c = none) : hexValF c = -1 := by
   unfold hexValF; rw [h]
 
-/-- Value of the hex digit string `arr[off .. off+n)`, `none` if any byte is not HEXDIG. -/
-def valOf (arr : Nat → Int) (off : Nat) : Nat → Option Int
+/-- Value of the hex digit string `b[off .. off+n)`, `none` if any byte is not HEXDIG. -/
+def valOf (b : Jvm.Arr) (off : Nat) : Nat → Option Int
   | 0     => some 0
-  | n + 1 => match valOf arr off n, digitVal (arr (off + n)) with
+  | n + 1 => match valOf b off n, digitVal (b (off + n)) with
              | some v, some d => some (v * 16 + d)
              | _, _ => none
 
 /-- A parsed hex value is non-negative. -/
-theorem valOf_nonneg {arr : Nat → Int} {off : Nat} :
-    ∀ {n : Nat} {v : Int}, valOf arr off n = some v → 0 ≤ v := by
+theorem valOf_nonneg {b : Jvm.Arr} {off : Nat} :
+    ∀ {n : Nat} {v : Int}, valOf b off n = some v → 0 ≤ v := by
   intro n
   induction n with
   | zero => intro v h; simp only [valOf, Option.some.injEq] at h; omega
   | succ k ih =>
     intro v h
     simp only [valOf] at h
-    cases hw : valOf arr off k with
+    cases hw : valOf b off k with
     | none => rw [hw] at h; simp at h
     | some w =>
-      cases hd : digitVal (arr (off + k)) with
+      cases hd : digitVal (b (off + k)) with
       | none => rw [hw, hd] at h; simp at h
       | some d =>
         rw [hw, hd] at h
@@ -63,23 +63,23 @@ theorem valOf_nonneg {arr : Nat → Int} {off : Nat} :
         omega
 
 /-- Once `valOf` is `none` at one length it is `none` at every greater length. -/
-theorem valOf_none_le {arr : Nat → Int} {off n : Nat}
-    (h : valOf arr off n = none) : ∀ {m : Nat}, n ≤ m → valOf arr off m = none := by
+theorem valOf_none_le {b : Jvm.Arr} {off n : Nat}
+    (h : valOf b off n = none) : ∀ {m : Nat}, n ≤ m → valOf b off m = none := by
   intro m hnm
   induction hnm with
   | refl => exact h
   | step _ ih => simp [valOf, ih]
 
 /-- Once the value reaches `w`, every longer prefix is `none` or at least `w`. -/
-theorem valOf_ge {arr : Nat → Int} {off k : Nat} {w : Int} (hk : valOf arr off k = some w) :
-    ∀ {m : Nat}, k ≤ m → valOf arr off m = none ∨ ∃ u, valOf arr off m = some u ∧ w ≤ u := by
+theorem valOf_ge {b : Jvm.Arr} {off k : Nat} {w : Int} (hk : valOf b off k = some w) :
+    ∀ {m : Nat}, k ≤ m → valOf b off m = none ∨ ∃ u, valOf b off m = some u ∧ w ≤ u := by
   intro m hkm
   induction hkm with
   | refl => exact Or.inr ⟨w, hk, by omega⟩
   | @step j _ ih =>
     rcases ih with hnone | ⟨u, hu, hwu⟩
     · exact Or.inl (by simp [valOf, hnone])
-    · cases hd : digitVal (arr (off + j)) with
+    · cases hd : digitVal (b (off + j)) with
       | none => exact Or.inl (by simp [valOf, hu, hd])
       | some d =>
         refine Or.inr ⟨u * 16 + d, by simp [valOf, hu, hd], ?_⟩
@@ -92,24 +92,24 @@ theorem valOf_ge {arr : Nat → Int} {off k : Nat} {w : Int} (hk : valOf arr off
   HEXDIG that fits in a 32-bit int, otherwise -1 (empty, non-hex byte, or overflow).
   RFC 9112 requires 1*HEXDIG, so the empty field is rejected.
 -/
-def parseSpec (arr : Nat → Int) (off n : Nat) : Int :=
+def parseSpec (b : Jvm.Arr) (off n : Nat) : Int :=
   if n = 0 then -1
-  else match valOf arr off n with
+  else match valOf b off n with
        | some v => if v ≤ Jvm.MAXI then v else -1
        | none   => -1
 
 /-- A non-hex byte anywhere in `[k, m)` (via `valOf … k = none`) forces -1. -/
-theorem parseSpec_none {arr : Nat → Int} {off k m : Nat}
-    (hkm : k ≤ m) (hk : valOf arr off k = none) : parseSpec arr off m = -1 := by
-  have hm : valOf arr off m = none := valOf_none_le hk hkm
+theorem parseSpec_none {b : Jvm.Arr} {off k m : Nat}
+    (hkm : k ≤ m) (hk : valOf b off k = none) : parseSpec b off m = -1 := by
+  have hm : valOf b off m = none := valOf_none_le hk hkm
   unfold parseSpec
   simp only [hm]
   split <;> rfl
 
 /-- A prefix value exceeding MAXI forces -1. -/
-theorem parseSpec_overflow {arr : Nat → Int} {off k m : Nat} {w : Int}
-    (hkm : k ≤ m) (hk : valOf arr off k = some w) (hover : Jvm.MAXI < w) :
-    parseSpec arr off m = -1 := by
+theorem parseSpec_overflow {b : Jvm.Arr} {off k m : Nat} {w : Int}
+    (hkm : k ≤ m) (hk : valOf b off k = some w) (hover : Jvm.MAXI < w) :
+    parseSpec b off m = -1 := by
   have hk0 : k ≠ 0 := by
     rintro rfl
     simp only [valOf, Option.some.injEq] at hk

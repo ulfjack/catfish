@@ -97,12 +97,11 @@ final class Emit {
   /** Binding prelude: source-level names for locals, so spec strings read naturally. */
   /** Bind only the locals whose LVT scope covers this offset, so slot reuse does not shadow. */
   private void prelude(int off, int retSlot) {
-    out("  let alen : Int := (s.alen : Int)");
     Set<String> bound = new HashSet<>();
     for (var lv : v.m.locals) {
       if (!lv.covers(off) || !bound.add(lv.name)) continue;
       if (lv.slot == 0 && v.m.desc.startsWith("([B")) {
-        out("  let " + lv.name + " : Nat → Int := s.arr");
+        out("  let " + lv.name + " : Jvm.Arr := s.arr");
       } else {
         out("  let " + lv.name + " : Int := s.loc " + lv.slot);
       }

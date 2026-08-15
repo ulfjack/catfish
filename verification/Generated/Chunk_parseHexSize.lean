@@ -67,28 +67,25 @@ def P : Nat → Option Instr
 
 /-- requires at bytecode offset 0, verification/java/Chunk.java:8 -/
 def inv_pre (s : State) : Prop :=
-  let alen : Int := (s.alen : Int)
-  let b : Nat → Int := s.arr
+  let b : Jvm.Arr := s.arr
   let off : Int := s.loc 1
   let len : Int := s.loc 2
-  (0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ alen ∧ alen ≤ MAXI)
+  (0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ b.length ∧ b.length ≤ MAXI)
 
 /-- invariant at bytecode offset 5, verification/java/Chunk.java:12 -/
 def inv_loop0 (s : State) : Prop :=
-  let alen : Int := (s.alen : Int)
-  let b : Nat → Int := s.arr
+  let b : Jvm.Arr := s.arr
   let off : Int := s.loc 1
   let len : Int := s.loc 2
   let acc : Int := s.loc 3
   let i : Int := s.loc 4
-  (0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ alen ∧ alen ≤ MAXI ∧
+  (0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ b.length ∧ b.length ≤ MAXI ∧
    0 ≤ i ∧ i ≤ len ∧ 0 ≤ acc ∧ acc ≤ MAXI ∧
    valOf b off.toNat i.toNat = some acc)
 
 /-- ensure at bytecode offset 87, verification/java/Chunk.java:34 -/
 def inv_ret0 (s : State) : Prop :=
-  let alen : Int := (s.alen : Int)
-  let b : Nat → Int := s.arr
+  let b : Jvm.Arr := s.arr
   let off : Int := s.loc 1
   let len : Int := s.loc 2
   let acc : Int := s.loc 3
@@ -116,7 +113,7 @@ theorem obl_pre_loop0_0 (s s' : State)
 
 /-- verification/java/Chunk.java:12 -> verification/java/Chunk.java:12   (bytecode 5 -> 5, 32 steps) -/
 --   side condition: no wrap: (s.loc 1) + (s.loc 4)
---   side condition: in bounds: 0 ≤ (wrap ((s.loc 1) + (s.loc 4))) ∧ (wrap ((s.loc 1) + (s.loc 4))) < (s.alen : Int)
+--   side condition: in bounds: 0 ≤ (wrap ((s.loc 1) + (s.loc 4))) ∧ (wrap ((s.loc 1) + (s.loc 4))) < (s.arr.len : Int)
 --   side condition: no wrap: (2147483647 : Int) - (hexValF (s.arr ((wrap ((s.loc 1) + (s.loc 4)))).toNat))
 --   side condition: nonzero divisor: (16 : Int)
 --   side condition: no wrap: (s.loc 3) * (16 : Int)
@@ -131,6 +128,7 @@ theorem obl_loop0_loop0_0 (s s' : State)
     inv_loop0 s' := by
   simp only [inv_loop0] at hinv
   obtain ⟨hoff, hlen, hfits, harr, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+  simp only [Jvm.Arr.length] at hfits harr
   unfold MAXI at harr haccm
   have hidx : wrap (s.loc 1 + s.loc 4) = s.loc 1 + s.loc 4 := by
     apply wrap_id' <;> omega
@@ -159,7 +157,7 @@ theorem obl_loop0_loop0_0 (s s' : State)
       apply wrap_id' <;> omega
     have hinc : wrap (s.loc 4 + 1) = s.loc 4 + 1 := by
       apply wrap_id' <;> omega
-    have hbnd : 0 ≤ s.loc 1 + s.loc 4 ∧ s.loc 1 + s.loc 4 < (s.alen : Int) := by omega
+    have hbnd : 0 ≤ s.loc 1 + s.loc 4 ∧ s.loc 1 + s.loc 4 < (s.arr.len : Int) := by omega
     have htn1 : (s.loc 4 + 1).toNat = (s.loc 4).toNat + 1 := by
       rw [Int.toNat_add hi0 (by omega)]; rfl
     simp only [inv_loop0]
@@ -175,7 +173,7 @@ theorem obl_loop0_loop0_0 (s s' : State)
 
 /-- verification/java/Chunk.java:12 -> verification/java/Chunk.java:34   (bytecode 5 -> 87, 24 steps) -/
 --   side condition: no wrap: (s.loc 1) + (s.loc 4)
---   side condition: in bounds: 0 ≤ (wrap ((s.loc 1) + (s.loc 4))) ∧ (wrap ((s.loc 1) + (s.loc 4))) < (s.alen : Int)
+--   side condition: in bounds: 0 ≤ (wrap ((s.loc 1) + (s.loc 4))) ∧ (wrap ((s.loc 1) + (s.loc 4))) < (s.arr.len : Int)
 --   side condition: no wrap: (2147483647 : Int) - (hexValF (s.arr ((wrap ((s.loc 1) + (s.loc 4)))).toNat))
 --   side condition: nonzero divisor: (16 : Int)
 theorem obl_loop0_ret0_0 (s s' : State)
@@ -187,9 +185,10 @@ theorem obl_loop0_ret0_0 (s s' : State)
     inv_ret0 s' := by
     simp only [inv_loop0] at hinv
     obtain ⟨hoff, hlen, hfits, hamax, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+    simp only [Jvm.Arr.length] at hfits hamax
     unfold MAXI at hamax haccm
     have hidx : wrap (s.loc 1 + s.loc 4) = s.loc 1 + s.loc 4 := by apply wrap_id' <;> omega
-    have hbnd : 0 ≤ s.loc 1 + s.loc 4 ∧ s.loc 1 + s.loc 4 < (s.alen : Int) := by omega
+    have hbnd : 0 ≤ s.loc 1 + s.loc 4 ∧ s.loc 1 + s.loc 4 < (s.arr.len : Int) := by omega
     have htn : (s.loc 1 + s.loc 4).toNat = (s.loc 1).toNat + (s.loc 4).toNat := Int.toNat_add hoff hi0
     have e2 : ((s.loc 2).toNat : Int) = s.loc 2 := Int.toNat_of_nonneg (by omega)
     have e4 : ((s.loc 4).toNat : Int) = s.loc 4 := Int.toNat_of_nonneg hi0
@@ -214,7 +213,7 @@ theorem obl_loop0_ret0_0 (s s' : State)
 
 /-- verification/java/Chunk.java:12 -> verification/java/Chunk.java:34   (bytecode 5 -> 87, 17 steps) -/
 --   side condition: no wrap: (s.loc 1) + (s.loc 4)
---   side condition: in bounds: 0 ≤ (wrap ((s.loc 1) + (s.loc 4))) ∧ (wrap ((s.loc 1) + (s.loc 4))) < (s.alen : Int)
+--   side condition: in bounds: 0 ≤ (wrap ((s.loc 1) + (s.loc 4))) ∧ (wrap ((s.loc 1) + (s.loc 4))) < (s.arr.len : Int)
 theorem obl_loop0_ret0_1 (s s' : State)
     (hinv : inv_loop0 s) (hpc : s.pc = 4) (hstk : s.stk = [])
     (c0 : (s.loc 4) < (s.loc 2))
@@ -223,9 +222,10 @@ theorem obl_loop0_ret0_1 (s s' : State)
     inv_ret0 s' := by
     simp only [inv_loop0] at hinv
     obtain ⟨hoff, hlen, hfits, hamax, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+    simp only [Jvm.Arr.length] at hfits hamax
     unfold MAXI at hamax haccm
     have hidx : wrap (s.loc 1 + s.loc 4) = s.loc 1 + s.loc 4 := by apply wrap_id' <;> omega
-    have hbnd : 0 ≤ s.loc 1 + s.loc 4 ∧ s.loc 1 + s.loc 4 < (s.alen : Int) := by omega
+    have hbnd : 0 ≤ s.loc 1 + s.loc 4 ∧ s.loc 1 + s.loc 4 < (s.arr.len : Int) := by omega
     have htn : (s.loc 1 + s.loc 4).toNat = (s.loc 1).toNat + (s.loc 4).toNat := Int.toNat_add hoff hi0
     rw [hidx, htn] at c1
     have hd : digitVal (s.arr ((s.loc 1).toNat + (s.loc 4).toNat)) = none := by

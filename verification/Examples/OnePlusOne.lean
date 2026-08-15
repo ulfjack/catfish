@@ -26,7 +26,7 @@ def onePlusOne : Nat → Option Instr
 
 /-- Entry state: empty operand stack; locals and the array are unused here. -/
 def start : State :=
-  { pc := 0, stk := [], loc := fun _ => 0, arr := fun _ => 0, alen := 0 }
+  { pc := 0, stk := [], loc := fun _ => 0, arr := { get := fun _ => 0, len := 0 } }
 
 /-- After the four instructions, the top (and only) stack value is `2`.
     `run` re-executes the semantics from the definition, so this is a claim

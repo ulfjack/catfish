@@ -53,13 +53,11 @@ def P : Nat → Option Instr
 
 /-- requires at bytecode offset 0, verification/java/Chunk.java:44 -/
 def inv_pre (s : State) : Prop :=
-  let alen : Int := (s.alen : Int)
   let c : Int := s.loc 0
   (True)
 
 /-- ensure at bytecode offset 62, verification/java/Chunk.java:53 -/
 def inv_ret0 (s : State) : Prop :=
-  let alen : Int := (s.alen : Int)
   let c : Int := s.loc 0
   let r : Int := s.loc 1
   let ret : Int := s.loc 1

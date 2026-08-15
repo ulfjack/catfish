@@ -1,5 +1,6 @@
 simp only [inv_loop0] at hinv
 obtain ⟨hoff, hlen, hfits, harr, hi0, hile, hacc0, haccm, haccv⟩ := hinv
+simp only [Jvm.Arr.length] at hfits harr
 unfold MAXI at harr haccm
 have hidx : wrap (s.loc 1 + s.loc 4) = s.loc 1 + s.loc 4 := by
   apply wrap_id' <;> omega
@@ -28,7 +29,7 @@ cases hdv : digitVal (s.arr ((s.loc 1).toNat + (s.loc 4).toNat)) with
     apply wrap_id' <;> omega
   have hinc : wrap (s.loc 4 + 1) = s.loc 4 + 1 := by
     apply wrap_id' <;> omega
-  have hbnd : 0 ≤ s.loc 1 + s.loc 4 ∧ s.loc 1 + s.loc 4 < (s.alen : Int) := by omega
+  have hbnd : 0 ≤ s.loc 1 + s.loc 4 ∧ s.loc 1 + s.loc 4 < (s.arr.len : Int) := by omega
   have htn1 : (s.loc 4 + 1).toNat = (s.loc 4).toNat + 1 := by
     rw [Int.toNat_add hi0 (by omega)]; rfl
   simp only [inv_loop0]
