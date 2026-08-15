@@ -34,19 +34,10 @@ java_binary(
 
 # The Java under verification. A normal java_library; its compiled bytecode
 # (with LocalVariableTable) is what the generator reads.
-# The verification annotations (@Precondition, @Returns, @ImportLeanPackage) and
-# the Verify cut-point markers. CLASS-retained / compile-only, so annotated
-# production code can depend on this without any runtime cost.
-java_library(
-    name = "verify",
-    srcs = glob(["java/de/ofahrt/catfish/verify/*.java"]),
-    visibility = ["//visibility:public"],
-)
-
 java_library(
     name = "chunk_java",
     srcs = ["java/Chunk.java"],
-    deps = [":verify"],
+    deps = ["//java/de/ofahrt/catfish/verify"],
 )
 
 # End-to-end: Chunk.java -> javac -> generator -> Lean -> audited.
