@@ -1,5 +1,9 @@
 package de.ofahrt.catfish.http;
 
+import de.ofahrt.catfish.verify.ImportLeanPackage;
+import de.ofahrt.catfish.verify.Precondition;
+import de.ofahrt.catfish.verify.Returns;
+
 /**
  * The single strict state machine for HTTP/1.1 chunked transfer-coding (RFC 9112 §7.1). It walks a
  * chunked byte stream incrementally, reporting the decoded (de-chunked) content through a {@link
@@ -15,6 +19,7 @@ package de.ofahrt.catfish.http;
  * normalising malformed framing is what closes the request-smuggling surface: Catfish refuses any
  * framing a peer might resolve differently instead of laundering it into clean framing.
  */
+@ImportLeanPackage("ChunkedEncoding")
 public final class ChunkedBodyState {
 
   /** Receives decoded content spans that point into the caller's buffer (zero-copy). */
@@ -244,6 +249,8 @@ public final class ChunkedBodyState {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
   }
 
+  @Precondition("digitVal c ≠ none")
+  @Returns("hexValF c")
   private static int hexValue(char c) {
     if (c >= '0' && c <= '9') {
       return c - '0';

@@ -30,6 +30,7 @@ final class Vcg {
     String markerKind; // requires | invariant | ensure | assume
     String cutName; // stable obligation name for a cut point: pre | loop<n> | ret<n>
     int retSlot = -1; // on an `ensure` cut point: slot holding the return value
+    boolean stackReturn; // ensure cut where the return value is the operand-stack top
     // symbolic effect, applied by the explorer
     String kind; // opcode class for the explorer
     int slot; // local slot for loads/stores/iinc
@@ -99,13 +100,22 @@ final class Vcg {
    */
   private void synthReturnCutPoints() {
     if (m.returnsSpec == null) return;
-    for (int k = 0; k + 1 < ins.size(); k++) {
-      Ins a = ins.get(k), b = ins.get(k + 1);
-      if (a.kind.equals("iload") && b.isReturn) {
-        a.isMarkerLdc = true; // isMarkerLdc == "is a cut point" downstream
-        a.markerKind = "ensure";
-        a.retSlot = a.slot;
-        a.specString = "ret = " + m.returnsSpec;
+    for (int k = 0; k < ins.size(); k++) {
+      Ins r = ins.get(k);
+      if (!r.isReturn) continue;
+      Ins prev = k > 0 ? ins.get(k - 1) : null;
+      if (prev != null && prev.kind.equals("iload")) {
+        // `return <local>;`: cut at the iload, postcondition `ret = expr` over that local.
+        prev.isMarkerLdc = true; // isMarkerLdc == "is a cut point" downstream
+        prev.markerKind = "ensure";
+        prev.retSlot = prev.slot;
+        prev.specString = "ret = " + m.returnsSpec;
+      } else {
+        // `return <expr>;`: cut at the ireturn, postcondition over the operand-stack top.
+        r.isMarkerLdc = true;
+        r.markerKind = "ensure";
+        r.stackReturn = true;
+        r.specString = m.returnsSpec;
       }
     }
   }

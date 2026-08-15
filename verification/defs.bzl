@@ -157,13 +157,15 @@ lean_test = rule(
 
 def _java_obligations_impl(ctx):
     # The full class jar (real bytecode + LocalVariableTable), not the header jar.
-    outs = ctx.attr.lib[JavaInfo].java_outputs
+    # `lib` carries a 1:1 config transition, so it arrives as a single-element list.
+    outs = ctx.attr.lib[0][JavaInfo].java_outputs
     class_jar = outs[0].class_jar
     entry = ctx.attr.class_name.replace(".", "/") + ".class"
 
     # Build-only path, distinct from the checked-in golden (which lives under
-    # Generated/) so both can coexist in a diff test's runfiles.
-    stem = "_generated/%s_%s" % (ctx.attr.class_name.replace(".", "_"), ctx.attr.method)
+    # Generated/) so both can coexist in a diff test's runfiles. Simple class name
+    # (drop the package) keeps the file name readable for packaged subjects.
+    stem = "_generated/%s_%s" % (ctx.attr.class_name.split(".")[-1], ctx.attr.method)
     lean_out = ctx.actions.declare_file(stem + ".lean")
     map_out = ctx.actions.declare_file(stem + ".lean.map.json")
 
@@ -199,10 +201,22 @@ def _java_obligations_impl(ctx):
     )
     return [DefaultInfo(files = depset([lean_out]))]
 
+# Under `bazel coverage`, a //java/... subject library would be JaCoCo-instrumented
+# (probe arrays, invokedynamic), which the generator cannot read. Build the subject
+# in a coverage-free configuration.
+def _no_coverage_impl(_settings, _attr):
+    return {"//command_line_option:collect_code_coverage": False}
+
+_no_coverage = transition(
+    implementation = _no_coverage_impl,
+    inputs = [],
+    outputs = ["//command_line_option:collect_code_coverage"],
+)
+
 _java_obligations = rule(
     implementation = _java_obligations_impl,
     attrs = {
-        "lib": attr.label(providers = [JavaInfo], mandatory = True),
+        "lib": attr.label(providers = [[JavaInfo]], mandatory = True, cfg = _no_coverage),
         "method": attr.string(mandatory = True),
         "class_name": attr.string(mandatory = True),
         "source": attr.label(allow_single_file = [".java"], mandatory = True),

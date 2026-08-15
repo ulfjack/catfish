@@ -73,3 +73,21 @@ java_verification_test(
         ":chunked_encoding",
     ],
 )
+
+# A real Catfish method: de.ofahrt.catfish.http.ChunkedBodyState.hexValue. Its
+# @Precondition("digitVal c ≠ none") is load-bearing -- the else branch (c-'A'+10)
+# is only correct for A-F, and the precondition is what rules out non-hex input.
+# `return <expr>;` returns the value on the operand stack (natural-return support).
+java_verification_test(
+    name = "chunkedbodystate_hexvalue",
+    lib = "//java/de/ofahrt/catfish/http",
+    method = "hexValue",
+    class_name = "de.ofahrt.catfish.http.ChunkedBodyState",
+    source = "//java/de/ofahrt/catfish/http:ChunkedBodyState.java",
+    proofs = glob(["proofs/ChunkedBodyState_hexValue/*.lean"]),
+    golden = "Generated/ChunkedBodyState_hexValue.lean",
+    deps = [
+        ":semantics",
+        ":chunked_encoding",
+    ],
+)
