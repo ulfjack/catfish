@@ -32,7 +32,7 @@ def P : Nat → Option Instr
   | 18   => some (.push 1)   -- @36
   | 19   => some (.goto 21)   -- @37
   | 20   => some (.push 0)   -- @40
-  | 21   => some (.ireturn)   -- @41  <-- cut point (ensure)
+  | 21   => some (.ireturn)   -- @41
   | _    => none
 
 
@@ -41,287 +41,33 @@ def inv_pre (s : State) : Prop :=
   let c : Int := s.loc 0
   (True)
 
-/-- ensure at bytecode offset 41, java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -/
-def inv_ret0 (s : State) : Prop :=
+/-- postcondition (@Returns): the value returned on every path -/
+def inv_post (s : State) : Prop :=
   let c : Int := s.loc 0
   (s.stk = [isHexDigitF c])
 
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (bytecode 0 -> 41, 10 steps) -/
-theorem obl_pre_ret0_0 (s s' : State)
+/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (one obligation, merged over all
+    15 return paths; N = 21 = longest) -/
+--   phi guards to split on: (s.loc 0) < (48 : Int)  ;  (s.loc 0) < (97 : Int)  ;  (s.loc 0) < (65 : Int)  ;  (s.loc 0) > (70 : Int)  ;  (s.loc 0) ≤ (102 : Int)  ;  (s.loc 0) ≤ (57 : Int)
+theorem obl_pre_post (s s' : State)
     (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : (s.loc 0) < (48 : Int))
-    (c1 : (s.loc 0) < (97 : Int))
-    (c2 : (s.loc 0) < (65 : Int))
-    (hrun : run P 10 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pLe, pGt, pGe, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true, isHexDigitF_eq]
-    by_cases hh : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102) ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70)
-    · rw [if_pos hh] <;> omega
-    · rw [if_neg hh] <;> omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (bytecode 0 -> 41, 13 steps) -/
-theorem obl_pre_ret0_1 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : (s.loc 0) < (48 : Int))
-    (c1 : (s.loc 0) < (97 : Int))
-    (c2 : ¬ ((s.loc 0) < (65 : Int)))
-    (c3 : (s.loc 0) > (70 : Int))
-    (hrun : run P 13 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pLe, pGt, pGe, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true, isHexDigitF_eq]
-    by_cases hh : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102) ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70)
-    · rw [if_pos hh] <;> omega
-    · rw [if_neg hh] <;> omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (bytecode 0 -> 41, 14 steps) -/
-theorem obl_pre_ret0_2 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : (s.loc 0) < (48 : Int))
-    (c1 : (s.loc 0) < (97 : Int))
-    (c2 : ¬ ((s.loc 0) < (65 : Int)))
-    (c3 : ¬ ((s.loc 0) > (70 : Int)))
-    (hrun : run P 14 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pLe, pGt, pGe, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true, isHexDigitF_eq]
-    by_cases hh : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102) ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70)
-    · rw [if_pos hh] <;> omega
-    · rw [if_neg hh] <;> omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (bytecode 0 -> 41, 11 steps) -/
-theorem obl_pre_ret0_3 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : (s.loc 0) < (48 : Int))
-    (c1 : ¬ ((s.loc 0) < (97 : Int)))
-    (c2 : (s.loc 0) ≤ (102 : Int))
-    (hrun : run P 11 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pLe, pGt, pGe, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true, isHexDigitF_eq]
-    by_cases hh : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102) ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70)
-    · rw [if_pos hh] <;> omega
-    · rw [if_neg hh] <;> omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (bytecode 0 -> 41, 13 steps) -/
-theorem obl_pre_ret0_4 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : (s.loc 0) < (48 : Int))
-    (c1 : ¬ ((s.loc 0) < (97 : Int)))
-    (c2 : ¬ ((s.loc 0) ≤ (102 : Int)))
-    (c3 : (s.loc 0) < (65 : Int))
-    (hrun : run P 13 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pLe, pGt, pGe, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true, isHexDigitF_eq]
-    by_cases hh : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102) ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70)
-    · rw [if_pos hh] <;> omega
-    · rw [if_neg hh] <;> omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (bytecode 0 -> 41, 16 steps) -/
-theorem obl_pre_ret0_5 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : (s.loc 0) < (48 : Int))
-    (c1 : ¬ ((s.loc 0) < (97 : Int)))
-    (c2 : ¬ ((s.loc 0) ≤ (102 : Int)))
-    (c3 : ¬ ((s.loc 0) < (65 : Int)))
-    (c4 : (s.loc 0) > (70 : Int))
-    (hrun : run P 16 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pLe, pGt, pGe, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true, isHexDigitF_eq]
-    by_cases hh : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102) ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70)
-    · rw [if_pos hh] <;> omega
-    · rw [if_neg hh] <;> omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (bytecode 0 -> 41, 17 steps) -/
-theorem obl_pre_ret0_6 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : (s.loc 0) < (48 : Int))
-    (c1 : ¬ ((s.loc 0) < (97 : Int)))
-    (c2 : ¬ ((s.loc 0) ≤ (102 : Int)))
-    (c3 : ¬ ((s.loc 0) < (65 : Int)))
-    (c4 : ¬ ((s.loc 0) > (70 : Int)))
-    (hrun : run P 17 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pLe, pGt, pGe, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true, isHexDigitF_eq]
-    by_cases hh : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102) ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70)
-    · rw [if_pos hh] <;> omega
-    · rw [if_neg hh] <;> omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (bytecode 0 -> 41, 8 steps) -/
-theorem obl_pre_ret0_7 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : ¬ ((s.loc 0) < (48 : Int)))
-    (c1 : (s.loc 0) ≤ (57 : Int))
-    (hrun : run P 8 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pLe, pGt, pGe, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true, isHexDigitF_eq]
-    by_cases hh : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102) ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70)
-    · rw [if_pos hh] <;> omega
-    · rw [if_neg hh] <;> omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (bytecode 0 -> 41, 13 steps) -/
-theorem obl_pre_ret0_8 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : ¬ ((s.loc 0) < (48 : Int)))
-    (c1 : ¬ ((s.loc 0) ≤ (57 : Int)))
-    (c2 : (s.loc 0) < (97 : Int))
-    (c3 : (s.loc 0) < (65 : Int))
-    (hrun : run P 13 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pLe, pGt, pGe, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true, isHexDigitF_eq]
-    by_cases hh : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102) ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70)
-    · rw [if_pos hh] <;> omega
-    · rw [if_neg hh] <;> omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (bytecode 0 -> 41, 16 steps) -/
-theorem obl_pre_ret0_9 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : ¬ ((s.loc 0) < (48 : Int)))
-    (c1 : ¬ ((s.loc 0) ≤ (57 : Int)))
-    (c2 : (s.loc 0) < (97 : Int))
-    (c3 : ¬ ((s.loc 0) < (65 : Int)))
-    (c4 : (s.loc 0) > (70 : Int))
-    (hrun : run P 16 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pLe, pGt, pGe, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true, isHexDigitF_eq]
-    by_cases hh : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102) ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70)
-    · rw [if_pos hh] <;> omega
-    · rw [if_neg hh] <;> omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (bytecode 0 -> 41, 17 steps) -/
-theorem obl_pre_ret0_10 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : ¬ ((s.loc 0) < (48 : Int)))
-    (c1 : ¬ ((s.loc 0) ≤ (57 : Int)))
-    (c2 : (s.loc 0) < (97 : Int))
-    (c3 : ¬ ((s.loc 0) < (65 : Int)))
-    (c4 : ¬ ((s.loc 0) > (70 : Int)))
-    (hrun : run P 17 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pLe, pGt, pGe, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true, isHexDigitF_eq]
-    by_cases hh : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102) ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70)
-    · rw [if_pos hh] <;> omega
-    · rw [if_neg hh] <;> omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (bytecode 0 -> 41, 14 steps) -/
-theorem obl_pre_ret0_11 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : ¬ ((s.loc 0) < (48 : Int)))
-    (c1 : ¬ ((s.loc 0) ≤ (57 : Int)))
-    (c2 : ¬ ((s.loc 0) < (97 : Int)))
-    (c3 : (s.loc 0) ≤ (102 : Int))
-    (hrun : run P 14 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pLe, pGt, pGe, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true, isHexDigitF_eq]
-    by_cases hh : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102) ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70)
-    · rw [if_pos hh] <;> omega
-    · rw [if_neg hh] <;> omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (bytecode 0 -> 41, 16 steps) -/
-theorem obl_pre_ret0_12 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : ¬ ((s.loc 0) < (48 : Int)))
-    (c1 : ¬ ((s.loc 0) ≤ (57 : Int)))
-    (c2 : ¬ ((s.loc 0) < (97 : Int)))
-    (c3 : ¬ ((s.loc 0) ≤ (102 : Int)))
-    (c4 : (s.loc 0) < (65 : Int))
-    (hrun : run P 16 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pLe, pGt, pGe, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true, isHexDigitF_eq]
-    by_cases hh : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102) ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70)
-    · rw [if_pos hh] <;> omega
-    · rw [if_neg hh] <;> omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (bytecode 0 -> 41, 19 steps) -/
-theorem obl_pre_ret0_13 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : ¬ ((s.loc 0) < (48 : Int)))
-    (c1 : ¬ ((s.loc 0) ≤ (57 : Int)))
-    (c2 : ¬ ((s.loc 0) < (97 : Int)))
-    (c3 : ¬ ((s.loc 0) ≤ (102 : Int)))
-    (c4 : ¬ ((s.loc 0) < (65 : Int)))
-    (c5 : (s.loc 0) > (70 : Int))
-    (hrun : run P 19 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pLe, pGt, pGe, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true, isHexDigitF_eq]
-    by_cases hh : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102) ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70)
-    · rw [if_pos hh] <;> omega
-    · rw [if_neg hh] <;> omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:250 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:250   (bytecode 0 -> 41, 20 steps) -/
-theorem obl_pre_ret0_14 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : ¬ ((s.loc 0) < (48 : Int)))
-    (c1 : ¬ ((s.loc 0) ≤ (57 : Int)))
-    (c2 : ¬ ((s.loc 0) < (97 : Int)))
-    (c3 : ¬ ((s.loc 0) ≤ (102 : Int)))
-    (c4 : ¬ ((s.loc 0) < (65 : Int)))
-    (c5 : ¬ ((s.loc 0) > (70 : Int)))
-    (hrun : run P 20 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pLe, pGt, pGe, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true, isHexDigitF_eq]
-    by_cases hh : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102) ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70)
-    · rw [if_pos hh] <;> omega
-    · rw [if_neg hh] <;> omega
+    (hrun : run P 21 s = some s') :
+    inv_post s' := by
+  -- Merged obligation: one proof for all 15 return paths. Fix the six phi guards
+  -- with by_cases so `run` reduces with no internal fork, then relate the computed
+  -- 0/1 to isHexDigitF via its range-union form.
+  simp only [inv_post]
+  by_cases h0 : s.loc 0 < 48 <;> by_cases h1 : s.loc 0 ≤ 57 <;>
+  by_cases h2 : s.loc 0 < 97 <;> by_cases h3 : s.loc 0 ≤ 102 <;>
+  by_cases h4 : s.loc 0 < 65 <;> by_cases h5 : s.loc 0 > 70 <;>
+    simp only [run, step, P, State.set, pLt, pLe, pGt, pGe, hpc, hstk,
+      decide_eq_true_eq, decide_eq_false_iff_not, Nat.reduceAdd, Option.some.injEq, *] at hrun <;>
+    subst hrun <;>
+    simp only [List.cons.injEq, and_true, isHexDigitF_eq] <;>
+    split <;> omega
 
 /- Audit: every obligation must rest only on propext/Classical.choice/Quot.sound.
    A `sorryAx` here means something was left open, including via a spec string. -/
-#print axioms obl_pre_ret0_0
-#print axioms obl_pre_ret0_1
-#print axioms obl_pre_ret0_2
-#print axioms obl_pre_ret0_3
-#print axioms obl_pre_ret0_4
-#print axioms obl_pre_ret0_5
-#print axioms obl_pre_ret0_6
-#print axioms obl_pre_ret0_7
-#print axioms obl_pre_ret0_8
-#print axioms obl_pre_ret0_9
-#print axioms obl_pre_ret0_10
-#print axioms obl_pre_ret0_11
-#print axioms obl_pre_ret0_12
-#print axioms obl_pre_ret0_13
-#print axioms obl_pre_ret0_14
+#print axioms obl_pre_post
 
 end Generated.ChunkedBodyState.isHexDigit

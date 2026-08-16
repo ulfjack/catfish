@@ -20,7 +20,7 @@ def P : Nat → Option Instr
   | 6    => some (.iload 0)   -- @12
   | 7    => some (.push (48))   -- @13
   | 8    => some (.isub)   -- @15
-  | 9    => some (.ireturn)   -- @16  <-- cut point (ensure)
+  | 9    => some (.ireturn)   -- @16
   | 10   => some (.iload 0)   -- @17
   | 11   => some (.push (97))   -- @18
   | 12   => some (.ifcmp pLt 22)   -- @20
@@ -32,13 +32,13 @@ def P : Nat → Option Instr
   | 18   => some (.isub)   -- @32
   | 19   => some (.push (10))   -- @33
   | 20   => some (.iadd)   -- @35
-  | 21   => some (.ireturn)   -- @36  <-- cut point (ensure)
+  | 21   => some (.ireturn)   -- @36
   | 22   => some (.iload 0)   -- @37
   | 23   => some (.push (65))   -- @38
   | 24   => some (.isub)   -- @40
   | 25   => some (.push (10))   -- @41
   | 26   => some (.iadd)   -- @43
-  | 27   => some (.ireturn)   -- @44  <-- cut point (ensure)
+  | 27   => some (.ireturn)   -- @44
   | _    => none
 
 
@@ -47,187 +47,44 @@ def inv_pre (s : State) : Prop :=
   let c : Int := s.loc 0
   (digitVal c ≠ none)
 
-/-- ensure at bytecode offset 16, java/de/ofahrt/catfish/http/ChunkedBodyState.java:257 -/
-def inv_ret0 (s : State) : Prop :=
+/-- postcondition (@Returns): the value returned on every path -/
+def inv_post (s : State) : Prop :=
   let c : Int := s.loc 0
   (s.stk = [hexValF c])
 
-/-- ensure at bytecode offset 36, java/de/ofahrt/catfish/http/ChunkedBodyState.java:260 -/
-def inv_ret1 (s : State) : Prop :=
-  let c : Int := s.loc 0
-  (s.stk = [hexValF c])
-
-/-- ensure at bytecode offset 44, java/de/ofahrt/catfish/http/ChunkedBodyState.java:262 -/
-def inv_ret2 (s : State) : Prop :=
-  let c : Int := s.loc 0
-  (s.stk = [hexValF c])
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:262   (bytecode 0 -> 44, 11 steps) -/
---   side condition: no wrap: (s.loc 0) - (65 : Int)
---   side condition: no wrap: (wrap ((s.loc 0) - (65 : Int))) + (10 : Int)
-theorem obl_pre_ret2_0 (s s' : State)
+/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:256   (one obligation, merged over all
+    7 return paths; N = 18 = longest) -/
+--   phi guards to split on: (s.loc 0) < (48 : Int)  ;  (s.loc 0) < (97 : Int)  ;  (s.loc 0) > (102 : Int)  ;  (s.loc 0) > (57 : Int)
+theorem obl_pre_post (s s' : State)
     (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : (s.loc 0) < (48 : Int))
-    (c1 : (s.loc 0) < (97 : Int))
-    (hrun : run P 11 s = some s') :
-    inv_ret2 s' := by
-    simp only [inv_pre] at hinv
+    (hrun : run P 18 s = some s') :
+    inv_post s' := by
+  -- Merged obligation: one proof for all 7 return paths. From the precondition
+  -- (digitVal c ≠ none) derive that c is in one of the three HEXDIG ranges, then
+  -- fix the four phi guards with by_cases so `run` reduces with no internal fork;
+  -- `wrap` is identity on the small results (omega discharges the emod).
+  simp only [inv_pre] at hinv
+  have hr : (48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57) ∨ (97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102)
+          ∨ (65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70) := by
     unfold digitVal at hinv
-    rw [if_neg (by omega), if_neg (by omega)] at hinv
-    have hr : 65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70 := by
-      by_cases h : 65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70
-      · exact h
-      · rw [if_neg h] at hinv; exact absurd rfl hinv
-    simp only [inv_ret2]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true]
-    have h1 : wrap (s.loc 0 - 65) = s.loc 0 - 65 := by apply wrap_id' <;> omega
-    rw [h1, wrap_id' (by omega) (by omega)]
-    rw [hexValF_of (show digitVal (s.loc 0) = some (s.loc 0 - 55) by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_pos ⟨by omega, by omega⟩])]
-    omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:262   (bytecode 0 -> 44, 14 steps) -/
---   side condition: no wrap: (s.loc 0) - (65 : Int)
---   side condition: no wrap: (wrap ((s.loc 0) - (65 : Int))) + (10 : Int)
-theorem obl_pre_ret2_1 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : (s.loc 0) < (48 : Int))
-    (c1 : ¬ ((s.loc 0) < (97 : Int)))
-    (c2 : (s.loc 0) > (102 : Int))
-    (hrun : run P 14 s = some s') :
-    inv_ret2 s' := by
-    simp only [inv_pre] at hinv
-    unfold digitVal at hinv
-    rw [if_neg (by omega), if_neg (by omega)] at hinv
-    have hr : 65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70 := by
-      by_cases h : 65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70
-      · exact h
-      · rw [if_neg h] at hinv; exact absurd rfl hinv
-    simp only [inv_ret2]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true]
-    have h1 : wrap (s.loc 0 - 65) = s.loc 0 - 65 := by apply wrap_id' <;> omega
-    rw [h1, wrap_id' (by omega) (by omega)]
-    rw [hexValF_of (show digitVal (s.loc 0) = some (s.loc 0 - 55) by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_pos ⟨by omega, by omega⟩])]
-    omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:260   (bytecode 0 -> 36, 14 steps) -/
---   side condition: no wrap: (s.loc 0) - (97 : Int)
---   side condition: no wrap: (wrap ((s.loc 0) - (97 : Int))) + (10 : Int)
-theorem obl_pre_ret1_0 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : (s.loc 0) < (48 : Int))
-    (c1 : ¬ ((s.loc 0) < (97 : Int)))
-    (c2 : ¬ ((s.loc 0) > (102 : Int)))
-    (hrun : run P 14 s = some s') :
-    inv_ret1 s' := by
-    simp only [inv_ret1]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true]
-    have h1 : wrap (s.loc 0 - 97) = s.loc 0 - 97 := by apply wrap_id' <;> omega
-    rw [h1, wrap_id' (by omega) (by omega)]
-    rw [hexValF_of (show digitVal (s.loc 0) = some (s.loc 0 - 87) by unfold digitVal; rw [if_neg (by omega), if_pos ⟨by omega, by omega⟩])]
-    omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:262   (bytecode 0 -> 44, 14 steps) -/
---   side condition: no wrap: (s.loc 0) - (65 : Int)
---   side condition: no wrap: (wrap ((s.loc 0) - (65 : Int))) + (10 : Int)
-theorem obl_pre_ret2_2 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : ¬ ((s.loc 0) < (48 : Int)))
-    (c1 : (s.loc 0) > (57 : Int))
-    (c2 : (s.loc 0) < (97 : Int))
-    (hrun : run P 14 s = some s') :
-    inv_ret2 s' := by
-    simp only [inv_pre] at hinv
-    unfold digitVal at hinv
-    rw [if_neg (by omega), if_neg (by omega)] at hinv
-    have hr : 65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70 := by
-      by_cases h : 65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70
-      · exact h
-      · rw [if_neg h] at hinv; exact absurd rfl hinv
-    simp only [inv_ret2]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true]
-    have h1 : wrap (s.loc 0 - 65) = s.loc 0 - 65 := by apply wrap_id' <;> omega
-    rw [h1, wrap_id' (by omega) (by omega)]
-    rw [hexValF_of (show digitVal (s.loc 0) = some (s.loc 0 - 55) by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_pos ⟨by omega, by omega⟩])]
-    omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:262   (bytecode 0 -> 44, 17 steps) -/
---   side condition: no wrap: (s.loc 0) - (65 : Int)
---   side condition: no wrap: (wrap ((s.loc 0) - (65 : Int))) + (10 : Int)
-theorem obl_pre_ret2_3 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : ¬ ((s.loc 0) < (48 : Int)))
-    (c1 : (s.loc 0) > (57 : Int))
-    (c2 : ¬ ((s.loc 0) < (97 : Int)))
-    (c3 : (s.loc 0) > (102 : Int))
-    (hrun : run P 17 s = some s') :
-    inv_ret2 s' := by
-    simp only [inv_pre] at hinv
-    unfold digitVal at hinv
-    rw [if_neg (by omega), if_neg (by omega)] at hinv
-    have hr : 65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70 := by
-      by_cases h : 65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70
-      · exact h
-      · rw [if_neg h] at hinv; exact absurd rfl hinv
-    simp only [inv_ret2]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true]
-    have h1 : wrap (s.loc 0 - 65) = s.loc 0 - 65 := by apply wrap_id' <;> omega
-    rw [h1, wrap_id' (by omega) (by omega)]
-    rw [hexValF_of (show digitVal (s.loc 0) = some (s.loc 0 - 55) by unfold digitVal; rw [if_neg (by omega), if_neg (by omega), if_pos ⟨by omega, by omega⟩])]
-    omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:260   (bytecode 0 -> 36, 17 steps) -/
---   side condition: no wrap: (s.loc 0) - (97 : Int)
---   side condition: no wrap: (wrap ((s.loc 0) - (97 : Int))) + (10 : Int)
-theorem obl_pre_ret1_1 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : ¬ ((s.loc 0) < (48 : Int)))
-    (c1 : (s.loc 0) > (57 : Int))
-    (c2 : ¬ ((s.loc 0) < (97 : Int)))
-    (c3 : ¬ ((s.loc 0) > (102 : Int)))
-    (hrun : run P 17 s = some s') :
-    inv_ret1 s' := by
-    simp only [inv_ret1]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true]
-    have h1 : wrap (s.loc 0 - 97) = s.loc 0 - 97 := by apply wrap_id' <;> omega
-    rw [h1, wrap_id' (by omega) (by omega)]
-    rw [hexValF_of (show digitVal (s.loc 0) = some (s.loc 0 - 87) by unfold digitVal; rw [if_neg (by omega), if_pos ⟨by omega, by omega⟩])]
-    omega
-
-/-- java/de/ofahrt/catfish/http/ChunkedBodyState.java:256 -> java/de/ofahrt/catfish/http/ChunkedBodyState.java:257   (bytecode 0 -> 16, 9 steps) -/
---   side condition: no wrap: (s.loc 0) - (48 : Int)
-theorem obl_pre_ret0_0 (s s' : State)
-    (hinv : inv_pre s) (hpc : s.pc = 0) (hstk : s.stk = [])
-    (c0 : ¬ ((s.loc 0) < (48 : Int)))
-    (c1 : ¬ ((s.loc 0) > (57 : Int)))
-    (hrun : run P 9 s = some s') :
-    inv_ret0 s' := by
-    simp only [inv_ret0]
-    simp [run, step, P, hpc, hstk, State.set, pLt, pGt, *] at hrun
-    subst hrun
-    simp only [State.set, List.cons.injEq, and_true]
-    rw [wrap_id' (by omega) (by omega)]
-    rw [hexValF_of (show digitVal (s.loc 0) = some (s.loc 0 - 48) by unfold digitVal; rw [if_pos ⟨by omega, by omega⟩])]
+    by_cases ha : 48 ≤ s.loc 0 ∧ s.loc 0 ≤ 57
+    · exact Or.inl ha
+    · by_cases hb : 97 ≤ s.loc 0 ∧ s.loc 0 ≤ 102
+      · exact Or.inr (Or.inl hb)
+      · by_cases hc : 65 ≤ s.loc 0 ∧ s.loc 0 ≤ 70
+        · exact Or.inr (Or.inr hc)
+        · rw [if_neg ha, if_neg hb, if_neg hc] at hinv; exact absurd rfl hinv
+  simp only [inv_post]
+  by_cases h0 : s.loc 0 < 48 <;> by_cases h1 : s.loc 0 > 57 <;>
+  by_cases h2 : s.loc 0 < 97 <;> by_cases h3 : s.loc 0 > 102 <;>
+    simp only [run, step, P, State.set, pLt, pGt, hpc, hstk,
+      decide_eq_true_eq, decide_eq_false_iff_not, Nat.reduceAdd, Option.some.injEq, *] at hrun <;>
+    subst hrun <;>
+    simp only [List.cons.injEq, and_true, hexValF_eq, wrap] <;>
+    (repeat' split) <;> omega
 
 /- Audit: every obligation must rest only on propext/Classical.choice/Quot.sound.
    A `sorryAx` here means something was left open, including via a spec string. -/
-#print axioms obl_pre_ret2_0
-#print axioms obl_pre_ret2_1
-#print axioms obl_pre_ret1_0
-#print axioms obl_pre_ret2_2
-#print axioms obl_pre_ret2_3
-#print axioms obl_pre_ret1_1
-#print axioms obl_pre_ret0_0
+#print axioms obl_pre_post
 
 end Generated.ChunkedBodyState.hexValue

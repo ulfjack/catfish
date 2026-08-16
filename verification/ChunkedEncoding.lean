@@ -47,6 +47,18 @@ theorem hexValF_of {c d : Int} (h : digitVal c = some d) : hexValF c = d := by
 theorem hexValF_neg {c : Int} (h : digitVal c = none) : hexValF c = -1 := by
   unfold hexValF; rw [h]
 
+/-- `hexValF` in computable range form -- the shape a merged proof matches its
+    per-branch computed value against (the counterpart of `isHexDigitF_eq`). -/
+theorem hexValF_eq (c : Int) :
+    hexValF c =
+      if 48 ≤ c ∧ c ≤ 57 then c - 48
+      else if 97 ≤ c ∧ c ≤ 102 then c - 87
+      else if 65 ≤ c ∧ c ≤ 70 then c - 55
+      else -1 := by
+  unfold hexValF digitVal
+  repeat' split
+  all_goals simp_all
+
 /-!
   ## The chunked framing as a state machine
 

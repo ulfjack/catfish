@@ -53,19 +53,28 @@ final class Emit {
     program();
     out("");
     for (Vcg.Ins i : v.ins) if (i.isMarkerLdc) invDef(i);
-    for (Vcg.Path p : v.paths) if (!p.endsInReturn) obligation(p);
+    if (v.merged) {
+      postDef();
+      mergedObligation();
+    } else {
+      for (Vcg.Path p : v.paths) if (!p.endsInReturn) obligation(p);
+    }
     out("");
     out("/- Audit: every obligation must rest only on propext/Classical.choice/Quot.sound.");
     out("   A `sorryAx` here means something was left open, including via a spec string. -/");
-    for (Vcg.Path p : v.paths)
-      if (!p.endsInReturn)
-        out(
-            "#print axioms obl_"
-                + v.ins.get(p.fromIdx).cutName
-                + "_"
-                + v.ins.get(p.toIdx).cutName
-                + "_"
-                + tag(p));
+    if (v.merged) {
+      out("#print axioms obl_pre_post");
+    } else {
+      for (Vcg.Path p : v.paths)
+        if (!p.endsInReturn)
+          out(
+              "#print axioms obl_"
+                  + v.ins.get(p.fromIdx).cutName
+                  + "_"
+                  + v.ins.get(p.toIdx).cutName
+                  + "_"
+                  + tag(p));
+    }
     out("");
     out("end Generated." + simpleClass + "." + method);
     return sb.toString();
@@ -137,6 +146,64 @@ final class Emit {
     }
   }
 
+  /**
+   * The single postcondition of a merged method: the @Returns value, on the operand stack when any
+   * `ireturn` runs.
+   */
+  private void postDef() {
+    cuts++;
+    out("");
+    out("/-- postcondition (@Returns): the value returned on every path -/");
+    out("def inv_post (s : State) : Prop :=");
+    prelude(v.ins.get(0).off, -1);
+    out("  (s.stk = [" + v.m.returnsSpec.strip() + "])");
+  }
+
+  /**
+   * One obligation for a loop-free @Returns method: from the entry, running to halt (N = the
+   * longest path), the postcondition holds. The proof fixes the branch predicates with by_cases so
+   * `run` reduces without an internal fork.
+   */
+  private void mergedObligation() {
+    Vcg.Ins pre = v.ins.get(0);
+    int n = 0;
+    for (Vcg.Path p : v.paths) if (p.fromIdx == pre.idx && p.sym.steps > n) n = p.sym.steps;
+    out("");
+    out("/-- " + javaFile + ":" + javaLine(pre.off) + "   (one obligation, merged over all");
+    out("    " + v.paths.size() + " return paths; N = " + n + " = longest) -/");
+    if (!v.branchPreds.isEmpty())
+      out("--   phi guards to split on: " + String.join("  ;  ", v.branchPreds));
+    map.add(new int[] {line, javaLine(pre.off), pre.off});
+    out("theorem obl_pre_post (s s' : State)");
+    out("    (hinv : inv_pre s) (hpc : s.pc = " + pre.idx + ") (hstk : s.stk = [])");
+    out("    (hrun : run P " + n + " s = some s') :");
+    out("    inv_post s' := by");
+    emitProofBody("obl_pre_post", javaLine(pre.off));
+  }
+
+  /** Splice the checked-in proof for `name`, or `sorry` if none exists yet. */
+  private void emitProofBody(String name, int jl) {
+    String body = null;
+    if (proofDir != null) {
+      java.nio.file.Path f = proofDir.resolve(name + ".lean");
+      if (java.nio.file.Files.exists(f)) {
+        try {
+          body = java.nio.file.Files.readString(f);
+        } catch (java.io.IOException e) {
+          throw new RuntimeException(e);
+        }
+      }
+    }
+    if (body == null) {
+      out("  sorry");
+      unproved++;
+      open.add(name + "  (" + javaFile + ":" + jl + ")");
+    } else {
+      out(body.stripTrailing().indent(2).stripTrailing());
+      proved++;
+    }
+  }
+
   private void obligation(Vcg.Path p) {
     Vcg.Ins a = v.ins.get(p.fromIdx), b = v.ins.get(p.toIdx);
     out("");
@@ -163,26 +230,7 @@ final class Emit {
     for (String c : p.sym.conds) out("    (c" + (n++) + " : " + c + ")");
     out("    (hrun : run P " + p.sym.steps + " s = some s') :");
     out("    inv_" + b.cutName + " s' := by");
-    String name = "obl_" + a.cutName + "_" + b.cutName + "_" + tag(p);
-    String body = null;
-    if (proofDir != null) {
-      java.nio.file.Path f = proofDir.resolve(name + ".lean");
-      if (java.nio.file.Files.exists(f)) {
-        try {
-          body = java.nio.file.Files.readString(f);
-        } catch (java.io.IOException e) {
-          throw new RuntimeException(e);
-        }
-      }
-    }
-    if (body == null) {
-      out("  sorry");
-      unproved++;
-      open.add(name + "  (" + javaFile + ":" + javaLine(a.off) + ")");
-    } else {
-      out(body.stripTrailing().indent(2).stripTrailing());
-      proved++;
-    }
+    emitProofBody("obl_" + a.cutName + "_" + b.cutName + "_" + tag(p), javaLine(a.off));
   }
 
   private static List<String> dedup(List<String> in) {

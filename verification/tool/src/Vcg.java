@@ -46,6 +46,13 @@ final class Vcg {
   final Map<String, String> callMap; // "Owner.name:desc" -> Lean function name
   final List<String> errors = new ArrayList<>();
   final String javaFile;
+  // Distinct branch predicates (phi guards), first-encounter order, for the
+  // merged proof's by_cases.
+  final LinkedHashSet<String> branchPreds = new LinkedHashSet<>();
+  // Merged mode: a loop-free @Returns method is one obligation from the entry to
+  // the postcondition, run to halt, rather than one per acyclic path. The proof
+  // fixes the guards with by_cases so `run` reduces without an internal fork.
+  boolean merged;
 
   Vcg(ClassFile cf, String methodName, Map<String, String> callMap, String javaFile) {
     this.cf = cf;
@@ -55,9 +62,27 @@ final class Vcg {
     decode();
     markCutPoints();
     synthPreconditionCutPoint();
-    synthReturnCutPoints();
+    merged = loopFree() && m.returnsSpec != null && !hasExplicitCut();
+    if (!merged) synthReturnCutPoints();
     nameCutPoints();
     checkBackEdges();
+  }
+
+  /** No back edges: the control-flow graph is acyclic (no loops). */
+  private boolean loopFree() {
+    for (Ins i : ins) if (i.target >= 0 && i.target <= i.off) return false;
+    return true;
+  }
+
+  /**
+   * A hand-written Verify.invariant/ensure keeps the per-path model (merged mode only handles the
+   * synthesized @Returns postcondition).
+   */
+  private boolean hasExplicitCut() {
+    for (Ins i : ins)
+      if (i.isMarkerLdc && ("invariant".equals(i.markerKind) || "ensure".equals(i.markerKind)))
+        return true;
+    return false;
   }
 
   /**
@@ -563,6 +588,7 @@ final class Vcg {
           String a = st.stack.pop();
           cond = rel(i.callee, a, "(0 : Int)");
         }
+        branchPreds.add(cond);
         st.steps++;
         Sym taken = st.copy();
         taken.conds.add(cond);
@@ -579,7 +605,7 @@ final class Vcg {
         pa.endsInReturn = true;
         pa.sym = st;
         paths.add(pa);
-        if (!ins.get(from).markerKind.equals("ensure")) {
+        if (!merged && !ins.get(from).markerKind.equals("ensure")) {
           Integer line =
               m.lines.floorEntry(i.off) == null ? null : m.lines.floorEntry(i.off).getValue();
           errors.add(
