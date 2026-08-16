@@ -17,6 +17,16 @@ lean_library(
     deps = [":semantics"],
 )
 
+# Refinement: the real ChunkedBodyState control flow (advanceStep + the field
+# abstraction α) refines the St state machine, proved one byte at a time and
+# folded over the whole input. A design-level proof, not the bytecode proof of
+# advance. lean_test audits the axioms so a `sorry` would fail the build.
+lean_test(
+    name = "chunked_refinement",
+    src = "ChunkedRefinement.lean",
+    deps = [":chunked_encoding"],
+)
+
 # Smoke test: executes `iconst_1; iconst_1; iadd; ireturn` through the
 # semantics and proves the machine halts with 2 on the operand stack.
 lean_test(
