@@ -133,4 +133,69 @@ theorem parseSpec_overflow {b : Jvm.Arr} {off k m : Nat} {w : Int}
   · simp only [hnone]
   · simp only [hu]; rw [if_neg (by omega : ¬ u ≤ Jvm.MAXI)]
 
+/-!
+  ## The chunked framing as a state machine
+
+  A reference decoder for RFC 9112 §7.1 chunked transfer-coding, one byte at a
+  time.  Chunk-ext and the trailer section are elided for now.
+
+  Per the RFC, `chunk-size = 1*HEXDIG` -- one or more hex digits, no upper bound
+  on the digit count -- so there is no digit cap here; `sizeStart` vs `size`
+  enforces the `1*` without a boolean.  The `value ≤ MAXI` rejection is Catfish's
+  recipient policy (a chunk larger than an int can address), not RFC grammar.
+-/
+
+def CR : Int := 13
+def LF : Int := 10
+
+/-- Decoder state.  The counter lives in the constructors that use it: the
+    chunk-size value being parsed, or the chunk-data bytes still to consume.
+    "Decoded byte count" is not stored -- it is the number of bytes consumed
+    while in `data`, recoverable from the run. -/
+inductive St where
+  | sizeStart          -- chunk-size field, before the first HEXDIG
+  | size (v : Nat)     -- chunk-size, ≥1 HEXDIG, value so far
+  | sizeLF (v : Nat)   -- consumed the size's CR, expecting LF (v = the size)
+  | data (left : Nat)  -- consuming chunk-data, `left` bytes remain
+  | dataCR             -- consumed all chunk-data, expecting CR
+  | dataLF             -- consumed the data's CR, expecting LF
+  | done               -- last-chunk (size 0) consumed
+  | error
+  deriving Repr, DecidableEq
+
+/-- One input byte drives one transition. -/
+def chunkStep : St → Int → St
+  | .sizeStart, b =>
+      match digitVal b with
+      | some d => .size d.toNat
+      | none => .error                                    -- 1*HEXDIG: need a leading digit
+  | .size v, b =>
+      match digitVal b with
+      | some d =>
+          let v' := v * 16 + d.toNat
+          if (v' : Int) ≤ Jvm.MAXI then .size v' else .error -- reject > Integer.MAX_VALUE
+      | none => if b = CR then .sizeLF v else .error       -- (chunk-ext elided)
+  | .sizeLF v, b => if b = LF then (if v = 0 then .done else .data v) else .error
+  | .data left, _ => if left ≤ 1 then .dataCR else .data (left - 1)
+  | .dataCR, b => if b = CR then .dataLF else .error
+  | .dataLF, b => if b = LF then .sizeStart else .error
+  | .done, _ => .done                                      -- absorbing
+  | .error, _ => .error                                    -- absorbing
+
+/-- Fold the machine over the whole input. -/
+def decode (bs : List Int) : St := bs.foldl chunkStep .sizeStart
+
+/-- The framing is well formed iff decoding completes. -/
+def accepts (bs : List Int) : Prop := decode bs = .done
+
+theorem chunkStep_error (b : Int) : chunkStep .error b = .error := rfl
+theorem chunkStep_done (b : Int) : chunkStep .done b = .done := rfl
+
+-- "1" CRLF "A" CRLF "0" CRLF : a one-byte chunk then the last-chunk.
+example : decode [49, 13, 10, 65, 13, 10, 48, 13, 10] = St.done := by decide
+-- a bare LF in the size line is rejected (line endings must be exactly CRLF)
+example : decode [49, 10] = St.error := by decide
+-- an empty size field (CR with no digit) is rejected (1*HEXDIG)
+example : decode [13] = St.error := by decide
+
 end ChunkedEncoding
