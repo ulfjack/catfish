@@ -92,7 +92,7 @@ def inv_ret0 (s : State) : Prop :=
   let i : Int := s.loc 4
   let result : Int := s.loc 5
   let ret : Int := s.loc 5
-  (ret = parseSpec b off.toNat len.toNat)
+  (ret = parseSpec MAXI b off.toNat len.toNat)
 
 /-- verification/java/Chunk.java:13 -> verification/java/Chunk.java:17   (bytecode 0 -> 5, 4 steps) -/
 theorem obl_pre_loop0_0 (s s' : State)

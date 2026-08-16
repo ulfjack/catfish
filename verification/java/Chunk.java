@@ -8,7 +8,7 @@ import de.ofahrt.catfish.verify.Verify;
 public final class Chunk {
 
   @Precondition("0 ≤ off ∧ 0 ≤ len ∧ off + len ≤ b.length")
-  @Returns("parseSpec b off.toNat len.toNat")
+  @Returns("parseSpec MAXI b off.toNat len.toNat")
   public static int parseHexSize(byte[] b, int off, int len) {
     int acc = 0;
     int i = 0;

@@ -1,12 +1,13 @@
-import Jvm.Semantics
-
 /-
   Domain specification for RFC 9112 §7.1 chunk-size parsing.  Referenced by name
   from the Verify.* / @Returns strings in Chunk.java and from the hand-written
   proofs.
 
   This is NOT part of the JVM trust base: a bug here is a wrong specification of
-  what a chunk size *is*, not a wrong model of the machine.
+  what chunked encoding *is*, not a wrong model of the machine.  It also does not
+  depend on the JVM semantics -- the byte source is an abstract `Nat → Int` index
+  function and the size cap is a `maxLen` parameter, so a caller (the generated
+  obligation) supplies the concrete array and `Integer.MAX_VALUE`.
 -/
 
 namespace ChunkedEncoding
@@ -46,15 +47,16 @@ theorem hexValF_of {c d : Int} (h : digitVal c = some d) : hexValF c = d := by
 theorem hexValF_neg {c : Int} (h : digitVal c = none) : hexValF c = -1 := by
   unfold hexValF; rw [h]
 
-/-- Value of the hex digit string `b[off .. off+n)`, `none` if any byte is not HEXDIG. -/
-def valOf (b : Jvm.Arr) (off : Nat) : Nat → Option Int
+/-- Value of the hex digit string `b[off .. off+n)`, `none` if any byte is not
+    HEXDIG.  `b` is any byte-index function; the JVM array coerces to one. -/
+def valOf (b : Nat → Int) (off : Nat) : Nat → Option Int
   | 0     => some 0
   | n + 1 => match valOf b off n, digitVal (b (off + n)) with
              | some v, some d => some (v * 16 + d)
              | _, _ => none
 
 /-- A parsed hex value is non-negative. -/
-theorem valOf_nonneg {b : Jvm.Arr} {off : Nat} :
+theorem valOf_nonneg {b : Nat → Int} {off : Nat} :
     ∀ {n : Nat} {v : Int}, valOf b off n = some v → 0 ≤ v := by
   intro n
   induction n with
@@ -75,7 +77,7 @@ theorem valOf_nonneg {b : Jvm.Arr} {off : Nat} :
         omega
 
 /-- Once `valOf` is `none` at one length it is `none` at every greater length. -/
-theorem valOf_none_le {b : Jvm.Arr} {off n : Nat}
+theorem valOf_none_le {b : Nat → Int} {off n : Nat}
     (h : valOf b off n = none) : ∀ {m : Nat}, n ≤ m → valOf b off m = none := by
   intro m hnm
   induction hnm with
@@ -83,7 +85,7 @@ theorem valOf_none_le {b : Jvm.Arr} {off n : Nat}
   | step _ ih => simp [valOf, ih]
 
 /-- Once the value reaches `w`, every longer prefix is `none` or at least `w`. -/
-theorem valOf_ge {b : Jvm.Arr} {off k : Nat} {w : Int} (hk : valOf b off k = some w) :
+theorem valOf_ge {b : Nat → Int} {off k : Nat} {w : Int} (hk : valOf b off k = some w) :
     ∀ {m : Nat}, k ≤ m → valOf b off m = none ∨ ∃ u, valOf b off m = some u ∧ w ≤ u := by
   intro m hkm
   induction hkm with
@@ -101,37 +103,35 @@ theorem valOf_ge {b : Jvm.Arr} {off k : Nat} {w : Int} (hk : valOf b off k = som
 
 /--
   The parse result: the hex value of the whole field when it is a non-empty run of
-  HEXDIG that fits in a 32-bit int, otherwise -1 (empty, non-hex byte, or overflow).
-  RFC 9112 requires 1*HEXDIG, so the empty field is rejected.
+  HEXDIG that fits under `maxLen`, otherwise -1 (empty, non-hex byte, or overflow).
+  RFC 9112 requires 1*HEXDIG, so the empty field is rejected.  `maxLen` is the
+  recipient's size cap (Catfish uses `Integer.MAX_VALUE`); the RFC itself has none.
 -/
-def parseSpec (b : Jvm.Arr) (off n : Nat) : Int :=
+def parseSpec (maxLen : Int) (b : Nat → Int) (off n : Nat) : Int :=
   if n = 0 then -1
   else match valOf b off n with
-       | some v => if v ≤ Jvm.MAXI then v else -1
+       | some v => if v ≤ maxLen then v else -1
        | none   => -1
 
 /-- A non-hex byte anywhere in `[k, m)` (via `valOf … k = none`) forces -1. -/
-theorem parseSpec_none {b : Jvm.Arr} {off k m : Nat}
-    (hkm : k ≤ m) (hk : valOf b off k = none) : parseSpec b off m = -1 := by
+theorem parseSpec_none {maxLen : Int} {b : Nat → Int} {off k m : Nat}
+    (hkm : k ≤ m) (hk : valOf b off k = none) : parseSpec maxLen b off m = -1 := by
   have hm : valOf b off m = none := valOf_none_le hk hkm
   unfold parseSpec
   simp only [hm]
   split <;> rfl
 
-/-- A prefix value exceeding MAXI forces -1. -/
-theorem parseSpec_overflow {b : Jvm.Arr} {off k m : Nat} {w : Int}
-    (hkm : k ≤ m) (hk : valOf b off k = some w) (hover : Jvm.MAXI < w) :
-    parseSpec b off m = -1 := by
-  have hk0 : k ≠ 0 := by
-    rintro rfl
-    simp only [valOf, Option.some.injEq] at hk
-    unfold Jvm.MAXI at hover; omega
-  have hm0 : m ≠ 0 := by omega
+/-- A prefix value exceeding `maxLen` forces -1. -/
+theorem parseSpec_overflow {maxLen : Int} {b : Nat → Int} {off k m : Nat} {w : Int}
+    (hkm : k ≤ m) (hk : valOf b off k = some w) (hover : maxLen < w) :
+    parseSpec maxLen b off m = -1 := by
   unfold parseSpec
-  rw [if_neg hm0]
-  rcases valOf_ge hk hkm with hnone | ⟨u, hu, hwu⟩
-  · simp only [hnone]
-  · simp only [hu]; rw [if_neg (by omega : ¬ u ≤ Jvm.MAXI)]
+  by_cases hm0 : m = 0
+  · rw [if_pos hm0]
+  · rw [if_neg hm0]
+    rcases valOf_ge hk hkm with hnone | ⟨u, hu, hwu⟩
+    · simp only [hnone]
+    · simp only [hu]; rw [if_neg (by omega : ¬ u ≤ maxLen)]
 
 /-!
   ## The chunked framing as a state machine
@@ -141,8 +141,9 @@ theorem parseSpec_overflow {b : Jvm.Arr} {off k m : Nat} {w : Int}
 
   Per the RFC, `chunk-size = 1*HEXDIG` -- one or more hex digits, no upper bound
   on the digit count -- so there is no digit cap here; `sizeStart` vs `size`
-  enforces the `1*` without a boolean.  The `value ≤ MAXI` rejection is Catfish's
-  recipient policy (a chunk larger than an int can address), not RFC grammar.
+  enforces the `1*` without a boolean.  The `value ≤ maxLen` rejection is the
+  recipient's policy (a chunk larger than it can address), not RFC grammar, so it
+  is a parameter; Catfish supplies `Integer.MAX_VALUE`.
 -/
 
 def CR : Int := 13
@@ -163,17 +164,18 @@ inductive St where
   | error
   deriving Repr, DecidableEq
 
-/-- One input byte drives one transition. -/
-def chunkStep : St → Int → St
+/-- One input byte drives one transition.  `maxLen` is the recipient size cap;
+    it is checked after every digit, mirroring Catfish's per-digit guard. -/
+def chunkStep (maxLen : Int) : St → Int → St
   | .sizeStart, b =>
       match digitVal b with
-      | some d => .size d.toNat
+      | some d => if (d.toNat : Int) ≤ maxLen then .size d.toNat else .error
       | none => .error                                    -- 1*HEXDIG: need a leading digit
   | .size v, b =>
       match digitVal b with
       | some d =>
           let v' := v * 16 + d.toNat
-          if (v' : Int) ≤ Jvm.MAXI then .size v' else .error -- reject > Integer.MAX_VALUE
+          if (v' : Int) ≤ maxLen then .size v' else .error -- reject > recipient cap
       | none => if b = CR then .sizeLF v else .error       -- (chunk-ext elided)
   | .sizeLF v, b => if b = LF then (if v = 0 then .done else .data v) else .error
   | .data left, _ => if left ≤ 1 then .dataCR else .data (left - 1)
@@ -183,19 +185,19 @@ def chunkStep : St → Int → St
   | .error, _ => .error                                    -- absorbing
 
 /-- Fold the machine over the whole input. -/
-def decode (bs : List Int) : St := bs.foldl chunkStep .sizeStart
+def decode (maxLen : Int) (bs : List Int) : St := bs.foldl (chunkStep maxLen) .sizeStart
 
 /-- The framing is well formed iff decoding completes. -/
-def accepts (bs : List Int) : Prop := decode bs = .done
+def accepts (maxLen : Int) (bs : List Int) : Prop := decode maxLen bs = .done
 
-theorem chunkStep_error (b : Int) : chunkStep .error b = .error := rfl
-theorem chunkStep_done (b : Int) : chunkStep .done b = .done := rfl
+theorem chunkStep_error (maxLen : Int) (b : Int) : chunkStep maxLen .error b = .error := rfl
+theorem chunkStep_done (maxLen : Int) (b : Int) : chunkStep maxLen .done b = .done := rfl
 
 -- "1" CRLF "A" CRLF "0" CRLF : a one-byte chunk then the last-chunk.
-example : decode [49, 13, 10, 65, 13, 10, 48, 13, 10] = St.done := by decide
+example : decode 255 [49, 13, 10, 65, 13, 10, 48, 13, 10] = St.done := by decide
 -- a bare LF in the size line is rejected (line endings must be exactly CRLF)
-example : decode [49, 10] = St.error := by decide
+example : decode 255 [49, 10] = St.error := by decide
 -- an empty size field (CR with no digit) is rejected (1*HEXDIG)
-example : decode [13] = St.error := by decide
+example : decode 255 [13] = St.error := by decide
 
 end ChunkedEncoding

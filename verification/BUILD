@@ -11,10 +11,12 @@ lean_library(
 
 # Domain spec for RFC 9112 chunk-size parsing (digitVal, valOf, hexValF...).
 # Named by @ImportLeanPackage("ChunkedEncoding") in Chunk.java; not trust base.
+# Deliberately does NOT depend on the JVM semantics: the byte source is a
+# `Nat → Int` and the size cap is a `maxLen` parameter, both supplied by the
+# obligation (which binds `b := s.arr` and `maxLen := MAXI`).
 lean_library(
     name = "chunked_encoding",
     src = "ChunkedEncoding.lean",
-    deps = [":semantics"],
 )
 
 # Refinement: the real ChunkedBodyState control flow (advanceStep + the field
