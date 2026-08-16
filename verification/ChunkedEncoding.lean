@@ -51,7 +51,18 @@ theorem hexValF_neg {c : Int} (h : digitVal c = none) : hexValF c = -1 := by
   ## The chunked framing as a state machine
 
   A reference decoder for RFC 9112 §7.1 chunked transfer-coding, one byte at a
-  time.  Chunk-ext and the trailer section are elided for now.
+  time.  Chunk-ext is elided; the trailer section is modelled.
+
+    chunked-body = *chunk last-chunk trailer-section CRLF
+    trailer-section = *( field-line CRLF )
+
+  So after the last-chunk (size 0) CRLF the machine enters the trailer section
+  and only reaches `done` on the terminal CRLF that ends the message.  Modelling
+  this -- rather than treating the zero-size chunk as the end -- is what pins the
+  terminal to an exact CRLF, closing the request-smuggling surface in the spec.
+  Trailer field-line content is opaque (any non-CR, non-LF byte).  Catfish's DoS
+  bound on the trailer section (`MAX_TRAILER_SECTION_BYTES`) is a resource limit,
+  not framing grammar, so it is not modelled here.
 
   Per the RFC, `chunk-size = 1*HEXDIG` -- one or more hex digits, no upper bound
   on the digit count -- so there is no digit cap here; `sizeStart` vs `size`
@@ -74,7 +85,11 @@ inductive St where
   | data (left : Nat)  -- consuming chunk-data, `left` bytes remain
   | dataCR             -- consumed all chunk-data, expecting CR
   | dataLF             -- consumed the data's CR, expecting LF
-  | done               -- last-chunk (size 0) consumed
+  | trailerStart       -- in the trailer section, at the start of a line
+  | trailerCR          -- CR beginning the terminal CRLF, expecting LF → done
+  | trailerLine        -- inside a trailer field-line, consuming opaque content
+  | trailerLineCR      -- CR ending a trailer field-line, expecting LF
+  | done               -- terminal CRLF consumed; the message is complete
   | error
   deriving Repr, DecidableEq
 
@@ -91,10 +106,16 @@ def chunkStep (maxLen : Int) : St → Int → St
           let v' := v * 16 + d.toNat
           if (v' : Int) ≤ maxLen then .size v' else .error -- reject > recipient cap
       | none => if b = CR then .sizeLF v else .error       -- (chunk-ext elided)
-  | .sizeLF v, b => if b = LF then (if v = 0 then .done else .data v) else .error
+  | .sizeLF v, b => if b = LF then (if v = 0 then .trailerStart else .data v) else .error
   | .data left, _ => if left ≤ 1 then .dataCR else .data (left - 1)
   | .dataCR, b => if b = CR then .dataLF else .error
   | .dataLF, b => if b = LF then .sizeStart else .error
+  | .trailerStart, b =>                                    -- field-line, or the terminal CRLF
+      if b = CR then .trailerCR else if b = LF then .error else .trailerLine
+  | .trailerCR, b => if b = LF then .done else .error      -- terminal CRLF completes the message
+  | .trailerLine, b =>                                     -- opaque field content until its CRLF
+      if b = CR then .trailerLineCR else if b = LF then .error else .trailerLine
+  | .trailerLineCR, b => if b = LF then .trailerStart else .error
   | .done, _ => .done                                      -- absorbing
   | .error, _ => .error                                    -- absorbing
 
@@ -107,8 +128,15 @@ def accepts (maxLen : Int) (bs : List Int) : Prop := decode maxLen bs = .done
 theorem chunkStep_error (maxLen : Int) (b : Int) : chunkStep maxLen .error b = .error := rfl
 theorem chunkStep_done (maxLen : Int) (b : Int) : chunkStep maxLen .done b = .done := rfl
 
--- "1" CRLF "A" CRLF "0" CRLF : a one-byte chunk then the last-chunk.
-example : decode 255 [49, 13, 10, 65, 13, 10, 48, 13, 10] = St.done := by decide
+-- "1" CRLF "A" CRLF "0" CRLF CRLF : a one-byte chunk, the last-chunk, an empty
+-- trailer section, then the terminal CRLF.
+example : decode 255 [49, 13, 10, 65, 13, 10, 48, 13, 10, 13, 10] = St.done := by decide
+-- "0" CRLF "Xy" CRLF CRLF : a trailer field-line before the terminal CRLF.
+example : decode 255 [48, 13, 10, 88, 121, 13, 10, 13, 10] = St.done := by decide
+-- the last-chunk without the terminal CRLF has not finished (still in the trailer).
+example : decode 255 [48, 13, 10] = St.trailerStart := by decide
+-- a bare LF where the terminal CRLF is expected is rejected (the smuggling surface).
+example : decode 255 [48, 13, 10, 10] = St.error := by decide
 -- a bare LF in the size line is rejected (line endings must be exactly CRLF)
 example : decode 255 [49, 10] = St.error := by decide
 -- an empty size field (CR with no digit) is rejected (1*HEXDIG)
