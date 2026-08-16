@@ -45,6 +45,15 @@ lean_test(
     deps = [":semantics"],
 )
 
+# Target shape for the merged (join-aware) VCG: `sign(x) = x>0 ? 1 : -1` proved
+# as ONE obligation whose postcondition is the phi `if x>0 then 1 else -1`,
+# rather than one obligation per arm. Hand-written until the generator merges.
+lean_test(
+    name = "sign",
+    src = "Examples/Sign.lean",
+    deps = [":semantics"],
+)
+
 # The generator: compiled Java method -> Lean obligations. No dependencies.
 java_binary(
     name = "generator",
