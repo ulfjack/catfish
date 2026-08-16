@@ -1,7 +1,7 @@
 /-
-  A subset JVM semantics, sufficient for straight-line + loop integer/byte-array
-  code as produced by javac.  Trusted component: everything in this file is part
-  of the trust base and should be read by a human.
+  A subset JVM semantics, sufficient for straight-line + loop integer/long/
+  byte-array code as produced by javac.  Trusted component: everything in this
+  file is part of the trust base and should be read by a human.
 -/
 
 namespace Jvm
@@ -22,6 +22,23 @@ theorem wrap_id {x : Int} (h1 : MINI ≤ x) (h2 : x ≤ MAXI) : wrap x = x := by
     without unfolding MAXI/MINI in every goal. -/
 theorem wrap_id' {x : Int} (h1 : -2147483648 ≤ x) (h2 : x ≤ 2147483647) : wrap x = x :=
   wrap_id (by unfold MINI; omega) (by unfold MAXI; omega)
+
+def MAXL : Int := 9223372036854775807   -- 2^63 - 1
+def MINL : Int := -9223372036854775808  -- -2^63
+
+/-- 64-bit two's-complement wraparound, for `long` arithmetic. -/
+def wrap64 (x : Int) : Int := (x + 9223372036854775808) % 18446744073709551616 - 9223372036854775808
+
+theorem wrap64_id {x : Int} (h1 : MINL ≤ x) (h2 : x ≤ MAXL) : wrap64 x = x := by
+  unfold wrap64 MAXL MINL at *
+  have : (x + 9223372036854775808) % 18446744073709551616 = x + 9223372036854775808 := by
+    apply Int.emod_eq_of_lt <;> omega
+  omega
+
+/-- Literal-bound form; a `long` staying within its range is unchanged. -/
+theorem wrap64_id' {x : Int} (h1 : -9223372036854775808 ≤ x) (h2 : x ≤ 9223372036854775807) :
+    wrap64 x = x :=
+  wrap64_id (by unfold MINL; omega) (by unfold MAXL; omega)
 
 /-- A byte array: its elements as an index function, bundled with its length.
     `CoeFun` lets `a i` mean `a.get i`, so indexing reads naturally.  `get` holds
@@ -72,6 +89,11 @@ inductive Instr where
   | alen
   | iadd | isub | imul | idiv | irem
   | iand | ior | ixor | ishl | ishr
+  -- Longs occupy one operand-stack/local slot here, not the JVMS two: values are
+  -- untyped `Int`s, so `lload`/`lstore`/`lconst`/`ldc2_w` reuse iload/istore/push;
+  -- only the width-specific ops differ.  `lcmp` pushes an int in {-1,0,1}.
+  | ladd | lsub | lmul | lcmp
+  | i2l | l2i                   -- int↔long: i2l preserves the value, l2i keeps low 32 bits
   | call     (f : Int → Int)    -- verified-elsewhere pure static, one int arg
   | callSpec                    -- spec-only static: never executed, never reached
   | ifcmp    (p : Int → Int → Bool) (t : Nat)
@@ -124,6 +146,13 @@ def step (prog : Nat → Option Instr) (s : State) : Option State :=
         some { s with pc := s.pc + 1, stk := wrap (a * 2 ^ shiftCount b) :: st }
     | .ishr,       b :: a :: st =>
         some { s with pc := s.pc + 1, stk := Int.div a (2 ^ shiftCount b) :: st }
+    | .ladd,       b :: a :: st => some { s with pc := s.pc + 1, stk := wrap64 (a + b) :: st }
+    | .lsub,       b :: a :: st => some { s with pc := s.pc + 1, stk := wrap64 (a - b) :: st }
+    | .lmul,       b :: a :: st => some { s with pc := s.pc + 1, stk := wrap64 (a * b) :: st }
+    | .lcmp,       b :: a :: st =>                    -- 1 if a>b, 0 if a=b, -1 if a<b
+        some { s with pc := s.pc + 1, stk := (if a > b then 1 else if a = b then 0 else -1) :: st }
+    | .i2l,        a :: st      => some { s with pc := s.pc + 1, stk := a :: st }
+    | .l2i,        a :: st      => some { s with pc := s.pc + 1, stk := wrap a :: st }
     | .call f,     c :: st      => some { s with pc := s.pc + 1, stk := f c :: st }
     | .callSpec,   _            => none              -- must not be reachable
     | .ifcmp p t,  b :: a :: st =>

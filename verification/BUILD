@@ -37,6 +37,14 @@ lean_test(
     deps = [":semantics"],
 )
 
+# Smoke test for the long opcodes (i2l/lmul/ladd/lsub/lcmp): a 64-bit product
+# that would overflow a 32-bit int, and a small add/subtract.
+lean_test(
+    name = "long_arith",
+    src = "Examples/LongArith.lean",
+    deps = [":semantics"],
+)
+
 # The generator: compiled Java method -> Lean obligations. No dependencies.
 java_binary(
     name = "generator",
