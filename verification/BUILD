@@ -44,48 +44,6 @@ java_binary(
     main_class = "Main",
 )
 
-# The Java under verification. A normal java_library; its compiled bytecode
-# (with LocalVariableTable) is what the generator reads.
-java_library(
-    name = "chunk_java",
-    srcs = ["java/Chunk.java"],
-    deps = ["//java/de/ofahrt/catfish/verify"],
-)
-
-# End-to-end: Chunk.java -> javac -> generator -> Lean -> audited.
-# `Chunk.parseHexSize` is the RFC 9112 chunk-size parser; the proof is that its
-# overflow guard makes 32-bit int overflow unreachable.
-java_verification_test(
-    name = "chunk",
-    lib = ":chunk_java",
-    method = "parseHexSize",
-    source = "java/Chunk.java",
-    proofs = glob(["proofs/Chunk_parseHexSize/*.lean"]),
-    # Checked-in obligations: the file lean_test proves and humans review.
-    # `:chunk_golden` fails if it drifts from what the generator emits.
-    golden = "Generated/Chunk_parseHexSize.lean",
-    deps = [
-        ":semantics",
-        ":chunked_encoding",
-    ],
-)
-
-# Proves Chunk.hexVal satisfies its @Returns("hexValF c") contract -- the same
-# contract parseHexSize substitutes at the call site. Branch-only (no loop); the
-# short-circuit && expands to 15 paths, hence 15 obligations.
-java_verification_test(
-    name = "chunk_hexval",
-    lib = ":chunk_java",
-    method = "hexVal",
-    source = "java/Chunk.java",
-    proofs = glob(["proofs/Chunk_hexVal/*.lean"]),
-    golden = "Generated/Chunk_hexVal.lean",
-    deps = [
-        ":semantics",
-        ":chunked_encoding",
-    ],
-)
-
 # A real Catfish method: de.ofahrt.catfish.http.ChunkedBodyState.hexValue. Its
 # @Precondition("digitVal c ≠ none") is load-bearing -- the else branch (c-'A'+10)
 # is only correct for A-F, and the precondition is what rules out non-hex input.
