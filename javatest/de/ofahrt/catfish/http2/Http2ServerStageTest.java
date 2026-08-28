@@ -130,6 +130,39 @@ public class Http2ServerStageTest {
     return frame;
   }
 
+  /**
+   * Builds an HPACK-encoded END_STREAM HEADERS frame for a POST with an explicit Content-Length.
+   */
+  private byte[] buildPostHeadersFrame(int streamId, String contentLength) {
+    HpackEncoder encoder = new HpackEncoder();
+    byte[] headerBlock =
+        encoder.encode(
+            new Header(":method", "POST"),
+            new Header(":path", "/"),
+            new Header(":scheme", "https"),
+            new Header(":authority", "localhost"),
+            new Header("content-length", contentLength));
+    ByteBuffer buf = ByteBuffer.allocate(9 + headerBlock.length);
+    Http2FrameWriter.writeHeaders(buf, streamId, headerBlock, true);
+    buf.flip();
+    byte[] frame = new byte[buf.remaining()];
+    buf.get(frame);
+    return frame;
+  }
+
+  @Test
+  public void postWithContentLengthZero_isDispatched() throws IOException {
+    // Regression: an HTTP/2 POST with Content-Length: 0 and END_STREAM on the HEADERS frame (no
+    // DATA) was rejected with 400, because the request builder required a body object whenever
+    // Content-Length was present. Content-Length: 0 is an empty body, so it must dispatch normally.
+    feedAndRead(concat(CLIENT_PREFACE, buildEmptySettings(), buildPostHeadersFrame(1, "0")));
+
+    assertEquals(1, dispatchedRequests.size());
+    HttpRequest request = dispatchedRequests.get(0);
+    assertEquals("POST", request.getMethod());
+    assertEquals("0", request.getHeaders().get("Content-Length"));
+  }
+
   /** Builds a SETTINGS frame with no settings (empty). */
   private byte[] buildEmptySettings() {
     ByteBuffer buf = ByteBuffer.allocate(9);

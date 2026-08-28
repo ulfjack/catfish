@@ -122,16 +122,27 @@ public final class SimpleHttpRequest implements HttpRequest {
           && !headers.containsKey(HttpHeaderName.HOST)) {
         throw MalformedRequestException.of(HttpStatusCode.BAD_REQUEST, "Missing 'Host' field");
       }
+      // Body-presence invariant. Content-Length: 0 declares an *empty* body: some paths represent
+      // that as a null body (e.g. HTTP/2, which sends END_STREAM with no DATA), others as an empty
+      // Body object (e.g. the HTTP/1.1 round-trip), so both must be accepted. The two directions
+      // use
+      // different predicates:
+      //  - a body is *required* only when a non-zero Content-Length or a Transfer-Encoding is
+      //    present (so Content-Length: 0 with no body is fine — the bug this fixes);
+      //  - a body is *allowed* whenever any Content-Length (including 0) or Transfer-Encoding is
+      //    present, so a body without framing is still rejected.
       boolean hasContentLength = headers.containsKey(HttpHeaderName.CONTENT_LENGTH);
       boolean hasTransferEncoding = headers.containsKey(HttpHeaderName.TRANSFER_ENCODING);
-      boolean mustHaveBody = hasContentLength || hasTransferEncoding;
-      if (mustHaveBody) {
-        if (body == null) {
-          throw MalformedRequestException.of(
-              HttpStatusCode.BAD_REQUEST,
-              "Requests with a Content-Length or Transfer-Encoding header must have a body");
-        }
-      } else if (body != null) {
+      String contentLengthValue = headers.get(HttpHeaderName.CONTENT_LENGTH);
+      boolean requiresBody =
+          (contentLengthValue != null && !"0".equals(contentLengthValue)) || hasTransferEncoding;
+      boolean allowsBody = hasContentLength || hasTransferEncoding;
+      if (requiresBody && body == null) {
+        throw MalformedRequestException.of(
+            HttpStatusCode.BAD_REQUEST,
+            "Requests with a Content-Length or Transfer-Encoding header must have a body");
+      }
+      if (!allowsBody && body != null) {
         throw MalformedRequestException.of(
             HttpStatusCode.BAD_REQUEST,
             "Requests without a Content-Length or Transfer-Encoding header must not have a body");

@@ -2,6 +2,7 @@ package de.ofahrt.catfish.api;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 
 import de.ofahrt.catfish.model.HttpHeaderName;
@@ -75,6 +76,39 @@ public class SimpleHttpRequestTest {
                     .build());
     assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
     assertNotNull(e.getErrorResponse().getBody());
+  }
+
+  @Test
+  public void contentLengthZeroAllowsNoBody() throws MalformedRequestException {
+    // Content-Length: 0 declares an empty body, so no Body object is required (regression: an
+    // HTTP/2 POST with Content-Length: 0 and no DATA frame was wrongly rejected with 400).
+    var request =
+        new SimpleHttpRequest.Builder()
+            .setVersion(HttpVersion.HTTP_1_1)
+            .setMethod(HttpMethodName.POST)
+            .setUri("/")
+            .addHeader(HttpHeaderName.HOST, "localhost")
+            .addHeader(HttpHeaderName.CONTENT_LENGTH, "0")
+            .build();
+    assertEquals("0", request.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
+    assertNull(request.getBody());
+  }
+
+  @Test
+  public void contentLengthZeroAllowsEmptyBody() throws MalformedRequestException {
+    // The other representation of an empty body: an explicit empty Body object alongside
+    // Content-Length: 0, as the HTTP/1.1 round-trip produces. Both representations must be
+    // accepted.
+    var request =
+        new SimpleHttpRequest.Builder()
+            .setVersion(HttpVersion.HTTP_1_1)
+            .setMethod(HttpMethodName.POST)
+            .setUri("/")
+            .addHeader(HttpHeaderName.HOST, "localhost")
+            .addHeader(HttpHeaderName.CONTENT_LENGTH, "0")
+            .setBody(new HttpRequest.InMemoryBody(new byte[0]))
+            .build();
+    assertNotNull(request.getBody());
   }
 
   @Test
