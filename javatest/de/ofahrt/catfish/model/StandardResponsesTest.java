@@ -49,4 +49,11 @@ public class StandardResponsesTest {
     assertEquals(415, response.getStatusCode());
     assertEquals("identity", response.getHeaders().get(HttpHeaderName.ACCEPT_ENCODING));
   }
+
+  @Test
+  public void badRequest_returns400WithMessageAsReasonPhrase() {
+    HttpResponse response = StandardResponses.badRequest("Malformed chunked request body");
+    assertEquals(400, response.getStatusCode());
+    assertEquals("Malformed chunked request body", response.getStatusMessage());
+  }
 }

@@ -138,7 +138,7 @@ final class LocalHttpRequestStage implements HttpRequestStage {
       if (HttpMethodName.OPTIONS.equals(headers.getMethod())) {
         return StandardResponses.OK.withHeaderOverrides(OPTIONS_STAR_HEADERS);
       }
-      return StandardResponses.BAD_REQUEST;
+      return StandardResponses.badRequest("Asterisk-form request URI is only allowed with OPTIONS");
     }
     return null;
   }
@@ -174,7 +174,7 @@ final class LocalHttpRequestStage implements HttpRequestStage {
           sendError(StandardResponses.PAYLOAD_TOO_LARGE);
           return;
         } catch (GzipRequestBodyDecoder.MalformedBodyException e) {
-          sendError(StandardResponses.BAD_REQUEST);
+          sendError(StandardResponses.badRequest("Malformed gzip request body"));
           return;
         }
       }

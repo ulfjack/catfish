@@ -811,7 +811,7 @@ public final class Http2ServerStage implements Stage {
         sendErrorResponse(stream, StandardResponses.PAYLOAD_TOO_LARGE);
         return;
       } catch (GzipRequestBodyDecoder.MalformedBodyException e) {
-        sendErrorResponse(stream, StandardResponses.BAD_REQUEST);
+        sendErrorResponse(stream, StandardResponses.badRequest("Malformed gzip request body"));
         return;
       }
     }
@@ -827,7 +827,9 @@ public final class Http2ServerStage implements Stage {
       }
       request = builder.build();
     } catch (MalformedRequestException e) {
-      sendErrorResponse(stream, StandardResponses.BAD_REQUEST);
+      // build() already produced a descriptive error response (e.g. a body-presence violation);
+      // forward it rather than a bare 400.
+      sendErrorResponse(stream, e.getErrorResponse());
       return;
     }
     if (stream.isDecodeGzip()) {

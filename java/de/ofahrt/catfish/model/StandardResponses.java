@@ -18,6 +18,16 @@ public final class StandardResponses {
   // 400
   public static final HttpResponse BAD_REQUEST =
       new PreconstructedResponse(HttpStatusCode.BAD_REQUEST); // 400
+
+  /**
+   * A 400 (Bad Request) response whose reason phrase carries a specific {@code message}, so the
+   * client and the server logs get more than a bare "Bad Request". Prefer this over {@link
+   * #BAD_REQUEST} wherever the cause is known.
+   */
+  public static HttpResponse badRequest(String message) {
+    return new PreconstructedResponse(HttpStatusCode.BAD_REQUEST, message);
+  }
+
   public static final HttpResponse UNAUTHORIZED =
       new PreconstructedResponse(HttpStatusCode.UNAUTHORIZED); // 401
   public static final HttpResponse PAYMENT_REQUIRED =

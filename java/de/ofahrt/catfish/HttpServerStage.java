@@ -241,7 +241,7 @@ final class HttpServerStage implements Stage {
       } catch (NumberFormatException e) {
         handler.close();
         currentHandler = null;
-        startBuffered(headers, StandardResponses.BAD_REQUEST);
+        startBuffered(headers, StandardResponses.badRequest("Illegal Content-Length value"));
         return ConnectionControl.CLOSE_INPUT;
       }
       if (contentLength < 0 || contentLength > Integer.MAX_VALUE) {
@@ -279,11 +279,11 @@ final class HttpServerStage implements Stage {
       try {
         URI uri = new URI(headers.getUri());
         if (uri.getHost() == null) {
-          startBuffered(headers, StandardResponses.BAD_REQUEST);
+          startBuffered(headers, StandardResponses.badRequest("Absolute request URI has no host"));
           return ConnectionControl.CLOSE_INPUT;
         }
       } catch (URISyntaxException e) {
-        startBuffered(headers, StandardResponses.BAD_REQUEST);
+        startBuffered(headers, StandardResponses.badRequest("Malformed absolute request URI"));
         return ConnectionControl.CLOSE_INPUT;
       }
     }
@@ -356,7 +356,7 @@ final class HttpServerStage implements Stage {
     } else if (action instanceof RequestAction.ForwardAndCapture fc) {
       Origin origin = parseOrigin(fc.request());
       if (origin == null) {
-        startBuffered(headers, StandardResponses.BAD_REQUEST);
+        startBuffered(headers, StandardResponses.badRequest("Cannot determine forward origin"));
         return ConnectionControl.PAUSE;
       }
       Executor exec = Objects.requireNonNull(this.executor, "executor");
@@ -375,7 +375,7 @@ final class HttpServerStage implements Stage {
     } else if (action instanceof RequestAction.Forward f) {
       Origin origin = parseOrigin(f.request());
       if (origin == null) {
-        startBuffered(headers, StandardResponses.BAD_REQUEST);
+        startBuffered(headers, StandardResponses.badRequest("Cannot determine forward origin"));
         return ConnectionControl.PAUSE;
       }
       Executor exec = Objects.requireNonNull(this.executor, "executor");
@@ -477,7 +477,8 @@ final class HttpServerStage implements Stage {
         chunkedScanner = null;
         handler.close();
         currentHandler = null;
-        startBuffered(headersRequest, StandardResponses.BAD_REQUEST);
+        startBuffered(
+            headersRequest, StandardResponses.badRequest("Malformed chunked request body"));
         headersRequest = null;
         return ConnectionControl.CLOSE_INPUT;
       }
@@ -609,7 +610,7 @@ final class HttpServerStage implements Stage {
     String uri = request.getUri();
     int colonIdx = uri.lastIndexOf(':');
     if (colonIdx < 0) {
-      startBuffered(request, StandardResponses.BAD_REQUEST);
+      startBuffered(request, StandardResponses.badRequest("CONNECT target must be host:port"));
       return ConnectionControl.CLOSE_INPUT;
     }
     String parsedHost = uri.substring(0, colonIdx);
@@ -617,7 +618,7 @@ final class HttpServerStage implements Stage {
     try {
       parsedPort = Integer.parseInt(uri.substring(colonIdx + 1));
     } catch (NumberFormatException e) {
-      startBuffered(request, StandardResponses.BAD_REQUEST);
+      startBuffered(request, StandardResponses.badRequest("Illegal port in CONNECT target"));
       return ConnectionControl.CLOSE_INPUT;
     }
     // Local-intercept mode needs to build a fresh HttpServerStage wired to the same request

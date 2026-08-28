@@ -47,7 +47,7 @@ public final class DirectoryHandler implements HttpHandler {
     try {
       f = getFile(request);
     } catch (URISyntaxException e) {
-      responseWriter.commitBuffered(StandardResponses.BAD_REQUEST);
+      responseWriter.commitBuffered(StandardResponses.badRequest("Malformed request URI"));
       return;
     }
     if (f == null || !f.exists() || !f.isFile() || f.isHidden() || !f.canRead()) {
