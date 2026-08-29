@@ -2,7 +2,6 @@ package de.ofahrt.catfish.api;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 
 import de.ofahrt.catfish.model.HttpHeaderName;
@@ -79,19 +78,23 @@ public class SimpleHttpRequestTest {
   }
 
   @Test
-  public void contentLengthZeroAllowsNoBody() throws MalformedRequestException {
-    // Content-Length: 0 declares an empty body, so no Body object is required (regression: an
-    // HTTP/2 POST with Content-Length: 0 and no DATA frame was wrongly rejected with 400).
-    var request =
-        new SimpleHttpRequest.Builder()
-            .setVersion(HttpVersion.HTTP_1_1)
-            .setMethod(HttpMethodName.POST)
-            .setUri("/")
-            .addHeader(HttpHeaderName.HOST, "localhost")
-            .addHeader(HttpHeaderName.CONTENT_LENGTH, "0")
-            .build();
-    assertEquals("0", request.getHeaders().get(HttpHeaderName.CONTENT_LENGTH));
-    assertNull(request.getBody());
+  public void contentLengthZeroStillRequiresABodyObject() {
+    // Even Content-Length: 0 declares a body (an empty one), so a Body object is required. Callers
+    // with no payload bytes must attach an empty body (see Http2ServerStage.doDispatch); a null
+    // body
+    // alongside a framing header is a programming error, not a valid empty-body request.
+    var e =
+        assertThrows(
+            MalformedRequestException.class,
+            () ->
+                new SimpleHttpRequest.Builder()
+                    .setVersion(HttpVersion.HTTP_1_1)
+                    .setMethod(HttpMethodName.POST)
+                    .setUri("/")
+                    .addHeader(HttpHeaderName.HOST, "localhost")
+                    .addHeader(HttpHeaderName.CONTENT_LENGTH, "0")
+                    .build());
+    assertEquals(HttpStatusCode.BAD_REQUEST.getStatusCode(), e.getErrorResponse().getStatusCode());
   }
 
   @Test

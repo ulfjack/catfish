@@ -824,6 +824,13 @@ public final class Http2ServerStage implements Stage {
         if (builder.getHeader(HttpHeaderName.CONTENT_LENGTH) == null) {
           builder.addHeader(HttpHeaderName.CONTENT_LENGTH, Integer.toString(bodyBytes.length));
         }
+      } else if (builder.getHeader(HttpHeaderName.CONTENT_LENGTH) != null
+          || builder.getHeader(HttpHeaderName.TRANSFER_ENCODING) != null) {
+        // The request declared a body (e.g. Content-Length: 0 with END_STREAM on the HEADERS frame)
+        // but no DATA carried bytes. Attach an empty body so a framing header always pairs with a
+        // Body object — matching the HTTP/1.1 representation and letting build() keep its strict
+        // "Content-Length/Transfer-Encoding present <-> body present" invariant.
+        builder.setBody(new HttpRequest.InMemoryBody(new byte[0]));
       }
       request = builder.build();
     } catch (MalformedRequestException e) {

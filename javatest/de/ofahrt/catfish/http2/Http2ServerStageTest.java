@@ -161,6 +161,8 @@ public class Http2ServerStageTest {
     HttpRequest request = dispatchedRequests.get(0);
     assertEquals("POST", request.getMethod());
     assertEquals("0", request.getHeaders().get("Content-Length"));
+    // Content-Length: 0 is represented as an empty body object, not a null body.
+    assertNotNull(request.getBody());
   }
 
   /** Builds a SETTINGS frame with no settings (empty). */
