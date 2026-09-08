@@ -137,4 +137,35 @@ public class RequestActionTest {
   public void forwardToUnixSocket_nullRequest_throws() {
     RequestAction.forwardToUnixSocket(Path.of("/run/backend.sock"), null);
   }
+
+  @Test
+  public void forwardToTcp_carriesRequestHostAndPort() {
+    HttpRequest request = requestWithUri("http://host/path");
+    RequestAction a = RequestAction.forwardToTcp("127.0.0.1", 8080, request);
+    assertTrue(a instanceof RequestAction.ForwardToTcp);
+    RequestAction.ForwardToTcp ft = (RequestAction.ForwardToTcp) a;
+    assertSame(request, ft.request());
+    assertEquals("127.0.0.1", ft.host());
+    assertEquals(8080, ft.port());
+  }
+
+  @Test(expected = NullPointerException.class)
+  public void forwardToTcp_nullHost_throws() {
+    RequestAction.forwardToTcp(null, 8080, requestWithUri("http://host/path"));
+  }
+
+  @Test(expected = NullPointerException.class)
+  public void forwardToTcp_nullRequest_throws() {
+    RequestAction.forwardToTcp("127.0.0.1", 8080, null);
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void forwardToTcp_portTooLow_throws() {
+    RequestAction.forwardToTcp("127.0.0.1", 0, requestWithUri("http://host/path"));
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void forwardToTcp_portTooHigh_throws() {
+    RequestAction.forwardToTcp("127.0.0.1", 70000, requestWithUri("http://host/path"));
+  }
 }
