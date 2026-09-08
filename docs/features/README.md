@@ -21,3 +21,4 @@ Status column below.
 | [0005](0005-http2-header-field-validation.md) | HTTP/2 request header field validation | implemented |
 | [0006](0006-http2-response-compression.md) | HTTP/2 response compression parity via a shared response-writer decorator | implemented |
 | [0007](0007-chunked-parser-consolidation.md) | Consolidate chunked transfer-coding onto one strict state machine | implemented |
+| [0009](0009-tls-terminating-dispatcher.md) | TLS-terminating dispatcher (reverse proxy) on HttpsEndpoint | ready |
