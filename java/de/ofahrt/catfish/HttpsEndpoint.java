@@ -5,7 +5,9 @@ import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.ssl.SSLInfo;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Executor;
@@ -19,6 +21,7 @@ public final class HttpsEndpoint {
   private final Binding binding;
   private final Map<String, HttpVirtualHost> hosts = new LinkedHashMap<>();
   private final Map<String, SSLInfo> sslInfos = new LinkedHashMap<>();
+  private final List<CertBoundDispatcher> certDispatchers = new ArrayList<>();
   private @Nullable ConnectHandler connectHandler;
   private @Nullable SSLSocketFactory originSslFactory;
   private HttpServerListener requestListener = new HttpServerListener() {};
@@ -62,9 +65,28 @@ public final class HttpsEndpoint {
     return this;
   }
 
-  /** Set the connect/proxy handler for this listener. */
+  /**
+   * Set the cert-less connect/proxy handler for this listener (forward proxy / MITM). Mutually
+   * exclusive with {@link #addHost} and {@link #dispatcher(SSLInfo, ConnectHandler)} — a cert-less
+   * dispatcher terminates no TLS itself, so a direct TLS client would get no server certificate.
+   */
   public HttpsEndpoint dispatcher(ConnectHandler handler) {
     this.connectHandler = Objects.requireNonNull(handler, "handler");
+    return this;
+  }
+
+  /**
+   * Register a TLS-terminating reverse-proxy dispatcher with its certificate. The certificate
+   * terminates TLS for a direct client selected by SNI ({@link SSLInfo#covers}), and {@code
+   * handler} routes requests on connections terminated with it (e.g. returning {@link
+   * de.ofahrt.catfish.model.server.RequestAction#forwardToTcp}). Coexists with {@link #addHost} and
+   * other cert-bound dispatchers on one endpoint, selected by SNI; the cert-less {@link
+   * #dispatcher(ConnectHandler)} remains mutually exclusive with these. See spec 0009.
+   */
+  public HttpsEndpoint dispatcher(SSLInfo sslInfo, ConnectHandler handler) {
+    Objects.requireNonNull(sslInfo, "sslInfo");
+    Objects.requireNonNull(handler, "handler");
+    certDispatchers.add(new CertBoundDispatcher(sslInfo, handler));
     return this;
   }
 
@@ -133,7 +155,7 @@ public final class HttpsEndpoint {
     return new AlpnNegotiatingHandler(
         executor,
         effectiveHandler,
-        /* needsExecutor= */ connectHandler != null,
+        /* needsExecutor= */ connectHandler != null || !certDispatchers.isEmpty(),
         effectiveOriginFactory,
         sslContextProvider,
         requestListener,
@@ -141,7 +163,7 @@ public final class HttpsEndpoint {
   }
 
   private ConnectHandler buildConnectHandler() {
-    return VirtualHostRouter.buildConnectHandler(connectHandler, hosts);
+    return VirtualHostRouter.buildConnectHandler(connectHandler, hosts, certDispatchers);
   }
 
   @Nullable SSLContext getSSLContext(@Nullable String host) {
@@ -156,6 +178,11 @@ public final class HttpsEndpoint {
     for (Map.Entry<String, SSLInfo> entry : sslInfos.entrySet()) {
       if (entry.getValue().covers(host)) {
         return entry.getValue().sslContext();
+      }
+    }
+    for (CertBoundDispatcher dispatcher : certDispatchers) {
+      if (dispatcher.sslInfo().covers(host)) {
+        return dispatcher.sslInfo().sslContext();
       }
     }
     return null;

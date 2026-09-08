@@ -1,9 +1,11 @@
 package de.ofahrt.catfish;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
+import de.ofahrt.catfish.bridge.TestHelper;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.model.SimpleHttpRequest;
 import de.ofahrt.catfish.model.server.ConnectDecision;
@@ -11,6 +13,7 @@ import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.RequestAction;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import org.junit.Test;
@@ -163,6 +166,63 @@ public class VirtualHostRouterTest {
     Function<String, HttpVirtualHost> lookup = host -> null;
     RequestAction action =
         VirtualHostRouter.applyLocalFromVhosts(lookup, requestWithHost("host:80"));
+    assertTrue(action instanceof RequestAction.Deny);
+  }
+
+  // --- cert-bound dispatchers (spec 0009) ---
+
+  private static ConnectHandler forwardingProxy() {
+    return new ConnectHandler() {
+      @Override
+      public RequestAction applyLocal(HttpRequest request) {
+        return RequestAction.forwardToTcp("127.0.0.1", 9999, request);
+      }
+    };
+  }
+
+  @Test
+  public void buildConnectHandler_certDispatcher_routesCoveredHost() throws Exception {
+    // The test cert covers "localhost"; a request for it (no matching vhost) hits the dispatcher.
+    List<CertBoundDispatcher> ds =
+        List.of(new CertBoundDispatcher(TestHelper.getSSLInfo(), forwardingProxy()));
+    ConnectHandler handler = VirtualHostRouter.buildConnectHandler(null, Map.of(), ds);
+    RequestAction action = handler.applyLocal(requestWithHost("localhost"));
+    assertTrue(action instanceof RequestAction.ForwardToTcp);
+  }
+
+  @Test
+  public void buildConnectHandler_vhostWinsOverCertDispatcher() throws Exception {
+    List<CertBoundDispatcher> ds =
+        List.of(new CertBoundDispatcher(TestHelper.getSSLInfo(), forwardingProxy()));
+    ConnectHandler handler =
+        VirtualHostRouter.buildConnectHandler(null, Map.of("localhost", VHOST_A), ds);
+    RequestAction action = handler.applyLocal(requestWithHost("localhost"));
+    assertTrue(action instanceof RequestAction.ServeLocally);
+  }
+
+  @Test
+  public void buildConnectHandler_certDispatcherAndHosts_coexist() {
+    List<CertBoundDispatcher> ds =
+        List.of(new CertBoundDispatcher(TestHelper.getSSLInfo(), new ConnectHandler() {}));
+    assertNotNull(VirtualHostRouter.buildConnectHandler(null, Map.of("localhost", VHOST_A), ds));
+  }
+
+  @Test
+  public void buildConnectHandler_certlessDispatcherAndCertDispatcher_throws() {
+    ConnectHandler custom = new ConnectHandler() {};
+    List<CertBoundDispatcher> ds =
+        List.of(new CertBoundDispatcher(TestHelper.getSSLInfo(), new ConnectHandler() {}));
+    assertThrows(
+        IllegalStateException.class,
+        () -> VirtualHostRouter.buildConnectHandler(custom, Map.of(), ds));
+  }
+
+  @Test
+  public void buildConnectHandler_certDispatcherNoCover_denies() throws Exception {
+    List<CertBoundDispatcher> ds =
+        List.of(new CertBoundDispatcher(TestHelper.getSSLInfo(), forwardingProxy()));
+    ConnectHandler handler = VirtualHostRouter.buildConnectHandler(null, Map.of(), ds);
+    RequestAction action = handler.applyLocal(requestWithHost("other"));
     assertTrue(action instanceof RequestAction.Deny);
   }
 }

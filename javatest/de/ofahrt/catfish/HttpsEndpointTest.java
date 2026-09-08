@@ -113,6 +113,53 @@ public class HttpsEndpointTest {
     assertThrows(IllegalStateException.class, () -> endpoint.build(Runnable::run));
   }
 
+  // --- dispatcher(SSLInfo, ConnectHandler) (spec 0009) ---
+
+  @Test
+  public void dispatcherWithCert_returnsEndpoint() {
+    HttpsEndpoint endpoint = HttpsEndpoint.onLocalhost(443);
+    assertNotNull(endpoint.dispatcher(TEST_SSL, new ConnectHandler() {}));
+  }
+
+  @Test
+  public void dispatcherWithCert_nullSslInfo_throws() {
+    HttpsEndpoint endpoint = HttpsEndpoint.onLocalhost(443);
+    assertThrows(
+        NullPointerException.class, () -> endpoint.dispatcher(null, new ConnectHandler() {}));
+  }
+
+  @Test
+  public void dispatcherWithCert_nullHandler_throws() {
+    HttpsEndpoint endpoint = HttpsEndpoint.onLocalhost(443);
+    assertThrows(NullPointerException.class, () -> endpoint.dispatcher(TEST_SSL, null));
+  }
+
+  @Test
+  public void build_certDispatcher_returnsNetworkHandler() {
+    HttpsEndpoint endpoint =
+        HttpsEndpoint.onLocalhost(443).dispatcher(TEST_SSL, new ConnectHandler() {});
+    assertNotNull(endpoint.build(Runnable::run));
+  }
+
+  @Test
+  public void build_addHostAndCertDispatcher_coexist() {
+    // A cert-bound dispatcher and addHost coexist on one endpoint (SNI-selected) — no throw.
+    HttpsEndpoint endpoint =
+        HttpsEndpoint.onLocalhost(443)
+            .addHost("localhost", new HttpVirtualHost(DUMMY), TEST_SSL)
+            .dispatcher(TEST_SSL, new ConnectHandler() {});
+    assertNotNull(endpoint.build(Runnable::run));
+  }
+
+  @Test
+  public void build_certlessDispatcherAndCertDispatcher_throws() {
+    HttpsEndpoint endpoint =
+        HttpsEndpoint.onLocalhost(443)
+            .dispatcher(TEST_SSL, new ConnectHandler() {})
+            .dispatcher(new ConnectHandler() {});
+    assertThrows(IllegalStateException.class, () -> endpoint.build(Runnable::run));
+  }
+
   // --- getSSLContext ---
 
   @Test
@@ -149,6 +196,20 @@ public class HttpsEndpointTest {
     // If the cert only covers "localhost", the scan path returns null for other names.
     // To properly test the scan path, register under a different key:
     assertNull(endpoint.getSSLContext("not-covered"));
+  }
+
+  @Test
+  public void getSSLContext_certDispatcherCoversHost_returnsContext() {
+    HttpsEndpoint endpoint =
+        HttpsEndpoint.onLocalhost(443).dispatcher(TEST_SSL, new ConnectHandler() {});
+    assertNotNull(endpoint.getSSLContext("localhost"));
+  }
+
+  @Test
+  public void getSSLContext_certDispatcherNoCover_returnsNull() {
+    HttpsEndpoint endpoint =
+        HttpsEndpoint.onLocalhost(443).dispatcher(TEST_SSL, new ConnectHandler() {});
+    assertNull(endpoint.getSSLContext("other.example.com"));
   }
 
   @Test
