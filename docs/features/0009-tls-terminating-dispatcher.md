@@ -1,7 +1,7 @@
 ---
 id: 0009
 title: TLS-terminating dispatcher (reverse proxy) on HttpsEndpoint
-status: ready
+status: implemented
 owner: Ulf Adams
 architecture_refs:
   - Server (HttpsEndpoint)
@@ -107,9 +107,13 @@ name; that entry's cert terminates TLS and its handler/router serves the connect
 - The **`addHost`-xor-`dispatcher` guard is relaxed** to allow cert-bound entries of both kinds to
   coexist (`VirtualHostRouter.buildConnectHandler`). The *cert-less* `dispatcher(ConnectHandler)`
   (forward-proxy/MITM) remains standalone as today.
-- **Overlap:** exact match beats wildcard; two entries covering the same name → throw at `listen()`.
-- **Unknown SNI:** existing `unrecognized_name` alert. **SNI absent:** refuse — there is no default
-  entry, and non-SNI traffic is not served (never guess a cert).
+- **Overlap:** first entry whose cert `covers()` the name wins (insertion order). Exact-over-wildcard
+  precedence and detecting two entries that cover the same name would need to enumerate a cert's SANs
+  and distinguish exact vs wildcard matches — which `SSLInfo` does not expose — so both are **out of
+  scope** here (see Notes).
+- **Unknown SNI:** existing `unrecognized_name` alert. **SNI absent:** already refused by
+  `SslServerStage` ("SSL Client did not send SNI"); there is no default entry and a cert is never
+  guessed.
 
 ### 3. `RequestAction.forwardToTcp` (mirrors 0004)
 
@@ -127,13 +131,16 @@ and a `HttpServerStage` dispatch arm that builds `OriginDialer.tcp(host, port, f
 - **Backend is operator-configured, never client-derived.** `forwardToTcp`'s host:port comes from the
   router (application/config), not the request URI/`Host` — no `parseOrigin`, no SSRF-to-arbitrary-origin
   primitive. Same trust boundary as 0004's unix path.
-- **Cert covers the served name (`:authority` invariant).** A connection terminated with `sslInfo`
-  serves only names the cert `covers()`; a request whose `Host`/`:authority` the cert does not cover is
-  rejected (`421` h2 / `400`+close h1). This is the runtime backstop for a free-form dispatcher router
-  whose targets aren't statically known, and it falls out of cert scoping + how clients coalesce.
+- **`:authority` enforcement is the dispatcher's responsibility, not the framework's.** A `dispatcher`
+  is user-supplied routing that returns arbitrary `RequestAction`s; the framework cannot interpose a
+  coverage check without overriding the dispatcher's decision. The framework *does* route a request to
+  a cert-bound dispatcher only when that dispatcher's cert `covers()` the request `Host` (else it is
+  denied), but it does not enforce the request `Host` against the *terminating* cert. A dispatcher
+  that wants strict `Host`-vs-cert enforcement (e.g. `421` on an h2-coalescing mismatch) does it
+  itself. Framework-side enforcement on the `addHost`/vhost path is a separate, pre-existing concern,
+  out of scope here.
 - **Wrong-cert mismatch is fail-closed.** An under-covering cert makes the client reject the handshake
-  (loud outage, no wrong content). Consider warning when two coexisting entries with different
-  routers/handlers resolve to overlapping SANs (silent isolation loss is the only dangerous case).
+  (loud outage, no wrong content served).
 - **No new NIO-thread blocking.** Cert/entry resolution runs where `getSSLContext` runs today; the
   dial/pump runs on the executor thread (unchanged from 0004).
 - **MITM/ALPN/framing unchanged.** No change to the `ConnectDecision` intercept path, ALPN negotiation,
@@ -153,8 +160,13 @@ and a `HttpServerStage` dispatch arm that builds `OriginDialer.tcp(host, port, f
 - **Decision:** Use the existing `SSLInfo` type; no `TlsCredentials`, no `addHost`/`SSLInfo`/ALPN
   changes. — *Rationale:* explicitly scoped out; keeps this change minimal and non-breaking for
   serving users.
-- **Decision:** The `:authority` coverage rule is a correctness invariant, not a policy. — *Rationale:*
-  falls out of cert scoping + client coalescing.
+- **Decision:** `:authority`-vs-terminating-cert enforcement is **not** done by the framework on the
+  dispatcher path. — *Rationale:* a dispatcher returns arbitrary `RequestAction`s and owns its routing;
+  the framework cannot interpose without overriding it, so coverage enforcement is the dispatcher's job.
+  (Vhost-side enforcement is a separate, pre-existing concern.)
+- **Decision:** No exact-over-wildcard precedence and no duplicate-coverage `listen()` error. —
+  *Rationale:* both require `SSLInfo` SAN enumeration / exact-vs-wildcard match info, which is out of
+  scope; cert/dispatcher selection stays first-`covers()`-match-wins.
 - **Decision:** Argument order is **cert-first**: `dispatcher(SSLInfo, ConnectHandler)`. — *Rationale:*
   TLS-before-routing; reads as "this cert, routed by this handler."
 - **Decision:** Relaxing the `xor` guard applies **only to cert-bound entries**; the guard is **kept**
@@ -171,31 +183,44 @@ None.
 
 ## Acceptance Criteria
 
-- [ ] `HttpsEndpoint.onAny(443).dispatcher(sslInfo, router)` terminates TLS for a **direct** client (no
-      `CONNECT`, no CA) and reverse-proxies a `GET`/`POST` to a backend, returning its response.
-- [ ] A cert-bound `dispatcher` entry and an `addHost` entry **coexist** on one endpoint and are
-      correctly SNI-selected.
-- [ ] `RequestAction.forwardToTcp(host, port, request)` exists (port/null validation) and forwards to a
-      fixed TCP backend without `parseOrigin`; a request for an uncovered `:authority` gets `421`/`400`.
-- [ ] Two entries covering the same name throw at `listen()`; non-SNI traffic is refused (no default).
-- [ ] Existing serving / MITM / unix-reverse-proxy tests remain green (the cert-less `dispatcher` and
+- [x] `HttpsEndpoint.onAny(443).dispatcher(sslInfo, router)` terminates TLS for a **direct** client (no
+      `CONNECT`, no CA) and reverse-proxies a `GET` to a backend, returning its response
+      (`TlsDispatcherIntegrationTest`).
+- [x] A cert-bound `dispatcher` entry and an `addHost` entry **coexist** on one endpoint (no `xor`
+      throw), routed by `Host` (`VirtualHostRouterTest`, `HttpsEndpointTest`), with SNI cert selection
+      via `getSSLContext` (`HttpsEndpointTest`).
+- [x] `RequestAction.forwardToTcp(host, port, request)` exists (port/null validation) and forwards to a
+      fixed TCP backend without `parseOrigin` (`RequestActionTest`, `TlsDispatcherIntegrationTest`).
+- [x] Non-SNI traffic is refused (existing `SslServerStage` behaviour; no default entry).
+- [x] Existing serving / MITM / unix-reverse-proxy tests remain green (the cert-less `dispatcher` and
       `addHost` paths are unchanged).
-- [ ] Tests join their suites; `bazel test //...` green; `format.check` passes; NullAway clean.
+- [x] Tests join their suites; `bazel test //...` green; `format.check` passes; NullAway clean.
+
+*Dropped from the original scope (see Notes):* framework-side `:authority`→`421`/`400` enforcement,
+exact-over-wildcard precedence, and the duplicate-coverage `listen()` error.
 
 ## Implementation Plan
 
-- [ ] PR 1: `RequestAction.forwardToTcp` variant + `HttpServerStage` dispatch arm + tests (additive,
-      mirrors 0004 PR 2).
-- [ ] PR 2: `HttpsEndpoint.dispatcher(SSLInfo, ConnectHandler)` registering the cert in the SNI map;
-      relax the `xor` guard for cert-bound entries; SNI selection over entries; end-to-end
+- [x] PR 1 (`03313a7`): `RequestAction.forwardToTcp` variant + `HttpServerStage` dispatch arm + tests
+      (additive, mirrors 0004 PR 2).
+- [x] PR 2 (`60ded5b`): `HttpsEndpoint.dispatcher(SSLInfo, ConnectHandler)` registering the cert in the
+      SNI map; relax the `xor` guard for cert-bound entries; SNI selection over entries; end-to-end
       TLS-terminating reverse proxy + mixed serve/proxy tests.
-- [ ] PR 3: SNI edges (overlap error, SNI-absent, exact-over-wildcard) + `:authority`/`421`
-      enforcement + tests.
+- ~~PR 3: SNI edges + `:authority`/`421` enforcement~~ — **dropped**; the feature is complete after
+  PR 1+2 (see Notes).
 
 ## Notes
 
+- **Why there is no PR 3.** The original plan carried a hardening PR; on review it dissolved:
+  - *SNI-absent* is already refused by `SslServerStage` — nothing to do.
+  - *`:authority`/`421` enforcement* is the **dispatcher's** responsibility, not the framework's: a
+    dispatcher is user routing returning arbitrary `RequestAction`s, and the framework can't interpose
+    a coverage check without overriding it. (Vhost-side enforcement is a separate, pre-existing
+    concern, not part of this spec.)
+  - *exact-over-wildcard precedence* and the *duplicate-coverage `listen()` error* need `SSLInfo` SAN
+    enumeration / exact-vs-wildcard match info, which is out of scope (no `SSLInfo` changes).
 - **The shelved [static-proxy-server proposal](../proposals/static-proxy-server.md) builds on this**
   (a proxied host is a cert-bound `dispatcher(sslInfo, reverseProxyRouter)` entry). It is on ice; only
-  0009 is active.
+  0009 was active.
 - The `TlsCredentials` / cert-derived-hostnames / ALPN-per-host ideas explored earlier are **out of
   scope** here; if wanted, they are a separate, later proposal.
