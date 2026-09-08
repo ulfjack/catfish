@@ -9,6 +9,7 @@ import org.junit.runners.Suite.SuiteClasses;
   BasicIntegrationTest.class,
   ConnectTunnelIntegrationTest.class,
   UnixSocketIntegrationTest.class,
+  TlsDispatcherIntegrationTest.class,
   MitmConnectIntegrationTest.class,
   ChunkedBodyIntegrationTest.class,
   ChunkedUploadLimitIntegrationTest.class,
