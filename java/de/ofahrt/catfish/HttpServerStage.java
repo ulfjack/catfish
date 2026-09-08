@@ -404,6 +404,19 @@ final class HttpServerStage implements Stage {
               null,
               this::installResponseGenerator);
       return startBodyOrDispatch(effective, currentHandler, -1);
+    } else if (action instanceof RequestAction.ForwardToTcp ft) {
+      Executor exec = Objects.requireNonNull(this.executor, "executor");
+      currentHandler =
+          new ProxyRequestStage(
+              parent,
+              exec,
+              serverListener,
+              requestId,
+              OriginDialer.tcp(ft.host(), ft.port(), false, SocketFactory.getDefault()),
+              ft.request(),
+              null,
+              this::installResponseGenerator);
+      return startBodyOrDispatch(effective, currentHandler, -1);
     } else {
       throw new IllegalStateException("Unknown RequestAction: " + action);
     }

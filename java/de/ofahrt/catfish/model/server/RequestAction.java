@@ -52,6 +52,24 @@ public sealed interface RequestAction {
     }
   }
 
+  /**
+   * Forward the request to the fixed TCP backend at {@code host:port}, independent of the request
+   * URI / Host header. Body is streamed.
+   *
+   * <p>The {@code host} and {@code port} are supplied by application code and are never inferred
+   * from the request — a reverse proxy must not let a remote client choose the backend (see spec
+   * 0009).
+   */
+  record ForwardToTcp(HttpRequest request, String host, int port) implements RequestAction {
+    public ForwardToTcp {
+      Objects.requireNonNull(request, "request");
+      Objects.requireNonNull(host, "host");
+      if (port < 1 || port > 65535) {
+        throw new IllegalArgumentException("port out of range: " + port);
+      }
+    }
+  }
+
   /** Deny with a custom response, or 403 Forbidden by default. No body is read. */
   record Deny(@Nullable HttpResponse response) implements RequestAction {
     public Deny() {
@@ -85,5 +103,13 @@ public sealed interface RequestAction {
    */
   static RequestAction forwardToUnixSocket(Path socketPath, HttpRequest request) {
     return new ForwardToUnixSocket(request, socketPath);
+  }
+
+  /**
+   * Forward the request to the fixed TCP backend at {@code host:port}. The body is streamed. The
+   * destination is chosen by application code, never derived from the request.
+   */
+  static RequestAction forwardToTcp(String host, int port, HttpRequest request) {
+    return new ForwardToTcp(request, host, port);
   }
 }
