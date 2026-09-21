@@ -4,22 +4,27 @@ import de.ofahrt.catfish.model.HttpHeaderName;
 import de.ofahrt.catfish.model.HttpRequest;
 import de.ofahrt.catfish.utils.HttpContentType;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-public record FormDataBody(List<FormEntry> parts) implements HttpRequest.Body, Iterable<FormEntry> {
+public record FormDataBody(List<FormEntry> parts) implements Iterable<FormEntry> {
   public static final FormDataBody EMPTY = new FormDataBody(Collections.emptyList());
 
   public static FormDataBody parseFormData(HttpRequest request) throws IOException {
-    if (request.getBody() == null) {
+    HttpRequest.Body requestBody = request.getBody();
+    if (requestBody == null) {
       return EMPTY;
     }
-    byte[] body = ((HttpRequest.InMemoryBody) request.getBody()).toByteArray();
+    byte[] body;
+    try (InputStream in = requestBody.openStream()) {
+      body = in.readAllBytes();
+    }
     String ctHeader = request.getHeaders().get(HttpHeaderName.CONTENT_TYPE);
-    if (body != null && ctHeader != null) {
+    if (ctHeader != null) {
       String mimeType = HttpContentType.getMimeTypeFromContentType(ctHeader);
 
       if (mimeType.equals(HttpContentType.MULTIPART_FORMDATA)) {

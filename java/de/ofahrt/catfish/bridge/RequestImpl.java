@@ -13,6 +13,7 @@ import de.ofahrt.catfish.utils.HttpConnectionHeader;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.InetSocketAddress;
@@ -76,7 +77,7 @@ public final class RequestImpl implements HttpServletRequest {
       Connection connection,
       @Nullable SessionManager sessionManager,
       HttpResponseWriter writer)
-      throws MalformedRequestException {
+      throws IOException {
     this.request = request;
     this.unparsedUri = request.getUri();
     this.headers = new TreeMap<>();
@@ -89,8 +90,10 @@ public final class RequestImpl implements HttpServletRequest {
       throw new MalformedRequestException(StandardResponses.badRequest("Malformed request URI"), e);
     }
     HttpRequest.Body entity = request.getBody();
-    if (entity instanceof HttpRequest.InMemoryBody) {
-      this.body = ((HttpRequest.InMemoryBody) entity).toByteArray();
+    if (entity != null) {
+      try (InputStream in = entity.openStream()) {
+        this.body = in.readAllBytes();
+      }
     } else {
       this.body = null;
     }

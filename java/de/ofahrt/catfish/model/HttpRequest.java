@@ -1,9 +1,25 @@
 package de.ofahrt.catfish.model;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import org.jspecify.annotations.Nullable;
 
 public interface HttpRequest {
-  interface Body {}
+  /**
+   * The body of a request. The bytes may be held in memory or spooled to a file on disk, so callers
+   * must not assume the whole body is resident in memory; read it through {@link #openStream}.
+   */
+  interface Body {
+    /**
+     * Opens a fresh stream over the body's bytes, positioned at the first byte. The caller is
+     * responsible for closing the returned stream.
+     */
+    InputStream openStream() throws IOException;
+
+    /** Returns the number of bytes in the body. */
+    long length();
+  }
 
   public static final class InMemoryBody implements Body {
     private final byte[] body;
@@ -14,6 +30,16 @@ public interface HttpRequest {
 
     public byte[] toByteArray() {
       return body;
+    }
+
+    @Override
+    public InputStream openStream() {
+      return new ByteArrayInputStream(body);
+    }
+
+    @Override
+    public long length() {
+      return body.length;
     }
   }
 

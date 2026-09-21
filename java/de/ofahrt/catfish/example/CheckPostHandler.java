@@ -17,6 +17,7 @@ import de.ofahrt.catfish.upload.UrlEncodedParser;
 import de.ofahrt.catfish.utils.HttpContentType;
 import de.ofahrt.catfish.utils.MimeType;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
@@ -26,18 +27,22 @@ public final class CheckPostHandler implements HttpHandler {
   public void handle(Connection connection, HttpRequest request, HttpResponseWriter responseWriter)
       throws IOException {
     FormDataBody formData = null;
-    if (HttpMethodName.POST.equals(request.getMethod())
-        && request.getBody() instanceof HttpRequest.InMemoryBody body) {
+    HttpRequest.Body requestBody = request.getBody();
+    if (HttpMethodName.POST.equals(request.getMethod()) && requestBody != null) {
+      byte[] body;
+      try (InputStream in = requestBody.openStream()) {
+        body = in.readAllBytes();
+      }
       String ctHeader = request.getHeaders().get(HttpHeaderName.CONTENT_TYPE);
       if (ctHeader != null) {
         String mimeType = HttpContentType.getMimeTypeFromContentType(ctHeader);
         if (HttpContentType.MULTIPART_FORMDATA.equals(mimeType)) {
           IncrementalMultipartParser parser = new IncrementalMultipartParser(ctHeader);
-          parser.parse(body.toByteArray());
+          parser.parse(body);
           formData = parser.getParsedBody();
         } else if (HttpContentType.WWW_FORM_URLENCODED.equals(mimeType)) {
           UrlEncodedParser parser = new UrlEncodedParser();
-          formData = parser.parse(body.toByteArray());
+          formData = parser.parse(body);
         }
       }
     }

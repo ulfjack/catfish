@@ -1,6 +1,5 @@
 package de.ofahrt.catfish.upload;
 
-import de.ofahrt.catfish.model.server.HttpRequestBodyParser;
 import de.ofahrt.catfish.utils.MediaType;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -14,7 +13,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
-public final class IncrementalMultipartParser implements HttpRequestBodyParser {
+public final class IncrementalMultipartParser {
   private static final Pattern nameExtractorPattern = Pattern.compile(".* name=\"([^\"]*)\".*");
 
   private static enum State {
@@ -152,7 +151,6 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
     return parse(data, 0, data.length);
   }
 
-  @Override
   @SuppressWarnings("NullAway") // State machine guarantees fields are non-null when accessed.
   public int parse(byte[] data, int offset, int length) {
     if (isDone()) {
@@ -372,12 +370,10 @@ public final class IncrementalMultipartParser implements HttpRequestBodyParser {
     }
   }
 
-  @Override
   public boolean isDone() {
     return (state == State.EPILOGUE) || (error != null);
   }
 
-  @Override
   public FormDataBody getParsedBody() throws MalformedMultipartException {
     if (error != null) {
       throw error;
