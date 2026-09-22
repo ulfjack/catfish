@@ -11,6 +11,7 @@ import de.ofahrt.catfish.model.network.Connection;
 import de.ofahrt.catfish.model.server.HttpHandler;
 import de.ofahrt.catfish.model.server.HttpResponseWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -187,10 +188,12 @@ public final class FcgiHandler implements HttpHandler {
     }
   }
 
-  private static byte[] extractBody(HttpRequest request) {
+  private static byte[] extractBody(HttpRequest request) throws IOException {
     HttpRequest.Body body = request.getBody();
-    if (body instanceof HttpRequest.InMemoryBody) {
-      return ((HttpRequest.InMemoryBody) body).toByteArray();
+    if (body != null) {
+      try (InputStream in = body.openStream()) {
+        return in.readAllBytes();
+      }
     }
     return new byte[0];
   }
