@@ -875,6 +875,11 @@ public final class NetworkEngine {
     listen(InetAddress.getLoopbackAddress(), port, handler);
   }
 
+  public void listenAddress(InetAddress address, int port, NetworkHandler handler)
+      throws IOException, InterruptedException {
+    listen(Objects.requireNonNull(address, "address"), port, handler);
+  }
+
   private void listen(@Nullable InetAddress address, int port, NetworkHandler handler)
       throws IOException, InterruptedException {
     getQueueForConnection().listenPort(address, port, handler);

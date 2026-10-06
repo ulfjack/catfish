@@ -4,6 +4,7 @@ import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
 import de.ofahrt.catfish.ssl.SSLInfo;
+import java.net.InetAddress;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -42,6 +43,12 @@ public final class HttpsEndpoint {
   /** Listen on localhost only. */
   public static HttpsEndpoint onLocalhost(int port) {
     return new HttpsEndpoint(new Binding.LocalhostPort(port));
+  }
+
+  /** Listen on a specific local IP address. */
+  public static HttpsEndpoint onAddress(InetAddress address, int port) {
+    return new HttpsEndpoint(
+        new Binding.AddressPort(Objects.requireNonNull(address, "address"), port));
   }
 
   /** Listen on a Unix domain socket. */

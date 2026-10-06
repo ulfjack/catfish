@@ -2,6 +2,7 @@ package de.ofahrt.catfish;
 
 import de.ofahrt.catfish.internal.network.NetworkEngine;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.nio.file.Path;
 
 /** Describes where an endpoint listens. */
@@ -9,6 +10,8 @@ public sealed interface Binding {
   record AnyPort(int port) implements Binding {}
 
   record LocalhostPort(int port) implements Binding {}
+
+  record AddressPort(InetAddress address, int port) implements Binding {}
 
   record UnixSocket(Path path) implements Binding {}
 
@@ -18,6 +21,8 @@ public sealed interface Binding {
       engine.listenAll(b.port(), handler);
     } else if (this instanceof LocalhostPort b) {
       engine.listenLocalhost(b.port(), handler);
+    } else if (this instanceof AddressPort b) {
+      engine.listenAddress(b.address(), b.port(), handler);
     } else if (this instanceof UnixSocket b) {
       engine.listenUnixSocket(b.path(), handler);
     } else {
