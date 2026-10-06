@@ -31,6 +31,16 @@ public class HttpsEndpointTest {
   }
 
   @Test
+  public void onAddress_createsEndpoint() throws Exception {
+    assertNotNull(HttpsEndpoint.onAddress(java.net.InetAddress.getByName("127.0.0.1"), 443));
+  }
+
+  @Test
+  public void onAddress_nullAddress_throws() {
+    assertThrows(NullPointerException.class, () -> HttpsEndpoint.onAddress(null, 443));
+  }
+
+  @Test
   public void addHost_withMatchingCert_succeeds() {
     // TestHelper cert covers "localhost"
     HttpsEndpoint endpoint = HttpsEndpoint.onLocalhost(443);

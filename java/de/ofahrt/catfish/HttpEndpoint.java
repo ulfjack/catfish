@@ -3,6 +3,7 @@ package de.ofahrt.catfish;
 import de.ofahrt.catfish.internal.network.NetworkEngine;
 import de.ofahrt.catfish.model.server.ConnectHandler;
 import de.ofahrt.catfish.model.server.HttpServerListener;
+import java.net.InetAddress;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -32,6 +33,12 @@ public final class HttpEndpoint {
   /** Listen on localhost only. */
   public static HttpEndpoint onLocalhost(int port) {
     return new HttpEndpoint(new Binding.LocalhostPort(port));
+  }
+
+  /** Listen on a specific local IP address. */
+  public static HttpEndpoint onAddress(InetAddress address, int port) {
+    return new HttpEndpoint(
+        new Binding.AddressPort(Objects.requireNonNull(address, "address"), port));
   }
 
   /** Listen on a Unix domain socket. */

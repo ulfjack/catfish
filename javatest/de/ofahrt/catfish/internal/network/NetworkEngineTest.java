@@ -69,6 +69,24 @@ public class NetworkEngineTest {
         cause.getMessage().contains(expectedFragment));
   }
 
+  // ---- 0. listenAddress binds to a specific local IP ----
+
+  @Test
+  public void listenAddress_boundToLoopback_acceptsConnection() throws Exception {
+    ProgrammableStage stage =
+        new ProgrammableStage()
+            .withInitialState(InitialConnectionState.WRITE_ONLY)
+            .enqueueOutput("hi".getBytes())
+            .withFinalWriteResponse(ConnectionControl.CLOSE_CONNECTION_AFTER_FLUSH);
+    engine.listenAddress(InetAddress.getLoopbackAddress(), 0, new ProgrammableHandler(stage));
+    int port = listener.waitForPortOpened();
+    try (Socket client = connectClient(port)) {
+      byte[] buf = readExactly(client.getInputStream(), 2);
+      assertEquals("hi", new String(buf));
+    }
+    assertTrue(stage.awaitClose(TIMEOUT_MS));
+  }
+
   // ---- 1. Happy path: server writes bytes, client reads them ----
 
   @Test

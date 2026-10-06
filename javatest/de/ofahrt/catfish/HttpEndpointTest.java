@@ -25,6 +25,16 @@ public class HttpEndpointTest {
   }
 
   @Test
+  public void onAddress_createsEndpoint() throws Exception {
+    assertNotNull(HttpEndpoint.onAddress(java.net.InetAddress.getByName("127.0.0.1"), 80));
+  }
+
+  @Test
+  public void onAddress_nullAddress_throws() {
+    assertThrows(NullPointerException.class, () -> HttpEndpoint.onAddress(null, 80));
+  }
+
+  @Test
   public void addHost_succeeds() {
     HttpEndpoint endpoint = HttpEndpoint.onLocalhost(80);
     assertNotNull(endpoint.addHost("localhost", new HttpVirtualHost(DUMMY)));
