@@ -1,0 +1,191 @@
+/-
+  A subset JVM semantics, sufficient for straight-line + loop integer/long/
+  byte-array code as produced by javac.  Trusted component: everything in this
+  file is part of the trust base and should be read by a human.
+-/
+
+namespace Jvm
+
+def MAXI : Int := 2147483647
+def MINI : Int := -2147483648
+
+/-- 32-bit two's-complement wraparound. -/
+def wrap (x : Int) : Int := (x + 2147483648) % 4294967296 - 2147483648
+
+theorem wrap_id {x : Int} (h1 : MINI ≤ x) (h2 : x ≤ MAXI) : wrap x = x := by
+  unfold wrap MAXI MINI at *
+  have : (x + 2147483648) % 4294967296 = x + 2147483648 := by
+    apply Int.emod_eq_of_lt <;> omega
+  omega
+
+/-- Literal-bound form, so callers can discharge side conditions with `omega`
+    without unfolding MAXI/MINI in every goal. -/
+theorem wrap_id' {x : Int} (h1 : -2147483648 ≤ x) (h2 : x ≤ 2147483647) : wrap x = x :=
+  wrap_id (by unfold MINI; omega) (by unfold MAXI; omega)
+
+def MAXL : Int := 9223372036854775807   -- 2^63 - 1
+def MINL : Int := -9223372036854775808  -- -2^63
+
+/-- 64-bit two's-complement wraparound, for `long` arithmetic. -/
+def wrap64 (x : Int) : Int := (x + 9223372036854775808) % 18446744073709551616 - 9223372036854775808
+
+theorem wrap64_id {x : Int} (h1 : MINL ≤ x) (h2 : x ≤ MAXL) : wrap64 x = x := by
+  unfold wrap64 MAXL MINL at *
+  have : (x + 9223372036854775808) % 18446744073709551616 = x + 9223372036854775808 := by
+    apply Int.emod_eq_of_lt <;> omega
+  omega
+
+/-- Literal-bound form; a `long` staying within its range is unchanged. -/
+theorem wrap64_id' {x : Int} (h1 : -9223372036854775808 ≤ x) (h2 : x ≤ 9223372036854775807) :
+    wrap64 x = x :=
+  wrap64_id (by unfold MINL; omega) (by unfold MAXL; omega)
+
+/-- A byte array: its elements as an index function, bundled with its length.
+    `CoeFun` lets `a i` mean `a.get i`, so indexing reads naturally.  `get` holds
+    already-sign-extended byte values, which is what `baload` delivers.  A JVM
+    array length is a non-negative int, so it never exceeds MAXI; carrying that
+    proof makes `b.length ≤ MAXI` a fact about every array rather than a
+    precondition callers must supply. -/
+structure Arr where
+  get : Nat → Int
+  len : Nat
+  len_le : len ≤ 2147483647
+
+instance : CoeFun Arr (fun _ => Nat → Int) := ⟨Arr.get⟩
+
+/-- Length as an `Int`, for specs that compare it against index arithmetic.
+    An `abbrev` so it stays transparent to `omega`. -/
+abbrev Arr.length (a : Arr) : Int := (a.len : Int)
+
+/-- Length bound in the `Int` form the proofs use. -/
+theorem Arr.length_le (a : Arr) : a.length ≤ MAXI := by
+  unfold Arr.length MAXI; exact_mod_cast a.len_le
+
+/--
+  Machine state.
+
+  ASSUMPTION (documented in TRUST.md): this subset admits exactly one array,
+  passed as a parameter, so the heap is modelled as a single `Arr` rather than a
+  general reference map.
+-/
+structure State where
+  pc   : Nat
+  stk  : List Int
+  loc  : Nat → Int
+  arr  : Arr
+
+def State.set (s : State) (n : Nat) (v : Int) : Nat → Int :=
+  fun m => if m = n then v else s.loc m
+
+inductive Instr where
+  | nop
+  | mark                        -- invokestatic Verify.*: pops the pushed spec ref
+  | push     (v : Int)          -- iconst_*, bipush, sipush, ldc <int>
+  | pushRef                     -- ldc <String>, aload_*: opaque reference
+  | iload    (n : Nat)
+  | istore   (n : Nat)
+  | iinc     (n : Nat) (k : Int)
+  | baload
+  | alen
+  | iadd | isub | imul | idiv | irem
+  | iand | ior | ixor | ishl | ishr
+  -- Longs occupy one operand-stack/local slot here, not the JVMS two: values are
+  -- untyped `Int`s, so `lload`/`lstore`/`lconst`/`ldc2_w` reuse iload/istore/push;
+  -- only the width-specific ops differ.  `lcmp` pushes an int in {-1,0,1}.
+  | ladd | lsub | lmul | lcmp
+  | i2l | l2i                   -- int↔long: i2l preserves the value, l2i keeps low 32 bits
+  | call     (f : Int → Int)    -- verified-elsewhere pure static, one int arg
+  | callSpec                    -- spec-only static: never executed, never reached
+  | ifcmp    (p : Int → Int → Bool) (t : Nat)
+  | ifz      (p : Int → Bool) (t : Nat)
+  | goto     (t : Nat)
+  | ireturn
+  | vreturn
+
+/-- Bitwise ops on 32-bit two's-complement, via UInt32. -/
+def bitOp (f : UInt32 → UInt32 → UInt32) (a b : Int) : Int :=
+  let w := f (UInt32.ofNat (a % 4294967296).toNat) (UInt32.ofNat (b % 4294967296).toNat)
+  wrap (w.toNat : Int)
+
+/-- Shift/mask semantics per JVMS: only the low 5 bits of the shift count. -/
+def shiftCount (b : Int) : Nat := (b % 32).toNat
+
+def step (prog : Nat → Option Instr) (s : State) : Option State :=
+  match prog s.pc with
+  | none => none
+  | some i =>
+    match i, s.stk with
+    | .nop,        st           => some { s with pc := s.pc + 1, stk := st }
+    | .mark,       _ :: st      => some { s with pc := s.pc + 1, stk := st }
+    | .push v,     st           => some { s with pc := s.pc + 1, stk := v :: st }
+    | .pushRef,    st           => some { s with pc := s.pc + 1, stk := 0 :: st }
+    | .iload n,    st           => some { s with pc := s.pc + 1, stk := s.loc n :: st }
+    | .istore n,   v :: st      =>
+        some { s with pc := s.pc + 1, stk := st, loc := s.set n v }
+    | .iinc n k,   st           =>
+        some { s with pc := s.pc + 1, stk := st, loc := s.set n (wrap (s.loc n + k)) }
+    | .baload,     j :: _ :: st =>
+        if 0 ≤ j ∧ j < (s.arr.len : Int)
+        then some { s with pc := s.pc + 1, stk := s.arr j.toNat :: st }
+        else none                                    -- ArrayIndexOutOfBoundsException
+    | .alen,       _ :: st      => some { s with pc := s.pc + 1, stk := (s.arr.len : Int) :: st }
+    | .iadd,       b :: a :: st => some { s with pc := s.pc + 1, stk := wrap (a + b) :: st }
+    | .isub,       b :: a :: st => some { s with pc := s.pc + 1, stk := wrap (a - b) :: st }
+    | .imul,       b :: a :: st => some { s with pc := s.pc + 1, stk := wrap (a * b) :: st }
+    | .idiv,       b :: a :: st =>
+        if b = 0 then none                           -- ArithmeticException
+        else some { s with pc := s.pc + 1, stk := wrap (Int.div a b) :: st }
+    | .irem,       b :: a :: st =>
+        if b = 0 then none
+        else some { s with pc := s.pc + 1, stk := Int.emod a b :: st }
+    -- bitwise ops go via 32-bit words; `bitOp` is defined below
+    | .iand,       b :: a :: st => some { s with pc := s.pc + 1, stk := bitOp (· &&& ·) a b :: st }
+    | .ior,        b :: a :: st => some { s with pc := s.pc + 1, stk := bitOp (· ||| ·) a b :: st }
+    | .ixor,       b :: a :: st => some { s with pc := s.pc + 1, stk := bitOp (· ^^^ ·) a b :: st }
+    | .ishl,       b :: a :: st =>
+        some { s with pc := s.pc + 1, stk := wrap (a * 2 ^ shiftCount b) :: st }
+    | .ishr,       b :: a :: st =>
+        some { s with pc := s.pc + 1, stk := Int.div a (2 ^ shiftCount b) :: st }
+    | .ladd,       b :: a :: st => some { s with pc := s.pc + 1, stk := wrap64 (a + b) :: st }
+    | .lsub,       b :: a :: st => some { s with pc := s.pc + 1, stk := wrap64 (a - b) :: st }
+    | .lmul,       b :: a :: st => some { s with pc := s.pc + 1, stk := wrap64 (a * b) :: st }
+    | .lcmp,       b :: a :: st =>                    -- 1 if a>b, 0 if a=b, -1 if a<b
+        some { s with pc := s.pc + 1, stk := (if a > b then 1 else if a = b then 0 else -1) :: st }
+    | .i2l,        a :: st      => some { s with pc := s.pc + 1, stk := a :: st }
+    | .l2i,        a :: st      => some { s with pc := s.pc + 1, stk := wrap a :: st }
+    | .call f,     c :: st      => some { s with pc := s.pc + 1, stk := f c :: st }
+    | .callSpec,   _            => none              -- must not be reachable
+    | .ifcmp p t,  b :: a :: st =>
+        some { s with pc := if p a b then t else s.pc + 1, stk := st }
+    | .ifz p t,    a :: st      =>
+        some { s with pc := if p a then t else s.pc + 1, stk := st }
+    | .goto t,     st           => some { s with pc := t, stk := st }
+    | .ireturn,    st           => some { s with stk := st }   -- halt: pc unchanged
+    | .vreturn,    st           => some { s with stk := st }
+    | _, _ => none                                   -- stack underflow / type error
+
+def run (prog : Nat → Option Instr) : Nat → State → Option State
+  | 0,     s => some s
+  | n + 1, s => match step prog s with
+                | some s' => run prog n s'
+                | none    => none
+
+theorem run_succ (prog : Nat → Option Instr) (n : Nat) (s t : State)
+    (h : step prog s = some t) : run prog (n + 1) s = run prog n t := by
+  simp [run, h]
+
+/-- Predicates used by emitted `ifcmp` / `ifz` instructions. -/
+def pEq  (a b : Int) : Bool := a = b
+def pNe  (a b : Int) : Bool := a ≠ b
+def pLt  (a b : Int) : Bool := a < b
+def pLe  (a b : Int) : Bool := a ≤ b
+def pGt  (a b : Int) : Bool := a > b
+def pGe  (a b : Int) : Bool := a ≥ b
+def zEq  (a : Int) : Bool := a = 0
+def zNe  (a : Int) : Bool := a ≠ 0
+def zLt  (a : Int) : Bool := a < 0
+def zLe  (a : Int) : Bool := a ≤ 0
+def zGt  (a : Int) : Bool := a > 0
+def zGe  (a : Int) : Bool := a ≥ 0
+
+end Jvm

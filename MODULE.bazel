@@ -15,3 +15,27 @@ http_archive(
     strip_prefix = "pmd-bin-7.23.0",
     build_file_content = """exports_files(glob(["**"]))""",
 )
+
+# Lean 4 toolchain for the jvmlean bytecode-verification proofs. Version is
+# pinned to match lean/lean-toolchain (leanprover/lean4:v4.12.0). Linux x86_64
+# only for now; add a module extension keyed on @platforms if other hosts are
+# needed. Fetched from the raw GitHub release, bypassing elan. The project is
+# core-only (no Mathlib/lake), so the binary plus its bundled lib/ is enough.
+http_archive(
+    name = "lean",
+    url = "https://github.com/leanprover/lean4/releases/download/v4.12.0/lean-4.12.0-linux.tar.zst",
+    sha256 = "2659fc3bfb3955c118e727346c4d894799c69cfbbc2238f6d625fd4f5ad2d929",
+    strip_prefix = "lean-4.12.0-linux",
+    build_file_content = """
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["bin/lean", "bin/lake"])
+
+# The whole toolchain tree, for use as `data`/runfiles by proof-checking rules:
+# `bin/lean` resolves its stdlib olean and shared libraries relative to itself.
+filegroup(
+    name = "toolchain",
+    srcs = glob(["bin/**", "lib/**", "include/**"], allow_empty = True),
+)
+""",
+)
