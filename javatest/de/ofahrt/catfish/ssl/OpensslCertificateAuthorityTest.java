@@ -94,6 +94,22 @@ public class OpensslCertificateAuthorityTest {
   }
 
   @Test
+  public void create_notBeforeIsBackdated() throws Exception {
+    OpensslCertificateAuthority ca =
+        new OpensslCertificateAuthority.Builder(caKey, caCert, workDir)
+            .setClockSkew(java.time.Duration.ofHours(1))
+            .build();
+    long before = System.currentTimeMillis();
+    SSLInfo info = ca.create("localhost", 443);
+    X509Certificate cert = info.certificate();
+    // notBefore must be in the past (backdated), so a client whose clock lags still accepts it.
+    assertTrue(
+        "Expected notBefore to be backdated at least ~55 minutes",
+        cert.getNotBefore().getTime() <= before - java.time.Duration.ofMinutes(55).toMillis());
+    assertTrue("Expected notAfter in the future", cert.getNotAfter().getTime() > before);
+  }
+
+  @Test
   public void create_differentHostnames_returnsDifferentContexts() throws Exception {
     OpensslCertificateAuthority ca =
         new OpensslCertificateAuthority.Builder(caKey, caCert, workDir).build();

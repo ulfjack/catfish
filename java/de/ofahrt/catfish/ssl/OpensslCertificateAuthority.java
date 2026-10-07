@@ -12,6 +12,9 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
@@ -23,10 +26,24 @@ import org.jspecify.annotations.Nullable;
 public final class OpensslCertificateAuthority implements CertificateAuthority {
   private static final Duration DEFAULT_VALIDITY = Duration.ofDays(1);
 
+  /**
+   * Backdate the leaf cert's notBefore by this much so a client whose clock runs slightly behind
+   * the proxy's doesn't reject a freshly minted cert as "not yet valid".
+   */
+  private static final Duration DEFAULT_CLOCK_SKEW = Duration.ofHours(1);
+
+  /**
+   * ASN.1 UTCTime/GeneralizedTime in the {@code [CC]YYMMDDHHMMSSZ} form openssl's {@code
+   * -not_before}/{@code -not_after} expect.
+   */
+  private static final DateTimeFormatter ASN1_UTC_TIME =
+      DateTimeFormatter.ofPattern("yyyyMMddHHmmss'Z'").withZone(ZoneOffset.UTC);
+
   private final Path caKey;
   private final Path caCert;
   private final Path workDir;
   private final Duration validity;
+  private final Duration clockSkew;
   private final @Nullable OriginCertFetcher originCertFetcher;
   private final List<X509Certificate> chainCerts;
 
@@ -35,6 +52,7 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
     this.caCert = builder.caCert;
     this.workDir = builder.workDir;
     this.validity = builder.validity;
+    this.clockSkew = builder.clockSkew;
     this.originCertFetcher = builder.originCertFetcher;
     this.chainCerts = List.copyOf(builder.chainCerts);
   }
@@ -92,6 +110,12 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
       // Use the UUID (without hyphens) as the certificate serial number so concurrent
       // invocations don't race on the shared .srl file that -CAcreateserial would create.
       String serial = id.replace("-", "");
+      // Pin the validity window explicitly rather than relying on openssl's default notBefore=now.
+      // Backdating notBefore by clockSkew tolerates clients whose clock runs behind the proxy's;
+      // -not_after sets the exact expiry (it overrides -days, so we omit -days entirely).
+      Instant now = Instant.now();
+      String notBefore = ASN1_UTC_TIME.format(now.minus(clockSkew));
+      String notAfter = ASN1_UTC_TIME.format(now.plus(validity));
       runCommand(
           "openssl",
           "x509",
@@ -106,8 +130,10 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
           "0x" + serial,
           "-out",
           crtFile.toString(),
-          "-days",
-          String.valueOf(Math.max(1, (validity.toSeconds() + 86399) / 86400)),
+          "-not_before",
+          notBefore,
+          "-not_after",
+          notAfter,
           "-extfile",
           extFile.toString());
 
@@ -185,6 +211,7 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
     private final Path caCert;
     private final Path workDir;
     private Duration validity = DEFAULT_VALIDITY;
+    private Duration clockSkew = DEFAULT_CLOCK_SKEW;
     private @Nullable OriginCertFetcher originCertFetcher;
     private List<X509Certificate> chainCerts = List.of();
 
@@ -196,6 +223,16 @@ public final class OpensslCertificateAuthority implements CertificateAuthority {
 
     public Builder setValidity(Duration validity) {
       this.validity = Objects.requireNonNull(validity, "validity");
+      return this;
+    }
+
+    /**
+     * Sets how far the minted leaf cert's notBefore is backdated before the current time. This
+     * absorbs clock skew between the proxy and clients: without it, a client whose clock lags the
+     * proxy's rejects a just-minted cert with "certificate is not yet valid". Defaults to one hour.
+     */
+    public Builder setClockSkew(Duration clockSkew) {
+      this.clockSkew = Objects.requireNonNull(clockSkew, "clockSkew");
       return this;
     }
 
